@@ -1,6 +1,6 @@
 # SIGPRO — Estado de la construcción
 
-Última actualización: 2026-11-05 · **Fase 1 (Base) cerrada** · La fase 2 no se ha empezado
+Última actualización: 2026-11-06 · **Fase 1 (Base) cerrada** · La fase 2 no se ha empezado
 
 Leyenda: `[x]` hecho · `[~]` en curso · `[ ]` pendiente
 
@@ -57,7 +57,8 @@ Recorrida fila a fila para Acceso y Programas. Specs en `e2e/tests/`: `access` =
 
 ## Pendiente / deuda conocida
 
-- **Primer despliegue en Render y primera ejecución de `ci.yml` en GitHub:** no se pueden probar desde aquí. Antes de desplegar, ajusta en `render.yaml` las URLs `sigpro-web/sigpro-api.onrender.com` a tu cohorte y crea `JWT_SECRET` y `ADMIN_KEY` al montar el Blueprint.
+- **Primer despliegue en Render:** no se puede probar desde aquí. Sigue [`docs/DEPLOY-RENDER.md`](DEPLOY-RENDER.md): ajusta en `render.yaml` los nombres y las URLs `sigpro-web/sigpro-api.onrender.com` a tu cohorte y crea `JWT_SECRET` y `ADMIN_KEY` al montar el Blueprint.
+- **CI en GitHub:** la primera ejecución de `ci.yml` (2026-11-06, repositorio `gsanchezm/sigpro`) terminó en verde: lint, typecheck, unit y e2e de humo.
 - **Node 22 en CI/Render** en vez de Node 20: `pnpm@11` exige ≥ 22.13 (ver `docs/DECISIONS.md`).
 - **Editar programa** (PATCH + formulario): hoy muestra el toast del prototipo; llega con el módulo completo en la fase 2.
 - **Deshacer eliminación** (`toast-action`): no se implementa (borrado permanente).
@@ -66,7 +67,7 @@ Recorrida fila a fila para Acceso y Programas. Specs en `e2e/tests/`: `access` =
 - **Textos variables del caos** (`flakyLabels`): se guardan y exponen, pero la web aún no alterna etiquetas (fase 3).
 - **Bugs plantados** (`docs/planted-bugs.md`): fase 3.
 - **Basic auth de `/api/docs`** (`DOCS_BASIC_AUTH`): implementado, sin spec e2e (no se activa en local).
-- **Git:** sigue sin confirmar la eliminación de `SIGPRO Design System Entregables.zip` (ya estaba borrado del árbol antes de empezar; no lo he tocado).
+- **Git:** el repositorio es público (`https://github.com/gsanchezm/sigpro`). El zip `SIGPRO Design System Entregables.zip` se eliminó de la rama, pero sigue en el primer commit del historial.
 
 ## Cómo levantar todo en local
 
