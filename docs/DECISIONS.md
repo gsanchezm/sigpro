@@ -75,3 +75,39 @@ Una línea de decisión + una de justificación. Si el plan y el handoff se cont
 - **`GET /api/users/owners` incluye `programCount`** para el contador de las opciones del combobox.
 - **Secciones futuras del menú** (Panel, Requisitos, Verificación, NC, Documentos, Auditoría, Administración) existen como página "Próximamente" para que los enlaces del sidebar no rompan.
 - **Detalle de programa** mínimo (cabecera, progreso, pestañas Resumen/Hitos/Requisitos con roles `tab`/`tabpanel`); hitos y requisitos llegan en la fase 2.
+
+## Fase 2 — Núcleo del dominio
+
+### Datos y seed
+
+- **`Requirement.tags String[]` y `Requirement.position Int`** (con valor por defecto). *Etiquetas del multi-select y orden manual entre hermanos; los defaults permiten migrar tablas con datos (Render).*
+- **`Evidence` guarda los bytes en Postgres (`Bytes`)**, máx. 2 MB por archivo y 5 por ejecución, solo PNG/JPEG/PDF. *El disco de Render es efímero; el plan pide limitar evidencias a 2 MB. Cascada desde el tenant: el reset sigue siendo una sola sentencia.* `TestRun.evidenceUrl` se conserva como «primera evidencia» (`/api/evidence/<id>`).
+- **`DocumentVersion` (texto por líneas)**: cada versión del documento guarda sus líneas; `Document.version` es la última. *Es lo que permite comparar versiones con un diff real y generar el visor HTML y el PDF.*
+- **Seed v2** (`SEED_VERSION = 2`): vínculos requisito↔caso dentro del mismo programa (la matriz es por programa), árbol de requisitos de hasta 3 niveles, etiquetas y posiciones deterministas, 130 eventos de auditoría (para que el scroll infinito tenga qué cargar), 1–3 versiones por documento y miniaturas PNG reales como evidencia. REQ-017 sigue en borrador y enlazado (ahora con TC-017).
+- **Re-siembra por versión al arrancar**: la API vuelve a sembrar los tenants cuyo `seed_version` sea menor que `SEED_VERSION` (conserva el caos). *Los tenants desplegados en Render tienen datos de la fase 1; sin esto la fase 2 saldría vacía hasta el reset nocturno.*
+
+### Permisos
+
+- Crear/editar/reordenar/vincular requisitos: `admin`, `program_manager`, `consultant`. Eliminar: `admin`, `program_manager`. Aprobar: `admin`, `program_manager`. **Verificar: `admin`, `consultant`.** Validar: `admin`, `auditor`. *El plan: «consultant crea y verifica»; admin puede todo (como en la tabla del plan).* Volver a borrador sin editar el texto: quien puede aprobar.
+- Registrar ejecuciones: `admin`, `consultant`. Publicar nueva versión de un documento: `admin`, `program_manager`. Ver auditoría: `admin`, `auditor`.
+- **Documentos `restricted`**: la API los omite en la lista y responde 403 en el detalle, el visor y la descarga para `consultant`. *El plan los oculta; el 403 directo permite practicar `page.route()` y pruebas de permisos por API.*
+
+### API
+
+- **Edición del texto devuelve el requisito a `draft`** (título o descripción distintos); etiquetas y prioridad no. *Regla del plan.*
+- **Reordenar = mover entre hermanos** (`POST /requirements/:code/move` con `targetCode` + `placement`); mover a otro padre queda fuera. *Es lo que pide «drag & drop para priorizar»; las posiciones de los hermanos se renumeran.*
+- **HTML enriquecido saneado en el servidor** (lista blanca: `b`, `strong`, `i`, `em`, `u`, `p`, `br`, `ul`, `ol`, `li`, sin atributos). *Misma función pura en `@sigpro/shared` para API y web.*
+- **Ejecución con evidencias = una sola petición multipart** (`POST /test-cases/:code/runs`); el cliente compartido admite `FormData`. *Atómica: no quedan ejecuciones sin sus archivos si falla una subida (y el caos devuelve 500 antes de escribir).*
+- **PDF generado a mano** (`apps/api/src/common/pdf.ts`, Helvetica, WinAnsi): sin dependencias nuevas y con test unitario de la estructura (xref, `%%EOF`). Lo usan el informe de verificación y la descarga de documentos.
+- **Auditoría con paginación por cursor** (`at desc, id desc`), 20 por página, con `total`. *Con offset, los eventos nuevos mientras se hace scroll duplicarían filas.*
+- **`/api/docs-json` también queda tras el basic auth** cuando `DOCS_BASIC_AUTH` está definido. *Antes el JSON de OpenAPI quedaba abierto aunque Swagger UI pidiera credenciales.*
+
+### Web
+
+- **Rutas:** `/programs/:code/requirements` (árbol + matriz), `/programs/:code/edit`, `/verification` y `/verification/:code`, `/documents` y `/documents/:id`, **`/documents/:id/view`** (visor HTML sin shell), `/audit`, públicas `/legal/terms`, `/legal/privacy`, `/help`. *El visor es una ruta SPA del mismo origen: `frameLocator` no ve dentro del visor nativo de PDF y así comparte sesión y tema.*
+- **Evidencias y descargas:** el cliente descarga con `Authorization`, crea un `blob:` y lo usa en `<img alt="Evidencia TC-001">` o en un `<a download>` temporal. *`<img src>` y los enlaces no pueden llevar el Bearer.*
+- **Reordenar con HTML5 drag & drop y alternativa de teclado** (Subir/Bajar en el menú contextual). *`dragTo` funciona con DnD nativo; un componente solo-ratón no se da por terminado.*
+- **Editor enriquecido sin librería:** `contenteditable` no controlado + `document.execCommand` (negrita `Ctrl+B`, cursiva, lista). *Evita dependencias; el HTML resultante se sanea al guardar.*
+- **Copiar código:** `navigator.clipboard.writeText` + toast «Código copiado». *El toast hace el comportamiento observable aunque el test no lea el portapapeles.*
+- **Scroll infinito:** contenedor de altura fija con `role="feed"` y `IntersectionObserver` sobre un centinela (más «Cargar más» como respaldo accesible). *Con la página entera como raíz, el centinela estaría ya visible en 900 px de alto y cargaría todo de golpe.*
+- **Tenants de los specs nuevos:** `alumno08…alumno16` (uno por archivo/spec de capturas).

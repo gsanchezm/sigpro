@@ -1,8 +1,21 @@
 # SIGPRO — Estado de la construcción
 
-Última actualización: 2026-11-06 · **Fase 1 (Base) cerrada** · La fase 2 no se ha empezado
+Última actualización: 2026-11-06 · **Fase 1 (Base) cerrada** · **Fase 2 (Núcleo del dominio) en curso**
 
 Leyenda: `[x]` hecho · `[~]` en curso · `[ ]` pendiente
+
+## Fase 2 — Núcleo del dominio
+
+Cada tarea termina con `pnpm lint && pnpm typecheck && pnpm test` en verde y un commit. Cada módulo cierra además con su spec e2e de humo, capturas claro/oscuro a 1440 y 390 px en `docs/screens/` y la pasada por la tabla «Cobertura de locators».
+
+- [ ] **T15** Modelo de datos y contratos: migración (`tags`, `position`, `Evidence`, `DocumentVersion`), seed v2 con re-seed por versión, permisos, esquemas Zod, DTOs, cliente (multipart + blob), `testids.ts`, i18n (4 espacios nuevos), helpers puros (HTML enriquecido, diff de líneas, árbol, PDF)
+- [ ] **T16** Pendientes de la fase 1: editar programa (PATCH + formulario), páginas legales y ayuda, spec de basic auth de `/api/docs`
+- [ ] **T17** Módulo **Requisitos**: árbol, estados y permisos, edición inline, etiquetas, editor `contenteditable`, reordenar, menú contextual, atajos, copiar código, matriz, CSV
+- [ ] **T18** Módulo **Verificación**: casos de prueba, ejecución (radio), evidencias (simple, múltiple, arrastrar), informe PDF
+- [ ] **T19** Módulo **Documentos**: clasificación por rol, visor en `<iframe>`, nueva pestaña, comparación de versiones
+- [ ] **T20** Módulo **Auditoría** (AuditLog): feed con scroll infinito y filtros
+- [ ] **T21** Cierre de fase 2: README, CHANGELOG, STATUS final, pasada completa (lint, typecheck, unit, e2e, capturas)
+
 
 ## Fase 1 — Base
 
@@ -57,7 +70,7 @@ Recorrida fila a fila para Acceso y Programas. Specs en `e2e/tests/`: `access` =
 
 ## Pendiente / deuda conocida
 
-- **Primer despliegue en Render:** no se puede probar desde aquí. Sigue [`docs/DEPLOY-RENDER.md`](DEPLOY-RENDER.md): ajusta en `render.yaml` los nombres y las URLs `sigpro-web/sigpro-api.onrender.com` a tu cohorte y crea `JWT_SECRET` y `ADMIN_KEY` al montar el Blueprint.
+- **Render:** desplegado (web <https://sigpro-web.onrender.com/>, API <https://sigpro-api.onrender.com/>); CI en verde. Al desplegar la fase 2, la API re-siembra al arrancar los tenants con `seed_version` antigua (ver `docs/DECISIONS.md`).
 - **CI en GitHub:** la primera ejecución de `ci.yml` (2026-11-06, repositorio `gsanchezm/sigpro`) terminó en verde: lint, typecheck, unit y e2e de humo.
 - **Node 22 en CI/Render** en vez de Node 20: `pnpm@11` exige ≥ 22.13 (ver `docs/DECISIONS.md`).
 - **Editar programa** (PATCH + formulario): hoy muestra el toast del prototipo; llega con el módulo completo en la fase 2.
