@@ -197,7 +197,7 @@ export const LabPage = () => {
             </h2>
             <p className={hint}>{t('lab', 'resetHint')}</p>
           </div>
-          <button type="button" data-testid={LAB_TESTIDS.LAB_RESET} onClick={reset} disabled={!isAdmin || busy} title={resetTitle} className="btn btn-danger self-start">
+          <button type="button" data-testid={LAB_TESTIDS.LAB_RESET} onClick={reset} disabled={!isAdmin || busy} title={busy ? t('common', 'processing') : resetTitle} className="btn btn-danger self-start">
             {t('lab', 'resetButton')}
           </button>
         </section>
@@ -261,7 +261,7 @@ export const LabPage = () => {
           {t('lab', 'chaosFlaky')}
         </label>
         <div className="flex gap-2">
-          <button type="button" data-testid={LAB_TESTIDS.LAB_CHAOS_APPLY} onClick={() => void applyChaos(chaos)} disabled={!isAdmin || busy} title={chaosTitle} className="btn btn-primary">
+          <button type="button" data-testid={LAB_TESTIDS.LAB_CHAOS_APPLY} onClick={() => void applyChaos(chaos)} disabled={!isAdmin || busy} title={busy ? t('common', 'processing') : chaosTitle} className="btn btn-primary">
             {t('lab', 'chaosApply')}
           </button>
           <button
@@ -269,7 +269,7 @@ export const LabPage = () => {
             data-testid={LAB_TESTIDS.LAB_CHAOS_OFF}
             onClick={() => void applyChaos({ latencyMs: 0, errorRate: 0, flakyLabels: false })}
             disabled={!isAdmin || busy}
-            title={chaosTitle}
+            title={busy ? t('common', 'processing') : chaosTitle}
             className="btn btn-secondary"
           >
             {t('lab', 'chaosOff')}
@@ -328,6 +328,7 @@ export const LabPage = () => {
                 <button
                   type="button"
                   id={`faq-button-${index}`}
+                  data-testid={LAB_DYNAMIC_TESTIDS.LAB_FAQ_TOGGLE(index + 1)}
                   aria-expanded={open}
                   aria-controls={`faq-panel-${index}`}
                   onClick={() => setOpenFaq(open ? null : index)}

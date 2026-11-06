@@ -237,4 +237,5 @@ export const LAB_DYNAMIC_TESTIDS = {
   /** lab-credential-admin, lab-credential-consultant-locked */
   LAB_CREDENTIAL: (role: string, status?: 'locked' | 'pending') => `lab-credential-${role}${status ? '-' + status : ''}`,
   LAB_FAQ_ITEM: (n: number) => `lab-faq-item-${n}`,
+  LAB_FAQ_TOGGLE: (n: number) => `lab-faq-toggle-${n}`,
 } as const;

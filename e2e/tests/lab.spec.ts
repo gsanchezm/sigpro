@@ -62,6 +62,7 @@ test.describe('/lab sin sesión', () => {
     await expect(first).toHaveAttribute('aria-expanded', 'false');
     await first.click();
     await expect(first).toHaveAttribute('aria-expanded', 'true');
+    await expect(page.getByTestId('lab-faq-toggle-1')).toHaveAttribute('aria-expanded', 'true'); // respaldo por testid
     await expect(page.getByRole('region', { name: '¿Cómo reinicio mis datos?' })).toContainText('POST /api/admin/reset');
     await page.getByRole('button', { name: '¿Cómo cambio de tenant?' }).click();
     await expect(first).toHaveAttribute('aria-expanded', 'false');
