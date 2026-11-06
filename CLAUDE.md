@@ -12,7 +12,7 @@ Si el plan y el handoff se contradicen, gana el handoff en lo visual y el plan e
 
 ## Stack
 
-- Monorepo `pnpm` + Turborepo. Node 20. Scripts por app: `dev`, `build`, `lint`, `typecheck`, `test`, `seed`.
+- Monorepo `pnpm` 11 + Turborepo. Node 22 (≥ 22.13, exigido por pnpm 11). Scripts por app: `dev`, `build`, `lint`, `typecheck`, `test`, `seed`.
 - `apps/api`: NestJS + Prisma + PostgreSQL. OpenAPI en `/api/docs`. JWT + roles. Socket.IO. Endpoints `/api/admin/reset`, `/api/admin/chaos`.
 - `apps/web`: React 18 + Vite + TypeScript + Tailwind + React Router. PWA. Tokens del design system como CSS variables (`[data-theme="light|dark"]`).
 - `apps/mobile`: Expo + Expo Router (fase 4; no empezar antes).
