@@ -137,3 +137,15 @@ Una línea de decisión + una de justificación. Si el plan y el handoff se cont
 - **Enlace cruzado:** el requisito de un caso abre `/programs/:code/requirements?select=REQ-001` con su detalle desplegado.
 - **Ojo con los prefijos de `data-testid`:** `testcase-row-menu-TC-001` también empieza por `testcase-row-`; los specs usan `/^testcase-row-TC-\d+$/`. (El mismo caso existe en Programas.)
 - **Tenants de los specs:** `alumno12` (UI), `alumno15` (API) con `alumno16` de solo lectura para el aislamiento, `alumno17` (capturas). Reservados: `alumno18`–`alumno21` (Documentos: UI, API, aislamiento y capturas) y `alumno22`–`alumno23` (Auditoría: UI/API y capturas).
+
+### Documentos (T19)
+
+- **El visor es una ruta del mismo origen** (`/documents/:id/view?version=2`, dentro de `RequireAuth` pero sin `AppShell`) que se carga en el `<iframe title="Visor de documento">` y también en la pestaña nueva. Con `localStorage` comparte la sesión; con `sessionStorage` (sesión sin «Mantener la sesión») la pestaña nueva **no** la hereda y pide iniciar sesión: es comportamiento real del navegador y un buen caso para `storageState`.
+- **Los `restricted` desaparecen de la lista** para el consultor (con un aviso con el recuento: `hiddenCount`) **y dan 403** en la ficha, el contenido, la comparación y la descarga. *El 403 directo permite practicar `page.route()` y pruebas de permisos por API.*
+- **Comparación calculada en el servidor** con `diffLines` + `alignDiff` (compartidas y con tests): filas `same`, `changed`, `added` y `removed`. En la tabla, `data-diff` en la fila y `<del>` / `<ins>` en cada columna. La comparación por defecto es «anterior → última».
+- **Publicar versión** (solo admin y gestor): el diálogo parte del contenido de la última, una línea por fila (1–80 líneas de ≤ 200 caracteres y una nota de ≤ 200); la versión nueva pasa a ser la última y queda auditada. Los errores de contenido llegan como `lines` o `lines.N`.
+- **Descarga de PDF por versión** (`DOC-004-v3.pdf`) generada con el mismo constructor de PDF que el informe de verificación.
+- **Accesibilidad de los `<select>` con etiqueta:** se usa `<label htmlFor>` y no una etiqueta envolvente. *Con la envolvente, el nombre accesible incluía el texto de todas las opciones («Versión Versión 1 Versión 2…») y `getByLabel` encontraba varios selectores.* Corregido también en Verificación.
+- **Foco al abrir «Nueva versión»:** el campo está deshabilitado mientras carga el contenido, así que recibe el foco en cuanto se habilita (lo descubrió el propio spec).
+- **El filtro de la lista de documentos no usa la URL** (son 12 documentos, sin paginación). Programas y Verificación sí.
+- **Tenants de los specs:** `alumno18` (UI), `alumno19` (API) con `alumno20` de solo lectura para el aislamiento y `alumno21` (capturas).

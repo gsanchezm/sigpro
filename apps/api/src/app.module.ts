@@ -11,6 +11,8 @@ import { ChaosInterceptor } from './chaos/chaos.interceptor';
 import { ChaosService } from './chaos/chaos.service';
 import { AllExceptionsFilter } from './common/all-exceptions.filter';
 import { ConfigController } from './config/config.controller';
+import { DocumentsController } from './documents/documents.controller';
+import { DocumentsService } from './documents/documents.service';
 import { ENV, loadEnv } from './config/env';
 import { HealthController } from './health.controller';
 import { PrismaService } from './prisma/prisma.service';
@@ -27,7 +29,7 @@ const env = loadEnv();
 
 @Module({
   imports: [JwtModule.register({ global: true, secret: env.JWT_SECRET })],
-  controllers: [HealthController, ConfigController, AuthController, ProgramsController, RequirementsController, VerificationController, UsersController, AdminController],
+  controllers: [HealthController, ConfigController, AuthController, ProgramsController, RequirementsController, VerificationController, DocumentsController, UsersController, AdminController],
   providers: [
     { provide: ENV, useValue: env },
     PrismaService,
@@ -39,6 +41,7 @@ const env = loadEnv();
     ProgramsService,
     RequirementsService,
     VerificationService,
+    DocumentsService,
     { provide: APP_GUARD, useClass: AuthGuard },
     { provide: APP_INTERCEPTOR, useClass: ChaosInterceptor },
     { provide: APP_FILTER, useClass: AllExceptionsFilter },

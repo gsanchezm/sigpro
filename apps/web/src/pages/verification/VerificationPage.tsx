@@ -193,9 +193,10 @@ export const VerificationPage = () => {
             className="input input-filter !h-8 pl-7"
           />
         </div>
-        <label className="flex items-center gap-1.5 text-[12px] text-fg-2">
-          <span>{t('verificacion', 'filterProgram')}</span>
+        <div className="flex items-center gap-1.5 text-[12px] text-fg-2">
+          <label htmlFor="verification-program">{t('verificacion', 'filterProgram')}</label>
           <select
+            id="verification-program"
             data-testid={VERIFICACION_TESTIDS.VERIFICATION_FILTER_PROGRAM}
             value={state.program}
             onChange={(event) => change({ ...state, program: event.target.value, page: 1 })}
@@ -208,10 +209,11 @@ export const VerificationPage = () => {
               </option>
             ))}
           </select>
-        </label>
-        <label className="flex items-center gap-1.5 text-[12px] text-fg-2">
-          <span>{t('verificacion', 'filterResult')}</span>
+        </div>
+        <div className="flex items-center gap-1.5 text-[12px] text-fg-2">
+          <label htmlFor="verification-result">{t('verificacion', 'filterResult')}</label>
           <select
+            id="verification-result"
             data-testid={VERIFICACION_TESTIDS.VERIFICATION_FILTER_RESULT}
             value={state.result}
             onChange={(event) => change({ ...state, result: event.target.value as VerificationState['result'], page: 1 })}
@@ -225,7 +227,7 @@ export const VerificationPage = () => {
             ))}
             <option value="none">{t('verificacion', 'neverRun')}</option>
           </select>
-        </label>
+        </div>
         {filtered ? (
           <button type="button" data-testid={VERIFICACION_TESTIDS.VERIFICATION_FILTERS_CLEAR} onClick={clearFilters} className="btn btn-ghost !h-8 !px-2.5">
             {t('verificacion', 'clearFilters')}

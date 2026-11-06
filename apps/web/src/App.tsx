@@ -2,6 +2,9 @@ import type { ReactNode } from 'react';
 import { BrowserRouter, Navigate, Outlet, Route, Routes } from 'react-router-dom';
 import { AppShell } from './layout/AppShell';
 import { ComingSoon } from './pages/ComingSoon';
+import { DocumentDetailPage } from './pages/documents/DocumentDetailPage';
+import { DocumentViewerPage } from './pages/documents/DocumentViewerPage';
+import { DocumentsPage } from './pages/documents/DocumentsPage';
 import { AccessPage } from './pages/access/AccessPage';
 import { LabPage } from './pages/lab/LabPage';
 import { LegalPage } from './pages/legal/LegalPage';
@@ -56,7 +59,7 @@ const LabRoute = () => {
   );
 };
 
-const Soon = ({ label }: { label: 'nav_mission' | 'nav_nc' | 'nav_documents' | 'nav_audit' | 'nav_admin' }) => {
+const Soon = ({ label }: { label: 'nav_mission' | 'nav_nc' | 'nav_audit' | 'nav_admin' }) => {
   const { t } = useI18n();
   return <ComingSoon title={t('programas', label)} />;
 };
@@ -98,6 +101,8 @@ export const App = () => (
               <Route path="/legal/privacy" element={<LegalPage kind="privacy" />} />
               <Route path="/help" element={<LegalPage kind="help" />} />
               <Route element={<RequireAuth />}>
+                {/* Visor HTML de documentos: mismo origen, sin shell (se carga en el iframe y en una pestaña nueva) */}
+                <Route path="/documents/:id/view" element={<DocumentViewerPage />} />
                 <Route element={<AppShell />}>
                   <Route path="/programs" element={<ProgramsPage />} />
                   <Route path="/programs/:code" element={<ProgramDetailPage />} />
@@ -107,7 +112,8 @@ export const App = () => (
                   <Route path="/verification" element={<VerificationPage />} />
                   <Route path="/verification/:code" element={<TestCaseDetailPage />} />
                   <Route path="/nc" element={<Soon label="nav_nc" />} />
-                  <Route path="/documents" element={<Soon label="nav_documents" />} />
+                  <Route path="/documents" element={<DocumentsPage />} />
+                  <Route path="/documents/:id" element={<DocumentDetailPage />} />
                   <Route path="/audit" element={<Soon label="nav_audit" />} />
                   <Route path="/admin" element={<Soon label="nav_admin" />} />
                 </Route>

@@ -461,6 +461,7 @@ export const DOCUMENTOS_TESTIDS = {
   DOCUMENT_NOT_FOUND: 'document-not-found',
   DOCUMENT_FORBIDDEN: 'document-forbidden',
   DOCUMENT_TITLE: 'document-title',
+  DOCUMENT_PROGRAM_LINK: 'document-program-link',
   DOCUMENT_VERSION_SELECT: 'document-version-select',
   DOCUMENT_VIEWER: 'document-viewer',
   DOCUMENT_OPEN_TAB: 'document-open-tab',

@@ -252,6 +252,62 @@ for (const theme of THEMES) {
         await page.unroute('**/api/test-cases?*');
       });
 
+      test('documentos: lista por rol, visor, comparación, publicación, permisos y estados', async ({ page, request }) => {
+        const tenant = 'alumno21';
+        await resetTenant(request, tenant);
+        await signIn(page, request, tenant, 'admin');
+        const mobile = viewport.width < 640;
+
+        await page.goto('/documents');
+        await page.getByTestId('document-row-DOC-012').waitFor();
+        await capture(page, 'documentos-lista', theme);
+
+        if (!mobile) {
+          await page.getByRole('button', { name: 'Acciones para DOC-001' }).click();
+          await capture(page, 'documentos-menu-fila', theme);
+          await page.keyboard.press('Escape');
+        }
+
+        await page.goto('/documents/DOC-001');
+        await page.frameLocator('[title="Visor de documento"]').getByTestId('viewer-page-1').waitFor();
+        await page.getByTestId('document-diff').waitFor();
+        await capture(page, 'documentos-detalle', theme);
+
+        await page.getByRole('button', { name: 'Publicar nueva versión' }).click();
+        await page.getByRole('dialog', { name: 'Nueva versión de DOC-001' }).getByLabel('Contenido (una línea por fila)').waitFor();
+        await page.getByLabel('Contenido (una línea por fila)').fill('');
+        await page.getByRole('button', { name: 'Publicar versión' }).click();
+        await page.getByTestId('document-publish-text-error').waitFor();
+        await capture(page, 'documentos-publicar-errores', theme);
+        await page.keyboard.press('Escape');
+
+        await page.goto('/documents/DOC-001/view?version=2');
+        await page.getByTestId('viewer-page-2').waitFor();
+        await capture(page, 'documentos-visor', theme);
+
+        await signIn(page, request, tenant, 'consultant');
+        await page.goto('/documents');
+        await page.getByTestId('documents-hidden-note').waitFor();
+        await capture(page, 'documentos-lista-consultor', theme);
+
+        await page.goto('/documents/DOC-003');
+        await page.getByTestId('document-forbidden').waitFor();
+        await capture(page, 'documentos-permiso-403', theme);
+
+        await page.goto('/documents');
+        await page.getByLabel('Clasificación').selectOption('restricted');
+        await page.getByTestId('documents-empty').waitFor();
+        await capture(page, 'documentos-vacio', theme);
+
+        await page.route(/\/api\/documents(\?.*)?$/, (route) =>
+          route.fulfill({ status: 503, contentType: 'application/json', body: JSON.stringify({ statusCode: 503, error: 'Service Unavailable', message: 'down', traceId: '7f3a-c21d' }) }),
+        );
+        await page.goto('/documents');
+        await page.getByTestId('documents-error').waitFor();
+        await capture(page, 'documentos-error', theme);
+        await page.unroute(/\/api\/documents(\?.*)?$/);
+      });
+
       test('programas: lista, estados, menú, asistente, diálogos y detalle', async ({ page, request, browser }) => {
         const tenant = 'alumno04';
         await resetTenant(request, tenant);
