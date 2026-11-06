@@ -1,0 +1,33 @@
+{
+  "name": "sigpro",
+  "private": true,
+  "version": "0.1.0",
+  "description": "SIGPRO — laboratorio de pruebas para el curso Playwright + TypeScript",
+  "packageManager": "pnpm@11.2.2",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dev": "turbo run dev --parallel",
+    "build": "turbo run build",
+    "lint": "turbo run lint",
+    "typecheck": "turbo run typecheck",
+    "test": "turbo run test",
+    "seed": "pnpm --filter api seed",
+    "db:up": "docker compose up -d db",
+    "db:down": "docker compose down",
+    "e2e": "pnpm --filter @sigpro/e2e test",
+    "e2e:screens": "pnpm --filter @sigpro/e2e screens",
+    "handoff": "serve docs/design-handoff"
+  },
+  "devDependencies": {
+    "@eslint/js": "9.39.5",
+    "eslint": "9.39.5",
+    "eslint-plugin-jsx-a11y": "6.10.2",
+    "eslint-plugin-react-hooks": "7.1.1",
+    "globals": "17.14.0",
+    "turbo": "2.11.10",
+    "typescript": "5.9.3",
+    "typescript-eslint": "8.72.1"
+  }
+}

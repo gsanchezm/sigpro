@@ -1,0 +1,16 @@
+node_modules/
+dist/
+.turbo/
+coverage/
+.env
+.env.local
+*.log
+playwright-report/
+test-results/
+e2e/.auth/
+apps/web/dev-dist/
+.DS_Store
+Thumbs.db
+.claude/settings.local.json
+.vite/
+.superpowers/
