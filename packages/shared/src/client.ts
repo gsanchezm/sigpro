@@ -1,6 +1,13 @@
-import { ADMIN_KEY_HEADER, HTTP_STATUS_TEXT, TENANT_HEADER } from './domain';
+import { ADMIN_KEY_HEADER, HTTP_STATUS_TEXT, TENANT_HEADER, type RequirementState } from './domain';
 import type {
   ApiErrorBody,
+  AuditPageDto,
+  AuditQuery,
+  DocumentCompareDto,
+  DocumentContentDto,
+  DocumentDetailDto,
+  DocumentListResponse,
+  FileDownload,
   HealthResponse,
   LoginResponse,
   OwnerDto,
@@ -9,13 +16,32 @@ import type {
   ProgramListResponse,
   PublicConfig,
   RegisterResponse,
+  RequirementDto,
+  RequirementListResponse,
   ResetResponse,
   SessionResponse,
   SessionUser,
   TenantInfo,
+  TestCaseDetailDto,
+  TestCaseListQuery,
+  TestCaseListResponse,
+  TestRunDto,
   TestUserDto,
+  TraceabilityDto,
 } from './api-types';
-import type { ChaosConfig, CreateProgramInput, ForgotInput, LoginInput, MfaInput, RegisterInput } from './schemas';
+import type {
+  ChaosConfig,
+  CreateProgramInput,
+  CreateRequirementInput,
+  ForgotInput,
+  LoginInput,
+  MfaInput,
+  MoveRequirementInput,
+  PublishVersionInput,
+  RegisterInput,
+  UpdateProgramInput,
+  UpdateRequirementInput,
+} from './schemas';
 
 /** Error HTTP con el cuerpo de la API y la traza `POST /api/x → 401 Unauthorized`. */
 export class ApiError extends Error {
@@ -38,8 +64,9 @@ export interface ApiClientOptions {
   readonly onUnauthorized?: () => Promise<string | null>;
 }
 
-type Method = 'GET' | 'POST' | 'PATCH' | 'DELETE';
+type Method = 'GET' | 'POST' | 'PATCH' | 'PUT' | 'DELETE';
 interface RequestOptions {
+  /** Objeto → JSON; `FormData` → multipart (el navegador pone el `boundary`). */
   readonly body?: unknown;
   readonly query?: Readonly<Record<string, string | number | undefined>>;
   readonly headers?: Readonly<Record<string, string>>;
@@ -58,15 +85,26 @@ const fallbackBody = (status: number, message: string): ApiErrorBody => ({
   message,
 });
 
+/** `attachment; filename="informe.pdf"` (o `filename*=UTF-8''…`) → nombre del archivo. */
+export const filenameFromDisposition = (header: string | null): string | null => {
+  if (!header) return null;
+  const encoded = /filename\*=UTF-8''([^;]+)/i.exec(header)?.[1];
+  if (encoded) return decodeURIComponent(encoded);
+  return /filename="?([^";]+)"?/i.exec(header)?.[1] ?? null;
+};
+
+const isFormData = (body: unknown): body is FormData => typeof FormData !== 'undefined' && body instanceof FormData;
+
 export const createApiClient = (options: ApiClientOptions) => {
   const doFetch = options.fetchImpl ?? ((...args: Parameters<typeof fetch>) => fetch(...args));
 
   const send = async (method: Method, path: string, opts: RequestOptions = {}, tokenOverride?: string | null): Promise<Response> => {
     const token = tokenOverride === undefined ? options.getToken?.() : tokenOverride;
     const tenant = options.getTenant?.();
+    const multipart = isFormData(opts.body);
     const headers: Record<string, string> = {
       Accept: 'application/json',
-      ...(opts.body === undefined ? {} : { 'Content-Type': 'application/json' }),
+      ...(opts.body === undefined || multipart ? {} : { 'Content-Type': 'application/json' }),
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...(tenant ? { [TENANT_HEADER]: tenant } : {}),
       ...opts.headers,
@@ -74,7 +112,7 @@ export const createApiClient = (options: ApiClientOptions) => {
     return doFetch(`${options.baseUrl}${path}${toQuery(opts.query)}`, {
       method,
       headers,
-      body: opts.body === undefined ? undefined : JSON.stringify(opts.body),
+      body: opts.body === undefined ? undefined : isFormData(opts.body) ? opts.body : JSON.stringify(opts.body),
     });
   };
 
@@ -106,6 +144,14 @@ export const createApiClient = (options: ApiClientOptions) => {
     await request(method, path, opts);
   };
 
+  /** Descarga binaria (PDF, evidencias): la web la convierte en `blob:` porque `<img src>` y `<a href>` no llevan el Bearer. */
+  const file = async (method: Method, path: string, opts?: RequestOptions): Promise<FileDownload> => {
+    const response = await request(method, path, opts);
+    return { blob: await response.blob(), filename: filenameFromDisposition(response.headers.get('Content-Disposition')) };
+  };
+
+  const enc = encodeURIComponent;
+
   return {
     auth: {
       login: (input: LoginInput) => json<LoginResponse>('POST', '/auth/login', { body: input, anonymous: true }),
@@ -126,12 +172,47 @@ export const createApiClient = (options: ApiClientOptions) => {
     health: () => json<HealthResponse>('GET', '/health', { anonymous: true }),
     programs: {
       list: (query: ProgramListQuery = {}) => json<ProgramListResponse>('GET', '/programs', { query: { ...query } }),
-      get: (code: string) => json<ProgramDto>('GET', `/programs/${encodeURIComponent(code)}`),
+      get: (code: string) => json<ProgramDto>('GET', `/programs/${enc(code)}`),
       create: (input: CreateProgramInput) => json<ProgramDto>('POST', '/programs', { body: input }),
-      remove: (code: string) => empty('DELETE', `/programs/${encodeURIComponent(code)}`),
-      archive: (code: string) => json<ProgramDto>('POST', `/programs/${encodeURIComponent(code)}/archive`),
-      duplicate: (code: string) => json<ProgramDto>('POST', `/programs/${encodeURIComponent(code)}/duplicate`),
+      update: (code: string, input: UpdateProgramInput) => json<ProgramDto>('PATCH', `/programs/${enc(code)}`, { body: input }),
+      remove: (code: string) => empty('DELETE', `/programs/${enc(code)}`),
+      archive: (code: string) => json<ProgramDto>('POST', `/programs/${enc(code)}/archive`),
+      duplicate: (code: string) => json<ProgramDto>('POST', `/programs/${enc(code)}/duplicate`),
       exportCsv: async (query: ProgramListQuery = {}): Promise<string> => (await request('GET', '/programs/export', { query: { ...query } })).text(),
+    },
+    requirements: {
+      list: (programCode: string) => json<RequirementListResponse>('GET', `/programs/${enc(programCode)}/requirements`),
+      traceability: (programCode: string) => json<TraceabilityDto>('GET', `/programs/${enc(programCode)}/traceability`),
+      get: (code: string) => json<RequirementDto>('GET', `/requirements/${enc(code)}`),
+      create: (input: CreateRequirementInput) => json<RequirementDto>('POST', '/requirements', { body: input }),
+      update: (code: string, input: UpdateRequirementInput) => json<RequirementDto>('PATCH', `/requirements/${enc(code)}`, { body: input }),
+      transition: (code: string, to: RequirementState) => json<RequirementDto>('POST', `/requirements/${enc(code)}/transition`, { body: { to } }),
+      move: (code: string, input: MoveRequirementInput) => json<RequirementListResponse>('POST', `/requirements/${enc(code)}/move`, { body: input }),
+      remove: (code: string) => empty('DELETE', `/requirements/${enc(code)}`),
+      link: (code: string, testCaseCode: string) => empty('PUT', `/requirements/${enc(code)}/tests/${enc(testCaseCode)}`),
+      unlink: (code: string, testCaseCode: string) => empty('DELETE', `/requirements/${enc(code)}/tests/${enc(testCaseCode)}`),
+    },
+    testCases: {
+      list: (query: TestCaseListQuery = {}) => json<TestCaseListResponse>('GET', '/test-cases', { query: { ...query } }),
+      get: (code: string) => json<TestCaseDetailDto>('GET', `/test-cases/${enc(code)}`),
+      /** `form`: campos `result`, `notes` y hasta 5 `files` (PNG/JPEG/PDF de 2 MB como máximo). */
+      execute: (code: string, form: FormData) => json<TestRunDto>('POST', `/test-cases/${enc(code)}/runs`, { body: form }),
+      /** Informe PDF del plan de verificación; `codes` = casos separados por coma (si no, todos los del programa o del tenant). */
+      report: (query: { readonly program?: string; readonly codes?: string } = {}) => file('GET', '/verification/report', { query: { ...query } }),
+    },
+    evidence: {
+      download: (id: string) => file('GET', `/evidence/${enc(id)}`),
+    },
+    documents: {
+      list: (query: { readonly program?: string; readonly classification?: string; readonly q?: string } = {}) => json<DocumentListResponse>('GET', '/documents', { query: { ...query } }),
+      get: (id: string) => json<DocumentDetailDto>('GET', `/documents/${enc(id)}`),
+      content: (id: string, version?: number) => json<DocumentContentDto>('GET', `/documents/${enc(id)}/content`, { query: { version } }),
+      compare: (id: string, from: number, to: number) => json<DocumentCompareDto>('GET', `/documents/${enc(id)}/compare`, { query: { from, to } }),
+      publish: (id: string, input: PublishVersionInput) => json<DocumentDetailDto>('POST', `/documents/${enc(id)}/versions`, { body: input }),
+      download: (id: string, version?: number) => file('GET', `/documents/${enc(id)}/download`, { query: { version } }),
+    },
+    audit: {
+      list: (query: AuditQuery = {}) => json<AuditPageDto>('GET', '/audit', { query: { ...query } }),
     },
     users: {
       owners: () => json<readonly OwnerDto[]>('GET', '/users/owners'),

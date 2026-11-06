@@ -2,6 +2,8 @@ import type {
   AuditLog,
   Contract,
   Document,
+  DocumentVersion,
+  Evidence,
   Milestone,
   NonConformity,
   Program,
@@ -13,7 +15,8 @@ import type {
   TestRun,
   User,
 } from '@prisma/client';
-import type { Role } from '@sigpro/shared';
+import { REQUIREMENT_TAGS, type Role } from '@sigpro/shared';
+import { evidencePng } from './png';
 
 // Seed determinista: ninguna función usa Date.now() ni Math.random().
 // La misma entrada produce siempre las mismas filas (códigos PRG-001…, REQ-001…, TC-001…, NC-001…).
@@ -29,14 +32,17 @@ export interface SeedRows {
   readonly testCases: readonly TestCase[];
   readonly requirementTestCases: readonly RequirementTestCase[];
   readonly testRuns: readonly TestRun[];
+  readonly evidences: readonly Evidence[];
   readonly nonConformities: readonly NonConformity[];
   readonly documents: readonly Document[];
+  readonly documentVersions: readonly DocumentVersion[];
   readonly auditLogs: readonly AuditLog[];
   readonly suppliers: readonly Supplier[];
   readonly contracts: readonly Contract[];
 }
 
-export const SEED_VERSION = 1;
+/** v2 (fase 2): árbol de requisitos con etiquetas, casos enlazados por programa, evidencias, versiones de documentos y 130 eventos de auditoría. */
+export const SEED_VERSION = 2;
 export const MFA_CODE = '123456';
 
 /** Fecha base fija para createdAt y marcas de tiempo del seed. */
@@ -179,19 +185,43 @@ const buildMilestones = (tenantId: string, programs: readonly Program[]): readon
 
 const REQUIREMENT_STATES: readonly Requirement['state'][] = ['draft', 'approved', 'verified', 'validated'];
 const REQUIREMENT_TOPICS = ['Disponibilidad', 'Latencia', 'Cifrado', 'Trazabilidad', 'Interfaz operador', 'Redundancia', 'Registro de eventos', 'Autenticación'] as const;
+const REQUIREMENTS_PER_PROGRAM = 14;
 
-const buildRequirements = (tenantId: string): readonly Requirement[] =>
-  range(40).map((n) => ({
-    tenantId,
-    code: `REQ-${pad(n)}`,
-    programCode: `PRG-${pad(Math.floor((n - 1) / 14) + 1)}`,
-    title: `${pick(REQUIREMENT_TOPICS, n - 1)} del subsistema ${pad(n)}`,
-    description: `El sistema debe cumplir el requisito ${pad(n)} de ${pick(REQUIREMENT_TOPICS, n - 1).toLowerCase()} en condiciones nominales.`,
-    priority: pick(PRIORITY_CYCLE, n),
-    // REQ-017 nace en borrador: es el requisito de los ejercicios de aprobación
-    state: n === 17 ? 'draft' : pick(REQUIREMENT_STATES, n),
-    parentCode: n % 4 === 0 ? `REQ-${pad(n - 1)}` : null,
-  }));
+/** Árbol de hasta 3 niveles dentro de cada programa: una raíz cada 5 requisitos; el 4.º de cada grupo cuelga del 3.º. */
+const requirementParent = (n: number): number | null => {
+  const group = ((n - 1) % REQUIREMENTS_PER_PROGRAM) % 5;
+  if (group === 0) return null;
+  return group === 3 ? n - 1 : n - group;
+};
+
+/** Etiquetas deterministas: un tercio sin etiquetas, el resto con una (o dos cada quinto). */
+const requirementTags = (n: number): string[] => {
+  if (n % 3 === 0) return [];
+  const tags = [REQUIREMENT_TAGS[n % REQUIREMENT_TAGS.length], ...(n % 5 === 0 ? [REQUIREMENT_TAGS[(n + 3) % REQUIREMENT_TAGS.length]] : [])];
+  return Array.from(new Set(tags.filter((tag): tag is (typeof REQUIREMENT_TAGS)[number] => tag !== undefined)));
+};
+
+const buildRequirements = (tenantId: string): readonly Requirement[] => {
+  const rows: readonly Requirement[] = range(40).map((n) => {
+    const parent = requirementParent(n);
+    const topic = pick(REQUIREMENT_TOPICS, n - 1);
+    return {
+      tenantId,
+      code: `REQ-${pad(n)}`,
+      programCode: `PRG-${pad(Math.floor((n - 1) / REQUIREMENTS_PER_PROGRAM) + 1)}`,
+      title: `${topic} del subsistema ${pad(n)}`,
+      description: `<p>El sistema debe cumplir el requisito ${pad(n)} de <strong>${topic.toLowerCase()}</strong> en condiciones nominales.</p>`,
+      priority: pick(PRIORITY_CYCLE, n),
+      // REQ-017 nace en borrador: es el requisito de los ejercicios de aprobación
+      state: n === 17 ? 'draft' : pick(REQUIREMENT_STATES, n),
+      parentCode: parent === null ? null : `REQ-${pad(parent)}`,
+      tags: requirementTags(n),
+      position: 0,
+    };
+  });
+  // Posición = nº de hermanos anteriores (mismo programa y mismo padre)
+  return rows.map((row, index) => ({ ...row, position: rows.slice(0, index).filter((other) => other.programCode === row.programCode && other.parentCode === row.parentCode).length }));
+};
 
 const buildTestCases = (tenantId: string): readonly TestCase[] =>
   range(25).map((n) => ({
@@ -203,28 +233,74 @@ const buildTestCases = (tenantId: string): readonly TestCase[] =>
     expected: 'Los valores medidos cumplen el umbral definido en el requisito.',
   }));
 
-/** TC-n cubre REQ-n y REQ-(n+12): así REQ-017 queda enlazado con TC-005. */
-const buildRequirementTestCases = (tenantId: string): readonly RequirementTestCase[] =>
-  range(25).flatMap((n) =>
-    [n, n + 12]
-      .filter((r) => r <= 40)
-      .map((r) => ({ tenantId, requirementCode: `REQ-${pad(r)}`, testCaseCode: `TC-${pad(n)}` })),
-  );
+/**
+ * Matriz de trazabilidad dentro de cada programa: el caso nº j de un programa cubre el requisito nº j y, si no es
+ * de los dos últimos, el nº j+7. El último requisito de cada programa queda sin cobertura (hueco que la matriz enseña).
+ * REQ-017 queda enlazado con TC-012.
+ */
+const buildRequirementTestCases = (tenantId: string, requirements: readonly Requirement[], testCases: readonly TestCase[]): readonly RequirementTestCase[] =>
+  testCases.flatMap((testCase) => {
+    const codes = requirements.filter((r) => r.programCode === testCase.programCode).map((r) => r.code);
+    const j = testCases.filter((other) => other.programCode === testCase.programCode && other.code < testCase.code).length;
+    const targets = [codes[j], j + 7 < codes.length - 1 ? codes[j + 7] : undefined].filter((code): code is string => code !== undefined);
+    return targets.map((requirementCode) => ({ tenantId, requirementCode, testCaseCode: testCase.code }));
+  });
 
 const RESULT_CYCLE: readonly TestRun['result'][] = ['pass', 'pass', 'fail', 'blocked', 'pass'];
+const RESULT_NOTES: Readonly<Record<TestRun['result'], string>> = {
+  pass: 'Resultado conforme con el criterio de aceptación.',
+  fail: 'Desviación respecto al criterio de aceptación; se abrirá una no conformidad.',
+  blocked: 'Ejecución bloqueada: el entorno de pruebas no estaba disponible.',
+};
 
-const buildTestRuns = (tenantId: string): readonly TestRun[] =>
+interface RunPlan {
+  readonly run: TestRun;
+  /** Id de la evidencia del seed (una de cada cuatro ejecuciones lleva una captura). */
+  readonly evidenceId: string | null;
+  readonly index: number;
+}
+
+const planTestRuns = (tenantId: string): readonly RunPlan[] =>
   range(25)
     .flatMap((tc) => range(1 + (tc % 3)).map((k) => ({ tc, k })))
-    .map(({ tc, k }, index) => ({
-      tenantId,
-      id: `RUN-${pad(index + 1)}`,
-      testCaseCode: `TC-${pad(tc)}`,
-      executedAt: addDays(EPOCH, 30 + index),
-      result: pick(RESULT_CYCLE, index + k),
-      evidenceUrl: index % 4 === 0 ? `/files/evidence/TC-${pad(tc)}-${k}.png` : null,
-      executedById: 'u3',
-    }));
+    .map(({ tc, k }, index) => {
+      const result = pick(RESULT_CYCLE, index + k);
+      const evidenceId = index % 4 === 0 ? `EV-${pad(index / 4 + 1)}` : null;
+      return {
+        index,
+        evidenceId,
+        run: {
+          tenantId,
+          id: `RUN-${pad(index + 1)}`,
+          testCaseCode: `TC-${pad(tc)}`,
+          executedAt: addDays(EPOCH, 30 + index),
+          result,
+          notes: RESULT_NOTES[result],
+          evidenceUrl: evidenceId ? `/api/evidence/${evidenceId}` : null,
+          executedById: 'u3',
+        },
+      };
+    });
+
+const buildTestRuns = (tenantId: string): readonly TestRun[] => planTestRuns(tenantId).map((plan) => plan.run);
+
+const buildEvidences = (tenantId: string): readonly Evidence[] =>
+  planTestRuns(tenantId).flatMap(({ run, evidenceId, index }) => {
+    if (!evidenceId) return [];
+    const data = new Uint8Array(evidencePng(run.result, index));
+    return [
+      {
+        tenantId,
+        id: evidenceId,
+        testRunId: run.id,
+        filename: `${run.testCaseCode}-${run.id.slice(-3)}.png`,
+        mimeType: 'image/png',
+        size: data.length,
+        data,
+        createdAt: run.executedAt,
+      },
+    ];
+  });
 
 // --- No conformidades, documentos, proveedores, contratos, auditoría -------
 
@@ -257,9 +333,73 @@ const buildDocuments = (tenantId: string, programs: readonly Program[]): readonl
         title: `${kind} ${program.code}`,
         classification: n % 3 === 0 ? ('restricted' as const) : ('public' as const),
         fileUrl: `/files/docs/DOC-${pad(n)}.pdf`,
-        version: 1 + (n % 3),
+        // 1–3 versiones: DOC-001 y DOC-004 tienen 3; los restringidos (DOC-003, 006…) tienen 2; DOC-002 y DOC-005, solo 1
+        version: 1 + ((n + 1) % 3),
       };
     }),
+  );
+
+/** Contenido base de un documento (v1): 18 líneas, dos páginas en el visor. */
+const baseDocumentLines = (title: string, programCode: string): readonly string[] => [
+  title,
+  `Programa ${programCode} · documento ficticio del laboratorio`,
+  '',
+  '1. Objeto',
+  'Este documento define el alcance de la verificación del sistema.',
+  '',
+  '2. Alcance',
+  'Aplica a todos los subsistemas del programa.',
+  'Se excluyen los equipos de apoyo en tierra.',
+  '',
+  '3. Responsabilidades',
+  'El gestor del programa aprueba el plan.',
+  'El consultor ejecuta las pruebas.',
+  'El auditor valida los resultados.',
+  '',
+  '4. Criterios de aceptación',
+  'Todas las pruebas deben terminar en estado superado.',
+  'Las desviaciones se registran como no conformidades.',
+];
+
+type LineEdit = (lines: readonly string[]) => readonly string[];
+
+/** Cambios que introduce cada versión sobre la anterior (v2, v3…): una línea modificada, una añadida, una eliminada y una sección nueva. */
+const VERSION_EDITS: readonly LineEdit[] = [
+  (lines) =>
+    lines.flatMap((line) =>
+      line === 'Se excluyen los equipos de apoyo en tierra.'
+        ? ['Se excluyen los equipos de apoyo en tierra y los simuladores.']
+        : line === 'El auditor valida los resultados.'
+          ? [line, 'El director técnico supervisa la ejecución.']
+          : [line],
+    ),
+  (lines) => [
+    ...lines
+      .filter((line) => line !== 'Se excluyen los equipos de apoyo en tierra y los simuladores.')
+      .map((line) => (line === 'Todas las pruebas deben terminar en estado superado.' ? 'Al menos el 95 % de las pruebas debe terminar en estado superado.' : line)),
+    '',
+    '5. Anexos',
+    'Anexo A: matriz de trazabilidad.',
+  ],
+];
+
+const VERSION_NOTES: readonly string[] = ['Versión inicial', 'Ajuste de alcance y responsabilidades', 'Nuevos criterios de aceptación y anexos'];
+
+/** Líneas del documento en la versión `version` (la usan el seed y los tests). */
+export const documentLines = (title: string, programCode: string, version: number): readonly string[] =>
+  VERSION_EDITS.slice(0, Math.max(0, version - 1)).reduce<readonly string[]>((lines, edit) => edit(lines), baseDocumentLines(title, programCode));
+
+const buildDocumentVersions = (tenantId: string, documents: readonly Document[]): readonly DocumentVersion[] =>
+  documents.flatMap((document) =>
+    range(document.version).map((version) => ({
+      tenantId,
+      documentId: document.id,
+      version,
+      lines: [...documentLines(document.title, document.programCode, version)],
+      note: pick(VERSION_NOTES, version - 1),
+      authorId: 'u2',
+      createdAt: addDays(EPOCH, 10 + version * 7),
+    })),
   );
 
 const SUPPLIER_NAMES = ['Aeronáutica Levante S.L.', 'Sistemas Ibéricos S.A.', 'Electrónica del Cantábrico', 'Optrónica Meseta S.L.', 'Cibertáctica Norte', 'Logística Marítima Atlas'] as const;
@@ -285,34 +425,71 @@ const buildContracts = (tenantId: string, suppliers: readonly Supplier[]): reado
     })),
   );
 
+interface AuditTemplate {
+  readonly action: string;
+  readonly entity: string;
+  readonly actorId: string;
+  readonly entityId: (n: number) => string;
+  readonly diff: (n: number) => Readonly<Record<string, string | number | string[]>>;
+}
+
+const programRef = (n: number): string => `PRG-${pad((n % 24) + 1)}`;
+const requirementRef = (n: number): string => `REQ-${pad((n % 40) + 1)}`;
+
+/** Plantillas de los 130 eventos del seed (suficientes para que el feed de Auditoría necesite scroll infinito). */
+const AUDIT_TEMPLATES: readonly AuditTemplate[] = [
+  { action: 'program.created', entity: 'program', actorId: 'u1', entityId: programRef, diff: (n) => ({ name: pick(PROGRAM_NAMES, n) }) },
+  { action: 'program.updated', entity: 'program', actorId: 'u2', entityId: programRef, diff: () => ({ fields: ['name', 'budget'] }) },
+  { action: 'program.archived', entity: 'program', actorId: 'u2', entityId: programRef, diff: () => ({ status: 'closed' }) },
+  { action: 'requirement.created', entity: 'requirement', actorId: 'u3', entityId: requirementRef, diff: (n) => ({ title: `${pick(REQUIREMENT_TOPICS, n)} del subsistema ${pad((n % 40) + 1)}` }) },
+  { action: 'requirement.updated', entity: 'requirement', actorId: 'u3', entityId: requirementRef, diff: () => ({ fields: ['title'] }) },
+  { action: 'requirement.state_changed', entity: 'requirement', actorId: 'u2', entityId: requirementRef, diff: (n) => ({ from: pick(REQUIREMENT_STATES, n), to: pick(REQUIREMENT_STATES, n + 1) }) },
+  { action: 'requirement.moved', entity: 'requirement', actorId: 'u3', entityId: requirementRef, diff: () => ({ placement: 'before' }) },
+  { action: 'requirement.linked', entity: 'requirement', actorId: 'u3', entityId: requirementRef, diff: (n) => ({ testCase: `TC-${pad((n % 25) + 1)}` }) },
+  { action: 'testrun.executed', entity: 'testrun', actorId: 'u3', entityId: (n) => `RUN-${pad((n % 50) + 1)}`, diff: (n) => ({ result: pick(RESULT_CYCLE, n) }) },
+  { action: 'document.version_published', entity: 'document', actorId: 'u2', entityId: (n) => `DOC-${pad((n % 12) + 1)}`, diff: (n) => ({ version: (n % 3) + 1 }) },
+];
+
+const AUDIT_EVENTS = 130;
+/** 2,5 h entre eventos: fechas distintas y en orden, para que la paginación por cursor sea estable. */
+const AUDIT_STEP_MS = 9_000_000;
+
 const buildAuditLogs = (tenantId: string): readonly AuditLog[] =>
-  range(5).map((n) => ({
-    tenantId,
-    id: `AL-${pad(n)}`,
-    actorId: 'u1',
-    action: 'program.created',
-    entity: 'program',
-    entityId: `PRG-${pad(n)}`,
-    at: addDays(EPOCH, n),
-    diff: { name: pick(PROGRAM_NAMES, n - 1) },
-  }));
+  range(AUDIT_EVENTS).map((n) => {
+    const template = pick(AUDIT_TEMPLATES, n * 7 + 3);
+    return {
+      tenantId,
+      id: `AL-${pad(n)}`,
+      actorId: template.actorId,
+      action: template.action,
+      entity: template.entity,
+      entityId: template.entityId(n),
+      at: new Date(EPOCH.getTime() + 86_400_000 + n * AUDIT_STEP_MS),
+      diff: { ...template.diff(n) },
+    };
+  });
 
 // --- Composición -----------------------------------------------------------
 
 export const buildTenantSeed = (tenantId: string, hash: (plain: string) => string): SeedRows => {
   const programs = buildPrograms(tenantId);
   const suppliers = buildSuppliers(tenantId);
+  const requirements = buildRequirements(tenantId);
+  const testCases = buildTestCases(tenantId);
+  const documents = buildDocuments(tenantId, programs);
   return {
     tenant: { id: tenantId, name: tenantId === 'demo' ? 'Demo' : `Alumno ${tenantId.slice('alumno'.length)}`, seedVersion: SEED_VERSION },
     users: buildUsers(tenantId, hash),
     programs,
     milestones: buildMilestones(tenantId, programs),
-    requirements: buildRequirements(tenantId),
-    testCases: buildTestCases(tenantId),
-    requirementTestCases: buildRequirementTestCases(tenantId),
+    requirements,
+    testCases,
+    requirementTestCases: buildRequirementTestCases(tenantId, requirements, testCases),
     testRuns: buildTestRuns(tenantId),
+    evidences: buildEvidences(tenantId),
     nonConformities: buildNonConformities(tenantId),
-    documents: buildDocuments(tenantId, programs),
+    documents,
+    documentVersions: buildDocumentVersions(tenantId, documents),
     auditLogs: buildAuditLogs(tenantId),
     suppliers,
     contracts: buildContracts(tenantId, suppliers),

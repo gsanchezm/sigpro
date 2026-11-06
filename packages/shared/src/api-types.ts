@@ -1,5 +1,6 @@
 import type { ChaosConfig } from './schemas';
-import type { Priority, ProgramSortColumn, ProgramStatus, Role, SortDir } from './domain';
+import type { Classification, Priority, ProgramSortColumn, ProgramStatus, RequirementState, RequirementTag, Role, SortDir, TestCaseSortColumn, TestResult } from './domain';
+import type { DiffRow, DiffStats } from './documents';
 
 // Contrato HTTP compartido: la API lo implementa y la web (y la futura app móvil) lo consume.
 
@@ -127,4 +128,177 @@ export interface TestUserDto {
   readonly role: Role;
   readonly mfa: boolean;
   readonly status: 'active' | 'locked' | 'pending';
+}
+
+// --- Requisitos ------------------------------------------------------------
+
+export interface RequirementDto {
+  readonly code: string;
+  readonly programCode: string;
+  readonly parentCode: string | null;
+  readonly title: string;
+  /** HTML saneado (lista blanca de `sanitizeRichText`). */
+  readonly description: string;
+  readonly priority: Priority;
+  readonly state: RequirementState;
+  readonly tags: readonly RequirementTag[];
+  readonly position: number;
+  /** Casos de prueba enlazados (matriz de trazabilidad). */
+  readonly testCaseCodes: readonly string[];
+}
+
+export interface RequirementListResponse {
+  readonly program: { readonly code: string; readonly name: string };
+  /** Todos los requisitos del programa en plano; el árbol se construye con `buildTree`. */
+  readonly items: readonly RequirementDto[];
+}
+
+export interface TraceabilityDto {
+  readonly requirements: readonly { readonly code: string; readonly title: string; readonly state: RequirementState }[];
+  readonly testCases: readonly { readonly code: string; readonly title: string }[];
+  readonly links: readonly { readonly requirementCode: string; readonly testCaseCode: string }[];
+}
+
+// --- Verificación ----------------------------------------------------------
+
+export interface TestCaseDto {
+  readonly code: string;
+  readonly programCode: string;
+  readonly programName: string;
+  readonly title: string;
+  readonly steps: readonly string[];
+  readonly expected: string;
+  readonly requirementCodes: readonly string[];
+  readonly runCount: number;
+  readonly lastResult: TestResult | null;
+  readonly lastRunAt: string | null;
+}
+
+export interface TestCaseListQuery {
+  readonly q?: string;
+  readonly program?: string;
+  readonly result?: TestResult;
+  readonly sort?: TestCaseSortColumn;
+  readonly dir?: SortDir;
+  readonly page?: number;
+  readonly pageSize?: number;
+}
+
+export interface TestCaseListResponse {
+  readonly items: readonly TestCaseDto[];
+  readonly total: number;
+  readonly totalAll: number;
+  readonly page: number;
+  readonly pageSize: number;
+  readonly pages: number;
+}
+
+export interface EvidenceDto {
+  readonly id: string;
+  readonly filename: string;
+  readonly mimeType: string;
+  readonly size: number;
+  /** Ruta de la API (`/evidence/EV-001`): requiere el Bearer, así que la web la descarga como blob. */
+  readonly url: string;
+}
+
+export interface TestRunDto {
+  readonly id: string;
+  readonly testCaseCode: string;
+  readonly executedAt: string;
+  readonly result: TestResult;
+  readonly notes: string;
+  readonly executedById: string | null;
+  readonly executedByName: string | null;
+  readonly evidences: readonly EvidenceDto[];
+}
+
+export interface TestCaseDetailDto extends TestCaseDto {
+  readonly requirements: readonly { readonly code: string; readonly title: string }[];
+  readonly runs: readonly TestRunDto[];
+}
+
+/** Archivo descargado con su nombre (cabecera `Content-Disposition`). */
+export interface FileDownload {
+  readonly blob: Blob;
+  readonly filename: string | null;
+}
+
+// --- Documentos ------------------------------------------------------------
+
+export interface DocumentDto {
+  readonly id: string;
+  readonly programCode: string;
+  readonly programName: string;
+  readonly title: string;
+  readonly classification: Classification;
+  /** Última versión. */
+  readonly version: number;
+  readonly updatedAt: string;
+}
+
+export interface DocumentListResponse {
+  readonly items: readonly DocumentDto[];
+  /** Documentos restringidos que el rol no puede ver (para el aviso de la lista). */
+  readonly hiddenCount: number;
+}
+
+export interface DocumentVersionInfo {
+  readonly version: number;
+  readonly note: string;
+  readonly authorName: string | null;
+  readonly createdAt: string;
+}
+
+export interface DocumentDetailDto extends DocumentDto {
+  readonly versions: readonly DocumentVersionInfo[];
+}
+
+export interface DocumentContentDto {
+  readonly id: string;
+  readonly title: string;
+  readonly programCode: string;
+  readonly classification: Classification;
+  readonly version: number;
+  readonly note: string;
+  readonly createdAt: string;
+  readonly pages: readonly (readonly string[])[];
+}
+
+export interface DocumentCompareDto {
+  readonly id: string;
+  readonly from: number;
+  readonly to: number;
+  readonly rows: readonly DiffRow[];
+  readonly stats: DiffStats;
+}
+
+// --- Auditoría -------------------------------------------------------------
+
+export interface AuditEntryDto {
+  readonly id: string;
+  readonly at: string;
+  readonly actorId: string | null;
+  readonly actorName: string | null;
+  readonly action: string;
+  readonly entity: string;
+  readonly entityId: string;
+  readonly diff: Readonly<Record<string, unknown>> | null;
+}
+
+export interface AuditQuery {
+  readonly entity?: string;
+  readonly q?: string;
+  readonly from?: string;
+  readonly to?: string;
+  readonly cursor?: string;
+  readonly limit?: number;
+}
+
+export interface AuditPageDto {
+  readonly items: readonly AuditEntryDto[];
+  /** `null` cuando no quedan más eventos. */
+  readonly nextCursor: string | null;
+  /** Eventos que cumplen los filtros (no solo los de esta página). */
+  readonly total: number;
 }

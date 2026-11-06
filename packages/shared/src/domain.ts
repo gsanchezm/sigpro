@@ -24,7 +24,51 @@ export const STATUS_TONE: Readonly<Record<ProgramStatus, Tone>> = {
   cancelled: 'danger',
 };
 
-export const PROGRAM_SORT_COLUMNS = ['code', 'name', 'status', 'owner', 'dates', 'budget'] as const;
+// --- Fase 2: requisitos, verificación, documentos y auditoría ---------------
+
+/** Máquina de estados del requisito (el plan: draft → approved → verified → validated). */
+export const REQUIREMENT_STATES = ['draft', 'approved', 'verified', 'validated'] as const;
+export type RequirementState = (typeof REQUIREMENT_STATES)[number];
+
+export const REQUIREMENT_STATE_TONE: Readonly<Record<RequirementState, Tone>> = {
+  draft: 'neutral',
+  approved: 'info',
+  verified: 'purple',
+  validated: 'ok',
+};
+
+/** Catálogo cerrado de etiquetas del multi-select (el texto visible sale de i18n). */
+export const REQUIREMENT_TAGS = ['safety', 'security', 'performance', 'interface', 'regulatory', 'maintainability', 'availability', 'usability'] as const;
+export type RequirementTag = (typeof REQUIREMENT_TAGS)[number];
+
+export const TEST_RESULTS = ['pass', 'fail', 'blocked'] as const;
+export type TestResult = (typeof TEST_RESULTS)[number];
+
+export const TEST_RESULT_TONE: Readonly<Record<TestResult, Tone>> = { pass: 'ok', fail: 'danger', blocked: 'warn' };
+
+export const CLASSIFICATIONS = ['public', 'restricted'] as const;
+export type Classification = (typeof CLASSIFICATIONS)[number];
+
+export const CLASSIFICATION_TONE: Readonly<Record<Classification, Tone>> = { public: 'info', restricted: 'warn' };
+
+/** Evidencias de una ejecución: hasta 5 archivos PNG/JPEG/PDF de 2 MB como máximo (el plan limita a 2 MB). */
+export const EVIDENCE_MAX_BYTES = 2 * 1024 * 1024;
+export const EVIDENCE_MAX_FILES = 5;
+export const EVIDENCE_MIME_TYPES = ['image/png', 'image/jpeg', 'application/pdf'] as const;
+export type EvidenceMime = (typeof EVIDENCE_MIME_TYPES)[number];
+
+export const TEST_CASE_SORT_COLUMNS = ['code', 'title', 'program', 'result', 'runs'] as const;
+export type TestCaseSortColumn = (typeof TEST_CASE_SORT_COLUMNS)[number];
+
+/** Entidades que escribe la auditoría (filtro del feed). */
+export const AUDIT_ENTITIES = ['program', 'requirement', 'testrun', 'document', 'tenant'] as const;
+export type AuditEntity = (typeof AUDIT_ENTITIES)[number];
+
+export const AUDIT_PAGE_SIZE = 20;
+/** Líneas por página del visor de documentos. */
+export const DOCUMENT_PAGE_LINES = 12;
+
+export const PROGRAM_SORT_COLUMNS =['code', 'name', 'status', 'owner', 'dates', 'budget'] as const;
 export type ProgramSortColumn = (typeof PROGRAM_SORT_COLUMNS)[number];
 export type SortDir = 'asc' | 'desc';
 

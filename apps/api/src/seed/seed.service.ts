@@ -3,7 +3,7 @@ import type { ChaosConfig, ResetResponse } from '@sigpro/shared';
 import { hashSync } from 'bcryptjs';
 import { ENV, type Env } from '../config/env';
 import { PrismaService } from '../prisma/prisma.service';
-import { buildTenantSeed, tenantIds } from './data';
+import { SEED_VERSION, buildTenantSeed, tenantIds } from './data';
 
 const BCRYPT_COST = 10;
 
@@ -30,13 +30,16 @@ export class SeedService implements OnApplicationBootstrap {
     return tenantIds(this.env.SEED_STUDENT_TENANTS);
   }
 
-  /** Crea los tenants que falten (no toca los existentes). */
+  /**
+   * Crea los tenants que falten y vuelve a sembrar los que tienen una `seed_version` anterior (despliegues con datos
+   * de una fase previa). Los tenants al día no se tocan; el caos se conserva al re-sembrar.
+   */
   async onApplicationBootstrap(): Promise<void> {
     if (!this.env.SEED_ON_BOOT) return;
-    const existing = new Set((await this.prisma.tenant.findMany({ select: { id: true } })).map((t) => t.id));
-    const missing = this.tenants.filter((id) => !existing.has(id));
-    for (const id of missing) await this.applyTenant(id);
-    if (missing.length > 0) this.logger.log(`Seed aplicado a ${missing.length} tenant(s): ${missing.join(', ')}`);
+    const existing = new Map((await this.prisma.tenant.findMany({ select: { id: true, seedVersion: true } })).map((t) => [t.id, t.seedVersion]));
+    const pending = this.tenants.filter((id) => (existing.get(id) ?? 0) < SEED_VERSION);
+    for (const id of pending) await this.applyTenant(id);
+    if (pending.length > 0) this.logger.log(`Seed v${SEED_VERSION} aplicado a ${pending.length} tenant(s): ${pending.join(', ')}`);
   }
 
   /** Restaura el seed del tenant en una sola transacción; conserva su configuración de caos. */
@@ -59,8 +62,10 @@ export class SeedService implements OnApplicationBootstrap {
       this.prisma.testCase.createMany({ data: copy(rows.testCases).map((row) => ({ ...row, steps: row.steps ?? [] })) }),
       this.prisma.requirementTestCase.createMany({ data: copy(rows.requirementTestCases) }),
       this.prisma.testRun.createMany({ data: copy(rows.testRuns) }),
+      this.prisma.evidence.createMany({ data: copy(rows.evidences) }),
       this.prisma.nonConformity.createMany({ data: copy(rows.nonConformities) }),
       this.prisma.document.createMany({ data: copy(rows.documents) }),
+      this.prisma.documentVersion.createMany({ data: copy(rows.documentVersions).map((row) => ({ ...row, lines: row.lines ?? [] })) }),
       this.prisma.contract.createMany({ data: copy(rows.contracts) }),
       this.prisma.auditLog.createMany({ data: copy(rows.auditLogs).map((row) => ({ ...row, diff: row.diff ?? undefined })) }),
     ]);

@@ -1,6 +1,7 @@
 import { z } from 'zod';
-import { PRIORITIES, PROGRAM_STATUSES, REGISTER_ROLES } from './domain';
+import { PRIORITIES, PROGRAM_STATUSES, REGISTER_ROLES, REQUIREMENT_STATES, REQUIREMENT_TAGS, TEST_RESULTS } from './domain';
 import { isPasswordValid } from './password';
+import { sanitizeRichText } from './richtext';
 
 // Los mensajes de error son CLAVES i18n (espacio `acceso` o `programas`); la UI las traduce.
 // Esto permite validar igual en cliente y servidor y mostrar el texto en el idioma activo.
@@ -82,6 +83,60 @@ export const createProgramSchema = z
   .object({ ...step1Shape, ...step2Shape, notify: z.boolean().default(true) })
   .superRefine(endAfterStart);
 export type CreateProgramInput = z.infer<typeof createProgramSchema>;
+
+/** Editar programa: mismos campos que el alta, sin el aviso por correo; el código no cambia. */
+export const updateProgramSchema = z.object({ ...step1Shape, ...step2Shape }).superRefine(endAfterStart);
+export type UpdateProgramInput = z.infer<typeof updateProgramSchema>;
+
+// --- Requisitos (mensajes = claves del espacio `requisitos`) -------------------
+
+const requirementTitle = z.string().trim().min(3, 'titleShort').max(120, 'titleLong');
+/** El HTML del editor se sanea con la lista blanca antes de validar la longitud. */
+const requirementDescription = z.string().max(12000, 'descLong').transform(sanitizeRichText).pipe(z.string().max(4000, 'descLong'));
+const requirementTags = z.array(z.enum(REQUIREMENT_TAGS)).max(REQUIREMENT_TAGS.length).transform((tags) => Array.from(new Set(tags)));
+
+export const createRequirementSchema = z.object({
+  programCode: z.string().min(1),
+  parentCode: z.string().min(1).nullable().default(null),
+  title: requirementTitle,
+  description: requirementDescription.default(''),
+  priority: z.enum(PRIORITIES).default('medium'),
+  tags: requirementTags.default([]),
+});
+export type CreateRequirementInput = z.infer<typeof createRequirementSchema>;
+
+export const updateRequirementSchema = z
+  .object({
+    title: requirementTitle.optional(),
+    description: requirementDescription.optional(),
+    priority: z.enum(PRIORITIES).optional(),
+    tags: requirementTags.optional(),
+  })
+  .refine((value) => Object.values(value).some((field) => field !== undefined), { message: 'nothingToUpdate' });
+export type UpdateRequirementInput = z.infer<typeof updateRequirementSchema>;
+
+export const transitionRequirementSchema = z.object({ to: z.enum(REQUIREMENT_STATES, { errorMap: () => ({ message: 'badState' }) }) });
+export type TransitionRequirementInput = z.infer<typeof transitionRequirementSchema>;
+
+export const moveRequirementSchema = z.object({ targetCode: z.string().min(1, 'required'), placement: z.enum(['before', 'after']) });
+export type MoveRequirementInput = z.infer<typeof moveRequirementSchema>;
+
+// --- Verificación ----------------------------------------------------------
+
+/** Campos de texto de una ejecución; los archivos viajan aparte (multipart). */
+export const runFieldsSchema = z.object({
+  result: z.enum(TEST_RESULTS, { errorMap: () => ({ message: 'resultRequired' }) }),
+  notes: z.string().trim().max(1000, 'notesLong').default(''),
+});
+export type RunFieldsInput = z.infer<typeof runFieldsSchema>;
+
+// --- Documentos ------------------------------------------------------------
+
+export const publishVersionSchema = z.object({
+  lines: z.array(z.string().max(200, 'lineLong')).min(1, 'linesRequired').max(80, 'linesMax'),
+  note: z.string().trim().max(200, 'noteLong').default(''),
+});
+export type PublishVersionInput = z.infer<typeof publishVersionSchema>;
 
 // --- Admin -----------------------------------------------------------------
 

@@ -3,6 +3,8 @@ import react from '@vitejs/plugin-react';
 import { defineConfig } from 'vite';
 import { VitePWA } from 'vite-plugin-pwa';
 
+// WEB_PORT permite levantar una segunda pila (p. ej. 5174) sin pisar la que ya esté en marcha
+const WEB_PORT = Number(process.env.WEB_PORT ?? 5173);
 const API_TARGET = process.env.API_PROXY_TARGET ?? 'http://localhost:3000';
 const proxy = { '/api': { target: API_TARGET, changeOrigin: true } };
 
@@ -28,6 +30,6 @@ export default defineConfig({
       workbox: { navigateFallbackDenylist: [/^\/api/] },
     }),
   ],
-  server: { port: 5173, strictPort: true, proxy },
-  preview: { port: 5173, strictPort: true, proxy },
+  server: { port: WEB_PORT, strictPort: true, proxy },
+  preview: { port: WEB_PORT, strictPort: true, proxy },
 });

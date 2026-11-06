@@ -1,15 +1,21 @@
 import { ROLES, type Role } from './domain';
 
-/** Matriz de permisos del plan + reglas de Programas del handoff. */
+/** Matriz de permisos del plan + reglas de Programas del handoff + decisiones de la fase 2 (docs/DECISIONS.md). */
 export const PERMISSIONS = {
   'program.create': ['admin', 'program_manager'],
   'program.edit': ['admin', 'program_manager'],
   'program.archive': ['admin', 'program_manager'],
   'program.delete': ['admin'],
   'program.export': ROLES,
+  'requirement.create': ['admin', 'program_manager', 'consultant'],
+  'requirement.edit': ['admin', 'program_manager', 'consultant'],
+  'requirement.delete': ['admin', 'program_manager'],
   'requirement.approve': ['admin', 'program_manager'],
+  'requirement.verify': ['admin', 'consultant'],
   'requirement.validate': ['admin', 'auditor'],
+  'testrun.execute': ['admin', 'consultant'],
   'document.viewRestricted': ['admin', 'program_manager', 'auditor'],
+  'document.publish': ['admin', 'program_manager'],
   'audit.view': ['admin', 'auditor'],
   'users.manage': ['admin'],
 } as const satisfies Readonly<Record<string, readonly Role[]>>;

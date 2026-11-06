@@ -79,8 +79,10 @@ model Tenant {
   testCases        TestCase[]
   requirementTests RequirementTestCase[]
   testRuns         TestRun[]
+  evidences        Evidence[]
   nonConformities  NonConformity[]
   documents        Document[]
+  documentVersions DocumentVersion[]
   auditLogs        AuditLog[]
   suppliers        Supplier[]
   contracts        Contract[]
@@ -110,6 +112,7 @@ model User {
   assignedNcs      NonConformity[] @relation("NcAssignee")
   executedRuns     TestRun[]       @relation("RunExecutor")
   auditEntries     AuditLog[]      @relation("AuditActor")
+  authoredVersions DocumentVersion[] @relation("VersionAuthor")
 
   @@id([tenantId, id])
   @@unique([tenantId, email])
@@ -169,6 +172,10 @@ model Requirement {
   priority    Priority         @default(medium)
   state       RequirementState @default(draft)
   parentCode  String?          @map("parent_code")
+  /// Etiquetas del multi-select (ids del catálogo `REQUIREMENT_TAGS`)
+  tags        String[]         @default([])
+  /// Orden manual entre hermanos (0, 1, 2…); lo reescribe «mover»
+  position    Int              @default(0)
 
   tenant   Tenant                @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   program  Program               @relation(fields: [tenantId, programCode], references: [tenantId, code], onDelete: Cascade)
@@ -219,17 +226,39 @@ model TestRun {
   testCaseCode String     @map("test_case_code")
   executedAt   DateTime   @map("executed_at")
   result       TestResult
+  /// Primera evidencia (`/api/evidence/<id>`); las demás cuelgan de `evidences`
   evidenceUrl  String?    @map("evidence_url")
   executedById String?    @map("executed_by")
+  notes        String     @default("")
 
   tenant          Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   testCase        TestCase        @relation(fields: [tenantId, testCaseCode], references: [tenantId, code], onDelete: Cascade)
   executedBy      User?           @relation("RunExecutor", fields: [tenantId, executedById], references: [tenantId, id], onDelete: NoAction)
   nonConformities NonConformity[]
+  evidences       Evidence[]
 
   @@id([tenantId, id])
   @@index([tenantId, testCaseCode])
   @@map("test_runs")
+}
+
+/// Archivo adjunto de una ejecución (PNG/JPEG/PDF, ≤ 2 MB). Los bytes viven en la base: el disco de Render es efímero.
+model Evidence {
+  tenantId  String   @map("tenant_id")
+  id        String
+  testRunId String   @map("test_run_id")
+  filename  String
+  mimeType  String   @map("mime_type")
+  size      Int
+  data      Bytes
+  createdAt DateTime @default(now()) @map("created_at")
+
+  tenant  Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  testRun TestRun @relation(fields: [tenantId, testRunId], references: [tenantId, id], onDelete: Cascade)
+
+  @@id([tenantId, id])
+  @@index([tenantId, testRunId])
+  @@map("evidences")
 }
 
 model NonConformity {
@@ -261,12 +290,31 @@ model Document {
   fileUrl        String         @map("file_url")
   version        Int            @default(1)
 
-  tenant  Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  program Program @relation(fields: [tenantId, programCode], references: [tenantId, code], onDelete: Cascade)
+  tenant   Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  program  Program           @relation(fields: [tenantId, programCode], references: [tenantId, code], onDelete: Cascade)
+  versions DocumentVersion[]
 
   @@id([tenantId, id])
   @@index([tenantId, programCode])
   @@map("documents")
+}
+
+/// Contenido de cada versión de un documento, línea a línea (visor HTML, PDF y comparación).
+model DocumentVersion {
+  tenantId   String   @map("tenant_id")
+  documentId String   @map("document_id")
+  version    Int
+  lines      Json     @default("[]")
+  note       String   @default("")
+  authorId   String?  @map("author_id")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  tenant   Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  document Document @relation(fields: [tenantId, documentId], references: [tenantId, id], onDelete: Cascade)
+  author   User?    @relation("VersionAuthor", fields: [tenantId, authorId], references: [tenantId, id], onDelete: NoAction)
+
+  @@id([tenantId, documentId, version])
+  @@map("document_versions")
 }
 
 model AuditLog {
