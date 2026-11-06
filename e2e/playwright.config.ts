@@ -34,7 +34,8 @@ export default defineConfig({
   ],
   webServer: [
     {
-      command: 'pnpm --filter api start',
+      // En local se recompila para no probar un dist obsoleto; en CI el build ya se hizo en un paso previo
+      command: CI ? 'pnpm --filter api start' : 'pnpm --filter api build && pnpm --filter api start',
       url: `${API_URL}/health`,
       reuseExistingServer: !CI,
       timeout: 120_000,

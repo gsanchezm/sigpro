@@ -1,5 +1,6 @@
 import {
   ACCESO_TESTIDS,
+  DETALLE_TESTIDS,
   REGISTER_ROLES,
   flattenIssues,
   forgotSchema,
@@ -577,7 +578,9 @@ export const AccessPage = ({ routeView }: { routeView: RouteView }) => {
                 <a href="#/legal/condiciones" data-testid={ACCESO_TESTIDS.REGISTER_TERMS_LINK}>
                   {t('acceso', 'terms2')}
                 </a>{' '}
-                {t('acceso', 'terms3')} <a href="#/legal/privacidad">{t('acceso', 'terms4')}</a>.
+                {t('acceso', 'terms3')} <a href="#/legal/privacidad" data-testid={DETALLE_TESTIDS.REGISTER_PRIVACY_LINK}>
+                  {t('acceso', 'terms4')}
+                </a>.
               </span>
             </label>
             {fieldErrors.terms ? (

@@ -19,7 +19,13 @@ export const capture = async (page: Page, name: string, theme: ThemeName): Promi
   const file = join(SCREENS_DIR, `${name}-${theme}-${width}.png`);
   // Deja terminar animaciones de entrada (toast, popover) antes de capturar
   await page.waitForTimeout(350);
-  await page.screenshot({ path: file, fullPage: true });
+  // Ajusta el viewport a la altura del contenido: así tabbar y botón flotante (fixed/sticky) quedan al final de la captura
+  const original = page.viewportSize();
+  const contentHeight = await page.evaluate(() => document.documentElement.scrollHeight);
+  if (original && contentHeight > original.height) await page.setViewportSize({ width: original.width, height: contentHeight });
+  await page.waitForTimeout(150);
+  await page.screenshot({ path: file });
+  if (original) await page.setViewportSize(original);
   return file;
 };
 

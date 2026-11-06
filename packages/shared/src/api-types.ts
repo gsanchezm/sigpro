@@ -92,6 +92,8 @@ export interface OwnerDto {
   readonly name: string;
   readonly email: string;
   readonly role: Role;
+  /** Programas del tenant cuyo responsable es esta persona. */
+  readonly programCount: number;
 }
 
 export interface PublicConfig {

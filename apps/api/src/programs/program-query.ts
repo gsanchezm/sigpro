@@ -1,5 +1,5 @@
 import type { Prisma } from '@prisma/client';
-import { PAGE_SIZE, PROGRAM_SORT_COLUMNS, PROGRAM_STATUSES, type Lang, type ProgramListQuery, type ProgramSortColumn, type ProgramStatus, type SortDir } from '@sigpro/shared';
+import { PAGE_SIZE, PROGRAM_SORT_COLUMNS, PROGRAM_STATUSES, type ProgramListQuery, type ProgramSortColumn, type ProgramStatus, type SortDir } from '@sigpro/shared';
 
 const MAX_PAGE_SIZE = 100;
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
@@ -74,31 +74,4 @@ export const buildOrderBy = (sort: ProgramSortColumn | undefined, dir: SortDir |
 
 export const progressOf = (done: number, total: number): number => (total === 0 ? 0 : Math.round((done / total) * 100));
 
-export const nextProgramCode = (codes: readonly string[]): string => {
-  const max = codes.reduce((acc, code) => Math.max(acc, Number.parseInt(code.replace(/\D/g, ''), 10) || 0), 0);
-  return `PRG-${String(max + 1).padStart(3, '0')}`;
-};
-
-export interface CsvRow {
-  readonly code: string;
-  readonly name: string;
-  readonly status: string;
-  readonly owner: string;
-  readonly start: string;
-  readonly end: string;
-  readonly budget: number;
-  readonly progress: number;
-}
-
-const CSV_HEADERS: Readonly<Record<Lang, readonly string[]>> = {
-  es: ['Código', 'Nombre', 'Estado', 'Responsable', 'Inicio', 'Fin', 'Presupuesto (EUR)', 'Progreso (%)'],
-  en: ['Code', 'Name', 'Status', 'Owner', 'Start', 'End', 'Budget (EUR)', 'Progress (%)'],
-};
-
-const csvCell = (value: string | number): string => {
-  const text = String(value);
-  return /[",\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
-};
-
-export const toCsv = (rows: readonly CsvRow[], lang: Lang): string =>
-  [CSV_HEADERS[lang].join(','), ...rows.map((r) => [r.code, r.name, r.status, r.owner, r.start, r.end, r.budget, r.progress].map(csvCell).join(','))].join('\n');
+export { nextProgramCode } from '@sigpro/shared';

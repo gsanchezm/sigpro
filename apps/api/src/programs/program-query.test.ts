@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildOrderBy, buildWhere, normalizePaging, nextProgramCode, parseListQuery, progressOf, toCsv } from './program-query';
+import { buildOrderBy, buildWhere, normalizePaging, nextProgramCode, parseListQuery, progressOf } from './program-query';
 
 describe('parseListQuery', () => {
   it('convierte la query string en valores tipados y descarta los inválidos', () => {
@@ -72,18 +72,5 @@ describe('nextProgramCode', () => {
   it('sigue la numeración existente, aunque haya huecos', () => {
     expect(nextProgramCode(['PRG-001', 'PRG-002', 'PRG-024'])).toBe('PRG-025');
     expect(nextProgramCode([])).toBe('PRG-001');
-  });
-});
-
-describe('toCsv', () => {
-  it('escribe cabecera y filas, y entrecomilla comas y comillas', () => {
-    const csv = toCsv(
-      [{ code: 'PRG-001', name: 'Radar "RVC", versión 2', status: 'active', owner: 'Marta Ruiz', start: '2023-01-01', end: '2024-07-01', budget: 450000, progress: 11 }],
-      'es',
-    );
-    expect(csv.split('\n')).toEqual([
-      'Código,Nombre,Estado,Responsable,Inicio,Fin,Presupuesto (EUR),Progreso (%)',
-      'PRG-001,"Radar ""RVC"", versión 2",active,Marta Ruiz,2023-01-01,2024-07-01,450000,11',
-    ]);
   });
 });

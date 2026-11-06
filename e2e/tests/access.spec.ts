@@ -1,6 +1,12 @@
 import { expect, test, type Page } from '@playwright/test';
+import { seedStorage } from '../support/auth';
 
 // Spec de humo del módulo Acceso. Locators por rol/label primero; data-testid como respaldo.
+
+// Acceso trabaja en su propio tenant: los registros de prueba no ensucian el seed de demo
+test.beforeEach(async ({ context }) => {
+  await seedStorage(context, { tenant: 'alumno01', cookies: false });
+});
 
 const fillLogin = async (page: Page, email: string, password: string) => {
   await page.getByLabel('Correo electrónico').fill(email);
@@ -102,6 +108,27 @@ test.describe('Acceso · login', () => {
     await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
     await page.getByRole('button', { name: 'Toggle theme' }).click();
     await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
+  });
+});
+
+test.describe('Acceso · cobertura de locators', () => {
+  test('getByPlaceholder, getByAltText, getByLabel (aria-label) y getByText exacto', async ({ page }) => {
+    await page.goto('/register');
+    await expect(page.getByPlaceholder('nombre@organizacion.es')).toBeVisible();
+    await expect(page.getByAltText('SIGPRO').first()).toBeVisible();
+    await expect(page.getByLabel('Mostrar contraseña')).toBeVisible(); // aria-label del botón de icono
+    // Pares que se solapan a propósito: Contraseña / Mostrar contraseña / Confirmar contraseña
+    await expect(page.getByLabel('Contraseña', { exact: true })).toHaveCount(1);
+    await expect(page.getByLabel(/contraseña/i)).toHaveCount(3);
+    await expect(page.getByText('Rol solicitado', { exact: true })).toBeVisible();
+  });
+
+  test('el campo MFA usa un placeholder distinto de su label', async ({ page }) => {
+    await page.goto('/login');
+    await page.getByTestId('test-user-admin').click();
+    await page.getByRole('button', { name: 'Entrar' }).click();
+    await expect(page.getByPlaceholder('000000')).toBeVisible();
+    await expect(page.getByLabel('Código de verificación')).toHaveAttribute('placeholder', '000000');
   });
 });
 

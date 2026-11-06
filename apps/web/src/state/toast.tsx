@@ -17,6 +17,9 @@ interface ToastValue {
 
 const ToastContext = createContext<ToastValue | null>(null);
 
+// Las trazas HTTP ("POST /api/…") van en mono; el resto del cuerpo, en la fuente normal
+const TRACE_LIKE = /^(GET|POST|PATCH|PUT|DELETE) \/api\//;
+
 const TONE_COLOR: Readonly<Record<ToastTone, string>> = {
   ok: 'var(--ok)',
   danger: 'var(--danger)',
@@ -67,13 +70,13 @@ export const ToastProvider = ({ children }: { children: ReactNode }) => {
             key={toast.id}
             role="status"
             data-testid={ACCESO_DYNAMIC_TESTIDS.TOAST(toast.tone)}
-            className="pointer-events-auto flex items-start gap-2.5 rounded-md border border-border bg-surface px-3 py-2.5 text-[12.5px] shadow-pop"
-            style={{ animation: 'toastIn .18s ease-out' }}
+            className="pointer-events-auto flex items-start gap-2.5 rounded-md border border-border bg-surface px-3 py-2.5 text-[13px] shadow-pop"
+            style={{ animation: 'toastIn .18s ease-out', borderLeft: `3px solid ${TONE_COLOR[toast.tone]}` }}
           >
             <span aria-hidden="true" className="mt-[5px] size-2 flex-none rounded-full" style={{ background: TONE_COLOR[toast.tone] }} />
             <div className="min-w-0 flex-1">
               <div className="font-medium">{toast.title}</div>
-              {toast.body ? <div className="font-mono text-[12px] text-fg-2">{toast.body}</div> : null}
+              {toast.body ? <div className={`text-[12px] text-fg-2 ${TRACE_LIKE.test(toast.body) ? 'font-mono' : ''}`}>{toast.body}</div> : null}
             </div>
             <button
               type="button"

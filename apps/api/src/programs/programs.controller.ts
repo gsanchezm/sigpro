@@ -1,14 +1,12 @@
 import { Body, Controller, Delete, Get, Header, HttpCode, Param, Post, Query } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
-import { createProgramSchema, type CreateProgramInput, type Lang } from '@sigpro/shared';
+import { CSV_FILENAME, createProgramSchema, type CreateProgramInput } from '@sigpro/shared';
 import { CurrentUser, RequirePermission, type AuthUser } from '../common/auth.types';
 import { ZodApiBody, ZodPipe } from '../common/zod.pipe';
 import { parseListQuery } from './program-query';
 import { ProgramsService } from './programs.service';
 
 const LIST_PARAMS = ['q', 'status', 'from', 'to', 'owner', 'sort', 'dir', 'page', 'pageSize'] as const;
-
-const asLang = (value: unknown): Lang => (value === 'en' ? 'en' : 'es');
 
 @ApiTags('programs')
 @ApiBearerAuth('bearer')
@@ -34,12 +32,11 @@ export class ProgramsController {
   @Get('export')
   @RequirePermission('program.export')
   @Header('Content-Type', 'text/csv; charset=utf-8')
-  @Header('Content-Disposition', 'attachment; filename="programas.csv"')
+  @Header('Content-Disposition', `attachment; filename="${CSV_FILENAME}"`)
   @ApiOperation({ summary: 'Exporta a CSV los programas que cumplen los filtros (mismos parámetros que la lista, sin paginar).' })
-  @ApiQuery({ name: 'lang', required: false, enum: ['es', 'en'] })
   export(@CurrentUser() user: AuthUser, @Query() query: Record<string, unknown>) {
     const filters = Object.fromEntries(LIST_PARAMS.map((key) => [key, query[key]]));
-    return this.programs.exportCsv(user.tenantId, parseListQuery(filters), asLang(query.lang));
+    return this.programs.exportCsv(user.tenantId, parseListQuery(filters));
   }
 
   @Get(':code')

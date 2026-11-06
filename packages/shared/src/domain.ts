@@ -54,3 +54,9 @@ export const HTTP_STATUS_TEXT: Readonly<Record<number, string>> = {
   501: 'Not Implemented',
   503: 'Service Unavailable',
 };
+
+/** Siguiente código `PRG-NNN` a partir de los existentes (admite huecos). */
+export const nextProgramCode = (codes: readonly string[]): string => {
+  const max = codes.reduce((acc, code) => Math.max(acc, Number.parseInt(code.replace(/\D/g, ''), 10) || 0), 0);
+  return `PRG-${String(max + 1).padStart(3, '0')}`;
+};

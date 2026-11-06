@@ -179,3 +179,33 @@ export const PROGRAMAS_DYNAMIC_TESTIDS = {
 } as const;
 
 export type TestId = (typeof ACCESO_TESTIDS)[keyof typeof ACCESO_TESTIDS] | (typeof PROGRAMAS_TESTIDS)[keyof typeof PROGRAMAS_TESTIDS];
+
+// --- Ampliaciones de la fase 1 (se añaden, nunca se renombran los anteriores) ---
+
+export const DETALLE_TESTIDS = {
+  AUTH_FOOTER_HELP: 'auth-footer-help',
+  AUTH_FOOTER_PRIVACY: 'auth-footer-privacy',
+  AUTH_FOOTER_TERMS: 'auth-footer-terms',
+  COMING_SOON_BACK: 'coming-soon-back',
+  LAYOUT_BREADCRUMB_HOME: 'layout-breadcrumb-home',
+  LAYOUT_BREADCRUMB_PROGRAM: 'layout-breadcrumb-program',
+  LAYOUT_BREADCRUMB_PROGRAMS: 'layout-breadcrumb-programs',
+  LAYOUT_SKIP_LINK: 'layout-skip-link',
+  REGISTER_PRIVACY_LINK: 'register-privacy-link',
+  PROGRAMS_WIZARD_NEXT: 'programs-wizard-next',
+  PROGRAMS_WIZARD_SUBMIT: 'programs-wizard-submit',
+  PROGRAMS_CSV_DOWNLOAD: 'programs-csv-download',
+  PROGRAM_DETAIL: 'program-detail',
+  PROGRAM_DETAIL_BACK: 'program-detail-back',
+  PROGRAM_DETAIL_NOT_FOUND: 'program-detail-not-found',
+  PROGRAM_DETAIL_PROGRESS: 'program-detail-progress',
+  PROGRAM_DETAIL_STATE_BADGE: 'program-detail-state-badge',
+  PROGRAM_DETAIL_TABS: 'program-detail-tabs',
+  COMING_SOON: 'coming-soon',
+  APP_SPLASH: 'app-splash',
+} as const;
+
+export const DETALLE_DYNAMIC_TESTIDS = {
+  PROGRAM_DETAIL_TAB: (key: 'summary' | 'milestones' | 'requirements') => `program-detail-tab-${key}`,
+  PROGRAM_DETAIL_PANEL: (key: 'summary' | 'milestones' | 'requirements') => `program-detail-panel-${key}`,
+} as const;

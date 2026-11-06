@@ -56,3 +56,22 @@ Una línea de decisión + una de justificación. Si el plan y el handoff se cont
 - **Logo y avatares:** `<img alt>` con SVG data-URI; la "S" del logotipo es un trazo propio (el SVG-imagen no carga fuentes web) escalado al 69 % para igualar la proporción del prototipo; los avatares usan colores por tema. *El `<img>` de avatar no puede leer variables CSS.*
 - **Panel de marca:** muestra entorno y versión reales de `GET /api/config` (`dev · v0.1.0`) en lugar del `staging · eu-west-1` del mock.
 - **Comparación con el handoff:** `e2e/tests/compare.spec.ts` sirve `docs/design-handoff` por HTTP y mide el % de píxeles distintos (`pnpm --filter @sigpro/e2e compare`); imágenes en `e2e/.compare/` (ignorado por git).
+
+## Programas
+
+- **Asistente = modal centrado de 560 px (hoja inferior en móvil), no drawer lateral de 480 px.** *El README del handoff dice "drawer", pero el `.dc.html` (la referencia visual) implementa un modal; en lo visual gana el prototipo.*
+- **Sidebar 224/56 px y breakpoints 640/1100:** valores del prototipo, no los 220/52 y 1024 del README. En tablet empieza colapsada y se puede expandir.
+- **Badge de fila = 20 px, 11/600, con borde del tono** (prototipo de Programas); el de 11,5/500 sin borde del README solo se usa en el panel de verificación.
+- **CSV:** separador `;`, cabecera `code;name;status;owner;start;end;budget;progress`, nombre y responsable entrecomillados, archivo `sigpro-programas.csv`, `<a download data-testid="programs-csv-download">` temporal. *Formato del prototipo; lo genera `@sigpro/shared` para API y web.* "Exportar CSV" respeta los filtros (pide `/api/programs/export`); "Exportar selección" lo genera en el cliente.
+- **Etiqueta del menú de fila:** `Acciones para PRG-001` (plan) en lugar de `Acciones PRG-001` (prototipo). *El plan manda en lo funcional/locators.*
+- **Menú ⋯ con `position: fixed`** dentro de la propia celda. *Se mantiene la jerarquía fila → menú para el encadenamiento de locators y no lo recorta el scroll de la tabla.*
+- **Estado de la lista en la URL** (`/programs?status=on_hold&sort=name&dir=desc&page=2`). *Se puede compartir, recargar y usar en `page.goto`.*
+- **Búsqueda global = búsqueda de Programas** (debounce 250 ms, `?q=`) en la fase 1.
+- **Skeleton:** inmediato en la primera carga; en las siguientes solo si tarda > 250 ms (mientras tanto, `aria-busy` y datos anteriores). *Evita parpadeos al teclear en filtros pero sigue siendo observable con latencia/caos.*
+- **Ids de toast `toast-{ok|danger|info|warn}`** también en Programas (el prototipo usaba `success`/`error`). Estilo con franja izquierda de color (prototipo de Programas) en todos los toasts.
+- **Vacío:** "Sin programas / Ningún programa coincide con los filtros aplicados." (handoff) en lugar de "No hay programas que coincidan" (plan). *Texto visible del handoff.*
+- **Borrado permanente, sin "Deshacer":** el diálogo dice "de forma permanente" y la API no tiene borrado lógico. *El `toast-action` del prototipo queda sin usar; id reservado en `testids.ts`.*
+- **Editar** muestra el toast informativo del prototipo (`→ /programs/PRG-001/edit`); la edición real (PATCH) llega con el módulo completo en la fase 2.
+- **`GET /api/users/owners` incluye `programCount`** para el contador de las opciones del combobox.
+- **Secciones futuras del menú** (Panel, Requisitos, Verificación, NC, Documentos, Auditoría, Administración) existen como página "Próximamente" para que los enlaces del sidebar no rompan.
+- **Detalle de programa** mínimo (cabecera, progreso, pestañas Resumen/Hitos/Requisitos con roles `tab`/`tabpanel`); hitos y requisitos llegan en la fase 2.

@@ -1,6 +1,9 @@
 import type { ReactNode } from 'react';
 import { BrowserRouter, Navigate, Outlet, Route, Routes } from 'react-router-dom';
+import { AppShell } from './layout/AppShell';
+import { ComingSoon } from './pages/ComingSoon';
 import { AccessPage } from './pages/access/AccessPage';
+import { ProgramDetailPage } from './pages/programs/ProgramDetailPage';
 import { ProgramsPage } from './pages/programs/ProgramsPage';
 import { AuthProvider, useAuth } from './state/auth';
 import { I18nProvider, useI18n } from './state/i18n';
@@ -31,6 +34,11 @@ const PublicOnly = ({ children }: { children: ReactNode }) => {
   const { status } = useAuth();
   if (status === 'loading') return <Splash />;
   return status === 'authenticated' ? <Navigate to="/programs" replace /> : <>{children}</>;
+};
+
+const Soon = ({ label }: { label: 'nav_mission' | 'nav_requirements' | 'nav_verification' | 'nav_nc' | 'nav_documents' | 'nav_audit' | 'nav_admin' }) => {
+  const { t } = useI18n();
+  return <ComingSoon title={t('programas', label)} />;
 };
 
 export const App = () => (
@@ -66,7 +74,17 @@ export const App = () => (
                 }
               />
               <Route element={<RequireAuth />}>
-                <Route path="/programs" element={<ProgramsPage />} />
+                <Route element={<AppShell />}>
+                  <Route path="/programs" element={<ProgramsPage />} />
+                  <Route path="/programs/:code" element={<ProgramDetailPage />} />
+                  <Route path="/programs/:code/requirements" element={<Soon label="nav_requirements" />} />
+                  <Route path="/mission" element={<Soon label="nav_mission" />} />
+                  <Route path="/verification" element={<Soon label="nav_verification" />} />
+                  <Route path="/nc" element={<Soon label="nav_nc" />} />
+                  <Route path="/documents" element={<Soon label="nav_documents" />} />
+                  <Route path="/audit" element={<Soon label="nav_audit" />} />
+                  <Route path="/admin" element={<Soon label="nav_admin" />} />
+                </Route>
               </Route>
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>

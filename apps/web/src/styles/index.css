@@ -288,6 +288,7 @@ a:hover {
   }
   .input-filter {
     height: 30px;
+    padding: 0 8px;
     background: var(--surface);
     font-size: 12.5px;
   }
@@ -417,6 +418,14 @@ a:hover {
   .badge[data-tone='purple'] {
     background: var(--purple-soft);
     color: var(--purple);
+  }
+  /* Badge de las filas de tabla/tarjetas: 20 px, 11/600, borde del tono (prototipo de Programas) */
+  .badge-row {
+    height: 20px;
+    padding: 0 7px;
+    font-size: 11px;
+    font-weight: 600;
+    border: 1px solid currentColor;
   }
   .pill {
     display: inline-block;

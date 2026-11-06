@@ -1,11 +1,11 @@
 import { Injectable } from '@nestjs/common';
 import type { Prisma } from '@prisma/client';
-import type { CreateProgramInput, Lang, ProgramDto, ProgramListQuery, ProgramListResponse } from '@sigpro/shared';
+import { nextProgramCode, programsToCsv, type CreateProgramInput, type ProgramDto, type ProgramListQuery, type ProgramListResponse } from '@sigpro/shared';
 import { AuditService } from '../audit/audit.service';
 import type { AuthUser } from '../common/auth.types';
 import { fail } from '../common/errors';
 import { PrismaService } from '../prisma/prisma.service';
-import { buildOrderBy, buildWhere, nextProgramCode, normalizePaging, progressOf, toCsv, type CsvRow } from './program-query';
+import { buildOrderBy, buildWhere, normalizePaging, progressOf } from './program-query';
 
 const WITH_DETAIL = { owner: { select: { name: true } }, milestones: { select: { done: true } } } as const;
 type ProgramRow = Prisma.ProgramGetPayload<{ include: typeof WITH_DETAIL }>;
@@ -31,17 +31,6 @@ export const toProgramDto = (row: ProgramRow): ProgramDto => {
     milestonesTotal: row.milestones.length,
   };
 };
-
-const toCsvRow = (dto: ProgramDto): CsvRow => ({
-  code: dto.code,
-  name: dto.name,
-  status: dto.status,
-  owner: dto.ownerName,
-  start: dto.startDate,
-  end: dto.endDate,
-  budget: dto.budgetEur,
-  progress: dto.progress,
-});
 
 @Injectable()
 export class ProgramsService {
@@ -70,9 +59,9 @@ export class ProgramsService {
     return { items: rows.map(toProgramDto), total, totalAll, activeCount, page: safePage, pageSize, pages };
   }
 
-  async exportCsv(tenantId: string, query: ProgramListQuery, lang: Lang): Promise<string> {
+  async exportCsv(tenantId: string, query: ProgramListQuery): Promise<string> {
     const rows = await this.prisma.program.findMany({ where: buildWhere(tenantId, query), orderBy: buildOrderBy(query.sort, query.dir), include: WITH_DETAIL });
-    return toCsv(rows.map(toProgramDto).map(toCsvRow), lang);
+    return programsToCsv(rows.map(toProgramDto));
   }
 
   async get(tenantId: string, code: string): Promise<ProgramDto> {
