@@ -1,4 +1,4 @@
-import { ApiError, DETALLE_DYNAMIC_TESTIDS, DETALLE_TESTIDS, EDITAR_PROGRAMA_TESTIDS, can, formatDate, formatMoney, type ProgramDto } from '@sigpro/shared';
+import { ApiError, DETALLE_DYNAMIC_TESTIDS, DETALLE_TESTIDS, EDITAR_PROGRAMA_TESTIDS, REQUISITOS_TESTIDS, can, formatDate, formatMoney, type ProgramDto } from '@sigpro/shared';
 import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { formatTrace } from '../../lib/errors';
@@ -147,6 +147,10 @@ export const ProgramDetailPage = () => {
                 </div>
               ))}
             </dl>
+          ) : tab === 'requirements' ? (
+            <Link to={`/programs/${program.code}/requirements`} data-testid={REQUISITOS_TESTIDS.PROGRAM_DETAIL_OPEN_REQUIREMENTS} className="font-medium">
+              {t('requisitos', 'openFromProgram')}
+            </Link>
           ) : (
             <p className="m-0 text-fg-2">{t('common', 'comingSoon')}</p>
           )}

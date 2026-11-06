@@ -124,3 +124,14 @@ export const nextRequirementCode = (codes: readonly string[]): string => {
   const max = codes.reduce((acc, code) => Math.max(acc, Number.parseInt(code.replace(/\D/g, ''), 10) || 0), 0);
   return `REQ-${String(max + 1).padStart(3, '0')}`;
 };
+
+/** Elementos que cumplen `matches` más todos sus ancestros (para filtrar el árbol sin perder el camino hasta cada coincidencia). */
+export const withAncestors = <T extends TreeItem>(items: readonly T[], matches: (item: T) => boolean): readonly T[] => {
+  const byCode = new Map(items.map((item) => [item.code, item]));
+  const path = (item: T): readonly string[] => {
+    const parent = item.parentCode === null ? undefined : byCode.get(item.parentCode);
+    return [item.code, ...(parent ? path(parent) : [])];
+  };
+  const keep = new Set(items.filter(matches).flatMap(path));
+  return items.filter((item) => keep.has(item.code));
+};

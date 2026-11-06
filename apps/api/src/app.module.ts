@@ -16,6 +16,8 @@ import { HealthController } from './health.controller';
 import { PrismaService } from './prisma/prisma.service';
 import { ProgramsController } from './programs/programs.controller';
 import { ProgramsService } from './programs/programs.service';
+import { RequirementsController } from './requirements/requirements.controller';
+import { RequirementsService } from './requirements/requirements.service';
 import { SeedService } from './seed/seed.service';
 import { UsersController } from './users/users.controller';
 
@@ -23,7 +25,7 @@ const env = loadEnv();
 
 @Module({
   imports: [JwtModule.register({ global: true, secret: env.JWT_SECRET })],
-  controllers: [HealthController, ConfigController, AuthController, ProgramsController, UsersController, AdminController],
+  controllers: [HealthController, ConfigController, AuthController, ProgramsController, RequirementsController, UsersController, AdminController],
   providers: [
     { provide: ENV, useValue: env },
     PrismaService,
@@ -33,6 +35,7 @@ const env = loadEnv();
     TokenService,
     AuthService,
     ProgramsService,
+    RequirementsService,
     { provide: APP_GUARD, useClass: AuthGuard },
     { provide: APP_INTERCEPTOR, useClass: ChaosInterceptor },
     { provide: APP_FILTER, useClass: AllExceptionsFilter },

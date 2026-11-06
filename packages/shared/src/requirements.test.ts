@@ -12,6 +12,7 @@ import {
   stepTarget,
   transitionsFor,
   visibleRows,
+  withAncestors,
   type TreeItem,
 } from './requirements';
 
@@ -114,5 +115,20 @@ describe('nextRequirementCode', () => {
   it('continúa tras el mayor código y admite huecos', () => {
     expect(nextRequirementCode([])).toBe('REQ-001');
     expect(nextRequirementCode(['REQ-001', 'REQ-040', 'REQ-017'])).toBe('REQ-041');
+  });
+});
+
+describe('withAncestors', () => {
+  const items = [item('A', null), item('B', 'A'), item('C', 'B'), item('D', null), item('E', 'D')];
+
+  it('conserva las coincidencias y todo el camino hasta la raíz', () => {
+    expect(withAncestors(items, (i) => i.code === 'C').map((i) => i.code)).toEqual(['A', 'B', 'C']);
+    expect(withAncestors(items, (i) => i.code === 'D').map((i) => i.code)).toEqual(['D']);
+    expect(withAncestors(items, (i) => ['C', 'E'].includes(i.code)).map((i) => i.code)).toEqual(['A', 'B', 'C', 'D', 'E']);
+  });
+
+  it('sin coincidencias, vacío; con todo coincidiendo, igual que la entrada', () => {
+    expect(withAncestors(items, () => false)).toEqual([]);
+    expect(withAncestors(items, () => true)).toEqual(items);
   });
 });

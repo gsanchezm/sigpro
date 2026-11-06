@@ -9,6 +9,7 @@ import { PublicLab } from './pages/lab/PublicLab';
 import { ProgramDetailPage } from './pages/programs/ProgramDetailPage';
 import { ProgramEditPage } from './pages/programs/ProgramEditPage';
 import { ProgramsPage } from './pages/programs/ProgramsPage';
+import { RequirementsPage } from './pages/requirements/RequirementsPage';
 import { AuthProvider, useAuth } from './state/auth';
 import { I18nProvider, useI18n } from './state/i18n';
 import { ThemeProvider } from './state/theme';
@@ -53,7 +54,7 @@ const LabRoute = () => {
   );
 };
 
-const Soon = ({ label }: { label: 'nav_mission' | 'nav_requirements' | 'nav_verification' | 'nav_nc' | 'nav_documents' | 'nav_audit' | 'nav_admin' }) => {
+const Soon = ({ label }: { label: 'nav_mission' | 'nav_verification' | 'nav_nc' | 'nav_documents' | 'nav_audit' | 'nav_admin' }) => {
   const { t } = useI18n();
   return <ComingSoon title={t('programas', label)} />;
 };
@@ -99,7 +100,7 @@ export const App = () => (
                   <Route path="/programs" element={<ProgramsPage />} />
                   <Route path="/programs/:code" element={<ProgramDetailPage />} />
                   <Route path="/programs/:code/edit" element={<ProgramEditPage />} />
-                  <Route path="/programs/:code/requirements" element={<Soon label="nav_requirements" />} />
+                  <Route path="/programs/:code/requirements" element={<RequirementsPage />} />
                   <Route path="/mission" element={<Soon label="nav_mission" />} />
                   <Route path="/verification" element={<Soon label="nav_verification" />} />
                   <Route path="/nc" element={<Soon label="nav_nc" />} />

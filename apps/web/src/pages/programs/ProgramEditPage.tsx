@@ -1,5 +1,6 @@
 import {
   ApiError,
+  DETALLE_TESTIDS,
   EDITAR_PROGRAMA_TESTIDS,
   PRIORITIES,
   PROGRAM_STATUSES,
@@ -96,7 +97,7 @@ export const ProgramEditPage = () => {
       <section role="alert" data-testid={EDITAR_PROGRAMA_TESTIDS.PROGRAM_EDIT_NOT_FOUND} className="alert alert-danger flex max-w-[560px] flex-col gap-1">
         <h1 className="m-0 text-[16px] font-semibold">{missing ? t('common', 'notFound') : t('common', 'genericError')}</h1>
         <span className="trace">{formatTrace(failure)}</span>
-        <Link to="/programs" className="mt-1 self-start text-[12.5px] font-medium">
+        <Link to="/programs" data-testid={DETALLE_TESTIDS.PROGRAM_DETAIL_BACK} className="mt-1 self-start text-[12.5px] font-medium">
           {t('common', 'backToPrograms')}
         </Link>
       </section>
@@ -117,7 +118,7 @@ export const ProgramEditPage = () => {
       <section role="alert" data-testid={EDITAR_PROGRAMA_TESTIDS.PROGRAM_EDIT_DENIED} className="alert alert-warn flex max-w-[560px] flex-col gap-1">
         <h1 className="m-0 text-[16px] font-semibold">{t('programas', 'editProgram')}</h1>
         <p className="m-0">{t('programas', 'editDenied')}</p>
-        <Link to={`/programs/${program.code}`} className="mt-1 self-start text-[12.5px] font-medium">
+        <Link to={`/programs/${program.code}`} data-testid={EDITAR_PROGRAMA_TESTIDS.PROGRAM_EDIT_BACK} className="mt-1 self-start text-[12.5px] font-medium">
           {t('programas', 'backToDetail')}
         </Link>
       </section>

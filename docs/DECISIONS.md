@@ -112,3 +112,17 @@ Una línea de decisión + una de justificación. Si el plan y el handoff se cont
 - **Scroll infinito:** contenedor de altura fija con `role="feed"` y `IntersectionObserver` sobre un centinela (más «Cargar más» como respaldo accesible). *Con la página entera como raíz, el centinela estaría ya visible en 900 px de alto y cargaría todo de golpe.*
 - **Tenants de los specs nuevos:** `alumno08…alumno16` (uno por archivo/spec de capturas).
 - **`WEB_PORT`** (Vite) permite levantar una segunda pila web (p. ej. `WEB_PORT=5174 API_PROXY_TARGET=http://localhost:3001`) sin pisar la que ya esté en marcha; Playwright la usa con `E2E_WEB_URL` / `E2E_API_URL`. *En Windows, `prisma generate` no puede reemplazar el motor mientras otra API lo tiene cargado.*
+
+### Requisitos (T17)
+
+- **Edición en línea: Enter guarda, Esc y salir del campo cancelan** (no se guarda nada por accidente). Doble clic en el título (o F2, o «Renombrar» del menú). Un título inválido deja el campo abierto con `aria-invalid` y el motivo en `title`.
+- **Detalle = panel lateral de 380 px en escritorio (≥ 1100 px); cajón superpuesto con scrim en tablet y hoja a pantalla completa en móvil.** *Con la barra lateral de 224 px, a menos de 1100 px el árbol quedaría ilegible junto al panel.*
+- **Árbol `role="tree"` con filas `treeitem` planas** (`aria-level`, `aria-posinset`, `aria-setsize`, `aria-expanded` solo en las que tienen hijos) y foco itinerante: ↑↓, Inicio/Fin, → / ← (desplegar, plegar o ir al padre), Enter, F2, Alt+↑↓ (mover), Mayús+F10 o tecla de menú (menú contextual). El nombre accesible de la fila es «REQ-017 título».
+- **Filtro del árbol:** conserva a los ancestros de cada coincidencia y despliega todo mientras hay texto (`withAncestors`, pura y con tests).
+- **Reordenar = arrastrar la fila entera** (HTML5 DnD); el icono ⋮⋮ es solo una pista (`role="img"`). En la zona central de la fila, soltar ocupa su sitio (hacia abajo va detrás; hacia arriba, delante); el cuarto superior o inferior fuerza antes o después. Soltar sobre otro padre no se acepta. Vista optimista; si la API falla se recarga el orden real.
+- **Atajos:** `N` nuevo requisito, `/` buscar, `Esc` sale del campo en el que se escribe y, al pulsarlo de nuevo, cierra el detalle. Los diálogos y menús tienen su propio `Esc`.
+- **Selector de etiquetas:** elegir una etiqueta cierra la lista (el foco sigue en el campo; escribir o ↓ la reabren). *Con la lista abierta tapaba los controles de debajo; lo descubrió el propio spec.*
+- **Matriz:** una casilla por cruce con vista optimista; el recuento «X de N con cobertura» se actualiza al instante y el último requisito de cada programa del seed queda sin cobertura a propósito (`data-covered="false"` y etiqueta «Sin cobertura»).
+- **Transición inválida = 409 (`invalid_transition`)**, rol sin permiso = 403, cuerpo inválido = 422. *Son tres casos de prueba distintos para el alumno.*
+- **Capturas:** el menú contextual solo se captura en escritorio (se cierra al redimensionar y la captura ajusta el viewport a la altura del contenido).
+- **Tenants de los specs:** `alumno09` (Requisitos UI), `alumno10` (Requisitos API, con `alumno11` como segundo tenant para el aislamiento), `alumno13` (capturas de edición de programa y páginas legales) y `alumno14` (capturas de Requisitos).

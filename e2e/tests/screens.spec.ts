@@ -123,6 +123,72 @@ for (const theme of THEMES) {
         await capture(page, 'ayuda', theme);
       });
 
+      test('requisitos: árbol, detalle, etiquetas, menú contextual, confirmación, matriz y vacío', async ({ page, request }) => {
+        const tenant = 'alumno14';
+        await resetTenant(request, tenant);
+        await signIn(page, request, tenant);
+        const mobile = viewport.width < 640;
+        const row = (code: string) => page.getByRole('tree', { name: 'Árbol de requisitos' }).getByRole('treeitem', { name: new RegExp(`^${code} `) });
+
+        await page.goto('/programs/PRG-002/requirements');
+        await row('REQ-015').waitFor();
+        await capture(page, 'requisitos-arbol', theme);
+
+        await page.getByRole('button', { name: 'Contraer REQ-020' }).click();
+        await capture(page, 'requisitos-arbol-plegado', theme);
+        await page.getByRole('button', { name: 'Expandir todo' }).click();
+
+        if (mobile) {
+          // El menú se cierra al redimensionar y la captura ajusta el viewport a la altura del contenido: solo en escritorio
+          await row('REQ-017').click();
+        } else {
+          await row('REQ-017').click({ button: 'right' });
+          await page.getByRole('menu').waitFor();
+          await capture(page, 'requisitos-menu-contextual', theme);
+          await page.getByRole('menuitem', { name: 'Abrir detalle' }).click();
+        }
+
+        const panel = page.getByRole('complementary', { name: 'Detalle del requisito' });
+        await panel.waitFor();
+        await panel.getByRole('combobox', { name: 'Etiquetas' }).fill('r');
+        await page.getByRole('listbox').waitFor();
+        await capture(page, 'requisitos-etiquetas', theme);
+        await page.getByRole('option', { name: 'Rendimiento' }).click();
+        await panel.getByRole('textbox', { name: 'Descripción' }).click();
+        await page.keyboard.press('Control+A');
+        await page.keyboard.press('Control+B');
+        await capture(page, 'requisitos-detalle-editor', theme);
+
+        await panel.getByRole('button', { name: 'Aprobar' }).click();
+        await page.getByRole('dialog', { name: 'Cambiar el estado de REQ-017' }).waitFor();
+        await capture(page, 'requisitos-confirmar-estado', theme);
+        await page.getByRole('button', { name: 'Confirmar' }).click();
+        await page.getByTestId('toast-ok').waitFor();
+        await capture(page, 'requisitos-estado-aprobado', theme);
+
+        // En móvil el detalle es una hoja a pantalla completa: hay que cerrarla para ver el resto
+        await page.getByRole('button', { name: 'Cerrar detalle de REQ-017' }).click();
+        await page.getByRole('searchbox', { name: 'Buscar requisitos' }).fill('latencia');
+        await capture(page, 'requisitos-filtro', theme);
+        await page.getByRole('searchbox', { name: 'Buscar requisitos' }).fill('');
+
+        await page.getByRole('tab', { name: 'Matriz de trazabilidad' }).click();
+        await page.getByRole('table', { name: 'Matriz de trazabilidad' }).waitFor();
+        await capture(page, 'requisitos-matriz', theme);
+
+        await page.goto('/programs/PRG-004/requirements');
+        await page.getByTestId('requirements-empty').waitFor();
+        await capture(page, 'requisitos-vacio', theme);
+
+        await page.route('**/api/programs/PRG-002/requirements', (route) =>
+          route.fulfill({ status: 503, contentType: 'application/json', body: JSON.stringify({ statusCode: 503, error: 'Service Unavailable', message: 'down', traceId: '7f3a-c21d' }) }),
+        );
+        await page.goto('/programs/PRG-002/requirements');
+        await page.getByTestId('requirements-error').waitFor();
+        await capture(page, 'requisitos-error', theme);
+        await page.unroute('**/api/programs/PRG-002/requirements');
+      });
+
       test('programas: lista, estados, menú, asistente, diálogos y detalle', async ({ page, request, browser }) => {
         const tenant = 'alumno04';
         await resetTenant(request, tenant);

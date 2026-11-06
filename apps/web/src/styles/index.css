@@ -493,3 +493,80 @@ a:hover {
     animation-duration: 3s;
   }
 }
+
+/* ---- Fase 2: editor enriquecido, árbol de requisitos, zona de arrastre y feed ---- */
+.rich-text:empty::before {
+  content: attr(data-placeholder);
+  color: var(--text-3);
+  pointer-events: none;
+}
+.rich-text[aria-readonly='true'] {
+  background: var(--surface-2);
+  cursor: default;
+}
+.rich-text p {
+  margin: 0 0 6px;
+}
+.rich-text p:last-child {
+  margin-bottom: 0;
+}
+.rich-text ul,
+.rich-text ol {
+  margin: 0 0 6px;
+  padding-left: 20px;
+}
+.rich-text ul {
+  list-style: disc;
+}
+.rich-text ol {
+  list-style: decimal;
+}
+.rich-text strong {
+  font-weight: 600;
+}
+
+/* Filas arrastrables: línea de inserción antes/después y fila de origen atenuada */
+.tree-row[data-dragging='true'] {
+  opacity: 0.45;
+}
+.tree-row[data-drop='before'] {
+  box-shadow: inset 0 2px 0 0 var(--accent);
+}
+.tree-row[data-drop='after'] {
+  box-shadow: inset 0 -2px 0 0 var(--accent);
+}
+.tree-row[aria-selected='true'] {
+  background: var(--accent-soft);
+}
+.tree-row:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+.dropzone[data-over='true'] {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+/* Comparación de versiones: resaltado del diff (también con data-diff para los locators) */
+.diff-row[data-diff='added'] {
+  background: var(--ok-soft);
+}
+.diff-row[data-diff='removed'] {
+  background: var(--danger-soft);
+}
+.diff-row[data-diff='changed'] {
+  background: var(--warn-soft);
+}
+.diff-row ins {
+  text-decoration: none;
+  background: color-mix(in srgb, var(--ok) 28%, transparent);
+  border-radius: 2px;
+  padding: 0 2px;
+}
+.diff-row del {
+  text-decoration: line-through;
+  background: color-mix(in srgb, var(--danger) 24%, transparent);
+  border-radius: 2px;
+  padding: 0 2px;
+}

@@ -12,3 +12,4 @@ Una línea por módulo cerrado.
 ## Fase 2 — Núcleo del dominio
 
 - **Pendientes de la fase 1:** editar programa (`PATCH /api/programs/:code` parcial + `/programs/:code/edit`, con «Guardar» / «Guardar y cerrar»), páginas públicas `/legal/terms`, `/legal/privacy` y `/help`, y spec de basic auth de `/api/docs` y `/api/docs-json` (segunda API con `DOCS_BASIC_AUTH`); 19 specs nuevos (`programs-edit`, `legal`, `api-docs`) y capturas `programas-editar-*`, `legal-condiciones`, `ayuda`.
+- **Requisitos** (`/programs/:code/requirements`): árbol `role="tree"` colapsable con filtro, estados draft → approved → verified → validated con confirmación y permisos por rol, edición en línea, etiquetas con chips, editor `contenteditable`, reordenar (arrastrar, Alt+↑↓ y menú), menú contextual (clic derecho), atajos `N` / `/` / `Esc`, copiar código al portapapeles, matriz requisito ↔ caso y CSV; 13 specs de UI y 9 de API (`requirements*.spec.ts`); capturas `requisitos-*`.
