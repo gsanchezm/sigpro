@@ -1,6 +1,6 @@
 # SIGPRO — Estado de la construcción
 
-Última actualización: 2026-11-06 · **Fase 1 (Base) cerrada** · **Fase 2 (Núcleo del dominio) en curso**
+Última actualización: 2026-11-06 · **Fase 1 (Base) cerrada** · **Fase 2 (Núcleo del dominio) cerrada** · La fase 3 no se ha empezado
 
 Leyenda: `[x]` hecho · `[~]` en curso · `[ ]` pendiente
 
@@ -14,11 +14,19 @@ Cada tarea termina con `pnpm lint && pnpm typecheck && pnpm test` en verde y un 
 - [x] **T18** Módulo **Verificación**: casos de prueba, ejecución (radio), evidencias (simple, múltiple, arrastrar), informe PDF
 - [x] **T19** Módulo **Documentos**: clasificación por rol, visor en `<iframe>`, nueva pestaña, comparación de versiones
 - [x] **T20** Módulo **Auditoría** (AuditLog): feed con scroll infinito y filtros
-- [ ] **T21** Cierre de fase 2: README, CHANGELOG, STATUS final, pasada completa (lint, typecheck, unit, e2e, capturas)
+- [x] **T21** Cierre de fase 2: README, CHANGELOG, STATUS final, pasada completa (lint, typecheck, unit, e2e, capturas)
 
-## Cobertura de locators — fase 2 (se completa módulo a módulo)
+## Resumen de la fase 2
 
-Recorrida contra la tabla del plan. Estado: **✓** cubierta · **T18 / T19 / T20** llega con ese módulo · **fase 3** fuera de alcance. Specs en `e2e/tests/`: `req` = requirements.spec.ts, `req-api` = requirements-api.spec.ts, `ver` = verification.spec.ts, `ver-api` = verification-api.spec.ts, `doc` = documents.spec.ts, `doc-api` = documents-api.spec.ts, `aud` = audit.spec.ts, `aud-api` = audit-api.spec.ts, `edit` = programs-edit.spec.ts, `legal` = legal.spec.ts, `docs-auth` = api-docs.spec.ts.
+- **Datos y API:** migración `phase2` (etiquetas y posición de requisitos, `Evidence`, `DocumentVersion`), seed v2 (árbol de requisitos de 3 niveles, matriz por programa, 13 capturas PNG reales, 1–3 versiones por documento, 130 eventos de auditoría) con **re-siembra al arrancar** de los tenants antiguos; `PATCH /programs/:code`; Requisitos (estados con permisos, mover, enlaces, cascada), Verificación (lista, ejecución multipart con validación por firma real, evidencias, informe PDF), Documentos (403 en restringidos, contenido paginado, diff por líneas, publicar versión, PDF) y Auditoría (cursor). Cada mutación escribe su evento.
+- **Web:** Requisitos, Verificación, Documentos y Auditoría; edición de programa; páginas públicas `/legal/terms`, `/legal/privacy` y `/help`; visor HTML en `<iframe>`; componentes nuevos reutilizables (`ActionMenu`, `ConfirmDialog`, `RichTextEditor`, `TagPicker`, `ToneBadge`).
+- **Calidad:** `pnpm lint` en verde en los 5 paquetes; `tsc --noEmit` limpio en los 4; **221 tests unitarios** (92 shared, 89 api, 40 web) y **161 specs e2e de humo** en `chromium` (70 de la fase 1 + 91 de la fase 2: Requisitos 13 + 9 de API, Verificación 12 + 8, Documentos 9 + 7, Auditoría 7 + 7, edición de programa 8, legales 5 y basic auth 6). También pasan 46 de ellos contra el build de producción servido con `vite preview`, y `pnpm --filter web build` compila. 250 capturas claro/oscuro a 1440 y 390 px en `docs/screens/` (162 nuevas).
+- **Testabilidad:** auditoría automática sobre el AST de `apps/web/src`: 0 elementos interactivos sin `data-testid` y 0 `<img>` sin `alt`.
+- **Tenants de los specs:** `alumno08` (edición de programa), `09`–`11` (Requisitos), `12`–`17` (Verificación), `18`–`21` (Documentos), `22`–`23` y `25` (Auditoría) y `13`–`14` (capturas de edición/legal y de Requisitos). Detalle en `docs/DECISIONS.md`.
+
+## Cobertura de locators — fase 2 (cerrada)
+
+Recorrida contra la tabla del plan. Estado: **✓** cubierta · **fase 3** fuera de alcance. Specs en `e2e/tests/`: `req` = requirements.spec.ts, `req-api` = requirements-api.spec.ts, `ver` = verification.spec.ts, `ver-api` = verification-api.spec.ts, `doc` = documents.spec.ts, `doc-api` = documents-api.spec.ts, `aud` = audit.spec.ts, `aud-api` = audit-api.spec.ts, `edit` = programs-edit.spec.ts, `legal` = legal.spec.ts, `docs-auth` = api-docs.spec.ts.
 
 | Locator del plan | Elemento nuevo en la fase 2 | Spec | Estado |
 | --- | --- | --- | --- |
@@ -101,15 +109,18 @@ Recorrida fila a fila para Acceso y Programas. Specs en `e2e/tests/`: `access` =
 | `and()` / `or()` | Botón exportar + testid; `toast-info` o alerta tras exportar; toast ok o error 422 | programs, crud |
 | Lista con `toHaveText([...])` | Columna Código tras ordenar (`programs-link-*`) | programs |
 | `dialog` nativo vs custom | Borrado = `alertdialog` propio; reset del tenant = `confirm()` nativo (`page.on('dialog')`) | crud, lab |
-| `frameLocator`, Shadow DOM, nueva pestaña, kanban sin asignado | Visor de documentos, `<sigpro-severity-picker>`, enlace `target=_blank`, NC | **fase 2/3** |
+| `frameLocator`, nueva pestaña | Visor de documentos y enlace `target=_blank` | **fase 2 ✓** (ver la tabla «fase 2» más arriba) |
+| Shadow DOM, kanban sin asignado | `<sigpro-severity-picker>` y tarjetas de NC | **fase 3** |
 
 ## Pendiente / deuda conocida
 
 - **Render:** desplegado (web <https://sigpro-web.onrender.com/>, API <https://sigpro-api.onrender.com/>); CI en verde. Al desplegar la fase 2, la API re-siembra al arrancar los tenants con `seed_version` antigua (ver `docs/DECISIONS.md`).
 - **CI en GitHub:** la primera ejecución de `ci.yml` (2026-11-06, repositorio `gsanchezm/sigpro`) terminó en verde: lint, typecheck, unit y e2e de humo.
-- **Node 22 en CI/Render** en vez de Node 20: `pnpm@11` exige ≥ 22.13 (ver `docs/DECISIONS.md`).
+- **Node 22** (resuelto): CI, Render y `CLAUDE.md` usan Node 22 y pnpm 11 (`pnpm@11` exige ≥ 22.13; ver `docs/DECISIONS.md`).
 - **Deshacer eliminación** (`toast-action`): no se implementa (borrado permanente).
-- **Detalle de programa:** solo la pestaña Resumen; Hitos y Requisitos son marcadores.
+- **Detalle de programa:** Resumen y Requisitos (enlace al módulo) están hechos; la pestaña **Hitos** sigue siendo un marcador. La tabla de hitos con edición inline y el slider de avance del catálogo del plan no entraban en la fase 2.
+- **Windows + Prisma:** `pnpm typecheck` y `pnpm build` ejecutan `prisma generate`, que falla con `EPERM … query_engine-windows.dll.node` si otra API tiene el motor cargado. Detén antes las APIs locales (el resto de comprobaciones no se ve afectado).
+- **Evidencias en PostgreSQL:** hasta 5 archivos de 2 MB por ejecución; el reset nocturno las elimina con el resto del tenant (ver `docs/DEPLOY-RENDER.md`).
 - **Perfil**: el enlace del menú de usuario sigue sin destino (las páginas legales y la ayuda ya existen: `/legal/terms`, `/legal/privacy`, `/help`).
 - **Textos variables del caos** (`flakyLabels`): se guardan y exponen, pero la web aún no alterna etiquetas (fase 3).
 - **Bugs plantados** (`docs/planted-bugs.md`): fase 3.

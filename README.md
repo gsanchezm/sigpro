@@ -16,6 +16,20 @@ Laboratorio de pruebas para el curso **Playwright + TypeScript**: un gestor fict
 | `e2e` | Playwright: specs de humo, capturas y comparación visual con el handoff |
 | `apps/mobile` | Expo (fase 4, aún no creado) |
 
+## Módulos
+
+| Ruta | Módulo | Qué practica |
+| --- | --- | --- |
+| `/login`, `/register`, `/forgot` | Acceso | `storageState`, MFA, bloqueo, formularios con 422 |
+| `/programs`, `/programs/:code`, `/programs/:code/edit` | Programas | Tablas, filtros, paginación, asistente de 3 pasos, edición con «Guardar» / «Guardar y cerrar» |
+| `/programs/:code/requirements` | Requisitos | Árbol `role="tree"`, estados por rol con confirmación, edición en línea, etiquetas con chips, editor `contenteditable`, drag & drop para reordenar, clic derecho, atajos, portapapeles, matriz, CSV |
+| `/verification`, `/verification/:code` | Verificación | Casos de prueba, ejecución con radio, subida simple / múltiple / zona de arrastre, `getByAltText`, informe PDF |
+| `/documents`, `/documents/:id`, `/documents/:id/view` | Documentos | Clasificación por rol (403), `<iframe>` con `frameLocator`, `target="_blank"`, comparación de versiones, descargas |
+| `/audit` | Auditoría | Feed con scroll infinito (`role="feed"`, cursor), filtros por fecha, entidad y texto |
+| `/lab`, `/legal/terms`, `/legal/privacy`, `/help` | Laboratorio y páginas públicas | Credenciales, reset, caos, contraejemplos de locators, pestañas nuevas |
+
+Pendiente: Panel de misión, No conformidades y Administración (fase 3) y la app móvil (fase 4).
+
 ## Arranque local
 
 Requisitos: Node ≥ 22.13 (lo pide `pnpm@11`), pnpm 11 (`corepack enable`) y Docker.
@@ -57,6 +71,18 @@ Usuarios demo (existen en cada tenant; `?tenant=alumno01` o el selector de `/lab
 
 La primera vez: `pnpm --filter @sigpro/e2e install:browsers`.
 
+**Segunda pila para los specs.** Si ya tienes la API en :3000 y la web en :5173 (o prefieres no pisarlas), arranca otra y apunta Playwright a ella:
+
+```bash
+PORT=3001 CORS_ORIGIN=http://localhost:5174 pnpm --filter api dev        # API en :3001
+WEB_PORT=5174 API_PROXY_TARGET=http://localhost:3001 pnpm --filter web dev # web en :5174
+E2E_API_URL=http://localhost:3001/api E2E_WEB_URL=http://localhost:5174 pnpm e2e
+```
+
+El spec de basic auth (`api-docs.spec.ts`) usa una segunda API con `DOCS_BASIC_AUTH=curso:docs-2026` que Playwright arranca solo en el puerto 3100 (`E2E_DOCS_URL` y `E2E_DOCS_AUTH` lo cambian).
+
+> En Windows, `prisma generate` no puede reemplazar el motor de consultas mientras otra API lo tenga cargado (`EPERM … query_engine-windows.dll.node`): para `pnpm typecheck` y `pnpm build` detén antes las APIs en marcha.
+
 ## Despliegue
 
-`render.yaml` declara la API (Web Service), la web (Static Site), PostgreSQL y el Cron Job de reset nocturno. `JWT_SECRET`, `ADMIN_KEY` y `DOCS_BASIC_AUTH` se piden al crear el Blueprint. El workflow [`ci.yml`](.github/workflows/ci.yml) ejecuta lint, typecheck, tests unitarios, build y los specs e2e de humo con un PostgreSQL de servicio.
+`render.yaml` declara la API (Web Service), la web (Static Site), PostgreSQL y el Cron Job de reset nocturno. `JWT_SECRET`, `ADMIN_KEY` y `DOCS_BASIC_AUTH` se piden al crear el Blueprint. Al desplegar la fase 2, la API aplica la migración `phase2` y vuelve a sembrar los tenants con `seed_version` antigua (ver [`docs/DEPLOY-RENDER.md`](docs/DEPLOY-RENDER.md#actualizar-a-la-fase-2)). El workflow [`ci.yml`](.github/workflows/ci.yml) ejecuta lint, typecheck, tests unitarios, build y los specs e2e de humo con un PostgreSQL de servicio.

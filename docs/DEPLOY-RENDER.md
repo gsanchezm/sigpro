@@ -164,6 +164,15 @@ Entrega a los alumnos: la URL de la web, `?tenant=alumnoNN` para cambiar de tena
 
 El seed es determinista, así que los datos de un tenant son siempre reproducibles: la base se puede considerar desechable.
 
+## Actualizar a la fase 2
+
+La fase 2 añade tablas y columnas (etiquetas y posición de requisitos, evidencias, versiones de documentos) con valores por defecto, así que la migración `phase2` se aplica sola con el `prisma migrate deploy` del comando de arranque de la API.
+
+- **Re-siembra al arrancar:** los tenants con `seed_version` anterior a 2 se vuelven a sembrar (conservando su configuración de caos). Con 26 tenants son unos 5–10 s; los datos que los alumnos hubieran creado en la fase 1 se pierden, que es lo mismo que haría el reset nocturno.
+- **Evidencias en la base:** los archivos (PNG, JPEG o PDF, ≤ 2 MB, hasta 5 por ejecución) se guardan en PostgreSQL; el disco de Render es efímero. El reset nocturno las borra con el resto de datos del tenant.
+- **`DOCS_BASIC_AUTH`** protege ahora también `/api/docs-json`. El spec `api-docs.spec.ts` lee las credenciales de `E2E_DOCS_AUTH` (`usuario:contraseña`); para probar Render, ponlo al valor que hayas definido allí. El valor por defecto del spec (`curso:docs-2026`) es solo para la API local de pruebas: no lo uses en producción.
+- **Comprobación rápida:** `https://<api>.onrender.com/api/health` y, con sesión de admin, `GET /api/audit` debe devolver 130 eventos en un tenant recién sembrado.
+
 ## 9. Rollback
 
 - **Código:** servicio → **Events** (o **Deploys**) → elige un despliegue anterior correcto → **Rollback**. Aplica a la API y a la web.
