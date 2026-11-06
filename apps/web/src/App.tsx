@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import { BrowserRouter, Navigate, Outlet, Route, Routes } from 'react-router-dom';
 import { AppShell } from './layout/AppShell';
 import { ComingSoon } from './pages/ComingSoon';
+import { AuditPage } from './pages/audit/AuditPage';
 import { DocumentDetailPage } from './pages/documents/DocumentDetailPage';
 import { DocumentViewerPage } from './pages/documents/DocumentViewerPage';
 import { DocumentsPage } from './pages/documents/DocumentsPage';
@@ -59,7 +60,7 @@ const LabRoute = () => {
   );
 };
 
-const Soon = ({ label }: { label: 'nav_mission' | 'nav_nc' | 'nav_audit' | 'nav_admin' }) => {
+const Soon = ({ label }: { label: 'nav_mission' | 'nav_nc' | 'nav_admin' }) => {
   const { t } = useI18n();
   return <ComingSoon title={t('programas', label)} />;
 };
@@ -114,7 +115,7 @@ export const App = () => (
                   <Route path="/nc" element={<Soon label="nav_nc" />} />
                   <Route path="/documents" element={<DocumentsPage />} />
                   <Route path="/documents/:id" element={<DocumentDetailPage />} />
-                  <Route path="/audit" element={<Soon label="nav_audit" />} />
+                  <Route path="/audit" element={<AuditPage />} />
                   <Route path="/admin" element={<Soon label="nav_admin" />} />
                 </Route>
               </Route>

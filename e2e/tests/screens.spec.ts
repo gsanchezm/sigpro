@@ -308,6 +308,48 @@ for (const theme of THEMES) {
         await page.unroute(/\/api\/documents(\?.*)?$/);
       });
 
+      test('auditoría: feed, scroll infinito, filtros, vacío, permisos y errores', async ({ page, request }) => {
+        const tenant = 'alumno25';
+        await resetTenant(request, tenant);
+        await signIn(page, request, tenant, 'auditor');
+        const feed = page.getByRole('feed', { name: 'Registro de auditoría' });
+
+        await page.goto('/audit');
+        await feed.getByRole('article').first().waitFor();
+        await capture(page, 'auditoria-feed', theme);
+
+        await feed.getByRole('article').last().scrollIntoViewIfNeeded();
+        await page.getByText('Mostrando 40 de 130 eventos').waitFor();
+        await feed.getByRole('article').last().scrollIntoViewIfNeeded();
+        await page.getByText('Mostrando 60 de 130 eventos').waitFor();
+        await capture(page, 'auditoria-scroll', theme);
+
+        await page.getByLabel('Entidad').selectOption('requirement');
+        await page.getByLabel('Desde').fill('2026-01-08');
+        await page.getByLabel('Hasta').fill('2026-01-12');
+        await page.getByPlaceholder('Acción o código…').fill('state');
+        await page.getByText(/Mostrando \d+ de \d+ eventos/).waitFor();
+        await capture(page, 'auditoria-filtros', theme);
+
+        await page.getByPlaceholder('Acción o código…').fill('zzz-no-existe');
+        await page.getByTestId('audit-empty').waitFor();
+        await capture(page, 'auditoria-vacio', theme);
+
+        await signIn(page, request, tenant, 'consultant');
+        await page.goto('/audit');
+        await page.getByTestId('audit-forbidden').waitFor();
+        await capture(page, 'auditoria-permiso', theme);
+
+        await signIn(page, request, tenant, 'auditor');
+        await page.route(/\/api\/audit(\?.*)?$/, (route) =>
+          route.fulfill({ status: 503, contentType: 'application/json', body: JSON.stringify({ statusCode: 503, error: 'Service Unavailable', message: 'down', traceId: '7f3a-c21d' }) }),
+        );
+        await page.goto('/audit');
+        await page.getByTestId('audit-error').waitFor();
+        await capture(page, 'auditoria-error', theme);
+        await page.unroute(/\/api\/audit(\?.*)?$/);
+      });
+
       test('programas: lista, estados, menú, asistente, diálogos y detalle', async ({ page, request, browser }) => {
         const tenant = 'alumno04';
         await resetTenant(request, tenant);

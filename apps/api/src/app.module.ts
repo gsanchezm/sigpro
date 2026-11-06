@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { APP_FILTER, APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
 import { JwtModule } from '@nestjs/jwt';
 import { AdminController } from './admin/admin.controller';
+import { AuditController } from './audit/audit.controller';
 import { AuditService } from './audit/audit.service';
 import { AuthController } from './auth/auth.controller';
 import { AuthGuard } from './auth/auth.guard';
@@ -29,7 +30,7 @@ const env = loadEnv();
 
 @Module({
   imports: [JwtModule.register({ global: true, secret: env.JWT_SECRET })],
-  controllers: [HealthController, ConfigController, AuthController, ProgramsController, RequirementsController, VerificationController, DocumentsController, UsersController, AdminController],
+  controllers: [HealthController, ConfigController, AuthController, ProgramsController, RequirementsController, VerificationController, DocumentsController, AuditController, UsersController, AdminController],
   providers: [
     { provide: ENV, useValue: env },
     PrismaService,

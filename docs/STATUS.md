@@ -13,22 +13,22 @@ Cada tarea termina con `pnpm lint && pnpm typecheck && pnpm test` en verde y un 
 - [x] **T17** Módulo **Requisitos**: árbol, estados y permisos, edición inline, etiquetas, editor `contenteditable`, reordenar, menú contextual, atajos, copiar código, matriz, CSV
 - [x] **T18** Módulo **Verificación**: casos de prueba, ejecución (radio), evidencias (simple, múltiple, arrastrar), informe PDF
 - [x] **T19** Módulo **Documentos**: clasificación por rol, visor en `<iframe>`, nueva pestaña, comparación de versiones
-- [ ] **T20** Módulo **Auditoría** (AuditLog): feed con scroll infinito y filtros
+- [x] **T20** Módulo **Auditoría** (AuditLog): feed con scroll infinito y filtros
 - [ ] **T21** Cierre de fase 2: README, CHANGELOG, STATUS final, pasada completa (lint, typecheck, unit, e2e, capturas)
 
 ## Cobertura de locators — fase 2 (se completa módulo a módulo)
 
-Recorrida contra la tabla del plan. Estado: **✓** cubierta · **T18 / T19 / T20** llega con ese módulo · **fase 3** fuera de alcance. Specs en `e2e/tests/`: `req` = requirements.spec.ts, `req-api` = requirements-api.spec.ts, `ver` = verification.spec.ts, `ver-api` = verification-api.spec.ts, `doc` = documents.spec.ts, `doc-api` = documents-api.spec.ts, `edit` = programs-edit.spec.ts, `legal` = legal.spec.ts, `docs-auth` = api-docs.spec.ts.
+Recorrida contra la tabla del plan. Estado: **✓** cubierta · **T18 / T19 / T20** llega con ese módulo · **fase 3** fuera de alcance. Specs en `e2e/tests/`: `req` = requirements.spec.ts, `req-api` = requirements-api.spec.ts, `ver` = verification.spec.ts, `ver-api` = verification-api.spec.ts, `doc` = documents.spec.ts, `doc-api` = documents-api.spec.ts, `aud` = audit.spec.ts, `aud-api` = audit-api.spec.ts, `edit` = programs-edit.spec.ts, `legal` = legal.spec.ts, `docs-auth` = api-docs.spec.ts.
 
 | Locator del plan | Elemento nuevo en la fase 2 | Spec | Estado |
 | --- | --- | --- | --- |
-| `getByRole` | Requisitos: `tree`/`treeitem`, `tab`, `menu`/`menuitem`, `dialog`/`alertdialog`, `combobox`/`option` (etiquetas), `checkbox` (matriz), `textbox` (editor), `toolbar`, `complementary`, `searchbox` · Verificación: `table`/`row`/`columnheader` (`aria-sort`), `radio` dentro de `group`, `checkbox` con estado indeterminado, `menuitem` | req, ver | ✓ |
+| `getByRole` | Requisitos: `tree`/`treeitem`, `tab`, `menu`/`menuitem`, `dialog`/`alertdialog`, `combobox`/`option` (etiquetas), `checkbox` (matriz), `textbox` (editor), `toolbar`, `complementary`, `searchbox` · Verificación: `table`/`row`/`columnheader` (`aria-sort`), `radio` dentro de `group`, `checkbox` con estado indeterminado, `menuitem` · Auditoría: `feed` y `article` (`aria-posinset` / `aria-setsize`) | req, ver, aud | ✓ |
 | `getByRole` + `name` regex / `exact` | «Guardar» / «Guardar y cerrar» (detalle de requisito y edición de programa); «Aprobar» / «Marcar como verificado» / «Validar»; «Publicar nueva versión» / «Publicar versión» | req, edit, doc | ✓ |
 | `getByLabel` (`<label for>`) | Título, Prioridad, Etiquetas, Programa, Requisito padre, edición de programa completa · Notas, «Adjuntar un archivo», «Adjuntar varios archivos», «Último resultado» · «Versión», «Desde», «Hasta», «Clasificación», «Contenido (una línea por fila)» | req, edit, ver, doc | ✓ |
 | `getByLabel` (`aria-label`) | «Contraer REQ-015», «Copiar código REQ-017», «Acciones para REQ-017», «Quitar etiqueta X», «REQ-017 ↔ TC-012», «Arrastrar REQ-019 para reordenar» · «Seleccionar TC-001», «Acciones para TC-003», «Quitar foto.jpg», «Zona para soltar evidencias», «Descargar X» | req, ver | ✓ |
-| `getByPlaceholder` | «Filtrar por código o título…», «Añadir etiqueta…» · «Buscar código o título…», «Observaciones de la ejecución…» | req, ver | ✓ |
+| `getByPlaceholder` | «Filtrar por código o título…», «Añadir etiqueta…» · «Buscar código o título…», «Observaciones de la ejecución…» · «Acción o código…» | req, ver, aud | ✓ |
 | `getByText` | «Sin coincidencias», «Sin cobertura», toasts, «Aprobado» con `exact` | req | ✓ |
-| `getByAltText` | Miniatura `alt="Evidencia TC-001"` (blob descargado con el token), `alt="Documento PDF informe.pdf"` y vista previa `alt="Vista previa de captura-1.png"` | ver | ✓ |
+| `getByAltText` | Miniatura `alt="Evidencia TC-001"` (blob descargado con el token), `alt="Documento PDF informe.pdf"` y vista previa `alt="Vista previa de captura-1.png"` · avatar del actor en cada evento de auditoría (`alt="Marta Ruiz"`) | ver, aud | ✓ |
 | `getByTitle` | Botones deshabilitados con su motivo («Tu rol no permite crear requisitos», «No hay cambios que guardar», «Tu rol no permite registrar ejecuciones») | req, edit, ver | ✓ |
 | `getByTestId` | Todo elemento interactivo (auditado con un script sobre el AST: 0 sin `data-testid`, 0 `<img>` sin `alt`) | todos | ✓ |
 | CSS (`data-state`, atributos) | `.badge[data-state="verified"]`, `[data-covered="false"]`, `[data-drop]` · `tr[data-state="restricted"]`, `tr[data-diff="added"]` y `toHaveCSS` del resaltado | req, doc | ✓ |
@@ -42,7 +42,7 @@ Recorrida contra la tabla del plan. Estado: **✓** cubierta · **T18 / T19 / T2
 | `dialog` nativo vs custom | `dialog` (cambio de estado, nueva versión) y `alertdialog` (eliminar) propios | req, doc | ✓ (el `prompt()` nativo llega con NC, fase 3) |
 | Nueva pestaña (`context.waitForEvent('page')`) | Enlaces de términos y privacidad del registro · «Abrir en nueva pestaña» de documentos (enlace `target="_blank"` real) y la opción del menú ⋯ | legal, doc | ✓ |
 | Lista con `toHaveText([...])` | Opciones del menú contextual; códigos del árbol tras reordenar; pasos de un caso de prueba | req, ver | ✓ |
-| Scroll infinito | Feed de auditoría | — | T20 |
+| Scroll infinito | Feed de auditoría: `role="feed"` de altura fija, centinela con `IntersectionObserver` y cursor; `scrollIntoViewIfNeeded` + `expect.poll` sobre el conteo (20 → 130) | aud | ✓ |
 | Clic derecho | Fila de requisito → menú contextual | req | ✓ |
 | Drag & drop de reorden | `dragTo` entre hermanos (y caída inválida) | req | ✓ |
 | `contenteditable` | Editor de la descripción (negrita con atajo, HTML saneado al recargar) | req | ✓ |

@@ -149,3 +149,14 @@ Una línea de decisión + una de justificación. Si el plan y el handoff se cont
 - **Foco al abrir «Nueva versión»:** el campo está deshabilitado mientras carga el contenido, así que recibe el foco en cuanto se habilita (lo descubrió el propio spec).
 - **El filtro de la lista de documentos no usa la URL** (son 12 documentos, sin paginación). Programas y Verificación sí.
 - **Tenants de los specs:** `alumno18` (UI), `alumno19` (API) con `alumno20` de solo lectura para el aislamiento y `alumno21` (capturas).
+
+### Auditoría (T20)
+
+- **Feed = `role="feed"` con `<article>` por evento** (`aria-posinset` / `aria-setsize` con el total del filtro), dentro de un contenedor de altura fija (`max-h` 68 vh, tope de 640 px) y con foco de teclado (región con scroll). *La API de scroll infinito del patrón ARIA «feed».*
+- **Centinela con `IntersectionObserver` cuya raíz es el contenedor**, no la ventana, y un margen de 120 px: con la ventana como raíz el centinela ya estaría visible a 900 px de alto y cargaría todo de golpe. Si el filtro deja pocos eventos y el centinela queda a la vista, carga la siguiente página (y termina).
+- **Si falla la página siguiente no se reintenta sola:** se conserva lo cargado y aparece el aviso con «Cargar más» (`audit-load-more`). Las respuestas de filtros antiguos se descartan y los eventos repetidos no se duplican.
+- **Cursor opaco** (base64url de `{ at, id }`); un cursor inválido es 422 (`errors.cursor = "badCursor"`). `limit`: 20 por defecto, entre 1 y 100. Las fechas del filtro son días completos en UTC (`from` y `to` incluidos) y las no válidas se ignoran.
+- **`q` busca en la acción y en el código de la entidad** (sin distinguir mayúsculas). Las entidades filtrables son `program`, `requirement`, `testrun`, `document` y `tenant`.
+- **Cada mutación audita en la misma transacción** (`program.updated`, `requirement.created|updated|state_changed|moved|linked|unlinked|deleted`, `testrun.executed`, `document.version_published`); las operaciones rechazadas (403, 409, 422) no dejan evento. El spec de API lo comprueba evento a evento.
+- **Hora en la zona del navegador** (`toLocaleString`); el atributo `datetime` de cada `<time>` lleva el instante UTC exacto.
+- **Tenants de los specs (reasignados):** `alumno22` (UI), `alumno23` (API) y `alumno25` (capturas). *Los `alumno22`–`alumno23` quedaron reservados para Auditoría y el 24 lo usé a mano; el 25 es el último que crea el seed por defecto.*

@@ -515,6 +515,7 @@ export const AUDITORIA_TESTIDS = {
   AUDIT_ERROR: 'audit-error',
   AUDIT_ERROR_RETRY: 'audit-error-retry',
   AUDIT_FORBIDDEN: 'audit-forbidden',
+  AUDIT_FORBIDDEN_BACK: 'audit-forbidden-back',
 } as const;
 
 export const AUDITORIA_DYNAMIC_TESTIDS = {
