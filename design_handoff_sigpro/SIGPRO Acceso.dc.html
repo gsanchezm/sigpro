@@ -1,0 +1,415 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#0b0f15;font-family:'IBM Plex Sans',system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+a{color:#2f6fed}a:hover{color:#2459c7}
+[data-theme="light"]{--bg:#f3f5f8;--surface:#ffffff;--surface-2:#eef1f5;--border:#d5dbe3;--border-strong:#b7c0cc;--text:#0f1620;--text-2:#4b5665;--text-3:#7a8594;--accent:#2f6fed;--accent-hover:#2459c7;--accent-soft:#e3ecfd;--on-accent:#ffffff;--danger:#c62f2f;--danger-soft:#fbe3e3;--warn:#8a5200;--warn-soft:#fdeccc;--ok:#1a7f4b;--ok-soft:#d9f3e4;--info:#2459c7;--info-soft:#e3ecfd;--neutral:#4b5665;--neutral-soft:#e6eaf0;--shadow:0 1px 2px rgba(15,22,32,.06);--shadow-pop:0 8px 24px rgba(15,22,32,.14)}
+[data-theme="dark"]{--bg:#0d1117;--surface:#151b24;--surface-2:#1c242f;--border:#2a3441;--border-strong:#3b4756;--text:#e8edf3;--text-2:#a3afbe;--text-3:#6f7c8c;--accent:#5b8def;--accent-hover:#7ea3f3;--accent-soft:#1b2a47;--on-accent:#ffffff;--danger:#f0716b;--danger-soft:#3a1f21;--warn:#e6a23c;--warn-soft:#3a2d14;--ok:#49c27f;--ok-soft:#14311f;--info:#7ea3f3;--info-soft:#1b2a47;--neutral:#a3afbe;--neutral-soft:#27303c;--shadow:0 1px 2px rgba(0,0,0,.4);--shadow-pop:0 8px 24px rgba(0,0,0,.5)}
+@keyframes spin{to{transform:rotate(360deg)}}
+@keyframes toastIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+</style>
+</helmet>
+<div style="min-height:100vh;background:#0b0f15;display:flex;flex-direction:column">
+  <div data-testid="proto-bar" style="display:flex;flex-wrap:wrap;gap:6px 18px;align-items:center;padding:6px 14px;background:#0b0f15;color:#9aa7b8;font-size:12px;border-bottom:1px solid #1c2531">
+    <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.06em;color:#e8edf3">SIGPRO · PROTOTIPO · ACCESO</span>
+    <label style="display:flex;align-items:center;gap:6px">Vista<select data-testid="proto-view" aria-label="Vista" value="{{ view }}" onChange="{{ setViewSel }}" style="height:24px;background:#151b24;color:#e8edf3;border:1px solid #2a3441;border-radius:4px;font:inherit;font-size:12px"><option value="login">login</option><option value="register">registro</option><option value="mfa">mfa</option><option value="forgot">recuperar</option><option value="verify">verificar correo</option></select></label>
+    <label style="display:flex;align-items:center;gap:6px">Viewport<select data-testid="proto-viewport" aria-label="Ancho de viewport" value="{{ frame }}" onChange="{{ setFrame }}" style="height:24px;background:#151b24;color:#e8edf3;border:1px solid #2a3441;border-radius:4px;font:inherit;font-size:12px"><option value="auto">auto</option><option value="1440">1440</option><option value="1024">1024</option><option value="390">390 (móvil)</option></select></label>
+    <label style="display:flex;align-items:center;gap:6px;cursor:pointer"><input type="checkbox" data-testid="proto-annotations" checked="{{ showTestIds }}" onChange="{{ toggleTestIds }}" style="accent-color:#5b8def;margin:0">Anotaciones data-testid</label>
+    <label style="display:flex;align-items:center;gap:6px;cursor:pointer"><input type="checkbox" data-testid="proto-test-users" checked="{{ showTestUsers }}" onChange="{{ toggleTestUsers }}" style="accent-color:#5b8def;margin:0">Usuarios de prueba</label>
+    <a href="SIGPRO Programas.dc.html" style="margin-left:auto;color:#9aa7b8;font-size:12px">Programas →</a>
+  </div>
+
+  <div style="{{ frameStyle }}">
+  <div ref="{{ rootRef }}" data-theme="{{ theme }}" data-screen-label="Acceso" style="position:relative;display:flex;min-height:calc(100vh - 37px);background:var(--bg);color:var(--text);font-family:'IBM Plex Sans',system-ui,sans-serif;font-size:13px;line-height:1.45;overflow:hidden">
+
+    <!-- Brand panel -->
+    <sc-if value="{{ notMobile }}" hint-placeholder-val="{{ true }}">
+      <aside aria-hidden="true" style="width:min(40%,460px);flex:none;background:#0d1117;color:#e8edf3;display:flex;flex-direction:column;justify-content:space-between;padding:32px;border-right:1px solid #1c2531">
+        <div style="display:flex;align-items:center;gap:10px"><div style="width:28px;height:28px;border-radius:5px;background:#5b8def;color:#fff;display:grid;place-items:center;font-weight:600;font-size:13px">S</div><span style="font-weight:600;letter-spacing:.01em;font-size:15px">SIGPRO</span></div>
+        <div style="display:flex;flex-direction:column;gap:14px">
+          <div style="font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.08em;color:#6f7c8c">SISTEMA INTEGRAL DE GESTIÓN DE PROGRAMAS</div>
+          <p style="margin:0;font-size:22px;font-weight:500;letter-spacing:-.01em;line-height:1.3;max-width:22ch;text-wrap:pretty">Programas, requisitos, verificación y no conformidades en un único panel.</p>
+          <dl style="margin:8px 0 0;display:grid;grid-template-columns:auto 1fr;gap:6px 14px;font-size:12px;color:#a3afbe;font-family:'IBM Plex Mono',monospace">
+            <dt style="color:#6f7c8c">entorno</dt><dd style="margin:0">staging · eu-west-1</dd>
+            <dt style="color:#6f7c8c">versión</dt><dd style="margin:0">v0.9.3-rc.2</dd>
+            <dt style="color:#6f7c8c">clasificación</dt><dd style="margin:0">USO OFICIAL</dd>
+          </dl>
+        </div>
+        <div style="font-size:11.5px;color:#6f7c8c">Acceso restringido a personal autorizado. Toda actividad queda registrada en el registro de auditoría.</div>
+      </aside>
+    </sc-if>
+
+    <!-- Form column -->
+    <div style="flex:1;min-width:0;display:flex;flex-direction:column">
+      <header style="display:flex;align-items:center;gap:8px;height:52px;padding:0 16px;border-bottom:1px solid var(--border);background:var(--surface)">
+        <sc-if value="{{ isMobile }}" hint-placeholder-val="{{ false }}"><div style="display:flex;align-items:center;gap:8px"><div aria-hidden="true" style="width:24px;height:24px;border-radius:5px;background:var(--accent);color:#fff;display:grid;place-items:center;font-weight:600;font-size:12px">S</div><span style="font-weight:600">SIGPRO</span></div></sc-if>
+        <div style="flex:1"></div>
+        <select data-testid="auth-lang" aria-label="{{ t.language }}" value="{{ lang }}" onChange="{{ setLang }}" style="height:32px;padding:0 6px;border-radius:4px;border:1px solid var(--border);background:var(--surface);color:var(--text-2);font:inherit;font-size:12px;font-weight:500;cursor:pointer"><option value="es">ES</option><option value="en">EN</option></select>
+        <button type="button" data-testid="auth-theme" aria-label="{{ t.toggleTheme }}" aria-pressed="{{ isDark }}" onClick="{{ toggleTheme }}" style="width:32px;height:32px;border-radius:4px;border:1px solid var(--border);background:var(--surface);color:var(--text-2);cursor:pointer;display:grid;place-items:center" style-hover="background:var(--surface-2)" style-focus="outline:2px solid var(--accent);outline-offset:2px">
+          <sc-if value="{{ isDark }}" hint-placeholder-val="{{ false }}"><svg aria-hidden="true" width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="7" cy="7" r="3"></circle><line x1="7" y1="0.8" x2="7" y2="2.2"></line><line x1="7" y1="11.8" x2="7" y2="13.2"></line><line x1="0.8" y1="7" x2="2.2" y2="7"></line><line x1="11.8" y1="7" x2="13.2" y2="7"></line></svg></sc-if>
+          <sc-if value="{{ isLight }}" hint-placeholder-val="{{ true }}"><svg aria-hidden="true" width="14" height="14" viewBox="0 0 14 14" fill="currentColor"><path d="M9 1.5a5.5 5.5 0 1 0 3.5 9.7A6 6 0 0 1 9 1.5z"></path></svg></sc-if>
+        </button>
+      </header>
+
+      <main style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:32px 16px;gap:20px">
+
+        <!-- LOGIN -->
+        <sc-if value="{{ isLogin }}" hint-placeholder-val="{{ true }}">
+          <form data-testid="login-form" noValidate="{{ true }}" onSubmit="{{ submitLogin }}" aria-busy="{{ busy }}" style="width:min(400px,100%);background:var(--surface);border:1px solid var(--border);border-radius:6px;box-shadow:var(--shadow);padding:24px;display:flex;flex-direction:column;gap:14px">
+            <div style="display:flex;flex-direction:column;gap:4px"><h1 style="margin:0;font-size:20px;font-weight:600;letter-spacing:-.01em">{{ t.signIn }}</h1><p style="margin:0;color:var(--text-2);font-size:12.5px">{{ t.signInHint }}</p></div>
+            <sc-if value="{{ serverError }}" hint-placeholder-val="{{ false }}">
+              <div role="alert" data-testid="login-error" style="padding:10px 12px;border-radius:6px;background:var(--danger-soft);border:1px solid var(--danger);display:flex;flex-direction:column;gap:2px"><span style="font-weight:600">{{ serverError.title }}</span><span style="font-family:'IBM Plex Mono',monospace;font-size:11.5px;color:var(--text-2)">{{ serverError.code }}</span></div>
+            </sc-if>
+            <sc-if value="{{ infoMsg }}" hint-placeholder-val="{{ false }}">
+              <div role="status" data-testid="login-info" style="padding:10px 12px;border-radius:6px;background:var(--ok-soft);border:1px solid var(--ok);font-size:12.5px">{{ infoMsg }}</div>
+            </sc-if>
+            <div style="display:flex;flex-direction:column;gap:4px">
+              <label for="l-email" style="font-size:12px;font-weight:500;color:var(--text-2)">{{ t.email }}</label>
+              <input id="l-email" ref="{{ emailRef }}" type="email" autoComplete="username" data-testid="login-email" aria-invalid="{{ errors.emailBad }}" aria-describedby="l-email-err" value="{{ login.email }}" onChange="{{ setLoginEmail }}" style="{{ inputStyle }}" style-focus="outline:2px solid var(--accent);outline-offset:-1px;border-color:var(--accent)">
+              <sc-if value="{{ errors.email }}" hint-placeholder-val="{{ false }}"><span id="l-email-err" data-testid="login-email-error" style="font-size:11.5px;color:var(--danger)">{{ errors.email }}</span></sc-if>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:4px">
+              <div style="display:flex;justify-content:space-between;align-items:center"><label for="l-pass" style="font-size:12px;font-weight:500;color:var(--text-2)">{{ t.password }}</label><button type="button" data-testid="login-forgot" onClick="{{ goForgot }}" style="border:0;background:none;color:var(--accent);font:inherit;font-size:12px;cursor:pointer;padding:0">{{ t.forgot }}</button></div>
+              <div style="position:relative">
+                <input id="l-pass" type="{{ passType }}" autoComplete="current-password" data-testid="login-password" aria-invalid="{{ errors.passwordBad }}" aria-describedby="l-pass-err" value="{{ login.password }}" onChange="{{ setLoginPassword }}" style="{{ inputStylePw }}" style-focus="outline:2px solid var(--accent);outline-offset:-1px;border-color:var(--accent)">
+                <button type="button" data-testid="login-toggle-password" aria-label="{{ passToggleLabel }}" aria-pressed="{{ showPass }}" onClick="{{ togglePass }}" style="position:absolute;right:4px;top:4px;height:28px;padding:0 8px;border:0;border-radius:4px;background:transparent;color:var(--text-3);font:inherit;font-size:11.5px;cursor:pointer" style-hover="background:var(--surface-2);color:var(--text)">{{ passToggleText }}</button>
+              </div>
+              <sc-if value="{{ errors.password }}" hint-placeholder-val="{{ false }}"><span id="l-pass-err" data-testid="login-password-error" style="font-size:11.5px;color:var(--danger)">{{ errors.password }}</span></sc-if>
+            </div>
+            <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:12.5px"><input type="checkbox" data-testid="login-remember" checked="{{ login.remember }}" onChange="{{ toggleRemember }}" style="width:16px;height:16px;accent-color:var(--accent);margin:0">{{ t.remember }}</label>
+            <button type="submit" data-testid="login-submit" disabled="{{ busy }}" style="{{ primaryBtnWide }}" style-hover="background:var(--accent-hover);border-color:var(--accent-hover)" style-focus="outline:2px solid var(--accent);outline-offset:2px"><sc-if value="{{ busy }}" hint-placeholder-val="{{ false }}"><span data-testid="spinner" aria-hidden="true" style="width:12px;height:12px;border:2px solid rgba(255,255,255,.4);border-top-color:#fff;border-radius:50%;animation:spin .8s linear infinite;display:inline-block"></span></sc-if>{{ t.signInBtn }}</button>
+            <div style="display:flex;align-items:center;gap:10px;color:var(--text-3);font-size:11.5px"><span style="flex:1;height:1px;background:var(--border)"></span>{{ t.or }}<span style="flex:1;height:1px;background:var(--border)"></span></div>
+            <button type="button" data-testid="login-sso" onClick="{{ ssoClick }}" style="{{ secondaryBtnWide }}" style-hover="background:var(--surface-2)" style-focus="outline:2px solid var(--accent);outline-offset:2px"><span aria-hidden="true" style="width:16px;height:16px;border-radius:3px;border:1.5px solid currentColor;display:grid;place-items:center;font-size:8px;font-weight:600">ID</span>{{ t.sso }}</button>
+            <p style="margin:4px 0 0;text-align:center;font-size:12.5px;color:var(--text-2)">{{ t.noAccount }} <button type="button" data-testid="login-go-register" onClick="{{ goRegister }}" style="border:0;background:none;color:var(--accent);font:inherit;font-weight:500;cursor:pointer;padding:0">{{ t.requestAccess }}</button></p>
+          </form>
+        </sc-if>
+
+        <!-- MFA -->
+        <sc-if value="{{ isMfa }}" hint-placeholder-val="{{ false }}">
+          <form data-testid="mfa-form" noValidate="{{ true }}" onSubmit="{{ submitMfa }}" aria-busy="{{ busy }}" style="width:min(400px,100%);background:var(--surface);border:1px solid var(--border);border-radius:6px;box-shadow:var(--shadow);padding:24px;display:flex;flex-direction:column;gap:14px">
+            <div style="display:flex;flex-direction:column;gap:4px"><h1 style="margin:0;font-size:20px;font-weight:600;letter-spacing:-.01em">{{ t.mfaTitle }}</h1><p style="margin:0;color:var(--text-2);font-size:12.5px">{{ mfaHint }}</p></div>
+            <sc-if value="{{ serverError }}" hint-placeholder-val="{{ false }}">
+              <div role="alert" data-testid="mfa-error" style="padding:10px 12px;border-radius:6px;background:var(--danger-soft);border:1px solid var(--danger);display:flex;flex-direction:column;gap:2px"><span style="font-weight:600">{{ serverError.title }}</span><span style="font-family:'IBM Plex Mono',monospace;font-size:11.5px;color:var(--text-2)">{{ serverError.code }}</span></div>
+            </sc-if>
+            <div style="display:flex;flex-direction:column;gap:4px">
+              <label for="mfa-code" style="font-size:12px;font-weight:500;color:var(--text-2)">{{ t.mfaCode }}</label>
+              <input id="mfa-code" ref="{{ mfaRef }}" inputMode="numeric" autoComplete="one-time-code" maxLength="6" data-testid="mfa-code" value="{{ mfaCode }}" onChange="{{ setMfaCode }}" style="height:44px;padding:0 12px;border-radius:4px;border:1px solid var(--border-strong);background:var(--bg);color:var(--text);font-family:'IBM Plex Mono',monospace;font-size:22px;letter-spacing:.4em;text-align:center" style-focus="outline:2px solid var(--accent);outline-offset:-1px;border-color:var(--accent)">
+              <span style="font-size:11.5px;color:var(--text-3)">{{ t.mfaDemo }}</span>
+            </div>
+            <button type="submit" data-testid="mfa-submit" disabled="{{ mfaDisabled }}" style="{{ primaryBtnWide }}" style-hover="background:var(--accent-hover)" style-focus="outline:2px solid var(--accent);outline-offset:2px"><sc-if value="{{ busy }}" hint-placeholder-val="{{ false }}"><span aria-hidden="true" style="width:12px;height:12px;border:2px solid rgba(255,255,255,.4);border-top-color:#fff;border-radius:50%;animation:spin .8s linear infinite;display:inline-block"></span></sc-if>{{ t.verify }}</button>
+            <button type="button" data-testid="mfa-back" onClick="{{ goLogin }}" style="{{ ghostBtnWide }}" style-hover="background:var(--surface-2)">{{ t.backToLogin }}</button>
+          </form>
+        </sc-if>
+
+        <!-- FORGOT -->
+        <sc-if value="{{ isForgot }}" hint-placeholder-val="{{ false }}">
+          <form data-testid="forgot-form" noValidate="{{ true }}" onSubmit="{{ submitForgot }}" aria-busy="{{ busy }}" style="width:min(400px,100%);background:var(--surface);border:1px solid var(--border);border-radius:6px;box-shadow:var(--shadow);padding:24px;display:flex;flex-direction:column;gap:14px">
+            <div style="display:flex;flex-direction:column;gap:4px"><h1 style="margin:0;font-size:20px;font-weight:600;letter-spacing:-.01em">{{ t.forgotTitle }}</h1><p style="margin:0;color:var(--text-2);font-size:12.5px">{{ t.forgotHint }}</p></div>
+            <sc-if value="{{ forgotSent }}" hint-placeholder-val="{{ false }}"><div role="status" data-testid="forgot-sent" style="padding:10px 12px;border-radius:6px;background:var(--ok-soft);border:1px solid var(--ok);font-size:12.5px">{{ t.forgotSent }}</div></sc-if>
+            <div style="display:flex;flex-direction:column;gap:4px">
+              <label for="f-email" style="font-size:12px;font-weight:500;color:var(--text-2)">{{ t.email }}</label>
+              <input id="f-email" type="email" data-testid="forgot-email" aria-invalid="{{ errors.emailBad }}" value="{{ login.email }}" onChange="{{ setLoginEmail }}" style="{{ inputStyle }}" style-focus="outline:2px solid var(--accent);outline-offset:-1px;border-color:var(--accent)">
+              <sc-if value="{{ errors.email }}" hint-placeholder-val="{{ false }}"><span data-testid="forgot-email-error" style="font-size:11.5px;color:var(--danger)">{{ errors.email }}</span></sc-if>
+            </div>
+            <button type="submit" data-testid="forgot-submit" disabled="{{ busy }}" style="{{ primaryBtnWide }}" style-hover="background:var(--accent-hover)">{{ t.sendLink }}</button>
+            <button type="button" data-testid="forgot-back" onClick="{{ goLogin }}" style="{{ ghostBtnWide }}" style-hover="background:var(--surface-2)">{{ t.backToLogin }}</button>
+          </form>
+        </sc-if>
+
+        <!-- REGISTER -->
+        <sc-if value="{{ isRegister }}" hint-placeholder-val="{{ false }}">
+          <form data-testid="register-form" noValidate="{{ true }}" onSubmit="{{ submitRegister }}" aria-busy="{{ busy }}" style="width:min(520px,100%);background:var(--surface);border:1px solid var(--border);border-radius:6px;box-shadow:var(--shadow);padding:24px;display:flex;flex-direction:column;gap:14px">
+            <div style="display:flex;flex-direction:column;gap:4px"><h1 style="margin:0;font-size:20px;font-weight:600;letter-spacing:-.01em">{{ t.registerTitle }}</h1><p style="margin:0;color:var(--text-2);font-size:12.5px">{{ t.registerHint }}</p></div>
+            <sc-if value="{{ serverError }}" hint-placeholder-val="{{ false }}">
+              <div role="alert" data-testid="register-error" style="padding:10px 12px;border-radius:6px;background:var(--danger-soft);border:1px solid var(--danger);display:flex;flex-direction:column;gap:2px"><span style="font-weight:600">{{ serverError.title }}</span><span style="font-family:'IBM Plex Mono',monospace;font-size:11.5px;color:var(--text-2)">{{ serverError.code }}</span></div>
+            </sc-if>
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px">
+              <div style="display:flex;flex-direction:column;gap:4px">
+                <label for="r-first" style="font-size:12px;font-weight:500;color:var(--text-2)">{{ t.firstName }}</label>
+                <input id="r-first" autoComplete="given-name" data-testid="register-first-name" aria-invalid="{{ errors.firstBad }}" value="{{ reg.first }}" onChange="{{ setRegFirst }}" style="{{ inputStyle }}" style-focus="outline:2px solid var(--accent);outline-offset:-1px;border-color:var(--accent)">
+                <sc-if value="{{ errors.first }}" hint-placeholder-val="{{ false }}"><span data-testid="register-first-name-error" style="font-size:11.5px;color:var(--danger)">{{ errors.first }}</span></sc-if>
+              </div>
+              <div style="display:flex;flex-direction:column;gap:4px">
+                <label for="r-last" style="font-size:12px;font-weight:500;color:var(--text-2)">{{ t.lastName }}</label>
+                <input id="r-last" autoComplete="family-name" data-testid="register-last-name" aria-invalid="{{ errors.lastBad }}" value="{{ reg.last }}" onChange="{{ setRegLast }}" style="{{ inputStyle }}" style-focus="outline:2px solid var(--accent);outline-offset:-1px;border-color:var(--accent)">
+                <sc-if value="{{ errors.last }}" hint-placeholder-val="{{ false }}"><span data-testid="register-last-name-error" style="font-size:11.5px;color:var(--danger)">{{ errors.last }}</span></sc-if>
+              </div>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:4px">
+              <label for="r-email" style="font-size:12px;font-weight:500;color:var(--text-2)">{{ t.workEmail }}</label>
+              <input id="r-email" type="email" autoComplete="email" data-testid="register-email" aria-invalid="{{ errors.emailBad }}" aria-describedby="r-email-help" placeholder="nombre@organizacion.es" value="{{ reg.email }}" onChange="{{ setRegEmail }}" style="{{ inputStyle }}" style-focus="outline:2px solid var(--accent);outline-offset:-1px;border-color:var(--accent)">
+              <sc-if value="{{ errors.email }}" hint-placeholder-val="{{ false }}"><span data-testid="register-email-error" style="font-size:11.5px;color:var(--danger)">{{ errors.email }}</span></sc-if>
+              <sc-if value="{{ noEmailErr }}" hint-placeholder-val="{{ true }}"><span id="r-email-help" style="font-size:11.5px;color:var(--text-3)">{{ t.emailHelp }}</span></sc-if>
+            </div>
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px">
+              <div style="display:flex;flex-direction:column;gap:4px">
+                <label for="r-org" style="font-size:12px;font-weight:500;color:var(--text-2)">{{ t.org }}</label>
+                <input id="r-org" autoComplete="organization" data-testid="register-org" aria-invalid="{{ errors.orgBad }}" value="{{ reg.org }}" onChange="{{ setRegOrg }}" style="{{ inputStyle }}" style-focus="outline:2px solid var(--accent);outline-offset:-1px;border-color:var(--accent)">
+                <sc-if value="{{ errors.org }}" hint-placeholder-val="{{ false }}"><span data-testid="register-org-error" style="font-size:11.5px;color:var(--danger)">{{ errors.org }}</span></sc-if>
+              </div>
+              <div style="display:flex;flex-direction:column;gap:4px">
+                <label for="r-role" style="font-size:12px;font-weight:500;color:var(--text-2)">{{ t.requestedRole }}</label>
+                <select id="r-role" data-testid="register-role" value="{{ reg.role }}" onChange="{{ setRegRole }}" style="{{ inputStyle }}" style-focus="outline:2px solid var(--accent);outline-offset:-1px;border-color:var(--accent)">
+                  <option value="consultant">consultant</option><option value="program_manager">program_manager</option><option value="auditor">auditor</option>
+                </select>
+                <span style="font-size:11.5px;color:var(--text-3)">{{ t.roleHelp }}</span>
+              </div>
+            </div>
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px">
+              <div style="display:flex;flex-direction:column;gap:4px">
+                <label for="r-pass" style="font-size:12px;font-weight:500;color:var(--text-2)">{{ t.password }}</label>
+                <div style="position:relative">
+                  <input id="r-pass" type="{{ passType }}" autoComplete="new-password" data-testid="register-password" aria-invalid="{{ errors.passwordBad }}" aria-describedby="r-pass-meter" value="{{ reg.password }}" onChange="{{ setRegPassword }}" style="{{ inputStylePw }}" style-focus="outline:2px solid var(--accent);outline-offset:-1px;border-color:var(--accent)">
+                  <button type="button" data-testid="register-toggle-password" aria-label="{{ passToggleLabel }}" aria-pressed="{{ showPass }}" onClick="{{ togglePass }}" style="position:absolute;right:4px;top:4px;height:28px;padding:0 8px;border:0;border-radius:4px;background:transparent;color:var(--text-3);font:inherit;font-size:11.5px;cursor:pointer" style-hover="background:var(--surface-2);color:var(--text)">{{ passToggleText }}</button>
+                </div>
+                <sc-if value="{{ errors.password }}" hint-placeholder-val="{{ false }}"><span data-testid="register-password-error" style="font-size:11.5px;color:var(--danger)">{{ errors.password }}</span></sc-if>
+              </div>
+              <div style="display:flex;flex-direction:column;gap:4px">
+                <label for="r-pass2" style="font-size:12px;font-weight:500;color:var(--text-2)">{{ t.confirmPassword }}</label>
+                <input id="r-pass2" type="{{ passType }}" autoComplete="new-password" data-testid="register-password-confirm" aria-invalid="{{ errors.confirmBad }}" value="{{ reg.confirm }}" onChange="{{ setRegConfirm }}" style="{{ inputStyle }}" style-focus="outline:2px solid var(--accent);outline-offset:-1px;border-color:var(--accent)">
+                <sc-if value="{{ errors.confirm }}" hint-placeholder-val="{{ false }}"><span data-testid="register-password-confirm-error" style="font-size:11.5px;color:var(--danger)">{{ errors.confirm }}</span></sc-if>
+              </div>
+            </div>
+            <div id="r-pass-meter" data-testid="register-password-meter" data-strength="{{ strength.key }}" style="display:flex;flex-direction:column;gap:6px">
+              <div style="display:flex;gap:4px" aria-hidden="true"><span style="{{ strength.s1 }}"></span><span style="{{ strength.s2 }}"></span><span style="{{ strength.s3 }}"></span><span style="{{ strength.s4 }}"></span></div>
+              <ul style="margin:0;padding:0;list-style:none;display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:2px 12px;font-size:11.5px">
+                <sc-for list="{{ rules }}" as="r" hint-placeholder-count="4"><li data-ok="{{ r.ok }}" style="{{ r.style }}"><span aria-hidden="true" style="font-family:'IBM Plex Mono',monospace;width:12px;display:inline-block">{{ r.mark }}</span>{{ r.label }}</li></sc-for>
+              </ul>
+            </div>
+            <label style="display:flex;align-items:flex-start;gap:8px;cursor:pointer;font-size:12.5px"><input type="checkbox" data-testid="register-terms" aria-invalid="{{ errors.termsBad }}" checked="{{ reg.terms }}" onChange="{{ toggleTerms }}" style="width:16px;height:16px;accent-color:var(--accent);margin:2px 0 0;flex:none"><span>{{ t.terms1 }} <a href="#/legal/condiciones" data-testid="register-terms-link">{{ t.terms2 }}</a> {{ t.terms3 }} <a href="#/legal/privacidad">{{ t.terms4 }}</a>.</span></label>
+            <sc-if value="{{ errors.terms }}" hint-placeholder-val="{{ false }}"><span data-testid="register-terms-error" style="font-size:11.5px;color:var(--danger);margin-top:-8px">{{ errors.terms }}</span></sc-if>
+            <div style="display:flex;justify-content:space-between;gap:8px;padding-top:8px;border-top:1px solid var(--border)">
+              <button type="button" data-testid="register-back" onClick="{{ goLogin }}" style="{{ ghostBtn }}" style-hover="background:var(--surface-2)">{{ t.backToLogin }}</button>
+              <button type="submit" data-testid="register-submit" disabled="{{ busy }}" style="{{ primaryBtn }}" style-hover="background:var(--accent-hover)" style-focus="outline:2px solid var(--accent);outline-offset:2px"><sc-if value="{{ busy }}" hint-placeholder-val="{{ false }}"><span aria-hidden="true" style="width:12px;height:12px;border:2px solid rgba(255,255,255,.4);border-top-color:#fff;border-radius:50%;animation:spin .8s linear infinite;display:inline-block"></span></sc-if>{{ t.registerBtn }}</button>
+            </div>
+            <p style="margin:0;font-size:11.5px;color:var(--text-3)">{{ t.registerServerHint }}</p>
+          </form>
+        </sc-if>
+
+        <!-- VERIFY EMAIL -->
+        <sc-if value="{{ isVerify }}" hint-placeholder-val="{{ false }}">
+          <div data-testid="verify-panel" role="status" style="width:min(400px,100%);background:var(--surface);border:1px solid var(--border);border-radius:6px;box-shadow:var(--shadow);padding:24px;display:flex;flex-direction:column;gap:14px">
+            <div aria-hidden="true" style="width:36px;height:36px;border-radius:50%;background:var(--ok-soft);color:var(--ok);display:grid;place-items:center;font-weight:600">✓</div>
+            <div style="display:flex;flex-direction:column;gap:4px"><h1 style="margin:0;font-size:20px;font-weight:600;letter-spacing:-.01em">{{ t.verifyTitle }}</h1><p style="margin:0;color:var(--text-2);font-size:12.5px">{{ verifyText }}</p></div>
+            <dl style="margin:0;display:grid;grid-template-columns:auto 1fr;gap:6px 14px;font-size:12px;padding:12px;border:1px solid var(--border);border-radius:6px;background:var(--surface-2)">
+              <dt style="color:var(--text-3)">{{ t.status }}</dt><dd style="margin:0"><span data-testid="verify-status-badge" style="display:inline-flex;align-items:center;gap:6px;padding:2px 8px;border-radius:4px;background:var(--warn-soft);color:var(--warn);font-weight:500;font-size:11.5px"><span aria-hidden="true" style="width:6px;height:6px;border-radius:50%;background:currentColor"></span>{{ t.pendingApproval }}</span></dd>
+              <dt style="color:var(--text-3)">{{ t.requestedRole }}</dt><dd style="margin:0;font-family:'IBM Plex Mono',monospace">{{ reg.role }}</dd>
+              <dt style="color:var(--text-3)">ID</dt><dd style="margin:0;font-family:'IBM Plex Mono',monospace">REQ-2026-0417</dd>
+            </dl>
+            <button type="button" data-testid="verify-resend" onClick="{{ resend }}" style="{{ secondaryBtnWide }}" style-hover="background:var(--surface-2)">{{ t.resend }}</button>
+            <button type="button" data-testid="verify-back" onClick="{{ goLogin }}" style="{{ ghostBtnWide }}" style-hover="background:var(--surface-2)">{{ t.backToLogin }}</button>
+          </div>
+        </sc-if>
+
+        <!-- Test users -->
+        <sc-if value="{{ showTestUsersPanel }}" hint-placeholder-val="{{ true }}">
+          <section aria-labelledby="tu-title" data-testid="test-users" style="width:min(520px,100%);border:1px dashed var(--border-strong);border-radius:6px;padding:12px 14px;display:flex;flex-direction:column;gap:8px">
+            <div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px"><h2 id="tu-title" style="margin:0;font-size:12px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--text-2)">{{ t.testUsers }}</h2><span style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--text-3)">{{ t.clickToFill }}</span></div>
+            <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:6px">
+              <sc-for list="{{ testUsers }}" as="u" hint-placeholder-count="6">
+                <button type="button" data-testid="{{ u.testid }}" onClick="{{ u.fill }}" title="{{ u.title }}" style="display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:4px;border:1px solid var(--border);background:var(--surface);color:var(--text);font:inherit;text-align:left;cursor:pointer" style-hover="background:var(--surface-2);border-color:var(--border-strong)" style-focus="outline:2px solid var(--accent);outline-offset:2px">
+                  <span aria-hidden="true" style="width:28px;height:28px;border-radius:4px;background:var(--neutral-soft);color:var(--text-2);display:grid;place-items:center;font-size:11px;font-weight:600;flex:none">{{ u.initials }}</span>
+                  <span style="display:flex;flex-direction:column;min-width:0;flex:1;line-height:1.25">
+                    <span style="font-size:12.5px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ u.name }}</span>
+                    <span style="font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:var(--text-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ u.email }} · {{ u.password }}</span>
+                  </span>
+                  <span data-testid="test-user-badge" style="{{ u.badgeStyle }}">{{ u.badge }}</span>
+                </button>
+              </sc-for>
+            </div>
+          </section>
+        </sc-if>
+      </main>
+
+      <footer style="display:flex;flex-wrap:wrap;gap:6px 16px;justify-content:center;padding:12px 16px;border-top:1px solid var(--border);font-size:11.5px;color:var(--text-3)">
+        <span style="font-family:'IBM Plex Mono',monospace">© 2026 SIGPRO</span><a href="#/legal/privacidad" style="color:var(--text-3)">{{ t.privacy }}</a><a href="#/legal/condiciones" style="color:var(--text-3)">{{ t.termsFooter }}</a><a href="#/ayuda" style="color:var(--text-3)">{{ t.help }}</a>
+      </footer>
+    </div>
+
+    <!-- Toasts -->
+    <div aria-live="polite" data-testid="toast-region" style="position:absolute;right:16px;bottom:16px;display:flex;flex-direction:column;gap:8px;z-index:60;width:min(360px,calc(100% - 32px));pointer-events:none">
+      <sc-for list="{{ toasts }}" as="toast" hint-placeholder-count="0">
+        <div role="status" data-testid="{{ toast.testid }}" style="{{ toast.style }}"><span aria-hidden="true" style="{{ toast.dot }}"></span><div style="flex:1;min-width:0"><div style="font-weight:500">{{ toast.title }}</div><sc-if value="{{ toast.body }}" hint-placeholder-val="{{ false }}"><div style="font-size:12px;color:var(--text-2);font-family:'IBM Plex Mono',monospace">{{ toast.body }}</div></sc-if></div><button type="button" data-testid="toast-close" aria-label="{{ t.close }}" onClick="{{ toast.close }}" style="border:0;background:none;color:var(--text-3);cursor:pointer;font-size:16px;line-height:1;padding:0">×</button></div>
+      </sc-for>
+    </div>
+
+    <!-- Redirect overlay -->
+    <sc-if value="{{ redirecting }}" hint-placeholder-val="{{ false }}">
+      <div data-testid="auth-redirecting" role="status" style="position:absolute;inset:0;background:var(--bg);z-index:70;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px">
+        <span aria-hidden="true" style="width:20px;height:20px;border:2px solid var(--border-strong);border-top-color:var(--accent);border-radius:50%;animation:spin .8s linear infinite;display:inline-block"></span>
+        <span style="font-size:12.5px;color:var(--text-2)">{{ redirectText }}</span>
+        <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--text-3)">POST /api/auth/session → 201 · role={{ sessionRole }}</span>
+      </div>
+    </sc-if>
+
+    <!-- Annotation overlay -->
+    <sc-if value="{{ showTestIds }}" hint-placeholder-val="{{ false }}">
+      <div aria-hidden="true" style="position:absolute;inset:0;pointer-events:none;z-index:100">
+        <sc-for list="{{ annots }}" as="a" hint-placeholder-count="0">
+          <div style="{{ a.box }}"><span style="position:absolute;left:-1px;top:-14px;padding:0 4px;background:#d946ef;color:#fff;font-family:'IBM Plex Mono',monospace;font-size:9px;line-height:13px;white-space:nowrap;border-radius:2px">{{ a.id }}</span></div>
+        </sc-for>
+      </div>
+    </sc-if>
+  </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;view&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;login&quot;,&quot;register&quot;,&quot;mfa&quot;,&quot;forgot&quot;,&quot;verify&quot;],&quot;default&quot;:&quot;login&quot;,&quot;tsType&quot;:&quot;'login'|'register'|'mfa'|'forgot'|'verify'&quot;,&quot;section&quot;:&quot;Prototipo&quot;},&quot;theme&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;light&quot;,&quot;dark&quot;],&quot;default&quot;:&quot;light&quot;,&quot;tsType&quot;:&quot;'light'|'dark'&quot;,&quot;section&quot;:&quot;Prototipo&quot;},&quot;showTestUsers&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Prototipo&quot;},&quot;showTestIds&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:false,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Prototipo&quot;}}">
+const USERS = [
+  { id: 'u1', name: 'Marta Ruiz', email: 'admin@sigpro.test', password: 'Admin1234!', role: 'admin', mfa: true, status: 'active' },
+  { id: 'u2', name: 'Javier Ortega', email: 'gestor@sigpro.test', password: 'Gestor1234!', role: 'program_manager', mfa: false, status: 'active' },
+  { id: 'u3', name: 'Lucía Fernández', email: 'consultor@sigpro.test', password: 'Consul1234!', role: 'consultant', mfa: false, status: 'active' },
+  { id: 'u4', name: 'Andrés Molina', email: 'auditor@sigpro.test', password: 'Audit1234!', role: 'auditor', mfa: false, status: 'active' },
+  { id: 'u5', name: 'Carmen Vidal', email: 'bloqueado@sigpro.test', password: 'Block1234!', role: 'consultant', mfa: false, status: 'locked' },
+  { id: 'u6', name: 'Pablo Serrano', email: 'pendiente@sigpro.test', password: 'Pend1234!', role: 'consultant', mfa: false, status: 'pending' },
+];
+const T = {
+  es: { language: 'Idioma', toggleTheme: 'Cambiar tema', signIn: 'Iniciar sesión', signInHint: 'Accede con tu cuenta corporativa de SIGPRO.', email: 'Correo electrónico', password: 'Contraseña', forgot: '¿Olvidaste la contraseña?', show: 'Mostrar', hide: 'Ocultar', showPw: 'Mostrar contraseña', hidePw: 'Ocultar contraseña', remember: 'Mantener la sesión en este equipo', signInBtn: 'Entrar', or: 'o', sso: 'Acceder con certificado digital / SSO', noAccount: '¿Sin cuenta?', requestAccess: 'Solicitar acceso', mfaTitle: 'Verificación en dos pasos', mfaHint: 'Introduce el código de 6 dígitos de tu aplicación de autenticación para', mfaCode: 'Código de verificación', mfaDemo: 'Prototipo: el código válido es 123456.', verify: 'Verificar', backToLogin: 'Volver al inicio de sesión', forgotTitle: 'Recuperar contraseña', forgotHint: 'Te enviaremos un enlace de un solo uso válido durante 30 minutos.', forgotSent: 'Si el correo existe, recibirás un enlace en breve.', sendLink: 'Enviar enlace', registerTitle: 'Solicitar acceso', registerHint: 'Un administrador revisará la solicitud antes de activar la cuenta.', firstName: 'Nombre', lastName: 'Apellidos', workEmail: 'Correo corporativo', emailHelp: 'Debe pertenecer a un dominio autorizado.', org: 'Organización / Unidad', requestedRole: 'Rol solicitado', roleHelp: 'El rol admin solo se asigna manualmente.', confirmPassword: 'Confirmar contraseña', terms1: 'He leído y acepto las', terms2: 'condiciones de uso', terms3: 'y la', terms4: 'política de privacidad', registerBtn: 'Enviar solicitud', registerServerHint: 'Validación servidor: un correo ya registrado (p. ej. admin@sigpro.test) devuelve 409.', verifyTitle: 'Solicitud enviada', verifyText: 'Hemos enviado un correo de verificación a', status: 'Estado', pendingApproval: 'Pendiente de aprobación', resend: 'Reenviar correo de verificación', testUsers: 'Usuarios de prueba', clickToFill: 'clic para rellenar', privacy: 'Privacidad', termsFooter: 'Condiciones', help: 'Ayuda', close: 'Cerrar', required: 'Campo obligatorio', badEmail: 'Introduce un correo válido', pwShort: 'Mínimo 10 caracteres', pwMismatch: 'Las contraseñas no coinciden', termsReq: 'Debes aceptar las condiciones', r1: 'Al menos 10 caracteres', r2: 'Una mayúscula y una minúscula', r3: 'Un número', r4: 'Un símbolo', weak: 'Débil', fair: 'Aceptable', good: 'Buena', strong: 'Fuerte', e401: 'Correo o contraseña incorrectos', e423: 'Cuenta bloqueada tras varios intentos fallidos. Contacta con un administrador.', e403: 'Cuenta pendiente de aprobación. Revisa tu correo.', e409: 'Ya existe una cuenta con ese correo.', eMfa: 'Código incorrecto o caducado', redirecting: 'Sesión iniciada. Redirigiendo a Programas…', resent: 'Correo reenviado', ssoToast: 'SSO no disponible en el prototipo', active: 'activo', locked: 'bloqueado', pending: 'pendiente', mfaBadge: 'mfa', signedOut: 'Sesión cerrada correctamente.' },
+  en: { language: 'Language', toggleTheme: 'Toggle theme', signIn: 'Sign in', signInHint: 'Use your SIGPRO corporate account.', email: 'Email', password: 'Password', forgot: 'Forgot password?', show: 'Show', hide: 'Hide', showPw: 'Show password', hidePw: 'Hide password', remember: 'Keep me signed in on this device', signInBtn: 'Sign in', or: 'or', sso: 'Sign in with digital certificate / SSO', noAccount: 'No account?', requestAccess: 'Request access', mfaTitle: 'Two-step verification', mfaHint: 'Enter the 6-digit code from your authenticator app for', mfaCode: 'Verification code', mfaDemo: 'Prototype: the valid code is 123456.', verify: 'Verify', backToLogin: 'Back to sign in', forgotTitle: 'Reset password', forgotHint: 'We will send a single-use link valid for 30 minutes.', forgotSent: 'If the email exists, you will receive a link shortly.', sendLink: 'Send link', registerTitle: 'Request access', registerHint: 'An administrator will review the request before activating the account.', firstName: 'First name', lastName: 'Last name', workEmail: 'Work email', emailHelp: 'Must belong to an authorized domain.', org: 'Organization / Unit', requestedRole: 'Requested role', roleHelp: 'The admin role is only assigned manually.', confirmPassword: 'Confirm password', terms1: 'I have read and accept the', terms2: 'terms of use', terms3: 'and the', terms4: 'privacy policy', registerBtn: 'Submit request', registerServerHint: 'Server validation: an existing email (e.g. admin@sigpro.test) returns 409.', verifyTitle: 'Request submitted', verifyText: 'We sent a verification email to', status: 'Status', pendingApproval: 'Pending approval', resend: 'Resend verification email', testUsers: 'Test users', clickToFill: 'click to fill', privacy: 'Privacy', termsFooter: 'Terms', help: 'Help', close: 'Close', required: 'Required field', badEmail: 'Enter a valid email', pwShort: 'At least 10 characters', pwMismatch: 'Passwords do not match', termsReq: 'You must accept the terms', r1: 'At least 10 characters', r2: 'Upper and lower case', r3: 'A number', r4: 'A symbol', weak: 'Weak', fair: 'Fair', good: 'Good', strong: 'Strong', e401: 'Incorrect email or password', e423: 'Account locked after several failed attempts. Contact an administrator.', e403: 'Account pending approval. Check your email.', e409: 'An account with that email already exists.', eMfa: 'Incorrect or expired code', redirecting: 'Signed in. Redirecting to Programs…', resent: 'Email resent', ssoToast: 'SSO not available in the prototype', active: 'active', locked: 'locked', pending: 'pending', mfaBadge: 'mfa', signedOut: 'You have been signed out.' },
+};
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const initials = (n) => n.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase();
+const INPUT = 'width:100%;height:36px;padding:0 10px;border-radius:4px;border:1px solid var(--border-strong);background:var(--bg);color:var(--text);font:inherit;font-size:13px';
+const BTN = 'height:34px;padding:0 14px;border-radius:4px;font:inherit;font-size:13px;font-weight:500;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:8px';
+
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.rootRef = React.createRef(); this.emailRef = React.createRef(); this.mfaRef = React.createRef();
+    const hash = (typeof location !== 'undefined' && location.hash) || '';
+    if (hash.includes('logout')) { try { localStorage.removeItem('sigpro.session'); } catch (e) {} }
+    this.state = {
+      view: props.view || (hash.includes('register') ? 'register' : 'login'), theme: props.theme || 'light', lang: 'es', frame: 'auto', width: 1280, showTestIds: !!props.showTestIds, showTestUsers: props.showTestUsers !== false,
+      login: { email: '', password: '', remember: true }, reg: { first: '', last: '', email: '', org: '', role: 'consultant', password: '', confirm: '', terms: false },
+      errors: {}, serverError: null, infoMsg: hash.includes('logout') ? T.es.signedOut : '', busy: false, showPass: false, mfaCode: '', mfaUser: null, forgotSent: false, redirecting: false, sessionRole: '', toasts: [], annots: [], attempts: {},
+    };
+    this.toastId = 0;
+  }
+  componentDidMount() {
+    this.measure = () => { const el = this.rootRef.current; if (el) this.setState({ width: el.offsetWidth }); };
+    this.measure(); window.addEventListener('resize', this.measure);
+    this.onKey = (e) => { if (e.key === 'Escape' && this.state.view !== 'login' && !this.state.busy) this.go('login'); };
+    window.addEventListener('keydown', this.onKey);
+    if (this.emailRef.current) this.emailRef.current.focus();
+  }
+  componentWillUnmount() { window.removeEventListener('resize', this.measure); window.removeEventListener('keydown', this.onKey); clearTimeout(this.annotT); clearTimeout(this.redirT); }
+  componentDidUpdate(_, prev) {
+    if (this.state.showTestIds && (prev.view !== this.state.view || prev.width !== this.state.width || prev.errors !== this.state.errors || prev.serverError !== this.state.serverError || prev.showTestIds !== this.state.showTestIds || prev.showTestUsers !== this.state.showTestUsers)) { clearTimeout(this.annotT); this.annotT = setTimeout(() => this.computeAnnots(), 60); }
+    if (prev.view !== this.state.view) { const r = this.state.view === 'mfa' ? this.mfaRef : this.emailRef; if (r.current) r.current.focus(); }
+  }
+  computeAnnots() {
+    const root = this.rootRef.current; if (!root) return;
+    const rb = root.getBoundingClientRect();
+    const annots = Array.from(root.querySelectorAll('[data-testid]')).filter(el => el.offsetParent !== null || el === root).map(el => { const b = el.getBoundingClientRect(); return { id: el.getAttribute('data-testid'), box: `position:absolute;left:${b.left - rb.left}px;top:${b.top - rb.top}px;width:${b.width}px;height:${b.height}px;outline:1px dashed #d946ef;outline-offset:-1px` }; });
+    this.setState({ annots });
+  }
+  go(view) { this.setState({ view, errors: {}, serverError: null, busy: false, mfaCode: '', forgotSent: false, infoMsg: '' }); }
+  toast(tone, title, body) {
+    const id = ++this.toastId; const c = { ok: 'var(--ok)', danger: 'var(--danger)', info: 'var(--info)', warn: 'var(--warn)' }[tone];
+    this.setState(s => ({ toasts: [...s.toasts, { id, testid: `toast-${tone}`, title, body, style: 'pointer-events:auto;display:flex;gap:10px;align-items:flex-start;padding:10px 12px;border-radius:6px;background:var(--surface);border:1px solid var(--border);box-shadow:var(--shadow-pop);animation:toastIn .18s ease-out;font-size:12.5px', dot: `width:8px;height:8px;border-radius:50%;margin-top:5px;flex:none;background:${c}`, close: () => this.setState(s2 => ({ toasts: s2.toasts.filter(x => x.id !== id) })) }] }));
+    setTimeout(() => this.setState(s => ({ toasts: s.toasts.filter(x => x.id !== id) })), 4500);
+  }
+  t() { return T[this.state.lang]; }
+  pwRules(pw) { return [pw.length >= 10, /[a-z]/.test(pw) && /[A-Z]/.test(pw), /\d/.test(pw), /[^A-Za-z0-9]/.test(pw)]; }
+  validateLogin() {
+    const t = this.t(), { email, password } = this.state.login, errors = {};
+    if (!email) errors.email = t.required; else if (!EMAIL_RE.test(email)) errors.email = t.badEmail;
+    if (!password) errors.password = t.required;
+    return errors;
+  }
+  validateReg() {
+    const t = this.t(), r = this.state.reg, errors = {};
+    if (!r.first.trim()) errors.first = t.required; if (!r.last.trim()) errors.last = t.required; if (!r.org.trim()) errors.org = t.required;
+    if (!r.email) errors.email = t.required; else if (!EMAIL_RE.test(r.email)) errors.email = t.badEmail;
+    if (!r.password) errors.password = t.required; else if (!this.pwRules(r.password).every(Boolean)) errors.password = t.pwShort;
+    if (r.confirm !== r.password) errors.confirm = t.pwMismatch;
+    if (!r.terms) errors.terms = t.termsReq;
+    return errors;
+  }
+  finishLogin(user) {
+    this.setState({ busy: false, redirecting: true, sessionRole: user.role });
+    try { localStorage.setItem('sigpro.session', JSON.stringify({ user: user.name, role: user.role, remember: this.state.login.remember })); } catch (e) {}
+    this.redirT = setTimeout(() => { location.href = 'SIGPRO Programas.dc.html#/programas?role=' + user.role; }, 1400);
+  }
+  renderVals() {
+    const s = this.state, t = this.t(), isMobile = s.frame === '390' || s.width < 640;
+    const err = s.errors; const se = s.serverError ? { title: s.serverError.title, code: s.serverError.code } : null;
+    const withBad = Object.assign({}, err, { emailBad: !!err.email, passwordBad: !!err.password, firstBad: !!err.first, lastBad: !!err.last, orgBad: !!err.org, confirmBad: !!err.confirm, termsBad: !!err.terms });
+    const rules = this.pwRules(s.reg.password); const score = rules.filter(Boolean).length;
+    const sc = ['var(--border)', 'var(--danger)', 'var(--warn)', 'var(--info)', 'var(--ok)'][score];
+    const seg = (i) => `flex:1;height:4px;border-radius:2px;background:${i <= score && score > 0 ? sc : 'var(--border)'}`;
+    const setL = (k) => (e) => this.setState({ login: Object.assign({}, s.login, { [k]: e.target.type === 'checkbox' ? e.target.checked : e.target.value }), errors: {}, serverError: null });
+    const setR = (k) => (e) => this.setState({ reg: Object.assign({}, s.reg, { [k]: e.target.type === 'checkbox' ? e.target.checked : e.target.value }), errors: {}, serverError: null });
+    const badge = (tone) => `font-family:'IBM Plex Mono',monospace;font-size:10px;padding:1px 6px;border-radius:999px;background:var(--${tone}-soft);color:var(--${tone});flex:none`;
+    return {
+      t, view: s.view, theme: s.theme, lang: s.lang, frame: s.frame, isDark: s.theme === 'dark', isLight: s.theme === 'light', isMobile, notMobile: !isMobile, showTestIds: s.showTestIds, showTestUsers: s.showTestUsers,
+      isLogin: s.view === 'login', isRegister: s.view === 'register', isMfa: s.view === 'mfa', isForgot: s.view === 'forgot', isVerify: s.view === 'verify',
+      showTestUsersPanel: s.showTestUsers && (s.view === 'login' || s.view === 'register'),
+      rootRef: this.rootRef, emailRef: this.emailRef, mfaRef: this.mfaRef,
+      frameStyle: s.frame === 'auto' ? 'flex:1;display:flex;flex-direction:column' : `flex:1;display:flex;flex-direction:column;width:${s.frame}px;max-width:100%;margin:0 auto;border-left:1px solid #1c2531;border-right:1px solid #1c2531`,
+      login: s.login, reg: s.reg, errors: withBad, serverError: se, infoMsg: s.infoMsg, busy: s.busy, showPass: s.showPass, passType: s.showPass ? 'text' : 'password', passToggleText: s.showPass ? t.hide : t.show, passToggleLabel: s.showPass ? t.hidePw : t.showPw,
+      mfaCode: s.mfaCode, mfaDisabled: s.busy || s.mfaCode.length !== 6, mfaHint: `${t.mfaHint} ${s.mfaUser ? s.mfaUser.email : ''}.`, forgotSent: s.forgotSent, redirecting: s.redirecting, redirectText: t.redirecting, sessionRole: s.sessionRole,
+      verifyText: `${t.verifyText} ${s.reg.email}.`, noEmailErr: !err.email,
+      inputStyle: INPUT, inputStylePw: INPUT + ';padding-right:72px',
+      primaryBtn: BTN + ';border:1px solid var(--accent);background:var(--accent);color:var(--on-accent)', primaryBtnWide: BTN + ';width:100%;height:38px;border:1px solid var(--accent);background:var(--accent);color:var(--on-accent)',
+      secondaryBtnWide: BTN + ';width:100%;border:1px solid var(--border-strong);background:var(--surface);color:var(--text)', ghostBtn: BTN + ';border:1px solid transparent;background:transparent;color:var(--text-2)', ghostBtnWide: BTN + ';width:100%;border:1px solid transparent;background:transparent;color:var(--text-2)',
+      strength: { key: ['none', 'weak', 'fair', 'good', 'strong'][score], s1: seg(1), s2: seg(2), s3: seg(3), s4: seg(4) },
+      rules: [t.r1, t.r2, t.r3, t.r4].map((label, i) => ({ label, ok: rules[i], mark: rules[i] ? '✓' : '·', style: `display:flex;align-items:center;gap:4px;color:${rules[i] ? 'var(--ok)' : 'var(--text-3)'}` })),
+      testUsers: USERS.map(u => ({ testid: `test-user-${u.role}${u.status !== 'active' ? '-' + u.status : ''}`, name: u.name, email: u.email, password: u.password, initials: initials(u.name), title: `${u.role} · ${u.status}${u.mfa ? ' · MFA' : ''}`,
+        badge: u.status === 'active' ? (u.mfa ? `${u.role} · ${t.mfaBadge}` : u.role) : t[u.status], badgeStyle: badge(u.status === 'locked' ? 'danger' : u.status === 'pending' ? 'warn' : u.role === 'admin' ? 'info' : 'neutral'),
+        fill: () => this.setState({ view: 'login', login: Object.assign({}, s.login, { email: u.email, password: u.password }), errors: {}, serverError: null, infoMsg: '' }, () => { if (this.emailRef.current) this.emailRef.current.focus(); }) })),
+      toasts: s.toasts, annots: s.annots,
+      setViewSel: (e) => this.go(e.target.value), setFrame: (e) => this.setState({ frame: e.target.value }), setLang: (e) => this.setState({ lang: e.target.value, errors: {} }), toggleTheme: () => this.setState({ theme: s.theme === 'dark' ? 'light' : 'dark' }),
+      toggleTestIds: (e) => this.setState({ showTestIds: e.target.checked, annots: [] }), toggleTestUsers: (e) => this.setState({ showTestUsers: e.target.checked }), togglePass: () => this.setState({ showPass: !s.showPass }),
+      setLoginEmail: setL('email'), setLoginPassword: setL('password'), toggleRemember: setL('remember'),
+      setRegFirst: setR('first'), setRegLast: setR('last'), setRegEmail: setR('email'), setRegOrg: setR('org'), setRegRole: setR('role'), setRegPassword: setR('password'), setRegConfirm: setR('confirm'), toggleTerms: setR('terms'),
+      setMfaCode: (e) => this.setState({ mfaCode: e.target.value.replace(/\D/g, '').slice(0, 6), serverError: null }),
+      goLogin: () => this.go('login'), goRegister: () => this.go('register'), goForgot: () => this.go('forgot'),
+      ssoClick: () => this.toast('info', t.ssoToast, 'GET /api/auth/sso → 501'),
+      resend: () => this.toast('ok', t.resent, 'POST /api/auth/verify/resend → 202'),
+      submitLogin: (e) => {
+        e.preventDefault(); const errors = this.validateLogin(); if (Object.keys(errors).length) { this.setState({ errors }); return; }
+        this.setState({ busy: true, serverError: null });
+        setTimeout(() => {
+          const u = USERS.find(x => x.email.toLowerCase() === s.login.email.trim().toLowerCase());
+          if (u && u.status === 'locked') return this.setState({ busy: false, serverError: { title: t.e423, code: 'POST /api/auth/login → 423 Locked' } });
+          if (!u || u.password !== s.login.password) { const n = (s.attempts[s.login.email] || 0) + 1; return this.setState({ busy: false, attempts: Object.assign({}, s.attempts, { [s.login.email]: n }), serverError: { title: t.e401, code: `POST /api/auth/login → 401 Unauthorized · attempts=${n}` } }); }
+          if (u.status === 'pending') return this.setState({ busy: false, serverError: { title: t.e403, code: 'POST /api/auth/login → 403 Forbidden · reason=pending_approval' } });
+          if (u.mfa) return this.setState({ busy: false, view: 'mfa', mfaUser: u, mfaCode: '' });
+          this.finishLogin(u);
+        }, 700);
+      },
+      submitMfa: (e) => {
+        e.preventDefault(); if (s.mfaCode.length !== 6) return; this.setState({ busy: true });
+        setTimeout(() => { if (s.mfaCode === '123456') this.finishLogin(s.mfaUser); else this.setState({ busy: false, serverError: { title: t.eMfa, code: 'POST /api/auth/mfa → 401 Unauthorized' } }); }, 600);
+      },
+      submitForgot: (e) => {
+        e.preventDefault(); const t2 = this.t(), errors = {}; if (!s.login.email) errors.email = t2.required; else if (!EMAIL_RE.test(s.login.email)) errors.email = t2.badEmail;
+        if (Object.keys(errors).length) { this.setState({ errors }); return; }
+        this.setState({ busy: true }); setTimeout(() => this.setState({ busy: false, forgotSent: true }), 600);
+      },
+      submitRegister: (e) => {
+        e.preventDefault(); const errors = this.validateReg(); if (Object.keys(errors).length) { this.setState({ errors }); const first = Object.keys(errors)[0]; const el = this.rootRef.current && this.rootRef.current.querySelector(`[data-testid="register-${{ first: 'first-name', last: 'last-name', email: 'email', org: 'org', password: 'password', confirm: 'password-confirm', terms: 'terms' }[first]}"]`); if (el) el.focus(); return; }
+        this.setState({ busy: true, serverError: null });
+        setTimeout(() => {
+          if (USERS.some(u => u.email.toLowerCase() === s.reg.email.trim().toLowerCase())) return this.setState({ busy: false, serverError: { title: t.e409, code: 'POST /api/auth/register → 409 Conflict · field=email' } });
+          this.setState({ busy: false, view: 'verify', errors: {} }); this.toast('ok', t.verifyTitle, 'POST /api/auth/register → 201 Created');
+        }, 800);
+      },
+    };
+  }
+}
+</script>
+</body>
+</html>

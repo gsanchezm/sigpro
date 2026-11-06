@@ -1,0 +1,408 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#f3f5f8;font-family:'IBM Plex Sans',system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+a{color:#2f6fed}a:hover{color:#2459c7}
+[data-theme="light"]{--bg:#f3f5f8;--surface:#ffffff;--surface-2:#eef1f5;--border:#d5dbe3;--border-strong:#b7c0cc;--text:#0f1620;--text-2:#4b5665;--text-3:#7a8594;--accent:#2f6fed;--accent-hover:#2459c7;--accent-soft:#e3ecfd;--on-accent:#ffffff;--danger:#c62f2f;--danger-soft:#fbe3e3;--warn:#8a5200;--warn-soft:#fdeccc;--ok:#1a7f4b;--ok-soft:#d9f3e4;--info:#2459c7;--info-soft:#e3ecfd;--neutral:#4b5665;--neutral-soft:#e6eaf0;--purple:#6b3fc9;--purple-soft:#ece4fb;--shadow:0 1px 2px rgba(15,22,32,.06);--shadow-pop:0 8px 24px rgba(15,22,32,.14);--scrim:rgba(15,22,32,.45)}
+[data-theme="dark"]{--bg:#0d1117;--surface:#151b24;--surface-2:#1c242f;--border:#2a3441;--border-strong:#3b4756;--text:#e8edf3;--text-2:#a3afbe;--text-3:#6f7c8c;--accent:#5b8def;--accent-hover:#7ea3f3;--accent-soft:#1b2a47;--on-accent:#ffffff;--danger:#f0716b;--danger-soft:#3a1f21;--warn:#e6a23c;--warn-soft:#3a2d14;--ok:#49c27f;--ok-soft:#14311f;--info:#7ea3f3;--info-soft:#1b2a47;--neutral:#a3afbe;--neutral-soft:#27303c;--purple:#b394f5;--purple-soft:#2a2140;--shadow:0 1px 2px rgba(0,0,0,.4);--shadow-pop:0 8px 24px rgba(0,0,0,.5);--scrim:rgba(0,0,0,.6)}
+@keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
+@keyframes spin{to{transform:rotate(360deg)}}
+</style>
+</helmet>
+<div data-theme="{{ theme }}" style="min-height:100vh;background:var(--bg);color:var(--text);font-family:'IBM Plex Sans',system-ui,sans-serif;font-size:13px;line-height:1.45">
+  <div style="max-width:1180px;margin:0 auto;padding:40px 32px 96px;display:flex;flex-direction:column;gap:56px">
+
+    <header style="display:flex;flex-wrap:wrap;gap:24px;align-items:flex-end;justify-content:space-between;border-bottom:1px solid var(--border);padding-bottom:24px">
+      <div style="display:flex;flex-direction:column;gap:8px;max-width:680px">
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--text-3);letter-spacing:.06em">SIGPRO · DESIGN SYSTEM v0.1</div>
+        <h1 style="margin:0;font-size:26px;font-weight:600;letter-spacing:-.01em">Sistema de diseño SIGPRO</h1>
+        <p style="margin:0;color:var(--text-2);text-wrap:pretty">Interfaz técnica y densa para gestión de programas de ingeniería de sistemas. Tipografía IBM Plex Sans / Mono, paleta gris azulada con un único acento azul, badges de estado de alto contraste. Sin ilustraciones ni degradados. Cada elemento interactivo lleva nombre accesible y <code style="font-family:'IBM Plex Mono',monospace;font-size:12px;background:var(--surface-2);padding:1px 5px;border-radius:3px">data-testid</code> con patrón <code style="font-family:'IBM Plex Mono',monospace;font-size:12px;background:var(--surface-2);padding:1px 5px;border-radius:3px">pantalla-elemento</code>.</p>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <span style="color:var(--text-2);font-size:12px">Tema</span>
+        <div role="group" aria-label="Tema" style="display:inline-flex;border:1px solid var(--border);border-radius:5px;overflow:hidden;background:var(--surface)">
+          <button type="button" data-testid="ds-theme-light" aria-pressed="{{ isLight }}" onClick="{{ setLight }}" style="{{ lightBtn }}">Claro</button>
+          <button type="button" data-testid="ds-theme-dark" aria-pressed="{{ isDark }}" onClick="{{ setDark }}" style="{{ darkBtn }}">Oscuro</button>
+        </div>
+      </div>
+    </header>
+
+    <section aria-labelledby="s-color" style="display:flex;flex-direction:column;gap:16px">
+      <div style="display:flex;flex-direction:column;gap:4px">
+        <h2 id="s-color" style="margin:0;font-size:16px;font-weight:600">01 · Color</h2>
+        <p style="margin:0;color:var(--text-2)">Tokens semánticos. Los mismos nombres resuelven a valores distintos en claro y oscuro; los componentes nunca usan hex directos.</p>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(380px,1fr));gap:16px">
+        <div data-theme="light" style="background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:16px;color:var(--text);display:flex;flex-direction:column;gap:12px">
+          <div style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--text-3)">data-theme="light"</div>
+          <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px">
+            <div style="display:flex;flex-direction:column;gap:4px"><div style="height:40px;border-radius:4px;background:var(--bg);border:1px solid var(--border)"></div><span style="font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:var(--text-2)">--bg</span></div>
+            <div style="display:flex;flex-direction:column;gap:4px"><div style="height:40px;border-radius:4px;background:var(--surface);border:1px solid var(--border)"></div><span style="font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:var(--text-2)">--surface</span></div>
+            <div style="display:flex;flex-direction:column;gap:4px"><div style="height:40px;border-radius:4px;background:var(--surface-2);border:1px solid var(--border)"></div><span style="font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:var(--text-2)">--surface-2</span></div>
+            <div style="display:flex;flex-direction:column;gap:4px"><div style="height:40px;border-radius:4px;background:var(--border-strong)"></div><span style="font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:var(--text-2)">--border</span></div>
+            <div style="display:flex;flex-direction:column;gap:4px"><div style="height:40px;border-radius:4px;background:var(--text)"></div><span style="font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:var(--text-2)">--text</span></div>
+            <div style="display:flex;flex-direction:column;gap:4px"><div style="height:40px;border-radius:4px;background:var(--text-2)"></div><span style="font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:var(--text-2)">--text-2</span></div>
+            <div style="display:flex;flex-direction:column;gap:4px"><div style="height:40px;border-radius:4px;background:var(--text-3)"></div><span style="font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:var(--text-2)">--text-3</span></div>
+            <div style="display:flex;flex-direction:column;gap:4px"><div style="height:40px;border-radius:4px;background:var(--accent)"></div><span style="font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:var(--text-2)">--accent</span></div>
+            <div style="display:flex;flex-direction:column;gap:4px"><div style="height:40px;border-radius:4px;background:var(--ok-soft);border:1px solid var(--ok);color:var(--ok);display:grid;place-items:center;font-size:11px;font-weight:600">ok</div><span style="font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:var(--text-2)">--ok</span></div>
+            <div style="display:flex;flex-direction:column;gap:4px"><div style="height:40px;border-radius:4px;background:var(--warn-soft);border:1px solid var(--warn);color:var(--warn);display:grid;place-items:center;font-size:11px;font-weight:600">warn</div><span style="font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:var(--text-2)">--warn</span></div>
+            <div style="display:flex;flex-direction:column;gap:4px"><div style="height:40px;border-radius:4px;background:var(--danger-soft);border:1px solid var(--danger);color:var(--danger);display:grid;place-items:center;font-size:11px;font-weight:600">danger</div><span style="font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:var(--text-2)">--danger</span></div>
+            <div style="display:flex;flex-direction:column;gap:4px"><div style="height:40px;border-radius:4px;background:var(--purple-soft);border:1px solid var(--purple);color:var(--purple);display:grid;place-items:center;font-size:11px;font-weight:600">purple</div><span style="font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:var(--text-2)">--purple</span></div>
+          </div>
+        </div>
+        <div data-theme="dark" style="background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:16px;color:var(--text);display:flex;flex-direction:column;gap:12px">
+          <div style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--text-3)">data-theme="dark"</div>
+          <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px">
+            <div style="display:flex;flex-direction:column;gap:4px"><div style="height:40px;border-radius:4px;background:var(--bg);border:1px solid var(--border)"></div><span style="font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:var(--text-2)">--bg</span></div>
+            <div style="display:flex;flex-direction:column;gap:4px"><div style="height:40px;border-radius:4px;background:var(--surface);border:1px solid var(--border)"></div><span style="font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:var(--text-2)">--surface</span></div>
+            <div style="display:flex;flex-direction:column;gap:4px"><div style="height:40px;border-radius:4px;background:var(--surface-2);border:1px solid var(--border)"></div><span style="font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:var(--text-2)">--surface-2</span></div>
+            <div style="display:flex;flex-direction:column;gap:4px"><div style="height:40px;border-radius:4px;background:var(--border-strong)"></div><span style="font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:var(--text-2)">--border</span></div>
+            <div style="display:flex;flex-direction:column;gap:4px"><div style="height:40px;border-radius:4px;background:var(--text)"></div><span style="font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:var(--text-2)">--text</span></div>
+            <div style="display:flex;flex-direction:column;gap:4px"><div style="height:40px;border-radius:4px;background:var(--text-2)"></div><span style="font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:var(--text-2)">--text-2</span></div>
+            <div style="display:flex;flex-direction:column;gap:4px"><div style="height:40px;border-radius:4px;background:var(--text-3)"></div><span style="font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:var(--text-2)">--text-3</span></div>
+            <div style="display:flex;flex-direction:column;gap:4px"><div style="height:40px;border-radius:4px;background:var(--accent)"></div><span style="font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:var(--text-2)">--accent</span></div>
+            <div style="display:flex;flex-direction:column;gap:4px"><div style="height:40px;border-radius:4px;background:var(--ok-soft);border:1px solid var(--ok);color:var(--ok);display:grid;place-items:center;font-size:11px;font-weight:600">ok</div><span style="font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:var(--text-2)">--ok</span></div>
+            <div style="display:flex;flex-direction:column;gap:4px"><div style="height:40px;border-radius:4px;background:var(--warn-soft);border:1px solid var(--warn);color:var(--warn);display:grid;place-items:center;font-size:11px;font-weight:600">warn</div><span style="font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:var(--text-2)">--warn</span></div>
+            <div style="display:flex;flex-direction:column;gap:4px"><div style="height:40px;border-radius:4px;background:var(--danger-soft);border:1px solid var(--danger);color:var(--danger);display:grid;place-items:center;font-size:11px;font-weight:600">danger</div><span style="font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:var(--text-2)">--danger</span></div>
+            <div style="display:flex;flex-direction:column;gap:4px"><div style="height:40px;border-radius:4px;background:var(--purple-soft);border:1px solid var(--purple);color:var(--purple);display:grid;place-items:center;font-size:11px;font-weight:600">purple</div><span style="font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:var(--text-2)">--purple</span></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section aria-labelledby="s-type" style="display:flex;flex-direction:column;gap:16px">
+      <div style="display:flex;flex-direction:column;gap:4px">
+        <h2 id="s-type" style="margin:0;font-size:16px;font-weight:600">02 · Tipografía</h2>
+        <p style="margin:0;color:var(--text-2)">IBM Plex Sans para interfaz, IBM Plex Mono para códigos (PRG-001, REQ-017), fechas y valores tabulares. Base 13px; tablas 12.5px.</p>
+      </div>
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:20px 24px;display:grid;grid-template-columns:140px 1fr;row-gap:14px;column-gap:24px;align-items:baseline">
+        <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--text-3)">title / 26 · 600</span><span style="font-size:26px;font-weight:600;letter-spacing:-.01em">Programas de ingeniería</span>
+        <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--text-3)">h2 / 18 · 600</span><span style="font-size:18px;font-weight:600">Sistema de mando táctico Ártemis</span>
+        <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--text-3)">h3 / 15 · 600</span><span style="font-size:15px;font-weight:600">Hitos del programa</span>
+        <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--text-3)">body / 13 · 400</span><span style="font-size:13px">El requisito debe verificarse mediante ensayo en banco antes de la revisión crítica de diseño.</span>
+        <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--text-3)">table / 12.5 · 400</span><span style="font-size:12.5px">Radar de vigilancia costera RVC-2 · Marta Ruiz · 12/03/2025</span>
+        <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--text-3)">label / 12 · 500</span><span style="font-size:12px;font-weight:500;color:var(--text-2)">Responsable del programa</span>
+        <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--text-3)">caption / 11 · 400</span><span style="font-size:11px;color:var(--text-3)">Última actualización hace 4 min</span>
+        <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--text-3)">mono / 12 · 500</span><span style="font-family:'IBM Plex Mono',monospace;font-size:12px;font-weight:500">PRG-001 · REQ-017 · TC-025 · NC-012</span>
+      </div>
+    </section>
+
+    <section aria-labelledby="s-space" style="display:flex;flex-direction:column;gap:16px">
+      <div style="display:flex;flex-direction:column;gap:4px">
+        <h2 id="s-space" style="margin:0;font-size:16px;font-weight:600">03 · Espaciado, radios y elevación</h2>
+        <p style="margin:0;color:var(--text-2)">Escala de 4px. Controles de 28px (denso) y 32px (formularios). Radios: 4px controles, 6px tarjetas, 999px chips.</p>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px">
+        <div style="background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:20px;display:flex;flex-direction:column;gap:10px">
+          <div style="display:flex;align-items:center;gap:12px"><div style="width:4px;height:16px;background:var(--accent)"></div><span style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--text-2)">4 · space-1</span></div>
+          <div style="display:flex;align-items:center;gap:12px"><div style="width:8px;height:16px;background:var(--accent)"></div><span style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--text-2)">8 · space-2</span></div>
+          <div style="display:flex;align-items:center;gap:12px"><div style="width:12px;height:16px;background:var(--accent)"></div><span style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--text-2)">12 · space-3</span></div>
+          <div style="display:flex;align-items:center;gap:12px"><div style="width:16px;height:16px;background:var(--accent)"></div><span style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--text-2)">16 · space-4</span></div>
+          <div style="display:flex;align-items:center;gap:12px"><div style="width:24px;height:16px;background:var(--accent)"></div><span style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--text-2)">24 · space-6</span></div>
+          <div style="display:flex;align-items:center;gap:12px"><div style="width:32px;height:16px;background:var(--accent)"></div><span style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--text-2)">32 · space-8</span></div>
+        </div>
+        <div style="background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:20px;display:flex;gap:16px;align-items:flex-end;flex-wrap:wrap">
+          <div style="display:flex;flex-direction:column;gap:6px;align-items:center"><div style="width:56px;height:40px;border:1px solid var(--border-strong);border-radius:4px"></div><span style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--text-2)">r-4</span></div>
+          <div style="display:flex;flex-direction:column;gap:6px;align-items:center"><div style="width:56px;height:40px;border:1px solid var(--border-strong);border-radius:6px"></div><span style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--text-2)">r-6</span></div>
+          <div style="display:flex;flex-direction:column;gap:6px;align-items:center"><div style="width:56px;height:24px;border:1px solid var(--border-strong);border-radius:999px"></div><span style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--text-2)">r-pill</span></div>
+        </div>
+        <div style="background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:20px;display:flex;gap:16px;align-items:center;flex-wrap:wrap">
+          <div style="display:flex;flex-direction:column;gap:6px;align-items:center"><div style="width:72px;height:48px;background:var(--surface);border:1px solid var(--border);border-radius:6px;box-shadow:var(--shadow)"></div><span style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--text-2)">card</span></div>
+          <div style="display:flex;flex-direction:column;gap:6px;align-items:center"><div style="width:72px;height:48px;background:var(--surface);border:1px solid var(--border);border-radius:6px;box-shadow:var(--shadow-pop)"></div><span style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--text-2)">popover</span></div>
+          <div style="display:flex;flex-direction:column;gap:6px;align-items:center"><div style="width:72px;height:48px;background:var(--surface);border:1px solid var(--border);border-radius:4px;outline:2px solid var(--accent);outline-offset:1px"></div><span style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--text-2)">focus ring</span></div>
+        </div>
+      </div>
+    </section>
+
+    <section aria-labelledby="s-badges" style="display:flex;flex-direction:column;gap:16px">
+      <div style="display:flex;flex-direction:column;gap:4px">
+        <h2 id="s-badges" style="margin:0;font-size:16px;font-weight:600">04 · Badges de estado</h2>
+        <p style="margin:0;color:var(--text-2)">Fondo suave + texto y borde del mismo tono; contraste ≥ 4.5:1 en ambos temas. El valor interno (draft, in_analysis…) se expone en <code style="font-family:'IBM Plex Mono',monospace;font-size:12px">data-state</code>.</p>
+      </div>
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:20px;display:grid;grid-template-columns:160px 1fr;row-gap:16px;column-gap:24px;align-items:center">
+        <span style="font-size:12px;font-weight:500;color:var(--text-2)">Programa</span>
+        <div style="display:flex;flex-wrap:wrap;gap:8px">
+          <span data-state="draft" style="display:inline-flex;align-items:center;gap:6px;height:22px;padding:0 8px;border-radius:4px;font-size:11.5px;font-weight:600;background:var(--neutral-soft);color:var(--neutral);border:1px solid var(--neutral)"><span style="width:6px;height:6px;border-radius:50%;background:currentColor"></span>Borrador</span>
+          <span data-state="active" style="display:inline-flex;align-items:center;gap:6px;height:22px;padding:0 8px;border-radius:4px;font-size:11.5px;font-weight:600;background:var(--info-soft);color:var(--info);border:1px solid var(--info)"><span style="width:6px;height:6px;border-radius:50%;background:currentColor"></span>Activo</span>
+          <span data-state="on_hold" style="display:inline-flex;align-items:center;gap:6px;height:22px;padding:0 8px;border-radius:4px;font-size:11.5px;font-weight:600;background:var(--warn-soft);color:var(--warn);border:1px solid var(--warn)"><span style="width:6px;height:6px;border-radius:50%;background:currentColor"></span>En pausa</span>
+          <span data-state="closed" style="display:inline-flex;align-items:center;gap:6px;height:22px;padding:0 8px;border-radius:4px;font-size:11.5px;font-weight:600;background:var(--ok-soft);color:var(--ok);border:1px solid var(--ok)"><span style="width:6px;height:6px;border-radius:50%;background:currentColor"></span>Cerrado</span>
+          <span data-state="cancelled" style="display:inline-flex;align-items:center;gap:6px;height:22px;padding:0 8px;border-radius:4px;font-size:11.5px;font-weight:600;background:var(--danger-soft);color:var(--danger);border:1px solid var(--danger)"><span style="width:6px;height:6px;border-radius:50%;background:currentColor"></span>Cancelado</span>
+        </div>
+        <span style="font-size:12px;font-weight:500;color:var(--text-2)">Requisito</span>
+        <div style="display:flex;flex-wrap:wrap;gap:8px">
+          <span data-state="draft" style="display:inline-flex;align-items:center;height:22px;padding:0 8px;border-radius:4px;font-size:11.5px;font-weight:600;background:var(--neutral-soft);color:var(--neutral);border:1px solid var(--neutral)">draft</span>
+          <span data-state="approved" style="display:inline-flex;align-items:center;height:22px;padding:0 8px;border-radius:4px;font-size:11.5px;font-weight:600;background:var(--info-soft);color:var(--info);border:1px solid var(--info)">approved</span>
+          <span data-state="verified" style="display:inline-flex;align-items:center;height:22px;padding:0 8px;border-radius:4px;font-size:11.5px;font-weight:600;background:var(--purple-soft);color:var(--purple);border:1px solid var(--purple)">verified</span>
+          <span data-state="validated" style="display:inline-flex;align-items:center;height:22px;padding:0 8px;border-radius:4px;font-size:11.5px;font-weight:600;background:var(--ok-soft);color:var(--ok);border:1px solid var(--ok)">validated</span>
+        </div>
+        <span style="font-size:12px;font-weight:500;color:var(--text-2)">No conformidad</span>
+        <div style="display:flex;flex-wrap:wrap;gap:8px">
+          <span data-state="open" style="display:inline-flex;align-items:center;height:22px;padding:0 8px;border-radius:4px;font-size:11.5px;font-weight:600;background:var(--danger-soft);color:var(--danger);border:1px solid var(--danger)">open</span>
+          <span data-state="in_analysis" style="display:inline-flex;align-items:center;height:22px;padding:0 8px;border-radius:4px;font-size:11.5px;font-weight:600;background:var(--warn-soft);color:var(--warn);border:1px solid var(--warn)">in_analysis</span>
+          <span data-state="corrective_action" style="display:inline-flex;align-items:center;height:22px;padding:0 8px;border-radius:4px;font-size:11.5px;font-weight:600;background:var(--info-soft);color:var(--info);border:1px solid var(--info)">corrective_action</span>
+          <span data-state="closed" style="display:inline-flex;align-items:center;height:22px;padding:0 8px;border-radius:4px;font-size:11.5px;font-weight:600;background:var(--ok-soft);color:var(--ok);border:1px solid var(--ok)">closed</span>
+          <span data-state="rejected" style="display:inline-flex;align-items:center;height:22px;padding:0 8px;border-radius:4px;font-size:11.5px;font-weight:600;background:var(--neutral-soft);color:var(--neutral);border:1px solid var(--neutral)">rejected</span>
+        </div>
+        <span style="font-size:12px;font-weight:500;color:var(--text-2)">Severidad NC</span>
+        <div style="display:flex;flex-wrap:wrap;gap:8px">
+          <span data-severity="critical" style="display:inline-flex;align-items:center;height:22px;padding:0 8px;border-radius:4px;font-size:11.5px;font-weight:600;background:var(--danger);color:#fff">Crítica</span>
+          <span data-severity="major" style="display:inline-flex;align-items:center;height:22px;padding:0 8px;border-radius:4px;font-size:11.5px;font-weight:600;background:var(--danger-soft);color:var(--danger);border:1px solid var(--danger)">Mayor</span>
+          <span data-severity="minor" style="display:inline-flex;align-items:center;height:22px;padding:0 8px;border-radius:4px;font-size:11.5px;font-weight:600;background:var(--warn-soft);color:var(--warn);border:1px solid var(--warn)">Menor</span>
+          <span data-severity="observation" style="display:inline-flex;align-items:center;height:22px;padding:0 8px;border-radius:4px;font-size:11.5px;font-weight:600;background:var(--neutral-soft);color:var(--neutral);border:1px solid var(--neutral)">Observación</span>
+        </div>
+        <span style="font-size:12px;font-weight:500;color:var(--text-2)">Resultado de prueba</span>
+        <div style="display:flex;flex-wrap:wrap;gap:8px">
+          <span data-result="pass" style="display:inline-flex;align-items:center;height:22px;padding:0 8px;border-radius:4px;font-size:11.5px;font-weight:600;background:var(--ok-soft);color:var(--ok);border:1px solid var(--ok)">pass</span>
+          <span data-result="fail" style="display:inline-flex;align-items:center;height:22px;padding:0 8px;border-radius:4px;font-size:11.5px;font-weight:600;background:var(--danger-soft);color:var(--danger);border:1px solid var(--danger)">fail</span>
+          <span data-result="blocked" style="display:inline-flex;align-items:center;height:22px;padding:0 8px;border-radius:4px;font-size:11.5px;font-weight:600;background:var(--warn-soft);color:var(--warn);border:1px solid var(--warn)">blocked</span>
+          <span data-result="not_run" style="display:inline-flex;align-items:center;height:22px;padding:0 8px;border-radius:4px;font-size:11.5px;font-weight:600;background:var(--neutral-soft);color:var(--neutral);border:1px dashed var(--neutral)">not_run</span>
+        </div>
+        <span style="font-size:12px;font-weight:500;color:var(--text-2)">Clasificación</span>
+        <div style="display:flex;flex-wrap:wrap;gap:8px">
+          <span style="display:inline-flex;align-items:center;height:22px;padding:0 8px;border-radius:999px;font-size:11.5px;font-weight:600;background:var(--surface-2);color:var(--text-2);border:1px solid var(--border-strong)">public</span>
+          <span style="display:inline-flex;align-items:center;height:22px;padding:0 8px;border-radius:999px;font-size:11.5px;font-weight:600;background:var(--text);color:var(--surface)">restricted</span>
+        </div>
+      </div>
+    </section>
+
+    <section aria-labelledby="s-controls" style="display:flex;flex-direction:column;gap:16px">
+      <div style="display:flex;flex-direction:column;gap:4px">
+        <h2 id="s-controls" style="margin:0;font-size:16px;font-weight:600">05 · Controles</h2>
+        <p style="margin:0;color:var(--text-2)">Botones, campos y selectores. Todos con etiqueta asociada, estado de foco visible y data-testid.</p>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:16px">
+        <div style="background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:20px;display:flex;flex-direction:column;gap:16px">
+          <span style="font-size:12px;font-weight:500;color:var(--text-2)">Botones</span>
+          <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center">
+            <button type="button" data-testid="ds-btn-primary" style="height:32px;padding:0 14px;border-radius:4px;border:1px solid var(--accent);background:var(--accent);color:var(--on-accent);font:inherit;font-weight:500;cursor:pointer" style-hover="background:var(--accent-hover);border-color:var(--accent-hover)" style-focus="outline:2px solid var(--accent);outline-offset:2px">Primario</button>
+            <button type="button" data-testid="ds-btn-secondary" style="height:32px;padding:0 14px;border-radius:4px;border:1px solid var(--border-strong);background:var(--surface);color:var(--text);font:inherit;font-weight:500;cursor:pointer" style-hover="background:var(--surface-2)" style-focus="outline:2px solid var(--accent);outline-offset:2px">Secundario</button>
+            <button type="button" data-testid="ds-btn-ghost" style="height:32px;padding:0 10px;border-radius:4px;border:1px solid transparent;background:transparent;color:var(--text-2);font:inherit;font-weight:500;cursor:pointer" style-hover="background:var(--surface-2);color:var(--text)" style-focus="outline:2px solid var(--accent);outline-offset:2px">Ghost</button>
+            <button type="button" data-testid="ds-btn-danger" style="height:32px;padding:0 14px;border-radius:4px;border:1px solid var(--danger);background:transparent;color:var(--danger);font:inherit;font-weight:500;cursor:pointer" style-hover="background:var(--danger-soft)" style-focus="outline:2px solid var(--danger);outline-offset:2px">Eliminar</button>
+            <button type="button" disabled="{{ true }}" data-testid="ds-btn-disabled" style="height:32px;padding:0 14px;border-radius:4px;border:1px solid var(--border);background:var(--surface-2);color:var(--text-3);font:inherit;font-weight:500;cursor:not-allowed">Deshabilitado</button>
+            <button type="button" aria-busy="true" data-testid="ds-btn-loading" style="height:32px;padding:0 14px;border-radius:4px;border:1px solid var(--accent);background:var(--accent);color:var(--on-accent);font:inherit;font-weight:500;display:inline-flex;align-items:center;gap:8px;cursor:progress"><span style="width:12px;height:12px;border:2px solid rgba(255,255,255,.4);border-top-color:#fff;border-radius:50%;animation:spin .8s linear infinite"></span>Guardando…</button>
+          </div>
+          <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center">
+            <button type="button" aria-label="Más acciones" data-testid="ds-btn-icon" style="width:28px;height:28px;border-radius:4px;border:1px solid var(--border);background:var(--surface);color:var(--text-2);display:grid;place-items:center;cursor:pointer" style-hover="background:var(--surface-2)" style-focus="outline:2px solid var(--accent);outline-offset:2px"><svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor"><circle cx="2.5" cy="7" r="1.4"></circle><circle cx="7" cy="7" r="1.4"></circle><circle cx="11.5" cy="7" r="1.4"></circle></svg></button>
+            <button type="button" data-testid="ds-btn-sm" style="height:26px;padding:0 10px;border-radius:4px;border:1px solid var(--border-strong);background:var(--surface);color:var(--text);font:inherit;font-size:12px;font-weight:500;cursor:pointer">Pequeño 26px</button>
+            <button type="button" data-testid="ds-btn-link" style="height:26px;padding:0 4px;border:0;background:none;color:var(--accent);font:inherit;font-weight:500;cursor:pointer;text-decoration:underline;text-underline-offset:3px">Enlace</button>
+          </div>
+        </div>
+        <div style="background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:20px;display:flex;flex-direction:column;gap:14px">
+          <span style="font-size:12px;font-weight:500;color:var(--text-2)">Campos</span>
+          <div style="display:flex;flex-direction:column;gap:4px">
+            <label for="ds-in-1" style="font-size:12px;font-weight:500;color:var(--text-2)">Nombre del programa</label>
+            <input id="ds-in-1" data-testid="ds-input" placeholder="Ej. Radar de vigilancia costera" style="height:32px;padding:0 10px;border-radius:4px;border:1px solid var(--border-strong);background:var(--surface);color:var(--text);font:inherit" style-focus="outline:2px solid var(--accent);outline-offset:-1px;border-color:var(--accent)">
+          </div>
+          <div style="display:flex;flex-direction:column;gap:4px">
+            <label for="ds-in-2" style="font-size:12px;font-weight:500;color:var(--text-2)">Presupuesto (€)</label>
+            <input id="ds-in-2" data-testid="ds-input-error" aria-invalid="true" aria-describedby="ds-in-2-err" value="0" readOnly="{{ true }}" style="height:32px;padding:0 10px;border-radius:4px;border:1px solid var(--danger);background:var(--surface);color:var(--text);font:inherit;font-family:'IBM Plex Mono',monospace">
+            <span id="ds-in-2-err" role="alert" style="font-size:12px;color:var(--danger)">El presupuesto debe ser mayor que 0 (422)</span>
+          </div>
+          <div style="display:flex;gap:12px;flex-wrap:wrap">
+            <div style="display:flex;flex-direction:column;gap:4px;flex:1;min-width:140px">
+              <label for="ds-sel" style="font-size:12px;font-weight:500;color:var(--text-2)">Estado (select nativo)</label>
+              <select id="ds-sel" data-testid="ds-select" defaultValue="active" style="height:32px;padding:0 8px;border-radius:4px;border:1px solid var(--border-strong);background:var(--surface);color:var(--text);font:inherit"><option value="draft">Borrador</option><option value="active">Activo</option><option value="on_hold">En pausa</option><option value="closed">Cerrado</option></select>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:4px;flex:1;min-width:140px">
+              <label for="ds-date" style="font-size:12px;font-weight:500;color:var(--text-2)">Fecha inicio</label>
+              <input id="ds-date" type="date" data-testid="ds-date" defaultValue="2025-03-12" style="height:32px;padding:0 8px;border-radius:4px;border:1px solid var(--border-strong);background:var(--surface);color:var(--text);font:inherit;font-family:'IBM Plex Mono',monospace;font-size:12px">
+            </div>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:4px">
+            <label for="ds-combo" style="font-size:12px;font-weight:500;color:var(--text-2)">Responsable (combobox)</label>
+            <div style="position:relative">
+              <input id="ds-combo" role="combobox" aria-expanded="true" aria-controls="ds-combo-list" aria-autocomplete="list" data-testid="ds-combobox" defaultValue="Mar" style="width:100%;height:32px;padding:0 10px;border-radius:4px;border:1px solid var(--accent);outline:2px solid var(--accent);outline-offset:-1px;background:var(--surface);color:var(--text);font:inherit">
+              <ul id="ds-combo-list" role="listbox" aria-label="Responsables" style="list-style:none;margin:4px 0 0;padding:4px;position:relative;background:var(--surface);border:1px solid var(--border);border-radius:6px;box-shadow:var(--shadow-pop)">
+                <li role="option" aria-selected="true" style="padding:6px 8px;border-radius:4px;background:var(--accent-soft);color:var(--text);display:flex;gap:8px;align-items:center"><span style="width:20px;height:20px;border-radius:50%;background:var(--accent);color:#fff;font-size:9px;font-weight:600;display:grid;place-items:center">MR</span><span><strong>Mar</strong>ta Ruiz</span></li>
+                <li role="option" aria-selected="false" style="padding:6px 8px;border-radius:4px;display:flex;gap:8px;align-items:center"><span style="width:20px;height:20px;border-radius:50%;background:var(--neutral);color:#fff;font-size:9px;font-weight:600;display:grid;place-items:center">MC</span><span><strong>Mar</strong>cos Cano</span></li>
+              </ul>
+            </div>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:4px">
+            <span id="ds-chips-l" style="font-size:12px;font-weight:500;color:var(--text-2)">Etiquetas (multi-select con chips)</span>
+            <div role="group" aria-labelledby="ds-chips-l" data-testid="ds-multiselect" style="min-height:32px;padding:3px 6px;border-radius:4px;border:1px solid var(--border-strong);display:flex;flex-wrap:wrap;gap:4px;align-items:center">
+              <span style="display:inline-flex;align-items:center;gap:4px;height:22px;padding:0 4px 0 8px;border-radius:999px;background:var(--accent-soft);color:var(--text);font-size:12px">safety<button type="button" aria-label="Quitar safety" style="width:16px;height:16px;border:0;border-radius:50%;background:transparent;color:var(--text-2);cursor:pointer;display:grid;place-items:center;font-size:12px;line-height:1">×</button></span>
+              <span style="display:inline-flex;align-items:center;gap:4px;height:22px;padding:0 4px 0 8px;border-radius:999px;background:var(--accent-soft);color:var(--text);font-size:12px">EMC<button type="button" aria-label="Quitar EMC" style="width:16px;height:16px;border:0;border-radius:50%;background:transparent;color:var(--text-2);cursor:pointer;display:grid;place-items:center;font-size:12px;line-height:1">×</button></span>
+              <input aria-label="Añadir etiqueta" placeholder="Añadir…" style="flex:1;min-width:80px;height:22px;border:0;background:transparent;color:var(--text);font:inherit;outline:none">
+            </div>
+          </div>
+        </div>
+        <div style="background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:20px;display:flex;flex-direction:column;gap:16px">
+          <span style="font-size:12px;font-weight:500;color:var(--text-2)">Selección</span>
+          <div style="display:flex;flex-direction:column;gap:10px">
+            <label style="display:flex;align-items:center;gap:8px;cursor:pointer"><input type="checkbox" defaultChecked="{{ true }}" data-testid="ds-checkbox" style="width:16px;height:16px;accent-color:var(--accent);margin:0">Recordar sesión</label>
+            <label style="display:flex;align-items:center;gap:8px;cursor:pointer"><input type="checkbox" data-testid="ds-checkbox-2" style="width:16px;height:16px;accent-color:var(--accent);margin:0">Documento clasificado</label>
+            <fieldset style="border:0;padding:0;margin:0;display:flex;gap:16px;flex-wrap:wrap"><legend style="font-size:12px;font-weight:500;color:var(--text-2);padding:0;margin-bottom:6px">Resultado</legend>
+              <label style="display:flex;align-items:center;gap:6px;cursor:pointer"><input type="radio" name="ds-r" defaultChecked="{{ true }}" data-testid="ds-radio-pass" style="accent-color:var(--ok);margin:0">pass</label>
+              <label style="display:flex;align-items:center;gap:6px;cursor:pointer"><input type="radio" name="ds-r" data-testid="ds-radio-fail" style="accent-color:var(--danger);margin:0">fail</label>
+              <label style="display:flex;align-items:center;gap:6px;cursor:pointer"><input type="radio" name="ds-r" data-testid="ds-radio-blocked" style="accent-color:var(--warn);margin:0">blocked</label>
+            </fieldset>
+          </div>
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:12px">
+            <span id="ds-sw-l" style="font-size:13px">Usuario activo</span>
+            <button type="button" role="switch" aria-checked="{{ switchOn }}" aria-labelledby="ds-sw-l" data-testid="ds-switch" onClick="{{ toggleSwitch }}" style="{{ switchStyle }}" style-focus="outline:2px solid var(--accent);outline-offset:2px"><span style="{{ switchKnob }}"></span></button>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:6px">
+            <div style="display:flex;justify-content:space-between"><label for="ds-slider" style="font-size:12px;font-weight:500;color:var(--text-2)">Avance del hito</label><span style="font-family:'IBM Plex Mono',monospace;font-size:12px">{{ sliderVal }}%</span></div>
+            <input id="ds-slider" type="range" min="0" max="100" value="{{ sliderVal }}" onChange="{{ setSlider }}" data-testid="ds-slider" style="width:100%;accent-color:var(--accent);margin:0">
+          </div>
+          <div style="display:flex;flex-direction:column;gap:6px">
+            <div style="display:flex;justify-content:space-between;font-size:12px"><span style="color:var(--text-2)">Progreso del programa</span><span style="font-family:'IBM Plex Mono',monospace">62%</span></div>
+            <div role="progressbar" aria-valuenow="62" aria-valuemin="0" aria-valuemax="100" aria-label="Progreso del programa" data-testid="ds-progress" style="height:6px;border-radius:3px;background:var(--surface-2);overflow:hidden"><div style="width:62%;height:100%;background:var(--accent)"></div></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section aria-labelledby="s-nav" style="display:flex;flex-direction:column;gap:16px">
+      <div style="display:flex;flex-direction:column;gap:4px">
+        <h2 id="s-nav" style="margin:0;font-size:16px;font-weight:600">06 · Navegación y contenedores</h2>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:16px">
+        <div style="background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:20px;display:flex;flex-direction:column;gap:20px">
+          <nav aria-label="Migas de pan" data-testid="ds-breadcrumbs" style="display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--text-3)"><a href="#" style="color:var(--text-2);text-decoration:none">Inicio</a><span aria-hidden="true">/</span><a href="#" style="color:var(--text-2);text-decoration:none">Programas</a><span aria-hidden="true">/</span><span aria-current="page" style="color:var(--text);font-weight:500">PRG-001</span></nav>
+          <div role="tablist" aria-label="Secciones del programa" data-testid="ds-tabs" style="display:flex;gap:2px;border-bottom:1px solid var(--border)">
+            <button type="button" role="tab" aria-selected="{{ tab0 }}" onClick="{{ setTab0 }}" style="{{ tab0Style }}" style-focus="outline:2px solid var(--accent);outline-offset:-2px">Resumen</button>
+            <button type="button" role="tab" aria-selected="{{ tab1 }}" onClick="{{ setTab1 }}" style="{{ tab1Style }}" style-focus="outline:2px solid var(--accent);outline-offset:-2px">Requisitos <span style="margin-left:4px;font-family:'IBM Plex Mono',monospace;font-size:10.5px;padding:0 5px;border-radius:999px;background:var(--surface-2);color:var(--text-2)">40</span></button>
+            <button type="button" role="tab" aria-selected="{{ tab2 }}" onClick="{{ setTab2 }}" style="{{ tab2Style }}" style-focus="outline:2px solid var(--accent);outline-offset:-2px">No conformidades <span style="margin-left:4px;font-family:'IBM Plex Mono',monospace;font-size:10.5px;padding:0 5px;border-radius:999px;background:var(--danger-soft);color:var(--danger)">3</span></button>
+          </div>
+          <div data-testid="ds-accordion" style="border:1px solid var(--border);border-radius:6px;overflow:hidden">
+            <h3 style="margin:0;font-size:13px"><button type="button" aria-expanded="{{ accOpen }}" aria-controls="ds-acc-p" onClick="{{ toggleAcc }}" style="width:100%;display:flex;justify-content:space-between;align-items:center;padding:10px 12px;border:0;background:var(--surface);color:var(--text);font:inherit;font-weight:500;cursor:pointer;text-align:left" style-hover="background:var(--surface-2)">¿Cómo reseteo los datos de demo?<span aria-hidden="true" style="{{ accChevron }}">⌄</span></button></h3>
+            <sc-if value="{{ accOpen }}" hint-placeholder-val="{{ true }}"><div id="ds-acc-p" style="padding:0 12px 12px;color:var(--text-2);border-top:1px solid var(--border);padding-top:10px">Desde Administración → Reset o con el botón de /lab. Se restauran PRG-001…003, REQ-001…040, TC-001…025 y NC-001…012.</div></sc-if>
+          </div>
+        </div>
+        <div style="background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:20px;display:flex;flex-direction:column;gap:16px">
+          <span style="font-size:12px;font-weight:500;color:var(--text-2)">Tabla densa</span>
+          <table data-testid="ds-table" style="width:100%;border-collapse:collapse;font-size:12.5px">
+            <thead><tr style="border-bottom:1px solid var(--border)">
+              <th scope="col" style="text-align:left;padding:6px 8px;font-weight:500;color:var(--text-2);font-size:12px"><input type="checkbox" aria-label="Seleccionar todo" style="accent-color:var(--accent);margin:0;vertical-align:middle"></th>
+              <th scope="col" aria-sort="ascending" style="text-align:left;padding:6px 8px;font-weight:500;color:var(--text);font-size:12px"><button type="button" style="border:0;background:none;font:inherit;color:inherit;padding:0;cursor:pointer;display:inline-flex;gap:4px;align-items:center">Código <span aria-hidden="true" style="color:var(--accent)">↑</span></button></th>
+              <th scope="col" style="text-align:left;padding:6px 8px;font-weight:500;color:var(--text-2);font-size:12px">Nombre</th>
+              <th scope="col" style="text-align:left;padding:6px 8px;font-weight:500;color:var(--text-2);font-size:12px">Estado</th>
+              <th scope="col" style="text-align:right;padding:6px 8px;font-weight:500;color:var(--text-2);font-size:12px">Avance</th>
+            </tr></thead>
+            <tbody>
+              <tr data-testid="ds-table-row-PRG-001" style="border-bottom:1px solid var(--border);background:var(--accent-soft)"><td style="padding:7px 8px"><input type="checkbox" defaultChecked="{{ true }}" aria-label="Seleccionar PRG-001" style="accent-color:var(--accent);margin:0;vertical-align:middle"></td><td style="padding:7px 8px;font-family:'IBM Plex Mono',monospace;font-weight:500">PRG-001</td><td style="padding:7px 8px">Sistema de mando táctico Ártemis</td><td style="padding:7px 8px"><span style="display:inline-flex;align-items:center;height:20px;padding:0 7px;border-radius:4px;font-size:11px;font-weight:600;background:var(--info-soft);color:var(--info);border:1px solid var(--info)">Activo</span></td><td style="padding:7px 8px;text-align:right;font-family:'IBM Plex Mono',monospace">62%</td></tr>
+              <tr data-testid="ds-table-row-PRG-002" style="border-bottom:1px solid var(--border)" style-hover="background:var(--surface-2)"><td style="padding:7px 8px"><input type="checkbox" aria-label="Seleccionar PRG-002" style="accent-color:var(--accent);margin:0;vertical-align:middle"></td><td style="padding:7px 8px;font-family:'IBM Plex Mono',monospace;font-weight:500">PRG-002</td><td style="padding:7px 8px">Radar de vigilancia costera RVC-2</td><td style="padding:7px 8px"><span style="display:inline-flex;align-items:center;height:20px;padding:0 7px;border-radius:4px;font-size:11px;font-weight:600;background:var(--warn-soft);color:var(--warn);border:1px solid var(--warn)">En pausa</span></td><td style="padding:7px 8px;text-align:right;font-family:'IBM Plex Mono',monospace">38%</td></tr>
+              <tr style="border-bottom:1px solid var(--border)"><td style="padding:7px 8px"><span style="display:block;width:14px;height:14px;border-radius:3px;background:linear-gradient(90deg,var(--surface-2) 25%,var(--border) 50%,var(--surface-2) 75%);background-size:200% 100%;animation:shimmer 1.4s infinite"></span></td><td style="padding:7px 8px"><span style="display:block;width:60px;height:12px;border-radius:3px;background:linear-gradient(90deg,var(--surface-2) 25%,var(--border) 50%,var(--surface-2) 75%);background-size:200% 100%;animation:shimmer 1.4s infinite"></span></td><td style="padding:7px 8px"><span style="display:block;width:70%;height:12px;border-radius:3px;background:linear-gradient(90deg,var(--surface-2) 25%,var(--border) 50%,var(--surface-2) 75%);background-size:200% 100%;animation:shimmer 1.4s infinite"></span></td><td style="padding:7px 8px"><span style="display:block;width:56px;height:20px;border-radius:4px;background:linear-gradient(90deg,var(--surface-2) 25%,var(--border) 50%,var(--surface-2) 75%);background-size:200% 100%;animation:shimmer 1.4s infinite"></span></td><td style="padding:7px 8px"><span style="display:block;margin-left:auto;width:32px;height:12px;border-radius:3px;background:linear-gradient(90deg,var(--surface-2) 25%,var(--border) 50%,var(--surface-2) 75%);background-size:200% 100%;animation:shimmer 1.4s infinite"></span></td></tr>
+            </tbody>
+          </table>
+          <div style="display:flex;justify-content:space-between;align-items:center;font-size:12px;color:var(--text-2)">
+            <span>1–10 de 24</span>
+            <nav aria-label="Paginación" style="display:flex;gap:4px">
+              <button type="button" disabled="{{ true }}" style="height:26px;padding:0 8px;border-radius:4px;border:1px solid var(--border);background:var(--surface);color:var(--text-3);font:inherit;font-size:12px">‹</button>
+              <button type="button" aria-current="page" style="height:26px;min-width:26px;border-radius:4px;border:1px solid var(--accent);background:var(--accent);color:#fff;font:inherit;font-size:12px">1</button>
+              <button type="button" style="height:26px;min-width:26px;border-radius:4px;border:1px solid var(--border);background:var(--surface);color:var(--text);font:inherit;font-size:12px">2</button>
+              <button type="button" style="height:26px;min-width:26px;border-radius:4px;border:1px solid var(--border);background:var(--surface);color:var(--text);font:inherit;font-size:12px">3</button>
+              <button type="button" style="height:26px;padding:0 8px;border-radius:4px;border:1px solid var(--border);background:var(--surface);color:var(--text);font:inherit;font-size:12px">›</button>
+            </nav>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section aria-labelledby="s-feedback" style="display:flex;flex-direction:column;gap:16px">
+      <div style="display:flex;flex-direction:column;gap:4px">
+        <h2 id="s-feedback" style="margin:0;font-size:16px;font-weight:600">07 · Feedback y superposiciones</h2>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px;align-items:start">
+        <div style="display:flex;flex-direction:column;gap:10px">
+          <div role="status" data-testid="toast-success" style="display:flex;gap:10px;align-items:flex-start;padding:10px 12px;border-radius:6px;background:var(--surface);border:1px solid var(--border);border-left:3px solid var(--ok);box-shadow:var(--shadow-pop)"><span style="width:8px;height:8px;margin-top:5px;border-radius:50%;background:var(--ok)"></span><div style="flex:1"><div style="font-weight:500">Programa creado</div><div style="font-size:12px;color:var(--text-2)">PRG-004 se añadió a la lista. Se cierra en 5 s.</div></div><button type="button" aria-label="Cerrar notificación" style="border:0;background:none;color:var(--text-3);cursor:pointer;font-size:14px;line-height:1;padding:0">×</button></div>
+          <div role="alert" data-testid="toast-error" style="display:flex;gap:10px;align-items:flex-start;padding:10px 12px;border-radius:6px;background:var(--surface);border:1px solid var(--border);border-left:3px solid var(--danger);box-shadow:var(--shadow-pop)"><span style="width:8px;height:8px;margin-top:5px;border-radius:50%;background:var(--danger)"></span><div style="flex:1"><div style="font-weight:500">Error 422</div><div style="font-size:12px;color:var(--text-2)">Revisa los campos marcados.</div></div></div>
+          <div role="alert" data-testid="ds-alert-inline" style="padding:10px 12px;border-radius:6px;background:var(--danger-soft);border:1px solid var(--danger);color:var(--text);display:flex;justify-content:space-between;gap:12px;align-items:center"><span>No se pudieron cargar los programas (503).</span><button type="button" style="height:26px;padding:0 10px;border-radius:4px;border:1px solid var(--danger);background:transparent;color:var(--danger);font:inherit;font-size:12px;font-weight:500;cursor:pointer">Reintentar</button></div>
+          <div style="display:flex;gap:16px;align-items:center;padding:4px 0">
+            <span role="status" aria-label="Cargando" style="width:18px;height:18px;border:2px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .8s linear infinite"></span>
+            <span style="position:relative;display:inline-flex;align-items:center;gap:6px"><span tabIndex="0" aria-describedby="ds-tip" data-testid="ds-tooltip-trigger" style="width:18px;height:18px;border-radius:50%;border:1px solid var(--border-strong);display:grid;place-items:center;font-size:11px;color:var(--text-2);cursor:help">i</span><span role="tooltip" id="ds-tip" style="position:absolute;left:26px;white-space:nowrap;padding:4px 8px;border-radius:4px;background:var(--text);color:var(--bg);font-size:11.5px">Tooltip: hitos completados / totales</span></span>
+          </div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:12px">
+          <div style="background:var(--scrim);padding:24px;border-radius:6px">
+            <div role="dialog" aria-modal="true" aria-labelledby="ds-dlg-t" data-testid="ds-modal" style="background:var(--surface);border:1px solid var(--border);border-radius:6px;box-shadow:var(--shadow-pop);padding:20px;display:flex;flex-direction:column;gap:12px;color:var(--text)">
+              <h3 id="ds-dlg-t" style="margin:0;font-size:15px;font-weight:600">Cambiar estado a <span style="font-family:'IBM Plex Mono',monospace">approved</span></h3>
+              <p style="margin:0;color:var(--text-2)">REQ-017 pasará de <strong>draft</strong> a <strong>approved</strong>. Esta acción queda registrada en auditoría.</p>
+              <div style="display:flex;justify-content:flex-end;gap:8px"><button type="button" style="height:32px;padding:0 14px;border-radius:4px;border:1px solid var(--border-strong);background:var(--surface);color:var(--text);font:inherit;font-weight:500;cursor:pointer">Cancelar</button><button type="button" style="height:32px;padding:0 14px;border-radius:4px;border:1px solid var(--accent);background:var(--accent);color:#fff;font:inherit;font-weight:500;cursor:pointer">Confirmar</button></div>
+            </div>
+          </div>
+          <div data-testid="ds-popover" style="width:260px;background:var(--surface);border:1px solid var(--border);border-radius:6px;box-shadow:var(--shadow-pop);padding:6px;display:flex;flex-direction:column">
+            <button type="button" role="menuitem" style="text-align:left;padding:7px 10px;border:0;border-radius:4px;background:none;color:var(--text);font:inherit;cursor:pointer" style-hover="background:var(--surface-2)">Ver detalle</button>
+            <button type="button" role="menuitem" style="text-align:left;padding:7px 10px;border:0;border-radius:4px;background:none;color:var(--text);font:inherit;cursor:pointer" style-hover="background:var(--surface-2)">Duplicar</button>
+            <button type="button" role="menuitem" disabled="{{ true }}" style="text-align:left;padding:7px 10px;border:0;border-radius:4px;background:none;color:var(--text-3);font:inherit;cursor:not-allowed">Archivar <span style="float:right;font-size:11px">solo PM</span></button>
+            <div role="separator" style="height:1px;background:var(--border);margin:4px 0"></div>
+            <button type="button" role="menuitem" style="text-align:left;padding:7px 10px;border:0;border-radius:4px;background:none;color:var(--danger);font:inherit;cursor:pointer" style-hover="background:var(--danger-soft)">Eliminar</button>
+          </div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:12px">
+          <div data-testid="ds-kanban-card" style="background:var(--surface);border:1px solid var(--border);border-left:3px solid var(--danger);border-radius:6px;padding:10px 12px;display:flex;flex-direction:column;gap:8px;cursor:grab">
+            <div style="display:flex;justify-content:space-between;align-items:center"><span style="font-family:'IBM Plex Mono',monospace;font-size:12px;font-weight:500">NC-004</span><span data-severity="critical" style="display:inline-flex;align-items:center;height:18px;padding:0 6px;border-radius:4px;font-size:10.5px;font-weight:600;background:var(--danger);color:#fff">Crítica</span></div>
+            <div style="font-size:12.5px;line-height:1.35">Desviación de ganancia en receptor RVC-2 fuera de tolerancia</div>
+            <div style="display:flex;justify-content:space-between;align-items:center;font-size:11px;color:var(--text-3)"><span>PRG-002</span><span style="width:20px;height:20px;border-radius:50%;background:var(--neutral);color:#fff;font-size:9px;font-weight:600;display:grid;place-items:center">JO</span></div>
+          </div>
+          <div data-testid="ds-empty" style="border:1px dashed var(--border-strong);border-radius:6px;padding:28px 16px;text-align:center;display:flex;flex-direction:column;gap:6px;align-items:center">
+            <div style="font-weight:500">Sin resultados</div>
+            <div style="font-size:12px;color:var(--text-2)">Ningún programa coincide con los filtros.</div>
+            <button type="button" style="margin-top:4px;height:28px;padding:0 10px;border-radius:4px;border:1px solid var(--border-strong);background:var(--surface);color:var(--text);font:inherit;font-size:12px;font-weight:500;cursor:pointer">Limpiar filtros</button>
+          </div>
+          <div data-testid="ds-cookie-banner" style="background:var(--text);color:var(--bg);border-radius:6px;padding:12px 14px;display:flex;flex-direction:column;gap:10px;font-size:12.5px"><span>Usamos cookies técnicas para mantener la sesión.</span><div style="display:flex;gap:8px"><button type="button" style="height:28px;padding:0 12px;border-radius:4px;border:0;background:var(--bg);color:var(--text);font:inherit;font-size:12px;font-weight:500;cursor:pointer">Aceptar</button><button type="button" style="height:28px;padding:0 12px;border-radius:4px;border:1px solid var(--text-3);background:transparent;color:var(--bg);font:inherit;font-size:12px;font-weight:500;cursor:pointer">Rechazar</button></div></div>
+        </div>
+      </div>
+    </section>
+
+    <section aria-labelledby="s-testid" style="display:flex;flex-direction:column;gap:16px">
+      <div style="display:flex;flex-direction:column;gap:4px">
+        <h2 id="s-testid" style="margin:0;font-size:16px;font-weight:600">08 · Convención data-testid</h2>
+        <p style="margin:0;color:var(--text-2)">Patrón <code style="font-family:'IBM Plex Mono',monospace;font-size:12px">pantalla-elemento[-ID]</code>, en minúsculas y kebab-case. Los IDs de dominio conservan su forma canónica (PRG-001). En las pantallas, la capa «Anotaciones» dibuja cada testid sobre su elemento.</p>
+      </div>
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:6px;overflow:hidden">
+        <table style="width:100%;border-collapse:collapse;font-size:12.5px">
+          <thead><tr style="border-bottom:1px solid var(--border);background:var(--surface-2)"><th scope="col" style="text-align:left;padding:8px 12px;font-weight:500;color:var(--text-2);font-size:12px">Pantalla</th><th scope="col" style="text-align:left;padding:8px 12px;font-weight:500;color:var(--text-2);font-size:12px">Ejemplos</th></tr></thead>
+          <tbody>
+            <tr style="border-bottom:1px solid var(--border)"><td style="padding:8px 12px">login</td><td style="padding:8px 12px;font-family:'IBM Plex Mono',monospace;font-size:12px">login-email · login-password · login-mfa-code · login-remember · login-submit · login-error</td></tr>
+            <tr style="border-bottom:1px solid var(--border)"><td style="padding:8px 12px">layout</td><td style="padding:8px 12px;font-family:'IBM Plex Mono',monospace;font-size:12px">layout-sidebar-toggle · layout-search · layout-notifications · layout-lang · layout-theme · layout-user-menu · layout-breadcrumbs · cookie-banner-accept</td></tr>
+            <tr style="border-bottom:1px solid var(--border)"><td style="padding:8px 12px">programs</td><td style="padding:8px 12px;font-family:'IBM Plex Mono',monospace;font-size:12px">programs-table · programs-row-PRG-001 · programs-filter-status · programs-filter-owner · programs-sort-name · programs-page-next · programs-export-csv · programs-new · programs-wizard-step-2</td></tr>
+            <tr style="border-bottom:1px solid var(--border)"><td style="padding:8px 12px">requirements</td><td style="padding:8px 12px;font-family:'IBM Plex Mono',monospace;font-size:12px">requirement-row-REQ-017 · requirement-state-badge · requirement-copy-code · requirement-tree-toggle</td></tr>
+            <tr style="border-bottom:1px solid var(--border)"><td style="padding:8px 12px">nc</td><td style="padding:8px 12px;font-family:'IBM Plex Mono',monospace;font-size:12px">nc-column-open · nc-card-NC-004 · nc-state-badge · nc-severity-select · nc-close-comment</td></tr>
+            <tr><td style="padding:8px 12px">global</td><td style="padding:8px 12px;font-family:'IBM Plex Mono',monospace;font-size:12px">toast-success · toast-error · toast-info · modal-confirm · modal-cancel · spinner · skeleton-row</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+class Component extends DCLogic {
+  state = { theme: 'light', switchOn: true, slider: 45, tab: 0, acc: true };
+  renderVals() {
+    const { theme, switchOn, slider, tab, acc } = this.state;
+    const seg = (on) => ({ height: 28, padding: '0 12px', border: 0, background: on ? 'var(--accent)' : 'transparent', color: on ? '#fff' : 'var(--text-2)', font: 'inherit', fontSize: 12, fontWeight: 500, cursor: 'pointer' });
+    const tabStyle = (on) => ({ height: 34, padding: '0 12px', border: 0, borderBottom: `2px solid ${on ? 'var(--accent)' : 'transparent'}`, marginBottom: -1, background: 'none', color: on ? 'var(--text)' : 'var(--text-2)', font: 'inherit', fontWeight: 500, cursor: 'pointer', display: 'inline-flex', alignItems: 'center' });
+    return {
+      theme, isLight: theme === 'light', isDark: theme === 'dark',
+      setLight: () => this.setState({ theme: 'light' }), setDark: () => this.setState({ theme: 'dark' }),
+      lightBtn: seg(theme === 'light'), darkBtn: seg(theme === 'dark'),
+      switchOn, toggleSwitch: () => this.setState({ switchOn: !switchOn }),
+      switchStyle: { width: 36, height: 20, borderRadius: 999, border: 0, padding: 2, background: switchOn ? 'var(--accent)' : 'var(--border-strong)', cursor: 'pointer', display: 'flex', transition: 'background .15s' },
+      switchKnob: { width: 16, height: 16, borderRadius: '50%', background: '#fff', transform: switchOn ? 'translateX(16px)' : 'none', transition: 'transform .15s', display: 'block' },
+      sliderVal: slider, setSlider: (e) => this.setState({ slider: Number(e.target.value) }),
+      tab0: tab === 0, tab1: tab === 1, tab2: tab === 2,
+      setTab0: () => this.setState({ tab: 0 }), setTab1: () => this.setState({ tab: 1 }), setTab2: () => this.setState({ tab: 2 }),
+      tab0Style: tabStyle(tab === 0), tab1Style: tabStyle(tab === 1), tab2Style: tabStyle(tab === 2),
+      accOpen: acc, toggleAcc: () => this.setState({ acc: !acc }),
+      accChevron: { display: 'inline-block', transform: acc ? 'rotate(180deg)' : 'none', transition: 'transform .15s', color: 'var(--text-3)' },
+    };
+  }
+}
+</script>
+</body>
+</html>

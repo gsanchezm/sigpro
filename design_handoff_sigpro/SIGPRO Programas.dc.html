@@ -1,0 +1,704 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#0b0f15;font-family:'IBM Plex Sans',system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+a{color:#2f6fed}a:hover{color:#2459c7}
+[data-theme="light"]{--bg:#f3f5f8;--surface:#ffffff;--surface-2:#eef1f5;--border:#d5dbe3;--border-strong:#b7c0cc;--text:#0f1620;--text-2:#4b5665;--text-3:#7a8594;--accent:#2f6fed;--accent-hover:#2459c7;--accent-soft:#e3ecfd;--on-accent:#ffffff;--danger:#c62f2f;--danger-soft:#fbe3e3;--warn:#8a5200;--warn-soft:#fdeccc;--ok:#1a7f4b;--ok-soft:#d9f3e4;--info:#2459c7;--info-soft:#e3ecfd;--neutral:#4b5665;--neutral-soft:#e6eaf0;--purple:#6b3fc9;--purple-soft:#ece4fb;--shadow:0 1px 2px rgba(15,22,32,.06);--shadow-pop:0 8px 24px rgba(15,22,32,.14);--scrim:rgba(15,22,32,.45)}
+[data-theme="dark"]{--bg:#0d1117;--surface:#151b24;--surface-2:#1c242f;--border:#2a3441;--border-strong:#3b4756;--text:#e8edf3;--text-2:#a3afbe;--text-3:#6f7c8c;--accent:#5b8def;--accent-hover:#7ea3f3;--accent-soft:#1b2a47;--on-accent:#ffffff;--danger:#f0716b;--danger-soft:#3a1f21;--warn:#e6a23c;--warn-soft:#3a2d14;--ok:#49c27f;--ok-soft:#14311f;--info:#7ea3f3;--info-soft:#1b2a47;--neutral:#a3afbe;--neutral-soft:#27303c;--purple:#b394f5;--purple-soft:#2a2140;--shadow:0 1px 2px rgba(0,0,0,.4);--shadow-pop:0 8px 24px rgba(0,0,0,.5);--scrim:rgba(0,0,0,.6)}
+@keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
+@keyframes spin{to{transform:rotate(360deg)}}
+@keyframes toastIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+</style>
+</helmet>
+<div style="min-height:100vh;background:#0b0f15;display:flex;flex-direction:column">
+  <div data-testid="proto-bar" style="display:flex;flex-wrap:wrap;gap:6px 18px;align-items:center;padding:6px 14px;background:#0b0f15;color:#9aa7b8;font-size:12px;border-bottom:1px solid #1c2531">
+    <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.06em;color:#e8edf3">SIGPRO · PROTOTIPO</span>
+    <label style="display:flex;align-items:center;gap:6px">Rol<select data-testid="proto-role" aria-label="Rol del usuario" value="{{ role }}" onChange="{{ setRole }}" style="height:24px;background:#151b24;color:#e8edf3;border:1px solid #2a3441;border-radius:4px;font:inherit;font-size:12px"><option value="admin">admin</option><option value="program_manager">program_manager</option><option value="consultant">consultant</option><option value="auditor">auditor</option></select></label>
+    <label style="display:flex;align-items:center;gap:6px">Datos<select data-testid="proto-data-state" aria-label="Estado de los datos" value="{{ dataState }}" onChange="{{ setDataState }}" style="height:24px;background:#151b24;color:#e8edf3;border:1px solid #2a3441;border-radius:4px;font:inherit;font-size:12px"><option value="normal">normal</option><option value="loading">cargando</option><option value="empty">vacío</option><option value="error">error 503</option></select></label>
+    <label style="display:flex;align-items:center;gap:6px">Viewport<select data-testid="proto-viewport" aria-label="Ancho de viewport" value="{{ frame }}" onChange="{{ setFrame }}" style="height:24px;background:#151b24;color:#e8edf3;border:1px solid #2a3441;border-radius:4px;font:inherit;font-size:12px"><option value="auto">auto</option><option value="1440">1440</option><option value="1024">1024</option><option value="390">390 (móvil)</option></select></label>
+    <label style="display:flex;align-items:center;gap:6px;cursor:pointer"><input type="checkbox" data-testid="proto-annotations" checked="{{ showTestIds }}" onChange="{{ toggleTestIds }}" style="accent-color:#5b8def;margin:0">Anotaciones data-testid</label>
+    <span style="margin-left:auto;font-family:'IBM Plex Mono',monospace;font-size:11px">{{ widthLabel }}</span>
+  </div>
+
+  <div style="{{ frameStyle }}">
+  <div ref="{{ rootRef }}" data-theme="{{ theme }}" data-screen-label="Programas" style="position:relative;display:flex;min-height:calc(100vh - 37px);background:var(--bg);color:var(--text);font-family:'IBM Plex Sans',system-ui,sans-serif;font-size:13px;line-height:1.45;overflow:hidden">
+
+    <!-- Sidebar -->
+    <sc-if value="{{ showSidebar }}" hint-placeholder-val="{{ true }}">
+      <aside aria-label="Navegación principal" data-testid="layout-sidebar" style="{{ sidebarStyle }}">
+        <div style="display:flex;align-items:center;gap:10px;height:52px;padding:0 14px;border-bottom:1px solid var(--border);overflow:hidden">
+          <div aria-hidden="true" style="width:24px;height:24px;border-radius:5px;background:var(--accent);color:#fff;display:grid;place-items:center;font-weight:600;font-size:12px;flex:none">S</div>
+          <sc-if value="{{ sidebarExpanded }}" hint-placeholder-val="{{ true }}"><span style="font-weight:600;letter-spacing:.01em;white-space:nowrap">SIGPRO</span></sc-if>
+        </div>
+        <nav style="display:flex;flex-direction:column;gap:2px;padding:10px 8px;flex:1">
+          <sc-for list="{{ navItems }}" as="item" hint-placeholder-count="8">
+            <a href="{{ item.href }}" data-testid="{{ item.testid }}" aria-current="{{ item.current }}" title="{{ item.label }}" onClick="{{ item.onClick }}" style="{{ item.style }}" style-hover="background:var(--surface-2);color:var(--text)" style-focus="outline:2px solid var(--accent);outline-offset:-2px">
+              <span aria-hidden="true" style="width:18px;height:18px;border-radius:4px;border:1.5px solid currentColor;opacity:.75;display:grid;place-items:center;font-size:9px;font-weight:600;flex:none">{{ item.glyph }}</span>
+              <sc-if value="{{ sidebarExpanded }}" hint-placeholder-val="{{ true }}"><span style="white-space:nowrap;flex:1">{{ item.label }}</span></sc-if>
+              <sc-if value="{{ item.badge }}" hint-placeholder-val="{{ false }}"><span style="font-family:'IBM Plex Mono',monospace;font-size:10.5px;padding:0 5px;border-radius:999px;background:var(--danger-soft);color:var(--danger)">{{ item.badge }}</span></sc-if>
+            </a>
+          </sc-for>
+        </nav>
+        <div style="padding:10px 8px;border-top:1px solid var(--border)">
+          <button type="button" data-testid="layout-sidebar-collapse" aria-label="{{ t.collapseSidebar }}" aria-expanded="{{ sidebarExpanded }}" onClick="{{ toggleSidebar }}" style="width:100%;height:30px;border-radius:4px;border:0;background:transparent;color:var(--text-2);font:inherit;font-size:12px;cursor:pointer;display:flex;align-items:center;gap:8px;padding:0 8px" style-hover="background:var(--surface-2)" style-focus="outline:2px solid var(--accent);outline-offset:-2px"><span aria-hidden="true" style="{{ collapseGlyph }}">«</span><sc-if value="{{ sidebarExpanded }}" hint-placeholder-val="{{ true }}"><span>{{ t.collapse }}</span></sc-if></button>
+        </div>
+      </aside>
+    </sc-if>
+    <sc-if value="{{ drawerOpen }}" hint-placeholder-val="{{ false }}">
+      <div data-testid="layout-drawer-scrim" onClick="{{ closeDrawer }}" style="position:absolute;inset:0;background:var(--scrim);z-index:30"></div>
+    </sc-if>
+
+    <!-- Main -->
+    <div style="flex:1;min-width:0;display:flex;flex-direction:column">
+      <header style="position:sticky;top:0;z-index:20;height:52px;display:flex;align-items:center;gap:8px;padding:0 12px 0 8px;background:var(--surface);border-bottom:1px solid var(--border)">
+        <button type="button" data-testid="layout-sidebar-toggle" aria-label="{{ t.menu }}" aria-expanded="{{ drawerOpen }}" onClick="{{ toggleDrawerOrSidebar }}" style="width:32px;height:32px;border-radius:4px;border:0;background:transparent;color:var(--text-2);cursor:pointer;display:grid;place-items:center;flex:none" style-hover="background:var(--surface-2)" style-focus="outline:2px solid var(--accent);outline-offset:-2px"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><line x1="2" y1="4" x2="14" y2="4"></line><line x1="2" y1="8" x2="14" y2="8"></line><line x1="2" y1="12" x2="14" y2="12"></line></svg></button>
+        <sc-if value="{{ notMobile }}" hint-placeholder-val="{{ true }}">
+          <nav aria-label="{{ t.breadcrumbs }}" data-testid="layout-breadcrumbs" style="display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--text-3);white-space:nowrap"><a href="#/" style="color:var(--text-2);text-decoration:none" style-hover="color:var(--text)">{{ t.home }}</a><span aria-hidden="true">/</span><span aria-current="page" style="color:var(--text);font-weight:500">{{ t.programs }}</span></nav>
+        </sc-if>
+        <sc-if value="{{ isMobile }}" hint-placeholder-val="{{ false }}"><span style="font-weight:600;font-size:15px">{{ t.programs }}</span></sc-if>
+        <div style="flex:1"></div>
+        <sc-if value="{{ notMobile }}" hint-placeholder-val="{{ true }}">
+          <div style="position:relative;width:min(320px,30vw)">
+            <svg aria-hidden="true" width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" style="position:absolute;left:9px;top:9px;color:var(--text-3)"><circle cx="6" cy="6" r="4.2"></circle><line x1="9.2" y1="9.2" x2="12.5" y2="12.5" stroke-linecap="round"></line></svg>
+            <input ref="{{ searchRef }}" type="search" data-testid="layout-search" aria-label="{{ t.globalSearch }}" placeholder="{{ t.searchPlaceholder }}" value="{{ search }}" onChange="{{ setSearch }}" style="width:100%;height:32px;padding:0 10px 0 28px;border-radius:4px;border:1px solid var(--border);background:var(--bg);color:var(--text);font:inherit;font-size:12.5px" style-focus="outline:2px solid var(--accent);outline-offset:-1px;border-color:var(--accent)">
+            <kbd aria-hidden="true" style="position:absolute;right:8px;top:8px;height:16px;padding:0 5px;border-radius:3px;border:1px solid var(--border);font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--text-3);background:var(--surface)">/</kbd>
+          </div>
+          <select data-testid="layout-lang" aria-label="{{ t.language }}" value="{{ lang }}" onChange="{{ setLang }}" style="height:32px;padding:0 6px;border-radius:4px;border:1px solid var(--border);background:var(--surface);color:var(--text-2);font:inherit;font-size:12px;font-weight:500;cursor:pointer"><option value="es">ES</option><option value="en">EN</option></select>
+        </sc-if>
+        <button type="button" data-testid="layout-theme" aria-label="{{ t.toggleTheme }}" aria-pressed="{{ isDark }}" onClick="{{ toggleTheme }}" style="width:32px;height:32px;border-radius:4px;border:1px solid var(--border);background:var(--surface);color:var(--text-2);cursor:pointer;display:grid;place-items:center" style-hover="background:var(--surface-2)" style-focus="outline:2px solid var(--accent);outline-offset:2px">
+          <sc-if value="{{ isDark }}" hint-placeholder-val="{{ false }}"><svg aria-hidden="true" width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="7" cy="7" r="3"></circle><line x1="7" y1="0.8" x2="7" y2="2.2"></line><line x1="7" y1="11.8" x2="7" y2="13.2"></line><line x1="0.8" y1="7" x2="2.2" y2="7"></line><line x1="11.8" y1="7" x2="13.2" y2="7"></line></svg></sc-if>
+          <sc-if value="{{ isLight }}" hint-placeholder-val="{{ true }}"><svg aria-hidden="true" width="14" height="14" viewBox="0 0 14 14" fill="currentColor"><path d="M9 1.5a5.5 5.5 0 1 0 3.5 9.7A6 6 0 0 1 9 1.5z"></path></svg></sc-if>
+        </button>
+        <div style="position:relative">
+          <button type="button" data-testid="layout-notifications" aria-label="{{ t.notifications }}" aria-haspopup="dialog" aria-expanded="{{ notifOpen }}" onClick="{{ toggleNotif }}" style="width:32px;height:32px;border-radius:4px;border:1px solid var(--border);background:var(--surface);color:var(--text-2);cursor:pointer;display:grid;place-items:center;position:relative" style-hover="background:var(--surface-2)" style-focus="outline:2px solid var(--accent);outline-offset:2px">
+            <svg aria-hidden="true" width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"><path d="M3 10V6.5a4 4 0 0 1 8 0V10l1 1.5H2z"></path><path d="M5.6 12.5a1.5 1.5 0 0 0 2.8 0"></path></svg>
+            <span aria-hidden="true" style="position:absolute;top:5px;right:5px;width:7px;height:7px;border-radius:50%;background:var(--danger);border:1.5px solid var(--surface)"></span>
+          </button>
+          <sc-if value="{{ notifOpen }}" hint-placeholder-val="{{ false }}">
+            <div role="dialog" aria-label="{{ t.notifications }}" data-testid="layout-notifications-popover" style="position:absolute;right:0;top:38px;width:300px;background:var(--surface);border:1px solid var(--border);border-radius:6px;box-shadow:var(--shadow-pop);z-index:40;display:flex;flex-direction:column">
+              <div style="padding:10px 12px;font-weight:600;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center">{{ t.notifications }}<button type="button" data-testid="layout-notifications-markread" onClick="{{ closeNotif }}" style="border:0;background:none;color:var(--accent);font:inherit;font-size:12px;cursor:pointer">{{ t.markRead }}</button></div>
+              <sc-for list="{{ notifications }}" as="n" hint-placeholder-count="3">
+                <div style="display:flex;gap:10px;padding:10px 12px;border-bottom:1px solid var(--border)"><span aria-hidden="true" style="{{ n.dot }}"></span><div style="flex:1;min-width:0"><div style="font-size:12.5px">{{ n.text }}</div><div style="font-size:11px;color:var(--text-3);font-family:'IBM Plex Mono',monospace">{{ n.time }}</div></div></div>
+              </sc-for>
+            </div>
+          </sc-if>
+        </div>
+        <div style="position:relative">
+          <button type="button" data-testid="layout-user-menu" aria-label="{{ t.userMenu }}" aria-haspopup="menu" aria-expanded="{{ userOpen }}" onClick="{{ toggleUser }}" style="height:32px;padding:0 4px 0 2px;border-radius:4px;border:1px solid var(--border);background:var(--surface);color:var(--text);cursor:pointer;display:flex;align-items:center;gap:8px" style-hover="background:var(--surface-2)" style-focus="outline:2px solid var(--accent);outline-offset:2px">
+            <span aria-hidden="true" style="width:26px;height:26px;border-radius:4px;background:var(--neutral-soft);color:var(--text-2);display:grid;place-items:center;font-size:10.5px;font-weight:600">{{ userInitials }}</span>
+            <sc-if value="{{ notMobile }}" hint-placeholder-val="{{ true }}"><span style="display:flex;flex-direction:column;align-items:flex-start;line-height:1.15;padding-right:6px"><span style="font-size:12.5px;font-weight:500">{{ userName }}</span><span style="font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:var(--text-3)">{{ role }}</span></span></sc-if>
+          </button>
+          <sc-if value="{{ userOpen }}" hint-placeholder-val="{{ false }}">
+            <div role="menu" data-testid="layout-user-menu-popover" style="position:absolute;right:0;top:38px;width:200px;background:var(--surface);border:1px solid var(--border);border-radius:6px;box-shadow:var(--shadow-pop);z-index:40;padding:6px;display:flex;flex-direction:column">
+              <button type="button" role="menuitem" data-testid="layout-user-profile" onClick="{{ closeUser }}" style="text-align:left;padding:7px 10px;border:0;border-radius:4px;background:none;color:var(--text);font:inherit;cursor:pointer" style-hover="background:var(--surface-2)">{{ t.profile }}</button>
+              <button type="button" role="menuitem" data-testid="layout-user-shortcuts" onClick="{{ closeUser }}" style="text-align:left;padding:7px 10px;border:0;border-radius:4px;background:none;color:var(--text);font:inherit;cursor:pointer;display:flex;justify-content:space-between" style-hover="background:var(--surface-2)">{{ t.shortcuts }}<kbd style="font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:var(--text-3)">?</kbd></button>
+              <div role="separator" style="height:1px;background:var(--border);margin:4px 0"></div>
+              <a href="SIGPRO Acceso.dc.html#/login?logout=1" role="menuitem" data-testid="layout-user-logout" style="padding:7px 10px;border-radius:4px;color:var(--danger);text-decoration:none" style-hover="background:var(--danger-soft)">{{ t.logout }}</a>
+            </div>
+          </sc-if>
+        </div>
+      </header>
+
+      <main style="{{ mainStyle }}">
+        <div style="display:flex;flex-wrap:wrap;gap:12px;align-items:flex-start;justify-content:space-between">
+          <div style="display:flex;flex-direction:column;gap:2px">
+            <sc-if value="{{ notMobile }}" hint-placeholder-val="{{ true }}"><h1 style="margin:0;font-size:20px;font-weight:600;letter-spacing:-.01em">{{ t.programs }}</h1></sc-if>
+            <p style="margin:0;color:var(--text-2);font-size:12.5px">{{ subtitle }}</p>
+          </div>
+          <sc-if value="{{ notMobile }}" hint-placeholder-val="{{ true }}">
+            <div style="display:flex;gap:8px">
+              <button type="button" data-testid="programs-export-csv" onClick="{{ exportCsv }}" disabled="{{ exportDisabled }}" style="{{ secondaryBtn }}" style-hover="background:var(--surface-2)" style-focus="outline:2px solid var(--accent);outline-offset:2px"><svg aria-hidden="true" width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><line x1="6" y1="1" x2="6" y2="8"></line><polyline points="3,5.5 6,8.5 9,5.5"></polyline><line x1="1.5" y1="11" x2="10.5" y2="11"></line></svg>{{ t.exportCsv }}</button>
+              <button type="button" data-testid="programs-new" onClick="{{ openWizard }}" disabled="{{ cannotCreate }}" title="{{ newTitle }}" style="{{ primaryBtn }}" style-hover="background:var(--accent-hover);border-color:var(--accent-hover)" style-focus="outline:2px solid var(--accent);outline-offset:2px">+ {{ t.newProgram }}<kbd aria-hidden="true" style="margin-left:6px;height:16px;padding:0 5px;border-radius:3px;border:1px solid rgba(255,255,255,.35);font-family:'IBM Plex Mono',monospace;font-size:10px;display:inline-grid;place-items:center">N</kbd></button>
+            </div>
+          </sc-if>
+        </div>
+
+        <!-- Filters -->
+        <div role="search" aria-label="{{ t.filters }}" data-testid="programs-filters" style="display:flex;flex-wrap:wrap;gap:8px;align-items:flex-end">
+          <sc-if value="{{ isMobile }}" hint-placeholder-val="{{ false }}">
+            <div style="position:relative;flex:1 1 100%">
+              <input type="search" data-testid="programs-search" aria-label="{{ t.searchPrograms }}" placeholder="{{ t.searchPlaceholder }}" value="{{ search }}" onChange="{{ setSearch }}" style="width:100%;height:36px;padding:0 10px;border-radius:4px;border:1px solid var(--border);background:var(--surface);color:var(--text);font:inherit" style-focus="outline:2px solid var(--accent);outline-offset:-1px">
+            </div>
+          </sc-if>
+          <div style="display:flex;flex-direction:column;gap:3px;flex:1 1 140px;max-width:200px">
+            <label for="f-status" style="font-size:11.5px;font-weight:500;color:var(--text-2)">{{ t.status }}</label>
+            <select id="f-status" data-testid="programs-filter-status" value="{{ filterStatus }}" onChange="{{ setFilterStatus }}" style="height:30px;padding:0 8px;border-radius:4px;border:1px solid var(--border-strong);background:var(--surface);color:var(--text);font:inherit;font-size:12.5px" style-focus="outline:2px solid var(--accent);outline-offset:-1px">
+              <option value="">{{ t.allStatuses }}</option>
+              <sc-for list="{{ statusOptions }}" as="o" hint-placeholder-count="5"><option value="{{ o.value }}">{{ o.label }}</option></sc-for>
+            </select>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:3px;flex:1 1 150px;max-width:180px">
+            <label for="f-from" style="font-size:11.5px;font-weight:500;color:var(--text-2)">{{ t.startFrom }}</label>
+            <input id="f-from" type="date" data-testid="programs-filter-date-from" value="{{ dateFrom }}" onChange="{{ setDateFrom }}" style="height:30px;padding:0 8px;border-radius:4px;border:1px solid var(--border-strong);background:var(--surface);color:var(--text);font:inherit;font-family:'IBM Plex Mono',monospace;font-size:12px" style-focus="outline:2px solid var(--accent);outline-offset:-1px">
+          </div>
+          <div style="display:flex;flex-direction:column;gap:3px;flex:1 1 150px;max-width:180px">
+            <label for="f-to" style="font-size:11.5px;font-weight:500;color:var(--text-2)">{{ t.endTo }}</label>
+            <input id="f-to" type="date" data-testid="programs-filter-date-to" value="{{ dateTo }}" onChange="{{ setDateTo }}" style="height:30px;padding:0 8px;border-radius:4px;border:1px solid var(--border-strong);background:var(--surface);color:var(--text);font:inherit;font-family:'IBM Plex Mono',monospace;font-size:12px" style-focus="outline:2px solid var(--accent);outline-offset:-1px">
+          </div>
+          <div style="display:flex;flex-direction:column;gap:3px;flex:1 1 180px;max-width:240px;position:relative">
+            <label for="f-owner" style="font-size:11.5px;font-weight:500;color:var(--text-2)">{{ t.owner }}</label>
+            <div style="position:relative">
+              <input id="f-owner" role="combobox" data-testid="programs-filter-owner" aria-expanded="{{ ownerOpen }}" aria-controls="f-owner-list" aria-autocomplete="list" aria-activedescendant="{{ ownerActiveId }}" autoComplete="off" placeholder="{{ t.anyOwner }}" value="{{ ownerQuery }}" onChange="{{ setOwnerQuery }}" onFocus="{{ openOwner }}" onKeyDown="{{ ownerKey }}" onBlur="{{ blurOwner }}" style="width:100%;height:30px;padding:0 26px 0 8px;border-radius:4px;border:1px solid var(--border-strong);background:var(--surface);color:var(--text);font:inherit;font-size:12.5px" style-focus="outline:2px solid var(--accent);outline-offset:-1px">
+              <sc-if value="{{ ownerSelected }}" hint-placeholder-val="{{ false }}"><button type="button" data-testid="programs-filter-owner-clear" aria-label="{{ t.clearOwner }}" onMouseDown="{{ clearOwner }}" style="position:absolute;right:4px;top:5px;width:20px;height:20px;border:0;border-radius:4px;background:transparent;color:var(--text-3);cursor:pointer;font-size:14px;line-height:1">×</button></sc-if>
+              <sc-if value="{{ ownerNotSelected }}" hint-placeholder-val="{{ true }}"><span aria-hidden="true" style="position:absolute;right:9px;top:7px;color:var(--text-3);font-size:11px">⌄</span></sc-if>
+            </div>
+            <sc-if value="{{ ownerOpen }}" hint-placeholder-val="{{ false }}">
+              <ul id="f-owner-list" role="listbox" aria-label="{{ t.owner }}" data-testid="programs-filter-owner-list" style="list-style:none;margin:0;padding:4px;position:absolute;top:100%;left:0;right:0;margin-top:4px;background:var(--surface);border:1px solid var(--border);border-radius:6px;box-shadow:var(--shadow-pop);z-index:25;max-height:220px;overflow:auto">
+                <sc-for list="{{ ownerOptions }}" as="o" hint-placeholder-count="4">
+                  <li id="{{ o.id }}" role="option" aria-selected="{{ o.selected }}" data-testid="{{ o.testid }}" onMouseDown="{{ o.pick }}" style="{{ o.style }}"><span aria-hidden="true" style="width:20px;height:20px;border-radius:50%;background:var(--neutral);color:#fff;font-size:9px;font-weight:600;display:grid;place-items:center;flex:none">{{ o.initials }}</span><span style="flex:1">{{ o.name }}</span><span style="font-size:11px;color:var(--text-3);font-family:'IBM Plex Mono',monospace">{{ o.count }}</span></li>
+                </sc-for>
+                <sc-if value="{{ ownerNoMatch }}" hint-placeholder-val="{{ false }}"><li style="padding:8px;color:var(--text-3);font-size:12px">{{ t.noOwnerMatch }}</li></sc-if>
+              </ul>
+            </sc-if>
+          </div>
+          <sc-if value="{{ hasFilters }}" hint-placeholder-val="{{ false }}">
+            <button type="button" data-testid="programs-filters-clear" onClick="{{ clearFilters }}" style="height:30px;padding:0 10px;border-radius:4px;border:0;background:transparent;color:var(--accent);font:inherit;font-size:12.5px;font-weight:500;cursor:pointer" style-hover="background:var(--accent-soft)" style-focus="outline:2px solid var(--accent);outline-offset:2px">{{ t.clearFilters }}</button>
+          </sc-if>
+        </div>
+
+        <!-- Bulk bar -->
+        <sc-if value="{{ hasSelection }}" hint-placeholder-val="{{ false }}">
+          <div role="toolbar" aria-label="{{ t.bulkActions }}" data-testid="programs-bulk-bar" style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:8px 12px;border-radius:6px;background:var(--accent-soft);border:1px solid var(--accent)">
+            <span data-testid="programs-bulk-count" style="font-weight:500;font-size:12.5px">{{ selectionLabel }}</span>
+            <div style="flex:1"></div>
+            <button type="button" data-testid="programs-bulk-export" onClick="{{ exportSelected }}" style="{{ smallBtn }}" style-hover="background:var(--surface-2)">{{ t.exportSelection }}</button>
+            <button type="button" data-testid="programs-bulk-archive" onClick="{{ bulkArchive }}" disabled="{{ cannotEdit }}" style="{{ smallBtn }}" style-hover="background:var(--surface-2)">{{ t.archive }}</button>
+            <button type="button" data-testid="programs-bulk-delete" onClick="{{ bulkDelete }}" disabled="{{ cannotDelete }}" title="{{ deleteTitle }}" style="{{ smallDangerBtn }}" style-hover="background:var(--danger-soft)">{{ t.delete }}</button>
+            <button type="button" data-testid="programs-bulk-clear" aria-label="{{ t.clearSelection }}" onClick="{{ clearSelection }}" style="width:26px;height:26px;border:0;border-radius:4px;background:transparent;color:var(--text-2);cursor:pointer;font-size:16px;line-height:1">×</button>
+          </div>
+        </sc-if>
+
+        <!-- Error -->
+        <sc-if value="{{ isError }}" hint-placeholder-val="{{ false }}">
+          <div role="alert" data-testid="programs-error" style="padding:12px 14px;border-radius:6px;background:var(--danger-soft);border:1px solid var(--danger);display:flex;flex-wrap:wrap;justify-content:space-between;gap:12px;align-items:center">
+            <div><div style="font-weight:600">{{ t.errorTitle }}</div><div style="font-size:12.5px;color:var(--text-2);font-family:'IBM Plex Mono',monospace">GET /api/programs → 503 Service Unavailable · trace 7f3a-c21d</div></div>
+            <button type="button" data-testid="programs-error-retry" onClick="{{ retry }}" style="height:30px;padding:0 12px;border-radius:4px;border:1px solid var(--danger);background:transparent;color:var(--danger);font:inherit;font-weight:500;cursor:pointer" style-hover="background:var(--surface)">{{ t.retry }}</button>
+          </div>
+        </sc-if>
+
+        <!-- Table (desktop/tablet) -->
+        <sc-if value="{{ showTable }}" hint-placeholder-val="{{ true }}">
+          <div style="background:var(--surface);border:1px solid var(--border);border-radius:6px;overflow:hidden">
+            <div style="overflow-x:auto">
+              <table data-testid="programs-table" aria-busy="{{ isLoading }}" aria-describedby="programs-count" style="width:100%;min-width:860px;border-collapse:collapse;font-size:12.5px">
+                <thead>
+                  <tr style="border-bottom:1px solid var(--border);background:var(--surface-2)">
+                    <th scope="col" style="width:36px;padding:0 8px 0 12px;text-align:left"><input type="checkbox" data-testid="programs-select-all" aria-label="{{ t.selectAll }}" checked="{{ allSelected }}" ref="{{ selectAllRef }}" onChange="{{ toggleAll }}" disabled="{{ notNormal }}" style="accent-color:var(--accent);margin:0;vertical-align:middle;width:14px;height:14px"></th>
+                    <sc-for list="{{ columns }}" as="col" hint-placeholder-count="7">
+                      <th scope="col" aria-sort="{{ col.ariaSort }}" style="{{ col.thStyle }}">
+                        <sc-if value="{{ col.sortable }}" hint-placeholder-val="{{ true }}">
+                          <button type="button" data-testid="{{ col.testid }}" onClick="{{ col.sort }}" style="{{ col.btnStyle }}" style-hover="color:var(--text)" style-focus="outline:2px solid var(--accent);outline-offset:-2px">{{ col.label }}<span aria-hidden="true" style="{{ col.arrowStyle }}">{{ col.arrow }}</span></button>
+                        </sc-if>
+                        <sc-if value="{{ col.hasTip }}" hint-placeholder-val="{{ false }}">
+                          <span style="position:relative;display:inline-flex;align-items:center;gap:6px">{{ col.label }}<button type="button" data-testid="programs-progress-info" aria-label="{{ t.progressHelp }}" aria-describedby="tip-progress" onMouseEnter="{{ showTip }}" onMouseLeave="{{ hideTip }}" onFocus="{{ showTip }}" onBlur="{{ hideTip }}" style="width:16px;height:16px;border-radius:50%;border:1px solid var(--border-strong);background:transparent;color:var(--text-2);font:inherit;font-size:10px;cursor:help;display:grid;place-items:center;padding:0">i</button>
+                            <sc-if value="{{ tipOpen }}" hint-placeholder-val="{{ false }}"><span role="tooltip" id="tip-progress" data-testid="programs-progress-tooltip" style="position:absolute;top:24px;right:0;white-space:nowrap;padding:5px 8px;border-radius:4px;background:var(--text);color:var(--bg);font-size:11.5px;font-weight:400;z-index:15;text-transform:none;letter-spacing:0">{{ t.progressHelp }}</span></sc-if>
+                          </span>
+                        </sc-if>
+                        <sc-if value="{{ col.plain }}" hint-placeholder-val="{{ false }}"><span>{{ col.label }}</span></sc-if>
+                      </th>
+                    </sc-for>
+                    <th scope="col" style="width:44px"><span style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)">{{ t.actions }}</span></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <sc-if value="{{ isLoading }}" hint-placeholder-val="{{ false }}">
+                    <sc-for list="{{ skeletonRows }}" as="s" hint-placeholder-count="6">
+                      <tr data-testid="skeleton-row" aria-hidden="true" style="border-bottom:1px solid var(--border);height:40px">
+                        <td style="padding:0 8px 0 12px"><span style="display:block;width:14px;height:14px;border-radius:3px;background:linear-gradient(90deg,var(--surface-2) 25%,var(--border) 50%,var(--surface-2) 75%);background-size:200% 100%;animation:shimmer 1.4s infinite"></span></td>
+                        <td style="padding:0 8px"><span style="display:block;width:60px;height:12px;border-radius:3px;background:linear-gradient(90deg,var(--surface-2) 25%,var(--border) 50%,var(--surface-2) 75%);background-size:200% 100%;animation:shimmer 1.4s infinite"></span></td>
+                        <td style="padding:0 8px"><span style="{{ s.w }}"></span></td>
+                        <td style="padding:0 8px"><span style="display:block;width:64px;height:20px;border-radius:4px;background:linear-gradient(90deg,var(--surface-2) 25%,var(--border) 50%,var(--surface-2) 75%);background-size:200% 100%;animation:shimmer 1.4s infinite"></span></td>
+                        <td style="padding:0 8px"><span style="display:block;width:110px;height:12px;border-radius:3px;background:linear-gradient(90deg,var(--surface-2) 25%,var(--border) 50%,var(--surface-2) 75%);background-size:200% 100%;animation:shimmer 1.4s infinite"></span></td>
+                        <td style="padding:0 8px"><span style="display:block;width:150px;height:12px;border-radius:3px;background:linear-gradient(90deg,var(--surface-2) 25%,var(--border) 50%,var(--surface-2) 75%);background-size:200% 100%;animation:shimmer 1.4s infinite"></span></td>
+                        <td style="padding:0 8px"><span style="display:block;margin-left:auto;width:80px;height:12px;border-radius:3px;background:linear-gradient(90deg,var(--surface-2) 25%,var(--border) 50%,var(--surface-2) 75%);background-size:200% 100%;animation:shimmer 1.4s infinite"></span></td>
+                        <td style="padding:0 8px"><span style="display:block;width:100px;height:6px;border-radius:3px;background:linear-gradient(90deg,var(--surface-2) 25%,var(--border) 50%,var(--surface-2) 75%);background-size:200% 100%;animation:shimmer 1.4s infinite"></span></td>
+                        <td></td>
+                      </tr>
+                    </sc-for>
+                  </sc-if>
+                  <sc-for list="{{ pageRows }}" as="row" hint-placeholder-count="10">
+                    <tr data-testid="{{ row.testid }}" data-code="{{ row.code }}" aria-selected="{{ row.selected }}" style="{{ row.style }}" style-hover="background:var(--surface-2)">
+                      <td style="padding:0 8px 0 12px"><input type="checkbox" data-testid="{{ row.checkTestid }}" aria-label="{{ row.selectLabel }}" checked="{{ row.selected }}" onChange="{{ row.toggle }}" style="accent-color:var(--accent);margin:0;vertical-align:middle;width:14px;height:14px"></td>
+                      <td style="padding:0 8px;font-family:'IBM Plex Mono',monospace;font-weight:500;white-space:nowrap"><a href="{{ row.href }}" data-testid="{{ row.linkTestid }}" style="color:var(--accent);text-decoration:none" style-hover="text-decoration:underline" style-focus="outline:2px solid var(--accent);outline-offset:2px;border-radius:2px">{{ row.code }}</a></td>
+                      <td style="padding:0 8px;max-width:320px"><div style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="{{ row.name }}">{{ row.name }}</div></td>
+                      <td style="padding:0 8px"><span data-testid="programs-state-badge" data-state="{{ row.status }}" style="{{ row.badgeStyle }}"><span aria-hidden="true" style="width:6px;height:6px;border-radius:50%;background:currentColor"></span>{{ row.statusLabel }}</span></td>
+                      <td style="padding:0 8px;white-space:nowrap"><span style="display:inline-flex;align-items:center;gap:6px"><span aria-hidden="true" style="width:20px;height:20px;border-radius:50%;background:var(--neutral-soft);color:var(--text-2);font-size:9px;font-weight:600;display:grid;place-items:center">{{ row.ownerInitials }}</span>{{ row.owner }}</span></td>
+                      <td style="padding:0 8px;font-family:'IBM Plex Mono',monospace;font-size:12px;white-space:nowrap;color:var(--text-2)">{{ row.start }} → {{ row.end }}</td>
+                      <td style="padding:0 8px;font-family:'IBM Plex Mono',monospace;font-size:12px;text-align:right;white-space:nowrap">{{ row.budget }}</td>
+                      <td style="padding:0 8px;min-width:140px"><div style="display:flex;align-items:center;gap:8px"><div role="progressbar" aria-valuenow="{{ row.progress }}" aria-valuemin="0" aria-valuemax="100" aria-label="{{ row.progressLabel }}" style="flex:1;height:6px;border-radius:3px;background:var(--surface-2);overflow:hidden"><div style="{{ row.barStyle }}"></div></div><span style="font-family:'IBM Plex Mono',monospace;font-size:11.5px;width:32px;text-align:right">{{ row.progress }}%</span></div></td>
+                      <td style="padding:0 8px;position:relative">
+                        <button type="button" data-testid="{{ row.menuTestid }}" aria-label="{{ row.menuLabel }}" aria-haspopup="menu" aria-expanded="{{ row.menuOpen }}" onClick="{{ row.openMenu }}" style="width:26px;height:26px;border-radius:4px;border:1px solid transparent;background:transparent;color:var(--text-2);cursor:pointer;display:grid;place-items:center" style-hover="background:var(--surface);border-color:var(--border)" style-focus="outline:2px solid var(--accent);outline-offset:-1px"><svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor" aria-hidden="true"><circle cx="2.5" cy="7" r="1.4"></circle><circle cx="7" cy="7" r="1.4"></circle><circle cx="11.5" cy="7" r="1.4"></circle></svg></button>
+                        <sc-if value="{{ row.menuOpen }}" hint-placeholder-val="{{ false }}">
+                          <div role="menu" aria-label="{{ row.menuLabel }}" data-testid="programs-row-menu" style="position:absolute;right:8px;top:34px;width:190px;background:var(--surface);border:1px solid var(--border);border-radius:6px;box-shadow:var(--shadow-pop);z-index:30;padding:6px;display:flex;flex-direction:column">
+                            <a href="{{ row.href }}" role="menuitem" data-testid="programs-row-menu-view" style="padding:7px 10px;border-radius:4px;color:var(--text);text-decoration:none" style-hover="background:var(--surface-2)">{{ t.viewDetail }}</a>
+                            <button type="button" role="menuitem" data-testid="programs-row-menu-edit" disabled="{{ cannotEdit }}" onClick="{{ row.edit }}" style="{{ menuItem }}" style-hover="background:var(--surface-2)">{{ t.edit }}</button>
+                            <button type="button" role="menuitem" data-testid="programs-row-menu-duplicate" disabled="{{ cannotCreate }}" onClick="{{ row.duplicate }}" style="{{ menuItem }}" style-hover="background:var(--surface-2)">{{ t.duplicate }}</button>
+                            <button type="button" role="menuitem" data-testid="programs-row-menu-archive" disabled="{{ cannotEdit }}" onClick="{{ row.archive }}" style="{{ menuItem }}" style-hover="background:var(--surface-2)">{{ t.archive }}</button>
+                            <div role="separator" style="height:1px;background:var(--border);margin:4px 0"></div>
+                            <button type="button" role="menuitem" data-testid="programs-row-menu-delete" disabled="{{ cannotDelete }}" onClick="{{ row.askDelete }}" style="{{ menuItemDanger }}" style-hover="background:var(--danger-soft)">{{ t.delete }}</button>
+                          </div>
+                        </sc-if>
+                      </td>
+                    </tr>
+                  </sc-for>
+                </tbody>
+              </table>
+            </div>
+            <sc-if value="{{ isEmpty }}" hint-placeholder-val="{{ false }}">
+              <div data-testid="programs-empty" style="padding:48px 16px;text-align:center;display:flex;flex-direction:column;gap:6px;align-items:center;border-top:1px solid var(--border)">
+                <div style="font-weight:500">{{ t.emptyTitle }}</div>
+                <div style="font-size:12.5px;color:var(--text-2)">{{ emptyHint }}</div>
+                <sc-if value="{{ hasFilters }}" hint-placeholder-val="{{ false }}"><button type="button" data-testid="programs-empty-clear" onClick="{{ clearFilters }}" style="margin-top:6px;height:28px;padding:0 10px;border-radius:4px;border:1px solid var(--border-strong);background:var(--surface);color:var(--text);font:inherit;font-size:12px;font-weight:500;cursor:pointer">{{ t.clearFilters }}</button></sc-if>
+              </div>
+            </sc-if>
+            <div style="display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:8px;padding:8px 12px;border-top:1px solid var(--border);font-size:12px;color:var(--text-2)">
+              <span id="programs-count" data-testid="programs-count" aria-live="polite">{{ rangeLabel }}</span>
+              <nav aria-label="{{ t.pagination }}" data-testid="programs-pagination" style="display:flex;gap:4px;align-items:center">
+                <button type="button" data-testid="programs-page-prev" aria-label="{{ t.prevPage }}" onClick="{{ prevPage }}" disabled="{{ isFirstPage }}" style="{{ pageBtn }}" style-hover="background:var(--surface-2)">‹</button>
+                <sc-for list="{{ pages }}" as="p" hint-placeholder-count="3"><button type="button" data-testid="{{ p.testid }}" aria-label="{{ p.label }}" aria-current="{{ p.current }}" onClick="{{ p.go }}" style="{{ p.style }}">{{ p.n }}</button></sc-for>
+                <button type="button" data-testid="programs-page-next" aria-label="{{ t.nextPage }}" onClick="{{ nextPage }}" disabled="{{ isLastPage }}" style="{{ pageBtn }}" style-hover="background:var(--surface-2)">›</button>
+              </nav>
+            </div>
+          </div>
+        </sc-if>
+
+        <!-- Mobile cards -->
+        <sc-if value="{{ isMobile }}" hint-placeholder-val="{{ false }}">
+          <div data-testid="programs-list" aria-busy="{{ isLoading }}" style="display:flex;flex-direction:column;gap:8px">
+            <sc-if value="{{ isLoading }}" hint-placeholder-val="{{ false }}">
+              <sc-for list="{{ skeletonRows }}" as="s" hint-placeholder-count="4"><div data-testid="skeleton-row" aria-hidden="true" style="height:84px;border-radius:6px;background:linear-gradient(90deg,var(--surface-2) 25%,var(--border) 50%,var(--surface-2) 75%);background-size:200% 100%;animation:shimmer 1.4s infinite"></div></sc-for>
+            </sc-if>
+            <sc-for list="{{ pageRows }}" as="row" hint-placeholder-count="4">
+              <a href="{{ row.href }}" data-testid="{{ row.testid }}" style="display:flex;flex-direction:column;gap:8px;padding:12px;border-radius:6px;background:var(--surface);border:1px solid var(--border);color:var(--text);text-decoration:none;min-height:44px" style-focus="outline:2px solid var(--accent);outline-offset:2px">
+                <div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><span style="font-family:'IBM Plex Mono',monospace;font-weight:500;font-size:12px">{{ row.code }}</span><span data-testid="programs-state-badge" data-state="{{ row.status }}" style="{{ row.badgeStyle }}"><span aria-hidden="true" style="width:6px;height:6px;border-radius:50%;background:currentColor"></span>{{ row.statusLabel }}</span></div>
+                <div style="font-weight:500;line-height:1.3">{{ row.name }}</div>
+                <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;font-size:11.5px;color:var(--text-2)"><span>{{ row.owner }}</span><span style="font-family:'IBM Plex Mono',monospace">{{ row.start }}</span></div>
+                <div style="display:flex;align-items:center;gap:8px"><div role="progressbar" aria-valuenow="{{ row.progress }}" aria-valuemin="0" aria-valuemax="100" aria-label="{{ row.progressLabel }}" style="flex:1;height:5px;border-radius:3px;background:var(--surface-2);overflow:hidden"><div style="{{ row.barStyle }}"></div></div><span style="font-family:'IBM Plex Mono',monospace;font-size:11px;width:32px;text-align:right">{{ row.progress }}%</span></div>
+              </a>
+            </sc-for>
+            <sc-if value="{{ isEmpty }}" hint-placeholder-val="{{ false }}">
+              <div data-testid="programs-empty" style="padding:40px 16px;text-align:center;display:flex;flex-direction:column;gap:6px;align-items:center;border:1px dashed var(--border-strong);border-radius:6px"><div style="font-weight:500">{{ t.emptyTitle }}</div><div style="font-size:12.5px;color:var(--text-2)">{{ emptyHint }}</div></div>
+            </sc-if>
+            <sc-if value="{{ hasRows }}" hint-placeholder-val="{{ true }}">
+              <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;font-size:12px;color:var(--text-2);padding:4px 0 8px"><span data-testid="programs-count">{{ rangeLabel }}</span><div style="display:flex;gap:6px"><button type="button" data-testid="programs-page-prev" aria-label="{{ t.prevPage }}" onClick="{{ prevPage }}" disabled="{{ isFirstPage }}" style="{{ pageBtnLg }}">‹</button><button type="button" data-testid="programs-page-next" aria-label="{{ t.nextPage }}" onClick="{{ nextPage }}" disabled="{{ isLastPage }}" style="{{ pageBtnLg }}">›</button></div></div>
+            </sc-if>
+          </div>
+        </sc-if>
+      </main>
+
+      <!-- Mobile bottom tabs + FAB -->
+      <sc-if value="{{ isMobile }}" hint-placeholder-val="{{ false }}">
+        <nav aria-label="{{ t.mainNav }}" data-testid="mobile-tabbar" style="position:sticky;bottom:0;z-index:20;display:grid;grid-template-columns:repeat(4,1fr);height:56px;background:var(--surface);border-top:1px solid var(--border)">
+          <sc-for list="{{ mobileTabs }}" as="tab" hint-placeholder-count="4">
+            <a href="{{ tab.href }}" data-testid="{{ tab.testid }}" aria-current="{{ tab.current }}" style="{{ tab.style }}" style-focus="outline:2px solid var(--accent);outline-offset:-2px"><span aria-hidden="true" style="width:20px;height:20px;border-radius:4px;border:1.5px solid currentColor;display:grid;place-items:center;font-size:9px;font-weight:600">{{ tab.glyph }}</span><span style="font-size:10.5px;font-weight:500">{{ tab.label }}</span></a>
+          </sc-for>
+        </nav>
+        <sc-if value="{{ canCreate }}" hint-placeholder-val="{{ true }}">
+          <button type="button" data-testid="programs-new" aria-label="{{ t.newProgram }}" onClick="{{ openWizard }}" style="position:absolute;right:16px;bottom:72px;width:52px;height:52px;border-radius:50%;border:0;background:var(--accent);color:#fff;font-size:26px;line-height:1;cursor:pointer;box-shadow:var(--shadow-pop);z-index:21;display:grid;place-items:center" style-focus="outline:2px solid var(--accent);outline-offset:2px">+</button>
+        </sc-if>
+      </sc-if>
+    </div>
+
+    <!-- Wizard -->
+    <sc-if value="{{ wizardOpen }}" hint-placeholder-val="{{ false }}">
+      <div data-testid="programs-wizard-scrim" onClick="{{ closeWizard }}" style="position:absolute;inset:0;background:var(--scrim);z-index:50"></div>
+      <div role="dialog" aria-modal="true" aria-labelledby="wiz-title" data-testid="programs-wizard" style="{{ wizardStyle }}">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;padding:16px 20px 0">
+          <div><h2 id="wiz-title" style="margin:0;font-size:16px;font-weight:600">{{ t.newProgram }}</h2><div style="font-size:12px;color:var(--text-3);font-family:'IBM Plex Mono',monospace">{{ wizStepLabel }}</div></div>
+          <button type="button" data-testid="programs-wizard-close" aria-label="{{ t.close }}" onClick="{{ closeWizard }}" style="width:28px;height:28px;border:0;border-radius:4px;background:transparent;color:var(--text-3);cursor:pointer;font-size:18px;line-height:1" style-hover="background:var(--surface-2)">×</button>
+        </div>
+        <ol aria-label="{{ t.steps }}" style="list-style:none;margin:0;padding:14px 20px;display:flex;gap:8px;align-items:center">
+          <sc-for list="{{ wizSteps }}" as="s" hint-placeholder-count="3">
+            <li data-testid="{{ s.testid }}" aria-current="{{ s.current }}" style="display:flex;align-items:center;gap:8px;flex:1;min-width:0"><span aria-hidden="true" style="{{ s.dot }}">{{ s.n }}</span><span style="{{ s.label }}">{{ s.name }}</span><sc-if value="{{ s.line }}" hint-placeholder-val="{{ true }}"><span aria-hidden="true" style="flex:1;height:1px;background:var(--border)"></span></sc-if></li>
+          </sc-for>
+        </ol>
+        <sc-if value="{{ serverError }}" hint-placeholder-val="{{ false }}">
+          <div role="alert" data-testid="programs-wizard-server-error" style="margin:0 20px;padding:10px 12px;border-radius:6px;background:var(--danger-soft);border:1px solid var(--danger);font-size:12.5px"><strong style="font-family:'IBM Plex Mono',monospace">422</strong> · {{ serverError }}</div>
+        </sc-if>
+        <form data-testid="programs-wizard-form" onSubmit="{{ wizNext }}" noValidate="{{ true }}" style="display:flex;flex-direction:column;gap:14px;padding:14px 20px 20px;overflow:auto;flex:1">
+          <sc-if value="{{ wizStep1 }}" hint-placeholder-val="{{ true }}">
+            <div style="display:flex;flex-direction:column;gap:4px">
+              <label for="w-code" style="font-size:12px;font-weight:500;color:var(--text-2)">{{ t.code }}</label>
+              <input id="w-code" data-testid="programs-wizard-code" value="{{ nextCode }}" readOnly="{{ true }}" style="height:32px;padding:0 10px;border-radius:4px;border:1px solid var(--border);background:var(--surface-2);color:var(--text-2);font:inherit;font-family:'IBM Plex Mono',monospace">
+            </div>
+            <div style="display:flex;flex-direction:column;gap:4px">
+              <label for="w-name" style="font-size:12px;font-weight:500;color:var(--text-2)">{{ t.name }} <span aria-hidden="true" style="color:var(--danger)">*</span></label>
+              <input id="w-name" data-testid="programs-wizard-name" required="{{ true }}" aria-required="true" aria-invalid="{{ errName }}" aria-describedby="w-name-err" value="{{ form.name }}" onChange="{{ setName }}" placeholder="{{ t.namePlaceholder }}" style="{{ nameStyle }}" style-focus="outline:2px solid var(--accent);outline-offset:-1px">
+              <sc-if value="{{ errName }}" hint-placeholder-val="{{ false }}"><span id="w-name-err" role="alert" data-testid="programs-wizard-name-error" style="font-size:12px;color:var(--danger)">{{ errors.name }}</span></sc-if>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:4px">
+              <label for="w-desc" style="font-size:12px;font-weight:500;color:var(--text-2)">{{ t.description }}</label>
+              <textarea id="w-desc" data-testid="programs-wizard-description" rows="3" value="{{ form.description }}" onChange="{{ setDescription }}" style="padding:8px 10px;border-radius:4px;border:1px solid var(--border-strong);background:var(--surface);color:var(--text);font:inherit;resize:vertical" style-focus="outline:2px solid var(--accent);outline-offset:-1px"></textarea>
+            </div>
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px">
+              <div style="display:flex;flex-direction:column;gap:4px;position:relative">
+                <label for="w-owner" style="font-size:12px;font-weight:500;color:var(--text-2)">{{ t.owner }} <span aria-hidden="true" style="color:var(--danger)">*</span></label>
+                <input id="w-owner" role="combobox" data-testid="programs-wizard-owner" aria-expanded="{{ wOwnerOpen }}" aria-controls="w-owner-list" aria-autocomplete="list" aria-invalid="{{ errOwner }}" aria-describedby="w-owner-err" autoComplete="off" value="{{ wOwnerQuery }}" onChange="{{ setWOwnerQuery }}" onFocus="{{ openWOwner }}" onBlur="{{ blurWOwner }}" onKeyDown="{{ wOwnerKey }}" placeholder="{{ t.searchPerson }}" style="{{ ownerStyle }}" style-focus="outline:2px solid var(--accent);outline-offset:-1px">
+                <sc-if value="{{ wOwnerOpen }}" hint-placeholder-val="{{ false }}">
+                  <ul id="w-owner-list" role="listbox" data-testid="programs-wizard-owner-list" style="list-style:none;margin:0;padding:4px;position:absolute;top:100%;left:0;right:0;margin-top:2px;background:var(--surface);border:1px solid var(--border);border-radius:6px;box-shadow:var(--shadow-pop);z-index:5;max-height:180px;overflow:auto">
+                    <sc-for list="{{ wOwnerOptions }}" as="o" hint-placeholder-count="3"><li role="option" aria-selected="{{ o.selected }}" data-testid="{{ o.testid }}" onMouseDown="{{ o.pick }}" style="{{ o.style }}"><span aria-hidden="true" style="width:20px;height:20px;border-radius:50%;background:var(--neutral);color:#fff;font-size:9px;font-weight:600;display:grid;place-items:center">{{ o.initials }}</span><span>{{ o.name }}</span></li></sc-for>
+                  </ul>
+                </sc-if>
+                <sc-if value="{{ errOwner }}" hint-placeholder-val="{{ false }}"><span id="w-owner-err" role="alert" data-testid="programs-wizard-owner-error" style="font-size:12px;color:var(--danger)">{{ errors.owner }}</span></sc-if>
+              </div>
+              <div style="display:flex;flex-direction:column;gap:4px">
+                <label for="w-status" style="font-size:12px;font-weight:500;color:var(--text-2)">{{ t.initialStatus }}</label>
+                <select id="w-status" data-testid="programs-wizard-status" value="{{ form.status }}" onChange="{{ setStatus }}" style="height:32px;padding:0 8px;border-radius:4px;border:1px solid var(--border-strong);background:var(--surface);color:var(--text);font:inherit" style-focus="outline:2px solid var(--accent);outline-offset:-1px"><option value="draft">{{ t.st_draft }}</option><option value="active">{{ t.st_active }}</option></select>
+              </div>
+            </div>
+          </sc-if>
+          <sc-if value="{{ wizStep2 }}" hint-placeholder-val="{{ false }}">
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px">
+              <div style="display:flex;flex-direction:column;gap:4px">
+                <label for="w-start" style="font-size:12px;font-weight:500;color:var(--text-2)">{{ t.startDate }} <span aria-hidden="true" style="color:var(--danger)">*</span></label>
+                <input id="w-start" type="date" data-testid="programs-wizard-start" aria-invalid="{{ errStart }}" aria-describedby="w-start-err" value="{{ form.start }}" onChange="{{ setStart }}" style="{{ startStyle }}" style-focus="outline:2px solid var(--accent);outline-offset:-1px">
+                <sc-if value="{{ errStart }}" hint-placeholder-val="{{ false }}"><span id="w-start-err" role="alert" data-testid="programs-wizard-start-error" style="font-size:12px;color:var(--danger)">{{ errors.start }}</span></sc-if>
+              </div>
+              <div style="display:flex;flex-direction:column;gap:4px">
+                <label for="w-end" style="font-size:12px;font-weight:500;color:var(--text-2)">{{ t.endDate }} <span aria-hidden="true" style="color:var(--danger)">*</span></label>
+                <input id="w-end" type="date" data-testid="programs-wizard-end" aria-invalid="{{ errEnd }}" aria-describedby="w-end-err" value="{{ form.end }}" onChange="{{ setEnd }}" style="{{ endStyle }}" style-focus="outline:2px solid var(--accent);outline-offset:-1px">
+                <sc-if value="{{ errEnd }}" hint-placeholder-val="{{ false }}"><span id="w-end-err" role="alert" data-testid="programs-wizard-end-error" style="font-size:12px;color:var(--danger)">{{ errors.end }}</span></sc-if>
+              </div>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:4px">
+              <label for="w-budget" style="font-size:12px;font-weight:500;color:var(--text-2)">{{ t.budget }} (€) <span aria-hidden="true" style="color:var(--danger)">*</span></label>
+              <input id="w-budget" type="number" min="0" step="1000" inputMode="numeric" data-testid="programs-wizard-budget" aria-invalid="{{ errBudget }}" aria-describedby="w-budget-err" value="{{ form.budget }}" onChange="{{ setBudget }}" placeholder="0" style="{{ budgetStyle }}" style-focus="outline:2px solid var(--accent);outline-offset:-1px">
+              <sc-if value="{{ errBudget }}" hint-placeholder-val="{{ false }}"><span id="w-budget-err" role="alert" data-testid="programs-wizard-budget-error" style="font-size:12px;color:var(--danger)">{{ errors.budget }}</span></sc-if>
+            </div>
+            <fieldset style="border:0;padding:0;margin:0;display:flex;flex-direction:column;gap:6px">
+              <legend style="font-size:12px;font-weight:500;color:var(--text-2);padding:0;margin-bottom:4px">{{ t.priority }}</legend>
+              <div style="display:flex;gap:16px;flex-wrap:wrap">
+                <label style="display:flex;align-items:center;gap:6px;cursor:pointer;min-height:24px"><input type="radio" name="w-priority" value="low" data-testid="programs-wizard-priority-low" checked="{{ prioLow }}" onChange="{{ setPriority }}" style="accent-color:var(--accent);margin:0">{{ t.low }}</label>
+                <label style="display:flex;align-items:center;gap:6px;cursor:pointer;min-height:24px"><input type="radio" name="w-priority" value="medium" data-testid="programs-wizard-priority-medium" checked="{{ prioMed }}" onChange="{{ setPriority }}" style="accent-color:var(--accent);margin:0">{{ t.medium }}</label>
+                <label style="display:flex;align-items:center;gap:6px;cursor:pointer;min-height:24px"><input type="radio" name="w-priority" value="high" data-testid="programs-wizard-priority-high" checked="{{ prioHigh }}" onChange="{{ setPriority }}" style="accent-color:var(--accent);margin:0">{{ t.high }}</label>
+              </div>
+            </fieldset>
+            <label style="display:flex;align-items:center;gap:8px;cursor:pointer"><input type="checkbox" data-testid="programs-wizard-classified" checked="{{ form.classified }}" onChange="{{ setClassified }}" style="width:16px;height:16px;accent-color:var(--accent);margin:0">{{ t.classified }}</label>
+          </sc-if>
+          <sc-if value="{{ wizStep3 }}" hint-placeholder-val="{{ false }}">
+            <dl data-testid="programs-wizard-summary" style="margin:0;display:grid;grid-template-columns:auto 1fr;gap:8px 16px;font-size:12.5px;padding:12px;border:1px solid var(--border);border-radius:6px;background:var(--surface-2)">
+              <dt style="color:var(--text-3)">{{ t.code }}</dt><dd style="margin:0;font-family:'IBM Plex Mono',monospace;font-weight:500">{{ nextCode }}</dd>
+              <dt style="color:var(--text-3)">{{ t.name }}</dt><dd style="margin:0">{{ form.name }}</dd>
+              <dt style="color:var(--text-3)">{{ t.owner }}</dt><dd style="margin:0">{{ wOwnerQuery }}</dd>
+              <dt style="color:var(--text-3)">{{ t.dates }}</dt><dd style="margin:0;font-family:'IBM Plex Mono',monospace">{{ summaryDates }}</dd>
+              <dt style="color:var(--text-3)">{{ t.budget }}</dt><dd style="margin:0;font-family:'IBM Plex Mono',monospace">{{ summaryBudget }}</dd>
+              <dt style="color:var(--text-3)">{{ t.priority }}</dt><dd style="margin:0">{{ summaryPriority }}</dd>
+              <dt style="color:var(--text-3)">{{ t.classified }}</dt><dd style="margin:0">{{ summaryClassified }}</dd>
+            </dl>
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:12px">
+              <span id="w-notify-l">{{ t.notifyTeam }}</span>
+              <button type="button" role="switch" aria-checked="{{ form.notify }}" aria-labelledby="w-notify-l" data-testid="programs-wizard-notify" onClick="{{ toggleNotify }}" style="{{ notifySwitch }}" style-focus="outline:2px solid var(--accent);outline-offset:2px"><span style="{{ notifyKnob }}"></span></button>
+            </div>
+            <p style="margin:0;font-size:12px;color:var(--text-3)">{{ t.serverHint }}</p>
+          </sc-if>
+          <div style="display:flex;justify-content:space-between;gap:8px;margin-top:auto;padding-top:8px;border-top:1px solid var(--border)">
+            <button type="button" data-testid="programs-wizard-back" onClick="{{ wizBack }}" disabled="{{ wizStep1 }}" style="{{ secondaryBtn }}" style-hover="background:var(--surface-2)">{{ t.back }}</button>
+            <div style="display:flex;gap:8px">
+              <button type="button" data-testid="programs-wizard-cancel" onClick="{{ closeWizard }}" style="{{ ghostBtn }}" style-hover="background:var(--surface-2)">{{ t.cancel }}</button>
+              <button type="submit" data-testid="{{ wizSubmitTestid }}" disabled="{{ submitting }}" aria-busy="{{ submitting }}" style="{{ primaryBtn }}" style-hover="background:var(--accent-hover)"><sc-if value="{{ submitting }}" hint-placeholder-val="{{ false }}"><span data-testid="spinner" aria-hidden="true" style="width:12px;height:12px;border:2px solid rgba(255,255,255,.4);border-top-color:#fff;border-radius:50%;animation:spin .8s linear infinite;display:inline-block"></span></sc-if>{{ wizNextLabel }}</button>
+            </div>
+          </div>
+        </form>
+      </div>
+    </sc-if>
+
+    <!-- Delete confirm -->
+    <sc-if value="{{ deleteTarget }}" hint-placeholder-val="{{ false }}">
+      <div onClick="{{ cancelDelete }}" style="position:absolute;inset:0;background:var(--scrim);z-index:50"></div>
+      <div role="alertdialog" aria-modal="true" aria-labelledby="del-title" aria-describedby="del-desc" data-testid="programs-delete-dialog" style="position:absolute;left:50%;top:40%;transform:translate(-50%,-50%);width:min(420px,calc(100% - 32px));background:var(--surface);border:1px solid var(--border);border-radius:6px;box-shadow:var(--shadow-pop);z-index:51;padding:20px;display:flex;flex-direction:column;gap:12px">
+        <h2 id="del-title" style="margin:0;font-size:15px;font-weight:600">{{ t.deleteTitle }}</h2>
+        <p id="del-desc" style="margin:0;color:var(--text-2)">{{ deleteDesc }}</p>
+        <div style="display:flex;justify-content:flex-end;gap:8px"><button type="button" data-testid="modal-cancel" onClick="{{ cancelDelete }}" style="{{ secondaryBtn }}" style-hover="background:var(--surface-2)">{{ t.cancel }}</button><button type="button" ref="{{ deleteBtnRef }}" data-testid="modal-confirm" onClick="{{ confirmDelete }}" style="{{ dangerBtn }}" style-hover="filter:brightness(.92)">{{ t.delete }}</button></div>
+      </div>
+    </sc-if>
+
+    <!-- Toasts -->
+    <div aria-live="polite" aria-atomic="false" data-testid="toast-region" style="position:absolute;right:16px;bottom:16px;display:flex;flex-direction:column;gap:8px;z-index:60;width:min(360px,calc(100% - 32px));pointer-events:none">
+      <sc-for list="{{ toasts }}" as="toast" hint-placeholder-count="0">
+        <div role="status" data-testid="{{ toast.testid }}" style="{{ toast.style }}"><span aria-hidden="true" style="{{ toast.dot }}"></span><div style="flex:1;min-width:0"><div style="font-weight:500">{{ toast.title }}</div><sc-if value="{{ toast.body }}" hint-placeholder-val="{{ false }}"><div style="font-size:12px;color:var(--text-2)">{{ toast.body }}</div></sc-if></div><sc-if value="{{ toast.action }}" hint-placeholder-val="{{ false }}"><button type="button" data-testid="toast-action" onClick="{{ toast.onAction }}" style="border:0;background:none;color:var(--accent);font:inherit;font-size:12px;font-weight:500;cursor:pointer;padding:0">{{ toast.action }}</button></sc-if><button type="button" data-testid="toast-close" aria-label="{{ t.close }}" onClick="{{ toast.close }}" style="border:0;background:none;color:var(--text-3);cursor:pointer;font-size:16px;line-height:1;padding:0">×</button></div>
+      </sc-for>
+    </div>
+
+    <!-- Cookie banner -->
+    <sc-if value="{{ showCookies }}" hint-placeholder-val="{{ false }}">
+      <div role="region" aria-label="{{ t.cookiesTitle }}" data-testid="cookie-banner" style="{{ cookieStyle }}">
+        <span style="flex:1;min-width:200px">{{ t.cookiesText }}</span>
+        <div style="display:flex;gap:8px"><button type="button" data-testid="cookie-banner-accept" onClick="{{ acceptCookies }}" style="height:30px;padding:0 12px;border-radius:4px;border:0;background:var(--bg);color:var(--text);font:inherit;font-size:12px;font-weight:500;cursor:pointer">{{ t.accept }}</button><button type="button" data-testid="cookie-banner-reject" onClick="{{ rejectCookies }}" style="height:30px;padding:0 12px;border-radius:4px;border:1px solid var(--text-3);background:transparent;color:var(--bg);font:inherit;font-size:12px;font-weight:500;cursor:pointer">{{ t.reject }}</button></div>
+      </div>
+    </sc-if>
+
+    <!-- Annotation overlay -->
+    <sc-if value="{{ showTestIds }}" hint-placeholder-val="{{ false }}">
+      <div aria-hidden="true" style="position:absolute;inset:0;pointer-events:none;z-index:100">
+        <sc-for list="{{ annots }}" as="a" hint-placeholder-count="0">
+          <div style="{{ a.box }}"><span style="position:absolute;left:-1px;top:-14px;padding:0 4px;background:#d946ef;color:#fff;font-family:'IBM Plex Mono',monospace;font-size:9px;line-height:13px;white-space:nowrap;border-radius:2px">{{ a.id }}</span></div>
+        </sc-for>
+      </div>
+    </sc-if>
+  </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;role&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;admin&quot;,&quot;program_manager&quot;,&quot;consultant&quot;,&quot;auditor&quot;],&quot;default&quot;:&quot;admin&quot;,&quot;tsType&quot;:&quot;'admin'|'program_manager'|'consultant'|'auditor'&quot;,&quot;section&quot;:&quot;Prototipo&quot;},&quot;dataState&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;normal&quot;,&quot;loading&quot;,&quot;empty&quot;,&quot;error&quot;],&quot;default&quot;:&quot;normal&quot;,&quot;tsType&quot;:&quot;'normal'|'loading'|'empty'|'error'&quot;,&quot;section&quot;:&quot;Prototipo&quot;},&quot;theme&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;light&quot;,&quot;dark&quot;],&quot;default&quot;:&quot;light&quot;,&quot;tsType&quot;:&quot;'light'|'dark'&quot;,&quot;section&quot;:&quot;Prototipo&quot;},&quot;showTestIds&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:false,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Prototipo&quot;}}">
+const OWNERS = [
+  { id: 'u1', name: 'Marta Ruiz' }, { id: 'u2', name: 'Javier Ortega' }, { id: 'u3', name: 'Lucía Fernández' },
+  { id: 'u4', name: 'Andrés Molina' }, { id: 'u5', name: 'Carmen Vidal' }, { id: 'u6', name: 'Pablo Serrano' },
+];
+const NAMES = ['Sistema de mando táctico Ártemis', 'Radar de vigilancia costera RVC-2', 'Enlace de datos seguro LD-9', 'Plataforma UAV Cóndor', 'Centro de control de misión CCM', 'Simulador de adiestramiento naval', 'Sensor electroóptico EO-7', 'Red de comunicaciones satelitales', 'Vehículo blindado modular VBM', 'Suite de guerra electrónica SGE', 'Defensa antiaérea de corto alcance', 'Gestión logística integrada', 'Sonar pasivo remolcado SPR-3', 'Sistema de navegación inercial', 'Torre de control móvil TCM', 'Infraestructura C4I', 'Estación terrena portátil ETP', 'Munición guiada de precisión', 'Sistema de identificación IFF', 'Buque de apoyo logístico BAL', 'Ciberdefensa de red táctica', 'Puesto de mando desplegable PMD', 'Sistema de misión helicóptero', 'Protección balística personal'];
+const STATUSES = ['active', 'active', 'draft', 'on_hold', 'active', 'closed', 'active', 'cancelled'];
+const STATUS_TONE = { draft: 'neutral', active: 'info', on_hold: 'warn', closed: 'ok', cancelled: 'danger' };
+const PRIORITIES = ['medium', 'high', 'low'];
+function seedPrograms() {
+  return NAMES.map((name, i) => {
+    const sm = (i * 5) % 12, sy = 2023 + Math.floor(i / 9);
+    const start = `${sy}-${String(sm + 1).padStart(2, '0')}-${String(((i * 7) % 27) + 1).padStart(2, '0')}`;
+    const end = `${sy + 1 + (i % 3)}-${String(((sm + 6) % 12) + 1).padStart(2, '0')}-${String(((i * 3) % 27) + 1).padStart(2, '0')}`;
+    return { code: `PRG-${String(i + 1).padStart(3, '0')}`, name, status: STATUSES[i % STATUSES.length], owner: OWNERS[i % OWNERS.length].id, start, end, budget: 450000 + ((i * 7919) % 23) * 185000, progress: (i * 37 + 11) % 100, priority: PRIORITIES[i % 3], classified: i % 4 === 0 };
+  });
+}
+const T = {
+  es: { programs: 'Programas', home: 'Inicio', breadcrumbs: 'Migas de pan', menu: 'Menú', collapse: 'Contraer', collapseSidebar: 'Contraer barra lateral', globalSearch: 'Búsqueda global', searchPlaceholder: 'Buscar código o nombre…', searchPrograms: 'Buscar programas', language: 'Idioma', toggleTheme: 'Cambiar tema', notifications: 'Notificaciones', markRead: 'Marcar leídas', userMenu: 'Menú de usuario', profile: 'Perfil', shortcuts: 'Atajos de teclado', logout: 'Cerrar sesión', exportCsv: 'Exportar CSV', newProgram: 'Nuevo programa', filters: 'Filtros', status: 'Estado', allStatuses: 'Todos los estados', startFrom: 'Inicio desde', endTo: 'Fin hasta', owner: 'Responsable', anyOwner: 'Cualquiera', clearOwner: 'Quitar responsable', noOwnerMatch: 'Sin coincidencias', clearFilters: 'Limpiar filtros', bulkActions: 'Acciones masivas', exportSelection: 'Exportar selección', archive: 'Archivar', delete: 'Eliminar', clearSelection: 'Quitar selección', errorTitle: 'No se pudieron cargar los programas', retry: 'Reintentar', selectAll: 'Seleccionar todos los programas de la página', actions: 'Acciones', progressHelp: 'Hitos completados sobre el total planificado', viewDetail: 'Ver detalle', edit: 'Editar', duplicate: 'Duplicar', emptyTitle: 'Sin programas', emptyFiltered: 'Ningún programa coincide con los filtros aplicados.', emptyNone: 'Todavía no hay programas registrados.', pagination: 'Paginación', prevPage: 'Página anterior', nextPage: 'Página siguiente', page: 'Página', mainNav: 'Navegación principal', close: 'Cerrar', steps: 'Pasos', code: 'Código', name: 'Nombre', namePlaceholder: 'Ej. Radar de vigilancia costera', description: 'Descripción', searchPerson: 'Buscar persona…', initialStatus: 'Estado inicial', startDate: 'Fecha de inicio', endDate: 'Fecha de fin', budget: 'Presupuesto', priority: 'Prioridad', low: 'Baja', medium: 'Media', high: 'Alta', classified: 'Programa clasificado', dates: 'Fechas', notifyTeam: 'Notificar al equipo por correo', serverHint: 'Validación de servidor: un nombre que contenga «duplicado» devuelve 422.', back: 'Atrás', cancel: 'Cancelar', next: 'Siguiente', create: 'Crear programa', deleteTitle: 'Eliminar programa', cookiesTitle: 'Aviso de cookies', cookiesText: 'SIGPRO usa cookies técnicas para mantener tu sesión y preferencias. No se usan cookies de terceros.', accept: 'Aceptar', reject: 'Rechazar', st_draft: 'Borrador', st_active: 'Activo', st_on_hold: 'En pausa', st_closed: 'Cerrado', st_cancelled: 'Cancelado', nav_mission: 'Panel de misión', nav_programs: 'Programas', nav_requirements: 'Requisitos', nav_verification: 'Verificación', nav_nc: 'No conformidades', nav_documents: 'Documentos', nav_audit: 'Auditoría', nav_admin: 'Administración', nav_lab: 'Lab', nav_more: 'Más', step1: 'Datos básicos', step2: 'Planificación', step3: 'Revisión', step: 'Paso', of: 'de', yes: 'Sí', no: 'No', requiredName: 'El nombre debe tener al menos 3 caracteres', requiredOwner: 'Selecciona un responsable de la lista', requiredStart: 'La fecha de inicio es obligatoria', endAfterStart: 'La fecha de fin debe ser posterior al inicio', budgetPositive: 'El presupuesto debe ser mayor que 0', dupName: 'Ya existe un programa con ese nombre', created: 'Programa creado', addedToList: 'se añadió a la lista', archived: 'archivado', archivedN: 'programas archivados', deleted: 'eliminado', deletedN: 'programas eliminados', undo: 'Deshacer', csvReady: 'CSV generado', csvBody: 'filas exportadas', deleteDescOne: 'se eliminará de forma permanente junto con sus requisitos y documentos.', deleteDescMany: 'programas se eliminarán de forma permanente.', selected: 'seleccionados', roleNoCreate: 'Tu rol no permite crear programas', roleNoDelete: 'Solo admin puede eliminar', shown: 'de', reloaded: 'Datos recargados', duplicatedBody: 'Copia creada como borrador', notif1: 'NC-004 escalada a crítica en PRG-002', notif2: 'REQ-017 aprobado por Javier Ortega', notif3: 'Hito «CDR» de PRG-001 vence en 3 días' },
+  en: { programs: 'Programs', home: 'Home', breadcrumbs: 'Breadcrumbs', menu: 'Menu', collapse: 'Collapse', collapseSidebar: 'Collapse sidebar', globalSearch: 'Global search', searchPlaceholder: 'Search code or name…', searchPrograms: 'Search programs', language: 'Language', toggleTheme: 'Toggle theme', notifications: 'Notifications', markRead: 'Mark read', userMenu: 'User menu', profile: 'Profile', shortcuts: 'Keyboard shortcuts', logout: 'Sign out', exportCsv: 'Export CSV', newProgram: 'New program', filters: 'Filters', status: 'Status', allStatuses: 'All statuses', startFrom: 'Start from', endTo: 'End until', owner: 'Owner', anyOwner: 'Anyone', clearOwner: 'Clear owner', noOwnerMatch: 'No matches', clearFilters: 'Clear filters', bulkActions: 'Bulk actions', exportSelection: 'Export selection', archive: 'Archive', delete: 'Delete', clearSelection: 'Clear selection', errorTitle: 'Programs could not be loaded', retry: 'Retry', selectAll: 'Select all programs on this page', actions: 'Actions', progressHelp: 'Milestones completed over total planned', viewDetail: 'View detail', edit: 'Edit', duplicate: 'Duplicate', emptyTitle: 'No programs', emptyFiltered: 'No program matches the current filters.', emptyNone: 'No programs registered yet.', pagination: 'Pagination', prevPage: 'Previous page', nextPage: 'Next page', page: 'Page', mainNav: 'Main navigation', close: 'Close', steps: 'Steps', code: 'Code', name: 'Name', namePlaceholder: 'E.g. Coastal surveillance radar', description: 'Description', searchPerson: 'Search person…', initialStatus: 'Initial status', startDate: 'Start date', endDate: 'End date', budget: 'Budget', priority: 'Priority', low: 'Low', medium: 'Medium', high: 'High', classified: 'Classified program', dates: 'Dates', notifyTeam: 'Notify team by email', serverHint: 'Server validation: a name containing "duplicado" returns 422.', back: 'Back', cancel: 'Cancel', next: 'Next', create: 'Create program', deleteTitle: 'Delete program', cookiesTitle: 'Cookie notice', cookiesText: 'SIGPRO uses technical cookies to keep your session and preferences. No third-party cookies.', accept: 'Accept', reject: 'Reject', st_draft: 'Draft', st_active: 'Active', st_on_hold: 'On hold', st_closed: 'Closed', st_cancelled: 'Cancelled', nav_mission: 'Mission panel', nav_programs: 'Programs', nav_requirements: 'Requirements', nav_verification: 'Verification', nav_nc: 'Nonconformities', nav_documents: 'Documents', nav_audit: 'Audit', nav_admin: 'Administration', nav_lab: 'Lab', nav_more: 'More', step1: 'Basics', step2: 'Planning', step3: 'Review', step: 'Step', of: 'of', yes: 'Yes', no: 'No', requiredName: 'Name must be at least 3 characters', requiredOwner: 'Pick an owner from the list', requiredStart: 'Start date is required', endAfterStart: 'End date must be after start', budgetPositive: 'Budget must be greater than 0', dupName: 'A program with that name already exists', created: 'Program created', addedToList: 'was added to the list', archived: 'archived', archivedN: 'programs archived', deleted: 'deleted', deletedN: 'programs deleted', undo: 'Undo', csvReady: 'CSV generated', csvBody: 'rows exported', deleteDescOne: 'will be permanently deleted with its requirements and documents.', deleteDescMany: 'programs will be permanently deleted.', selected: 'selected', roleNoCreate: 'Your role cannot create programs', roleNoDelete: 'Only admin can delete', shown: 'of', reloaded: 'Data reloaded', duplicatedBody: 'Copy created as draft', notif1: 'NC-004 escalated to critical in PRG-002', notif2: 'REQ-017 approved by Javier Ortega', notif3: 'Milestone "CDR" of PRG-001 due in 3 days' },
+};
+const PAGE = 10;
+const initials = (n) => n.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase();
+const ownerName = (id) => (OWNERS.find(o => o.id === id) || {}).name || '';
+
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.rootRef = React.createRef(); this.searchRef = React.createRef(); this.selectAllRef = React.createRef(); this.deleteBtnRef = React.createRef();
+    let session = null; try { session = JSON.parse(localStorage.getItem('sigpro.session') || 'null'); } catch (e) {}
+    this.session = session && session.role ? session : null;
+    this.state = {
+      role: (this.session && this.session.role) || props.role || 'admin', theme: props.theme || 'light', lang: 'es', dataState: props.dataState || 'normal', loading: true, showTestIds: !!props.showTestIds, frame: 'auto', width: 1280,
+      sidebarCollapsed: false, drawerOpen: false, search: '', filterStatus: '', dateFrom: '', dateTo: '', ownerQuery: '', ownerSel: null, ownerOpen: false, ownerActive: 0,
+      sortKey: 'code', sortDir: 'asc', page: 1, selected: [], rowMenu: null, tipOpen: false, notifOpen: false, userOpen: false, showCookies: false,
+      programs: seedPrograms(), wizardOpen: false, wizStep: 1, form: this.blankForm(), errors: {}, serverError: '', submitting: false, wOwnerQuery: '', wOwnerOpen: false, wOwnerActive: 0,
+      deleteTarget: null, toasts: [], annots: [],
+    };
+    this.toastId = 0;
+  }
+  blankForm() { return { name: '', description: '', owner: '', status: 'draft', start: '', end: '', budget: '', priority: 'medium', classified: false, notify: true }; }
+  componentDidMount() {
+    this.measure = () => { const el = this.rootRef.current; if (el) this.setState({ width: el.offsetWidth }); };
+    this.measure(); window.addEventListener('resize', this.measure);
+    this.onKey = (e) => {
+      const tag = (e.target.tagName || '').toLowerCase(); const typing = tag === 'input' || tag === 'textarea' || tag === 'select' || e.target.isContentEditable;
+      if (e.key === 'Escape') { this.setState({ wizardOpen: false, deleteTarget: null, rowMenu: null, notifOpen: false, userOpen: false, ownerOpen: false, drawerOpen: false, wOwnerOpen: false }); return; }
+      if (typing) return;
+      if (e.key === '/') { e.preventDefault(); if (this.searchRef.current) this.searchRef.current.focus(); }
+      if (e.key.toLowerCase() === 'n' && this.canCreate() && !this.state.wizardOpen) { e.preventDefault(); this.openWizard(); }
+    };
+    document.addEventListener('keydown', this.onKey);
+    try { if (!localStorage.getItem('sigpro_cookies')) this.setState({ showCookies: true }); } catch (e) { this.setState({ showCookies: true }); }
+    this.startLoad();
+  }
+  componentWillUnmount() { window.removeEventListener('resize', this.measure); document.removeEventListener('keydown', this.onKey); clearTimeout(this.loadT); }
+  componentDidUpdate(prev) {
+    if (this.selectAllRef.current) { const { some, all } = this.selectionState(); this.selectAllRef.current.indeterminate = some && !all; }
+    if (this.state.showTestIds) { cancelAnimationFrame(this.annotRaf); this.annotRaf = requestAnimationFrame(() => this.computeAnnots()); }
+    if (this.state.deleteTarget && !prev.deleteTarget && this.deleteBtnRef.current) this.deleteBtnRef.current.focus();
+  }
+  computeAnnots() {
+    const root = this.rootRef.current; if (!root) return;
+    const rb = root.getBoundingClientRect();
+    const list = Array.from(root.querySelectorAll('[data-testid]')).map(el => { const r = el.getBoundingClientRect(); return { id: el.getAttribute('data-testid'), x: r.left - rb.left, y: r.top - rb.top, w: r.width, h: r.height }; }).filter(a => a.w > 0 && a.h > 0 && a.id !== 'toast-region');
+    const key = JSON.stringify(list);
+    if (key !== this.annotKey) { this.annotKey = key; this.setState({ annots: list }); }
+  }
+  startLoad() { clearTimeout(this.loadT); this.setState({ loading: true }); this.loadT = setTimeout(() => this.setState({ loading: false }), 900); }
+  canCreate() { return ['admin', 'program_manager'].includes(this.state.role); }
+  canEdit() { return ['admin', 'program_manager'].includes(this.state.role); }
+  canDelete() { return this.state.role === 'admin'; }
+  toast(kind, title, body, action, onAction) {
+    const id = ++this.toastId;
+    this.setState(s => ({ toasts: [...s.toasts, { id, kind, title, body, action, onAction }] }));
+    setTimeout(() => this.setState(s => ({ toasts: s.toasts.filter(t => t.id !== id) })), 5000);
+  }
+  closeToast(id) { this.setState(s => ({ toasts: s.toasts.filter(t => t.id !== id) })); }
+  filtered() {
+    const { programs, search, filterStatus, dateFrom, dateTo, ownerSel, sortKey, sortDir, dataState } = this.state;
+    if (dataState === 'empty') return [];
+    const q = search.trim().toLowerCase();
+    let rows = programs.filter(p => (!q || p.code.toLowerCase().includes(q) || p.name.toLowerCase().includes(q)) && (!filterStatus || p.status === filterStatus) && (!dateFrom || p.start >= dateFrom) && (!dateTo || p.end <= dateTo) && (!ownerSel || p.owner === ownerSel));
+    const dir = sortDir === 'asc' ? 1 : -1;
+    rows.sort((a, b) => { let va = a[sortKey], vb = b[sortKey]; if (sortKey === 'owner') { va = ownerName(va); vb = ownerName(vb); } if (sortKey === 'dates') { va = a.start; vb = b.start; } return (va > vb ? 1 : va < vb ? -1 : 0) * dir; });
+    return rows;
+  }
+  selectionState() { const ids = this.pageIds || []; const sel = this.state.selected; const all = ids.length > 0 && ids.every(i => sel.includes(i)); const some = ids.some(i => sel.includes(i)); return { all, some }; }
+  openWizard() { if (!this.canCreate()) return; this.setState({ wizardOpen: true, wizStep: 1, form: this.blankForm(), errors: {}, serverError: '', wOwnerQuery: '', rowMenu: null }); }
+  validate(step) {
+    const t = T[this.state.lang], f = this.state.form, e = {};
+    if (step === 1) { if (f.name.trim().length < 3) e.name = t.requiredName; if (!f.owner) e.owner = t.requiredOwner; }
+    if (step === 2) { if (!f.start) e.start = t.requiredStart; if (!f.end || (f.start && f.end <= f.start)) e.end = t.endAfterStart; if (!(Number(f.budget) > 0)) e.budget = t.budgetPositive; }
+    return e;
+  }
+  submitWizard() {
+    const t = T[this.state.lang];
+    this.setState({ submitting: true, serverError: '' });
+    setTimeout(() => {
+      const f = this.state.form;
+      const dup = f.name.toLowerCase().includes('duplicado') || this.state.programs.some(p => p.name.toLowerCase() === f.name.trim().toLowerCase());
+      if (dup) { this.setState({ submitting: false, wizStep: 1, serverError: t.dupName, errors: { name: t.dupName } }); return; }
+      const code = this.nextCode();
+      const p = { code, name: f.name.trim(), status: f.status, owner: f.owner, start: f.start, end: f.end, budget: Number(f.budget), progress: 0, priority: f.priority, classified: f.classified };
+      this.setState(s => ({ programs: [p, ...s.programs], submitting: false, wizardOpen: false, page: 1, sortKey: 'code', sortDir: 'desc' }));
+      this.toast('success', t.created, `${code} ${t.addedToList}`);
+    }, 900);
+  }
+  nextCode() { const max = this.state.programs.reduce((m, p) => Math.max(m, Number(p.code.slice(4))), 0); return `PRG-${String(max + 1).padStart(3, '0')}`; }
+  downloadCsv(rows) {
+    const t = T[this.state.lang];
+    const head = ['code', 'name', 'status', 'owner', 'start', 'end', 'budget', 'progress'];
+    const csv = [head.join(';'), ...rows.map(r => [r.code, `"${r.name}"`, r.status, `"${ownerName(r.owner)}"`, r.start, r.end, r.budget, r.progress].join(';'))].join('\n');
+    const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' })); a.download = 'sigpro-programas.csv'; a.setAttribute('data-testid', 'programs-csv-download'); document.body.appendChild(a); a.click(); a.remove();
+    this.toast('info', t.csvReady, `${rows.length} ${t.csvBody}`);
+  }
+  removePrograms(codes) {
+    const t = T[this.state.lang]; const removed = this.state.programs.filter(p => codes.includes(p.code));
+    this.setState(s => ({ programs: s.programs.filter(p => !codes.includes(p.code)), selected: s.selected.filter(c => !codes.includes(c)), deleteTarget: null, rowMenu: null }));
+    this.toast('success', codes.length === 1 ? `${codes[0]} ${t.deleted}` : `${codes.length} ${t.deletedN}`, '', t.undo, () => this.setState(s => ({ programs: [...removed, ...s.programs] })));
+  }
+  archivePrograms(codes) {
+    const t = T[this.state.lang];
+    this.setState(s => ({ programs: s.programs.map(p => codes.includes(p.code) ? { ...p, status: 'closed' } : p), selected: [], rowMenu: null }));
+    this.toast('success', codes.length === 1 ? `${codes[0]} ${t.archived}` : `${codes.length} ${t.archivedN}`);
+  }
+  renderVals() {
+    const s = this.state, t = T[s.lang];
+    const effWidth = s.frame === 'auto' ? s.width : Number(s.frame);
+    const isMobile = effWidth < 640, isTablet = effWidth >= 640 && effWidth < 1100, notMobile = !isMobile;
+    const sidebarExpanded = !isMobile && !s.sidebarCollapsed && !isTablet || (isMobile && s.drawerOpen) || (isTablet && !s.sidebarCollapsed && false);
+    const showSidebar = !isMobile || s.drawerOpen;
+    const sidebarW = isMobile ? 260 : (sidebarExpanded ? 224 : 56);
+    const canCreate = this.canCreate(), canEdit = this.canEdit(), canDelete = this.canDelete();
+    const isLoading = s.loading || s.dataState === 'loading', isError = s.dataState === 'error' && !isLoading;
+    const rows = isError ? [] : this.filtered();
+    const total = rows.length, pageCount = Math.max(1, Math.ceil(total / PAGE)), page = Math.min(s.page, pageCount);
+    const slice = isLoading ? [] : rows.slice((page - 1) * PAGE, page * PAGE);
+    this.pageIds = slice.map(r => r.code);
+    const { all: allSelected } = this.selectionState();
+    const fmtDate = (d) => d ? new Date(d + 'T00:00:00').toLocaleDateString(s.lang === 'es' ? 'es-ES' : 'en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '—';
+    const fmtMoney = (n) => new Intl.NumberFormat(s.lang === 'es' ? 'es-ES' : 'en-GB', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(n);
+    const badge = (tone) => ({ display: 'inline-flex', alignItems: 'center', gap: 6, height: 20, padding: '0 7px', borderRadius: 4, fontSize: 11, fontWeight: 600, whiteSpace: 'nowrap', background: `var(--${tone}-soft)`, color: `var(--${tone})`, border: `1px solid var(--${tone})` });
+    const btnBase = { height: 32, padding: '0 12px', borderRadius: 4, font: 'inherit', fontWeight: 500, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6, whiteSpace: 'nowrap' };
+    const primaryBtn = { ...btnBase, border: '1px solid var(--accent)', background: 'var(--accent)', color: '#fff' };
+    const secondaryBtn = { ...btnBase, border: '1px solid var(--border-strong)', background: 'var(--surface)', color: 'var(--text)' };
+    const ghostBtn = { ...btnBase, border: '1px solid transparent', background: 'transparent', color: 'var(--text-2)' };
+    const dangerBtn = { ...btnBase, border: '1px solid var(--danger)', background: 'var(--danger)', color: '#fff' };
+    const smallBtn = { ...secondaryBtn, height: 26, fontSize: 12, padding: '0 10px' };
+    const smallDangerBtn = { ...smallBtn, border: '1px solid var(--danger)', color: 'var(--danger)', background: 'transparent' };
+    const menuItem = { textAlign: 'left', padding: '7px 10px', border: 0, borderRadius: 4, background: 'none', color: 'var(--text)', font: 'inherit', cursor: 'pointer', width: '100%' };
+    const pageBtn = { height: 26, minWidth: 26, padding: '0 6px', borderRadius: 4, border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text)', font: 'inherit', fontSize: 12, cursor: 'pointer' };
+    const field = (err) => ({ height: 32, padding: '0 10px', borderRadius: 4, border: `1px solid ${err ? 'var(--danger)' : 'var(--border-strong)'}`, background: 'var(--surface)', color: 'var(--text)', font: 'inherit' });
+    const monoField = (err) => ({ ...field(err), fontFamily: "'IBM Plex Mono',monospace", fontSize: 12 });
+    const pageRows = slice.map(r => {
+      const selected = s.selected.includes(r.code), menuOpen = s.rowMenu === r.code;
+      return { code: r.code, name: r.name, status: r.status, statusLabel: t['st_' + r.status], badgeStyle: badge(STATUS_TONE[r.status]), owner: ownerName(r.owner), ownerInitials: initials(ownerName(r.owner)), start: fmtDate(r.start), end: fmtDate(r.end), budget: fmtMoney(r.budget), progress: r.progress, progressLabel: `${t.programs} ${r.code}: ${r.progress}%`, barStyle: { width: r.progress + '%', height: '100%', background: r.status === 'cancelled' ? 'var(--text-3)' : 'var(--accent)' }, href: `#/programs/${r.code}`, testid: `programs-row-${r.code}`, checkTestid: `programs-select-${r.code}`, linkTestid: `programs-link-${r.code}`, menuTestid: `programs-row-menu-${r.code}`, menuLabel: `${t.actions} ${r.code}`, selectLabel: `${t.selectAll.split(' ')[0]} ${r.code}`, selected, menuOpen,
+        style: { height: 40, borderBottom: '1px solid var(--border)', background: selected ? 'var(--accent-soft)' : 'transparent' },
+        toggle: () => this.setState(st => ({ selected: selected ? st.selected.filter(c => c !== r.code) : [...st.selected, r.code] })),
+        openMenu: (e) => { e.stopPropagation(); this.setState({ rowMenu: menuOpen ? null : r.code, notifOpen: false, userOpen: false }); },
+        edit: () => { this.setState({ rowMenu: null }); this.toast('info', `${t.edit} ${r.code}`, '→ /programs/' + r.code + '/edit'); },
+        duplicate: () => { const code = this.nextCode(); this.setState(st => ({ programs: [{ ...r, code, name: r.name + ' (copia)', status: 'draft', progress: 0 }, ...st.programs], rowMenu: null, page: 1 })); this.toast('success', `${code} ${t.created.toLowerCase()}`, t.duplicatedBody); },
+        archive: () => this.archivePrograms([r.code]), askDelete: () => this.setState({ deleteTarget: [r.code], rowMenu: null }) };
+    });
+    const cols = [
+      { key: 'code', label: t.code, w: 100 }, { key: 'name', label: t.name }, { key: 'status', label: t.status, w: 120 }, { key: 'owner', label: t.owner, w: 170 }, { key: 'dates', label: t.dates, w: 200 }, { key: 'budget', label: t.budget, w: 120, right: true }, { key: 'progress', label: 'Avance', tip: true, w: 160 },
+    ];
+    if (s.lang === 'en') cols[6].label = 'Progress';
+    const columns = cols.map(c => { const active = s.sortKey === c.key; const sortable = !c.tip; return { label: c.label, sortable, hasTip: !!c.tip, plain: false, testid: `programs-sort-${c.key}`, ariaSort: active ? (s.sortDir === 'asc' ? 'ascending' : 'descending') : 'none', thStyle: { textAlign: c.right ? 'right' : 'left', padding: '0 8px', height: 36, fontWeight: 500, fontSize: 11.5, color: active ? 'var(--text)' : 'var(--text-2)', textTransform: 'uppercase', letterSpacing: '.04em', whiteSpace: 'nowrap', width: c.w }, btnStyle: { border: 0, background: 'none', font: 'inherit', color: 'inherit', padding: 0, cursor: 'pointer', display: 'inline-flex', gap: 4, alignItems: 'center', textTransform: 'inherit', letterSpacing: 'inherit' }, arrow: active ? (s.sortDir === 'asc' ? '↑' : '↓') : '↕', arrowStyle: { color: active ? 'var(--accent)' : 'var(--text-3)', fontSize: 11 }, sort: () => this.setState(st => ({ sortKey: c.key, sortDir: st.sortKey === c.key && st.sortDir === 'asc' ? 'desc' : 'asc', page: 1 })) }; });
+    const ownerCounts = s.programs.reduce((m, p) => { m[p.owner] = (m[p.owner] || 0) + 1; return m; }, {});
+    const mkOwnerOptions = (query, selId, activeIdx, prefix, pick) => OWNERS.filter(o => !query || o.name.toLowerCase().includes(query.toLowerCase()) || o.id === selId).map((o, i) => ({ id: `${prefix}-${o.id}`, name: o.name, initials: initials(o.name), count: ownerCounts[o.id] || 0, selected: o.id === selId, testid: `${prefix}-option-${o.id}`, pick: (e) => { e.preventDefault(); pick(o); }, style: { display: 'flex', alignItems: 'center', gap: 8, padding: '6px 8px', borderRadius: 4, cursor: 'pointer', background: i === activeIdx ? 'var(--accent-soft)' : (o.id === selId ? 'var(--surface-2)' : 'transparent'), fontSize: 12.5 } }));
+    const pickOwner = (o) => this.setState({ ownerSel: o.id, ownerQuery: o.name, ownerOpen: false, page: 1 });
+    const ownerOptions = mkOwnerOptions(s.ownerSel ? '' : s.ownerQuery, s.ownerSel, s.ownerActive, 'programs-filter-owner', pickOwner);
+    const pickWOwner = (o) => this.setState(st => ({ form: { ...st.form, owner: o.id }, wOwnerQuery: o.name, wOwnerOpen: false, errors: { ...st.errors, owner: undefined } }));
+    const wOwnerOptions = mkOwnerOptions(s.form.owner ? '' : s.wOwnerQuery, s.form.owner, s.wOwnerActive, 'programs-wizard-owner', pickWOwner);
+    const comboKey = (optsKey, activeKey, openKey, opts, pick) => (e) => {
+      if (e.key === 'ArrowDown') { e.preventDefault(); this.setState({ [openKey]: true, [activeKey]: Math.min(opts.length - 1, s[activeKey] + 1) }); }
+      else if (e.key === 'ArrowUp') { e.preventDefault(); this.setState({ [activeKey]: Math.max(0, s[activeKey] - 1) }); }
+      else if (e.key === 'Enter' && s[openKey] && opts[s[activeKey]]) { e.preventDefault(); const o = OWNERS.find(x => x.name === opts[s[activeKey]].name); pick(o); }
+      else if (e.key === 'Escape') { this.setState({ [openKey]: false }); }
+    };
+    const hasFilters = !!(s.search || s.filterStatus || s.dateFrom || s.dateTo || s.ownerSel);
+    const from = total ? (page - 1) * PAGE + 1 : 0, to = Math.min(page * PAGE, total);
+    const pages = Array.from({ length: pageCount }, (_, i) => i + 1).filter(n => pageCount <= 7 || Math.abs(n - page) <= 1 || n === 1 || n === pageCount).map(n => ({ n, testid: `programs-page-${n}`, label: `${t.page} ${n}`, current: n === page ? 'page' : undefined, go: () => this.setState({ page: n, selected: [] }), style: { ...pageBtn, border: `1px solid ${n === page ? 'var(--accent)' : 'var(--border)'}`, background: n === page ? 'var(--accent)' : 'var(--surface)', color: n === page ? '#fff' : 'var(--text)' } }));
+    const navDefs = [
+      { key: 'mission', href: '#/mission', glyph: 'M' }, { key: 'programs', href: '#/programs', glyph: 'P', current: true }, { key: 'requirements', href: '#/programs/PRG-001/requirements', glyph: 'R' }, { key: 'verification', href: '#/verification', glyph: 'V' }, { key: 'nc', href: '#/nc', glyph: 'NC', badge: 3 }, { key: 'documents', href: '#/documents', glyph: 'D' },
+      ...(['admin', 'auditor'].includes(s.role) ? [{ key: 'audit', href: '#/audit', glyph: 'A' }] : []), ...(s.role === 'admin' ? [{ key: 'admin', href: '#/admin', glyph: '⚙' }] : []), { key: 'lab', href: '#/lab', glyph: 'L' },
+    ];
+    const navItems = navDefs.map(n => ({ label: t['nav_' + n.key], href: n.href, glyph: n.glyph, badge: n.badge && sidebarExpanded ? n.badge : null, testid: `nav-${n.key}`, current: n.current ? 'page' : undefined, onClick: () => this.setState({ drawerOpen: false }), style: { display: 'flex', alignItems: 'center', gap: 10, height: 32, padding: sidebarExpanded ? '0 8px' : 0, justifyContent: sidebarExpanded ? 'flex-start' : 'center', borderRadius: 4, textDecoration: 'none', fontSize: 12.5, fontWeight: n.current ? 500 : 400, color: n.current ? 'var(--text)' : 'var(--text-2)', background: n.current ? 'var(--accent-soft)' : 'transparent' } }));
+    const mobileTabs = [{ key: 'programs', href: '#/programs', glyph: 'P', current: true }, { key: 'nc', href: '#/nc', glyph: 'NC' }, { key: 'mission', href: '#/mission', glyph: 'M' }, { key: 'more', href: '#/more', glyph: '…' }].map(n => ({ label: t['nav_' + n.key], href: n.href, glyph: n.glyph, testid: `mobile-tab-${n.key}`, current: n.current ? 'page' : undefined, style: { display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 3, textDecoration: 'none', color: n.current ? 'var(--accent)' : 'var(--text-3)', minHeight: 44 } }));
+    const f = s.form, e = s.errors;
+    const wizSteps = [t.step1, t.step2, t.step3].map((name, i) => { const n = i + 1, cur = n === s.wizStep, done = n < s.wizStep; return { n: done ? '✓' : n, name, testid: `programs-wizard-step-${n}`, current: cur ? 'step' : undefined, line: n < 3, dot: { width: 22, height: 22, borderRadius: '50%', display: 'grid', placeItems: 'center', fontSize: 11, fontWeight: 600, flex: 'none', background: cur || done ? 'var(--accent)' : 'var(--surface-2)', color: cur || done ? '#fff' : 'var(--text-3)', border: `1px solid ${cur || done ? 'var(--accent)' : 'var(--border-strong)'}` }, label: { fontSize: 12.5, fontWeight: cur ? 600 : 400, color: cur ? 'var(--text)' : 'var(--text-3)', whiteSpace: 'nowrap' } }; });
+    const setForm = (k, cast) => (ev) => { const v = cast ? cast(ev) : ev.target.value; this.setState(st => ({ form: { ...st.form, [k]: v }, errors: { ...st.errors, [k]: undefined } })); };
+    const toasts = s.toasts.map(x => ({ testid: `toast-${x.kind}`, title: x.title, body: x.body, action: x.action, onAction: () => { if (x.onAction) x.onAction(); this.closeToast(x.id); }, close: () => this.closeToast(x.id), style: { pointerEvents: 'auto', display: 'flex', gap: 10, alignItems: 'flex-start', padding: '10px 12px', borderRadius: 6, background: 'var(--surface)', border: '1px solid var(--border)', borderLeft: `3px solid var(--${x.kind === 'success' ? 'ok' : x.kind === 'error' ? 'danger' : 'accent'})`, boxShadow: 'var(--shadow-pop)', animation: 'toastIn .18s ease-out', fontSize: 13 }, dot: { width: 8, height: 8, marginTop: 5, borderRadius: '50%', flex: 'none', background: `var(--${x.kind === 'success' ? 'ok' : x.kind === 'error' ? 'danger' : 'accent'})` } }));
+    const notifications = [{ text: t.notif1, time: '09:42', tone: 'danger' }, { text: t.notif2, time: '08:15', tone: 'ok' }, { text: t.notif3, time: s.lang === 'es' ? 'ayer' : 'yesterday', tone: 'warn' }].map(n => ({ ...n, dot: { width: 8, height: 8, marginTop: 6, borderRadius: '50%', flex: 'none', background: `var(--${n.tone})` } }));
+    const userNames = { admin: 'Elena Castro', program_manager: 'Marta Ruiz', consultant: 'Diego Navarro', auditor: 'Rosa Ibáñez' };
+    const closeAll = { rowMenu: null, notifOpen: false, userOpen: false };
+    const prioLabel = { low: t.low, medium: t.medium, high: t.high };
+    return {
+      t, role: s.role, theme: s.theme, lang: s.lang, dataState: s.dataState, frame: s.frame, showTestIds: s.showTestIds, widthLabel: `${effWidth}px · ${isMobile ? 'móvil' : isTablet ? 'tablet' : 'desktop'}`,
+      setRole: (ev) => this.setState({ role: ev.target.value, selected: [], ...closeAll }), setDataState: (ev) => { this.setState({ dataState: ev.target.value, selected: [] }); if (ev.target.value !== 'loading') this.startLoad(); },
+      setFrame: (ev) => this.setState({ frame: ev.target.value, drawerOpen: false }), toggleTestIds: () => this.setState(st => ({ showTestIds: !st.showTestIds, annots: [] })),
+      frameStyle: { width: s.frame === 'auto' ? '100%' : Number(s.frame), maxWidth: '100%', margin: '0 auto', flex: 1, display: 'flex', flexDirection: 'column', borderLeft: s.frame === 'auto' ? 0 : '1px solid #1c2531', borderRight: s.frame === 'auto' ? 0 : '1px solid #1c2531' },
+      rootRef: this.rootRef, searchRef: this.searchRef, selectAllRef: this.selectAllRef, deleteBtnRef: this.deleteBtnRef,
+      isMobile, notMobile, showSidebar, sidebarExpanded, drawerOpen: s.drawerOpen, closeDrawer: () => this.setState({ drawerOpen: false }),
+      sidebarStyle: { width: sidebarW, flex: 'none', display: 'flex', flexDirection: 'column', background: 'var(--surface)', borderRight: '1px solid var(--border)', position: isMobile ? 'absolute' : 'sticky', top: 0, left: 0, bottom: 0, height: isMobile ? '100%' : 'calc(100vh - 37px)', zIndex: isMobile ? 31 : 'auto', transition: 'width .15s' },
+      collapseGlyph: { display: 'inline-block', transform: sidebarExpanded ? 'none' : 'rotate(180deg)', fontSize: 14 },
+      toggleSidebar: () => this.setState(st => ({ sidebarCollapsed: !st.sidebarCollapsed })), toggleDrawerOrSidebar: () => isMobile ? this.setState(st => ({ drawerOpen: !st.drawerOpen })) : this.setState(st => ({ sidebarCollapsed: !st.sidebarCollapsed })),
+      navItems, mobileTabs, mainStyle: { flex: 1, padding: isMobile ? 12 : isTablet ? 16 : '20px 24px 32px', display: 'flex', flexDirection: 'column', gap: isMobile ? 12 : 16, minWidth: 0 },
+      search: s.search, setSearch: (ev) => this.setState({ search: ev.target.value, page: 1 }), setLang: (ev) => this.setState({ lang: ev.target.value }),
+      isDark: s.theme === 'dark', isLight: s.theme === 'light', toggleTheme: () => this.setState(st => ({ theme: st.theme === 'dark' ? 'light' : 'dark' })),
+      notifOpen: s.notifOpen, toggleNotif: () => this.setState(st => ({ ...closeAll, notifOpen: !st.notifOpen })), closeNotif: () => this.setState({ notifOpen: false }), notifications,
+      userOpen: s.userOpen, toggleUser: () => this.setState(st => ({ ...closeAll, userOpen: !st.userOpen })), closeUser: () => this.setState({ userOpen: false }), userName: (this.session && this.session.role === s.role && this.session.user) || userNames[s.role], userInitials: initials((this.session && this.session.role === s.role && this.session.user) || userNames[s.role]),
+      subtitle: isLoading ? '…' : `${s.programs.length} ${t.programs.toLowerCase()} · ${rows.filter(r => r.status === 'active').length} ${t.st_active.toLowerCase()}`,
+      exportCsv: () => this.downloadCsv(rows), exportDisabled: isLoading || isError || total === 0, exportSelected: () => this.downloadCsv(s.programs.filter(p => s.selected.includes(p.code))),
+      openWizard: () => this.openWizard(), cannotCreate: !canCreate, canCreate, cannotEdit: !canEdit, cannotDelete: !canDelete, newTitle: canCreate ? `${t.newProgram} (N)` : t.roleNoCreate, deleteTitle: canDelete ? '' : t.roleNoDelete,
+      primaryBtn, secondaryBtn, ghostBtn, dangerBtn, smallBtn, smallDangerBtn, menuItem, menuItemDanger: { ...menuItem, color: 'var(--danger)' }, pageBtn, pageBtnLg: { ...pageBtn, height: 36, minWidth: 44 },
+      statusOptions: ['draft', 'active', 'on_hold', 'closed', 'cancelled'].map(v => ({ value: v, label: t['st_' + v] })), filterStatus: s.filterStatus, setFilterStatus: (ev) => this.setState({ filterStatus: ev.target.value, page: 1 }),
+      dateFrom: s.dateFrom, dateTo: s.dateTo, setDateFrom: (ev) => this.setState({ dateFrom: ev.target.value, page: 1 }), setDateTo: (ev) => this.setState({ dateTo: ev.target.value, page: 1 }),
+      ownerQuery: s.ownerQuery, ownerOpen: s.ownerOpen, ownerSelected: !!s.ownerSel, ownerNotSelected: !s.ownerSel, ownerOptions, ownerNoMatch: ownerOptions.length === 0, ownerActiveId: s.ownerOpen && ownerOptions[s.ownerActive] ? ownerOptions[s.ownerActive].id : undefined,
+      setOwnerQuery: (ev) => this.setState({ ownerQuery: ev.target.value, ownerSel: null, ownerOpen: true, ownerActive: 0, page: 1 }), openOwner: () => this.setState({ ownerOpen: true, ...closeAll }), blurOwner: () => this.setState(st => ({ ownerOpen: false, ownerQuery: st.ownerSel ? ownerName(st.ownerSel) : '' })), clearOwner: (ev) => { ev.preventDefault(); this.setState({ ownerSel: null, ownerQuery: '', page: 1 }); },
+      ownerKey: comboKey('ownerOptions', 'ownerActive', 'ownerOpen', ownerOptions, pickOwner),
+      hasFilters, clearFilters: () => this.setState({ search: '', filterStatus: '', dateFrom: '', dateTo: '', ownerQuery: '', ownerSel: null, page: 1 }),
+      hasSelection: s.selected.length > 0, selectionLabel: `${s.selected.length} ${t.selected}`, clearSelection: () => this.setState({ selected: [] }), bulkArchive: () => this.archivePrograms(s.selected), bulkDelete: () => this.setState({ deleteTarget: [...s.selected] }),
+      isError, retry: () => { this.setState({ dataState: 'normal' }); this.startLoad(); this.toast('info', t.reloaded); },
+      showTable: notMobile, isLoading, notNormal: isLoading || isError, skeletonRows: Array.from({ length: isMobile ? 4 : 6 }, (_, i) => ({ w: { display: 'block', width: `${55 + (i * 17) % 40}%`, height: 12, borderRadius: 3, background: 'linear-gradient(90deg,var(--surface-2) 25%,var(--border) 50%,var(--surface-2) 75%)', backgroundSize: '200% 100%', animation: 'shimmer 1.4s infinite' } })),
+      columns, pageRows, hasRows: slice.length > 0, isEmpty: !isLoading && !isError && total === 0, emptyHint: hasFilters ? t.emptyFiltered : t.emptyNone,
+      allSelected, toggleAll: () => this.setState(st => ({ selected: allSelected ? st.selected.filter(c => !this.pageIds.includes(c)) : Array.from(new Set([...st.selected, ...this.pageIds])) })),
+      tipOpen: s.tipOpen, showTip: () => this.setState({ tipOpen: true }), hideTip: () => this.setState({ tipOpen: false }),
+      rangeLabel: isLoading ? '…' : `${from}–${to} ${t.shown} ${total}`, pages, isFirstPage: page <= 1, isLastPage: page >= pageCount, prevPage: () => this.setState({ page: page - 1, selected: [] }), nextPage: () => this.setState({ page: page + 1, selected: [] }),
+      wizardOpen: s.wizardOpen, closeWizard: () => this.setState({ wizardOpen: false }), wizStepLabel: `${t.step} ${s.wizStep} ${t.of} 3`, wizSteps, wizStep1: s.wizStep === 1, wizStep2: s.wizStep === 2, wizStep3: s.wizStep === 3,
+      wizardStyle: { position: 'absolute', zIndex: 51, background: 'var(--surface)', border: '1px solid var(--border)', boxShadow: 'var(--shadow-pop)', display: 'flex', flexDirection: 'column', color: 'var(--text)', ...(isMobile ? { left: 0, right: 0, bottom: 0, top: 24, borderRadius: '10px 10px 0 0' } : { left: '50%', top: '50%', transform: 'translate(-50%,-50%)', width: 'min(560px, calc(100% - 32px))', maxHeight: 'calc(100% - 48px)', borderRadius: 6 }) },
+      serverError: s.serverError, nextCode: this.nextCode(), form: f, errors: e, errName: !!e.name, errOwner: !!e.owner, errStart: !!e.start, errEnd: !!e.end, errBudget: !!e.budget,
+      nameStyle: field(e.name), ownerStyle: field(e.owner), startStyle: monoField(e.start), endStyle: monoField(e.end), budgetStyle: monoField(e.budget),
+      setName: setForm('name'), setDescription: setForm('description'), setStatus: setForm('status'), setStart: setForm('start'), setEnd: setForm('end'), setBudget: setForm('budget'), setPriority: setForm('priority'), setClassified: setForm('classified', ev => ev.target.checked),
+      prioLow: f.priority === 'low', prioMed: f.priority === 'medium', prioHigh: f.priority === 'high',
+      wOwnerQuery: s.wOwnerQuery, wOwnerOpen: s.wOwnerOpen, wOwnerOptions, setWOwnerQuery: (ev) => this.setState(st => ({ wOwnerQuery: ev.target.value, wOwnerOpen: true, wOwnerActive: 0, form: { ...st.form, owner: '' } })), openWOwner: () => this.setState({ wOwnerOpen: true }), blurWOwner: () => this.setState(st => ({ wOwnerOpen: false, wOwnerQuery: st.form.owner ? ownerName(st.form.owner) : st.wOwnerQuery })), wOwnerKey: comboKey('wOwnerOptions', 'wOwnerActive', 'wOwnerOpen', wOwnerOptions, pickWOwner),
+      summaryDates: `${fmtDate(f.start)} → ${fmtDate(f.end)}`, summaryBudget: f.budget ? fmtMoney(Number(f.budget)) : '—', summaryPriority: prioLabel[f.priority], summaryClassified: f.classified ? t.yes : t.no,
+      toggleNotify: () => this.setState(st => ({ form: { ...st.form, notify: !st.form.notify } })), notifySwitch: { width: 36, height: 20, borderRadius: 999, border: 0, padding: 2, background: f.notify ? 'var(--accent)' : 'var(--border-strong)', cursor: 'pointer', display: 'flex', flex: 'none' }, notifyKnob: { width: 16, height: 16, borderRadius: '50%', background: '#fff', transform: f.notify ? 'translateX(16px)' : 'none', transition: 'transform .15s', display: 'block' },
+      submitting: s.submitting, wizNextLabel: s.wizStep === 3 ? t.create : t.next, wizSubmitTestid: s.wizStep === 3 ? 'programs-wizard-submit' : 'programs-wizard-next',
+      wizNext: (ev) => { ev.preventDefault(); const errs = this.validate(s.wizStep); if (Object.keys(errs).length) { this.setState({ errors: errs }); return; } if (s.wizStep < 3) this.setState({ wizStep: s.wizStep + 1, errors: {} }); else this.submitWizard(); },
+      wizBack: () => this.setState(st => ({ wizStep: Math.max(1, st.wizStep - 1), errors: {}, serverError: '' })),
+      deleteTarget: !!s.deleteTarget, deleteDesc: s.deleteTarget ? (s.deleteTarget.length === 1 ? `${s.deleteTarget[0]} ${t.deleteDescOne}` : `${s.deleteTarget.length} ${t.deleteDescMany}`) : '', cancelDelete: () => this.setState({ deleteTarget: null }), confirmDelete: () => this.removePrograms(s.deleteTarget || []),
+      toasts, showCookies: s.showCookies, cookieStyle: { position: 'absolute', left: 16, right: 16, bottom: isMobile ? 64 : 16, zIndex: 55, display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'center', padding: '12px 16px', borderRadius: 6, background: 'var(--text)', color: 'var(--bg)', fontSize: 12.5, boxShadow: 'var(--shadow-pop)', maxWidth: 720, margin: '0 auto' },
+      acceptCookies: () => { try { localStorage.setItem('sigpro_cookies', 'accepted'); } catch (x) {} this.setState({ showCookies: false }); }, rejectCookies: () => { try { localStorage.setItem('sigpro_cookies', 'rejected'); } catch (x) {} this.setState({ showCookies: false }); },
+      annots: s.annots.map(a => ({ id: a.id, box: { position: 'absolute', left: a.x, top: a.y, width: a.w, height: a.h, outline: '1px dashed #d946ef', outlineOffset: -1 } })),
+    };
+  }
+}
+</script>
+</body>
+</html>
