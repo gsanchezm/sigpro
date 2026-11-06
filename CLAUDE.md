@@ -1,53 +1,53 @@
-# CLAUDE.md
+# SIGPRO — laboratorio de pruebas para el curso Playwright + TypeScript
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+Aplicación ficticia de gestión de programas de ingeniería de sistemas (programas, requisitos, verificación, no conformidades, documentos). Su razón de ser es servir de blanco de automatización en un curso, así que la **testabilidad es un requisito funcional**, no un extra.
 
-## What this repo is
+## Fuentes de verdad (léelas antes de tocar código)
 
-A **design handoff bundle**, not an application. `design_handoff_sigpro/` holds high-fidelity HTML prototypes of SIGPRO (an engineering-program management system: programs, requirements, verification, non-conformities). The real job is to **recreate these screens in a production stack**; the prototypes are references, not code to ship. The README says to pick React + TypeScript + CSS variables/Tailwind if no stack exists, and none does yet.
+1. `docs/SIGPRO-plan.md` — concepto, arquitectura, modelo de datos, backlog por módulos, catálogo de componentes UI, cobertura de locators, testabilidad, Render, plan por fases.
+2. `docs/design-handoff/README.md` — design system (tokens, tipografía, componentes) y especificación pixel-perfect de Acceso y Programas. Los `.dc.html` son prototipos de referencia: se sirven por HTTP (`npx serve docs/design-handoff`), no se copian.
+3. `packages/shared/src/testids.ts` — ids de prueba ya acordados. Se amplía, nunca se renombra.
 
-There is no build, lint, test, package manager, or git history. `SIGPRO Design System Entregables.zip` is a byte-identical archive of `design_handoff_sigpro/`, so edit the folder and treat the zip as a stale copy.
+Si el plan y el handoff se contradicen, gana el handoff en lo visual y el plan en lo funcional. Anota la decisión en `docs/DECISIONS.md`.
 
-Everything user-facing (README, UI strings, comments) is **Spanish**; ES is the default language and EN is the secondary one.
+## Stack
 
-## Viewing the prototypes
+- Monorepo `pnpm` + Turborepo. Node 20. Scripts por app: `dev`, `build`, `lint`, `typecheck`, `test`, `seed`.
+- `apps/api`: NestJS + Prisma + PostgreSQL. OpenAPI en `/api/docs`. JWT + roles. Socket.IO. Endpoints `/api/admin/reset`, `/api/admin/chaos`.
+- `apps/web`: React 18 + Vite + TypeScript + Tailwind + React Router. PWA. Tokens del design system como CSS variables (`[data-theme="light|dark"]`).
+- `apps/mobile`: Expo + Expo Router (fase 4; no empezar antes).
+- `packages/shared`: tipos, esquemas Zod, cliente HTTP, `testids.ts`, i18n ES/EN.
+- Local: `docker compose up -d db` → API `:3000`, web `:5173`, Expo `:8081`.
 
-Open a `.dc.html` file directly in a browser, for example `Invoke-Item "design_handoff_sigpro\SIGPRO Acceso.dc.html"` in PowerShell. It needs network access: `support.js` loads React 18.3.1 and ReactDOM from unpkg at runtime, and the pages load IBM Plex from Google Fonts. Keep `support.js` next to the HTML files. (The runtime can also pull in Babel for `x-import`ed JSX, but none of these prototypes use that.)
+## Convenciones de código
 
-- `SIGPRO Acceso.dc.html`: login, MFA, recovery, registration, verification.
-- `SIGPRO Programas.dc.html`: app shell, programs table, filters, 3-step wizard, dialogs.
-- `SIGPRO Design System.dc.html`: tokens and components, sections 01–08 (color, type, spacing, badges, controls, navigation, feedback, `data-testid` convention).
+- Código en inglés, comentarios en español.
+- Estilo funcional: mapas de despacho (`ReadonlyMap`, objetos `as const`) y guard clauses; **nada de `switch/case`** ni cadenas largas de `if/else`.
+- Inmutabilidad por defecto; funciones puras en dominio; efectos en los bordes (controladores, hooks).
+- Tipos estrictos (`strict: true`, sin `any`). Validación de entrada con Zod compartida entre API y web.
+- Commits en inglés, estilo Conventional Commits (`feat(web): programs table with sorting`).
 
-The pages link to each other with relative URLs and hash params: login success goes to `SIGPRO Programas.dc.html#/programas?role=<role>`, and logout goes to `SIGPRO Acceso.dc.html#/login?logout=1`, which clears the session and shows the "signed out" notice.
+## Reglas de testabilidad (bloqueantes en code review)
 
-## `.dc.html` file anatomy
+- Todo elemento interactivo: nombre accesible (`<label for>` o `aria-label`) **y** `data-testid` tomado de `testids.ts`. Patrón `<pantalla>-<elemento>`; filas y nodos `<entidad>-row-<código>`.
+- Todo `<img>` con `alt` (avatares incluidos, como SVG data-URI). Botones deshabilitados con `title` explicativo. Barras de progreso con `title` y `aria-valuenow`.
+- Badges con `data-state` / `data-severity`. Placeholders distintos del label.
+- Estados de carga (`aria-busy`), vacío y error en toda lista. Toasts con `data-testid="toast-{ok|danger|info|warn}"` y autocierre a 3 s.
+- Seed determinista: códigos fijos `PRG-001…`, `REQ-001…`, `TC-001…`, `NC-001…`. Usuarios demo del handoff (`admin@sigpro.test` / `Admin1234!`, MFA `123456`, etc.) dentro de cada tenant.
+- Multi-tenant: toda tabla lleva `tenant_id`; la API filtra por el tenant del JWT.
+- La tabla "Cobertura de locators de Playwright" del plan es una checklist: cada fila debe tener su elemento implementado.
 
-Each prototype is a single file in three parts, rendered by the runtime in `support.js`:
+## Definición de hecho por módulo
 
-1. `<x-dc>`: the template. `<helmet>` holds head content (font links and a `<style>` with the token CSS variables). Then comes markup with `{{ expr }}` bindings and `<sc-if value="{{…}}">` / `<sc-for list="{{…}}" as="item">` blocks. `hint-placeholder-*` attributes are placeholder hints for the runtime (`support.js`) and mean nothing in a port.
-2. `<script type="text/x-dc" data-dc-script data-props="{json}">`: plain JS, not a module, containing `class Component extends DCLogic`. It is a React class component with `this.state`, `setState`, refs and lifecycle methods. `data-props` (absent in the Design System file) declares the prototype knobs the constructor reads from `props` to seed `this.state`: Acceso has `view`, `theme`, `showTestUsers` and `showTestIds`; Programas has `role`, `dataState`, `theme` and `showTestIds`. The proto bar changes them at runtime.
-3. Constants above the class: mock data (`USERS`, `OWNERS`, `seedPrograms()`), the i18n dictionary `T = { es, en }`, and shared inline-style strings (`INPUT`, `BTN`).
+1. `pnpm lint && pnpm typecheck && pnpm test` en verde.
+2. Un spec de humo en `e2e/` (Playwright) que recorre el módulo usando `getByRole`/`getByLabel` primero y `getByTestId` como respaldo.
+3. Captura de pantalla en claro y oscuro a 1440 y 390 px guardada en `docs/screens/`.
+4. `docs/CHANGELOG.md` actualizado con una línea.
+5. Commit.
 
-Styling is mostly **inline `style` strings plus CSS variables**; there is no shared stylesheet.
+## Cómo trabajar
 
-**`support.js` is generated** (header: "do not edit", built from `dc-runtime/src/*.ts`, which is not in this repo). Never hand-edit it. Do not port it either.
-
-## Things that are easy to get wrong
-
-- **Tokens are duplicated** in the `<helmet><style>` of each of the three files, as `[data-theme="light"]` and `[data-theme="dark"]` blocks. There is no single source, so a token change must be made in all three files, and `README.md` has to match. Acceso's blocks omit `--purple*` and `--scrim`; the other two include them.
-- **Prototype chrome must not be implemented.** The dark top bar (`data-testid="proto-bar"`, with `proto-role`, `proto-view`, `proto-viewport`, `proto-data-state`, `proto-annotations`, `proto-test-users`) and the dashed magenta `data-testid` annotation overlay (`computeAnnots`) exist only for the prototype. Real UI content is everything inside the themed container.
-- **`data-testid` values are a contract.** Playwright depends on them, and the pattern is `pantalla-elemento` (`login-submit`, `programs-filter-status`, `toast-close`). Keep them exactly. The README lists them per screen, and Design System section 08 documents the convention.
-- **Mock-only behavior to replace with real APIs.** Auth is checked against `USERS` in Acceso. The session lives in `localStorage['sigpro.session']` and cookie consent in `localStorage['sigpro_cookies']`. Programas reads the session on mount to set role and name. Latency is simulated with timers (700 ms login, 800 ms register, 1.4 s redirect overlay). The "server" errors (401, 403, 409, 422, 423, 503, 501) are faked client-side. Endpoints implied by the prototypes: `GET/POST /api/programs`, `DELETE /api/programs/:code`, `POST /api/auth/{login,mfa,register,forgot}`, `GET /api/auth/sso`.
-- **Test accounts** (fake, from `USERS` in Acceso) are useful for driving the flows, for example `admin@sigpro.test` / `Admin1234!`, which requires MFA code `123456`. The README has the full table with the locked and pending cases.
-- Breakpoints are measured on the **container width** in the prototypes. In production use media queries: ≥1024 full, 640–1023 sidebar collapsed, <640 mobile (drawer, card list instead of table, no breadcrumbs or brand panel).
-
-## Requirements carried from the README (full spec in `design_handoff_sigpro/README.md`)
-
-`README.md` is the spec: exact tokens, per-screen layout, the `data-testid` list, interaction flows and state shapes. Read the relevant section before changing or recreating a screen. The cross-cutting rules are:
-
-- **Fidelity:** high. Colors, type (IBM Plex Sans UI / Plex Mono for codes, dates, amounts, shortcuts, HTTP traces; 13px/1.45 base), spacing, states and copy are final.
-- **Theming:** `[data-theme="light|dark"]` on the root container. The Acceso brand panel is always dark.
-- **Roles (Programas):** `admin` can do everything. `program_manager` can create, edit and archive, but not delete. `consultant` has read-only access plus export. `auditor` has read-only access. Disallowed actions render **`disabled` with an explanatory `title`**, never hidden.
-- **Accessibility:** forms are `noValidate` with custom validation (`aria-invalid` plus an `aria-describedby` message), the owner filter is a full ARIA 1.2 combobox, contrast is at least 4.5:1, and everything is keyboard-operable with a universal focus ring (`outline: 2px solid var(--accent); outline-offset: 2px`). The README's "Accesibilidad / Testing" section lists the rest. Global shortcuts: `N` new program, `/` search, `Esc` closes everything or returns to login.
-- **i18n:** every string must exist in both ES and EN. Extract the `T` dictionaries into the project's i18n resources.
-- **Assets:** no images. Icons are inline SVG with a 1.5px stroke. Self-host the fonts in production instead of using Google Fonts.
+- No preguntes: decide, anótalo en `docs/DECISIONS.md` y sigue. Solo detente ante algo irreversible (borrar datos, cambiar un `data-testid` existente, cambiar el stack).
+- Avanza por fases en el orden del plan; no empieces una fase sin cerrar la anterior.
+- Si algo no compila o un test falla, arréglalo antes de seguir; nunca comentes un test para que pase.
+- Mantén `docs/STATUS.md` con qué está hecho, qué sigue y qué quedó pendiente, para que cualquier sesión nueva pueda continuar.
