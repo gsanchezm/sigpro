@@ -1,0 +1,22 @@
+{
+  "name": "@sigpro/e2e",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "e2e": "playwright test --project=chromium",
+    "screens": "playwright test --project=screens",
+    "compare": "playwright test --project=compare",
+    "install:browsers": "playwright install chromium",
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.65.0",
+    "@types/node": "20.19.43",
+    "typescript": "5.9.3",
+    "@types/pngjs": "6.0.5",
+    "pixelmatch": "8.0.0",
+    "pngjs": "7.0.0"
+  }
+}

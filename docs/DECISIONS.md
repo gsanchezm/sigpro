@@ -45,3 +45,14 @@ Una línea de decisión + una de justificación. Si el plan y el handoff se cont
 - **Archivar = estado `closed`; duplicar = copia en `draft` sin hitos.** *Comportamiento del prototipo.*
 - **Registro:** crea un usuario `pendingApproval` en el tenant de la cabecera (`demo` por defecto). El reset nocturno lo elimina.
 - **`/api/docs-json`** expone el OpenAPI; `/api/docs` admite basic auth con `DOCS_BASIC_AUTH`.
+
+## Web (apps/web)
+
+- **Rutas de Acceso:** `/login`, `/register`, `/forgot` son URL propias; MFA y verificación son subvistas de estado (dependen del flujo). *Los alumnos pueden navegar directo a registro; el resto no tiene sentido sin el paso previo.*
+- **Sesión:** access token en memoria; refresh en `localStorage` solo con "Mantener la sesión", si no en `sessionStorage`; al arrancar se recupera con `/auth/refresh`. *Permite enseñar `storageState`.*
+- **Spinner mínimo de 400 ms** en login/MFA/registro/recuperar. *Con la API local la respuesta es casi instantánea y el estado `aria-busy`/spinner del handoff no llegaría a verse.*
+- **Overlay de redirección de 1,4 s** (como el handoff) antes de entrar en Programas; la sesión se confirma al terminar. *Los specs que necesiten rapidez inician sesión por API y reutilizan `storageState`.*
+- **Tailwind 4 + componentes CSS:** tokens como CSS variables bajo `[data-theme]` en `<html>`, mapeados con `@theme inline`; los primitivos (`.btn`, `.input`, `.badge`, `.card`…) viven en `@layer components`. No se usan `text-xs/sm/…` (fijan `line-height`); se usan tamaños arbitrarios `text-[12px]`. *Con el line-height heredado (1,45) el diseño coincide al píxel; con los presets, no.*
+- **Logo y avatares:** `<img alt>` con SVG data-URI; la "S" del logotipo es un trazo propio (el SVG-imagen no carga fuentes web) escalado al 69 % para igualar la proporción del prototipo; los avatares usan colores por tema. *El `<img>` de avatar no puede leer variables CSS.*
+- **Panel de marca:** muestra entorno y versión reales de `GET /api/config` (`dev · v0.1.0`) en lugar del `staging · eu-west-1` del mock.
+- **Comparación con el handoff:** `e2e/tests/compare.spec.ts` sirve `docs/design-handoff` por HTTP y mide el % de píxeles distintos (`pnpm --filter @sigpro/e2e compare`); imágenes en `e2e/.compare/` (ignorado por git).

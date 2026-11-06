@@ -10,6 +10,15 @@ export const commonEs = {
   tenant: 'Tenant',
   chaosActive: 'Modo caos activo',
   csvFilename: 'programas.csv',
+  processing: 'Procesando…',
+  mfaIncomplete: 'Introduce los 6 dígitos del código',
+  brandTag: 'SISTEMA INTEGRAL DE GESTIÓN DE PROGRAMAS',
+  brandClaim: 'Programas, requisitos, verificación y no conformidades en un único panel.',
+  brandEnv: 'entorno',
+  brandVersion: 'versión',
+  brandClassification: 'clasificación',
+  brandClassificationValue: 'USO OFICIAL',
+  brandLegal: 'Acceso restringido a personal autorizado. Toda actividad queda registrada en el registro de auditoría.',
 };
 
 export const commonEn: typeof commonEs = {
@@ -22,4 +31,13 @@ export const commonEn: typeof commonEs = {
   tenant: 'Tenant',
   chaosActive: 'Chaos mode on',
   csvFilename: 'programs.csv',
+  processing: 'Processing…',
+  mfaIncomplete: 'Enter the 6 digits of the code',
+  brandTag: 'INTEGRATED PROGRAM MANAGEMENT SYSTEM',
+  brandClaim: 'Programs, requirements, verification and nonconformities in a single panel.',
+  brandEnv: 'environment',
+  brandVersion: 'version',
+  brandClassification: 'classification',
+  brandClassificationValue: 'OFFICIAL USE',
+  brandLegal: 'Access restricted to authorized personnel. All activity is recorded in the audit log.',
 };

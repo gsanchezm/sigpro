@@ -14,3 +14,4 @@ Thumbs.db
 .claude/settings.local.json
 .vite/
 .superpowers/
+e2e/.compare/

@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="es" data-theme="light">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#0d1117" />
+    <link rel="icon" type="image/svg+xml" href="/icon.svg" />
+    <title>SIGPRO</title>
+    <script>
+      // Aplica tema e idioma guardados antes de pintar para evitar el parpadeo
+      try {
+        var theme = localStorage.getItem('sigpro.theme');
+        var lang = localStorage.getItem('sigpro.lang');
+        if (theme === 'dark' || theme === 'light') document.documentElement.setAttribute('data-theme', theme);
+        if (lang === 'es' || lang === 'en') document.documentElement.lang = lang;
+      } catch (e) {}
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
