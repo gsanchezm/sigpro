@@ -84,8 +84,15 @@ export const createProgramSchema = z
   .superRefine(endAfterStart);
 export type CreateProgramInput = z.infer<typeof createProgramSchema>;
 
-/** Editar programa: mismos campos que el alta, sin el aviso por correo; el código no cambia. */
-export const updateProgramSchema = z.object({ ...step1Shape, ...step2Shape }).superRefine(endAfterStart);
+/**
+ * Editar programa (PATCH parcial): cualquier campo del alta salvo el aviso por correo. Los valores por defecto no se
+ * aplican (un campo ausente no se toca); si llegan las dos fechas se comprueba que el fin sea posterior al inicio.
+ */
+export const updateProgramSchema = z
+  .object({ ...step1Shape, ...step2Shape })
+  .partial()
+  .superRefine((value, ctx) => endAfterStart({ startDate: value.startDate ?? '', endDate: value.endDate ?? '' }, ctx))
+  .refine((value) => Object.values(value).some((field) => field !== undefined), { message: 'nothingToUpdate' });
 export type UpdateProgramInput = z.infer<typeof updateProgramSchema>;
 
 // --- Requisitos (mensajes = claves del espacio `requisitos`) -------------------

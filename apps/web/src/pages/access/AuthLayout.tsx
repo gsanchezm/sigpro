@@ -1,5 +1,6 @@
 import { ACCESO_TESTIDS, DETALLE_TESTIDS, type Lang, LANGS } from '@sigpro/shared';
 import { useEffect, useState, type ReactNode } from 'react';
+import { Link } from 'react-router-dom';
 import { useAuth } from '../../state/auth';
 import { isSupportedLang, useI18n } from '../../state/i18n';
 import { useTheme } from '../../state/theme';
@@ -86,15 +87,15 @@ export const AuthLayout = ({ children, overlay }: { children: ReactNode; overlay
 
         <footer className="flex flex-wrap justify-center gap-x-4 gap-y-1.5 border-t border-border px-4 py-3 text-[11.5px] text-fg-3">
           <span className="font-mono">© 2026 SIGPRO</span>
-          <a href="#/legal/privacidad" data-testid={DETALLE_TESTIDS.AUTH_FOOTER_PRIVACY} className="!text-fg-3">
+          <Link to="/legal/privacy" data-testid={DETALLE_TESTIDS.AUTH_FOOTER_PRIVACY} className="!text-fg-3">
             {t('acceso', 'privacy')}
-          </a>
-          <a href="#/legal/condiciones" data-testid={DETALLE_TESTIDS.AUTH_FOOTER_TERMS} className="!text-fg-3">
+          </Link>
+          <Link to="/legal/terms" data-testid={DETALLE_TESTIDS.AUTH_FOOTER_TERMS} className="!text-fg-3">
             {t('acceso', 'termsFooter')}
-          </a>
-          <a href="#/ayuda" data-testid={DETALLE_TESTIDS.AUTH_FOOTER_HELP} className="!text-fg-3">
+          </Link>
+          <Link to="/help" data-testid={DETALLE_TESTIDS.AUTH_FOOTER_HELP} className="!text-fg-3">
             {t('acceso', 'help')}
-          </a>
+          </Link>
         </footer>
       </div>
       {overlay}

@@ -15,7 +15,12 @@ import { useGlobalSearch } from './useGlobalSearch';
 type ProgramasKey = MessageKey<'programas'>;
 
 /** Id de prueba de cada miga con enlace: Inicio · Programas · programa. */
-const crumbTestId = (to: string): string => (to === '/' ? DETALLE_TESTIDS.LAYOUT_BREADCRUMB_HOME : to === '/programs' ? DETALLE_TESTIDS.LAYOUT_BREADCRUMB_PROGRAMS : DETALLE_TESTIDS.LAYOUT_BREADCRUMB_PROGRAM);
+const crumbTestId = (to: string): string => {
+  if (to === '/') return DETALLE_TESTIDS.LAYOUT_BREADCRUMB_HOME;
+  if (to === '/programs') return DETALLE_TESTIDS.LAYOUT_BREADCRUMB_PROGRAMS;
+  // /programs/PRG-001 → miga del programa; /verification, /documents… → miga de sección
+  return to.startsWith('/programs/') ? DETALLE_TESTIDS.LAYOUT_BREADCRUMB_PROGRAM : DETALLE_TESTIDS.LAYOUT_BREADCRUMB_SECTION;
+};
 const navLabelKey = (item: NavItem): ProgramasKey => `nav_${item.key}`;
 
 const NavGlyph = ({ glyph, size }: { glyph: string; size: number }) => (
@@ -59,6 +64,7 @@ export const AppShell = ({ children }: { children?: ReactNode } = {}) => {
     home: t('programas', 'home'),
     programs: t('programas', 'programs'),
     requirements: t('programas', 'nav_requirements'),
+    edit: t('programas', 'edit'),
     other: (key) => {
       const item = nav.find((candidate) => candidate.key === key);
       return item ? t('programas', navLabelKey(item)) : key;

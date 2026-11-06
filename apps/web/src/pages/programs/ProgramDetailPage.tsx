@@ -1,4 +1,4 @@
-import { ApiError, DETALLE_DYNAMIC_TESTIDS, DETALLE_TESTIDS, formatDate, formatMoney, type ProgramDto } from '@sigpro/shared';
+import { ApiError, DETALLE_DYNAMIC_TESTIDS, DETALLE_TESTIDS, EDITAR_PROGRAMA_TESTIDS, can, formatDate, formatMoney, type ProgramDto } from '@sigpro/shared';
 import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { formatTrace } from '../../lib/errors';
@@ -14,10 +14,11 @@ const TABS: readonly TabKey[] = ['summary', 'milestones', 'requirements'];
 export const ProgramDetailPage = () => {
   const { code = '' } = useParams();
   const { t, lang } = useI18n();
-  const { api } = useAuth();
+  const { api, user } = useAuth();
   const [program, setProgram] = useState<ProgramDto | null>(null);
   const [failure, setFailure] = useState<unknown>(null);
   const [tab, setTab] = useState<TabKey>('summary');
+  const canEdit = user ? can(user.role, 'program.edit') : false;
 
   useEffect(() => {
     let cancelled = false;
@@ -75,6 +76,21 @@ export const ProgramDetailPage = () => {
         <div className="flex flex-wrap items-center gap-2.5">
           <span className="font-mono text-[13px] font-medium text-fg-2">{program.code}</span>
           <StatusBadge status={program.status} testId={DETALLE_TESTIDS.PROGRAM_DETAIL_STATE_BADGE} />
+          {canEdit ? (
+            <Link to={`/programs/${program.code}/edit`} data-testid={EDITAR_PROGRAMA_TESTIDS.PROGRAM_DETAIL_EDIT} className="btn btn-secondary ml-auto no-underline !h-8 !px-3">
+              {t('programas', 'editButton')}
+            </Link>
+          ) : (
+            <button
+              type="button"
+              disabled
+              data-testid={EDITAR_PROGRAMA_TESTIDS.PROGRAM_DETAIL_EDIT}
+              title={t('programas', 'editButtonDisabled')}
+              className="btn btn-secondary ml-auto !h-8 !px-3"
+            >
+              {t('programas', 'editButton')}
+            </button>
+          )}
         </div>
         <h1 className="m-0 text-[20px] font-semibold tracking-[-.01em]">{program.name}</h1>
         {program.description ? <p className="m-0 text-fg-2">{program.description}</p> : null}

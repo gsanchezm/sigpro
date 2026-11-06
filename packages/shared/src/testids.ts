@@ -190,6 +190,7 @@ export const DETALLE_TESTIDS = {
   LAYOUT_BREADCRUMB_HOME: 'layout-breadcrumb-home',
   LAYOUT_BREADCRUMB_PROGRAM: 'layout-breadcrumb-program',
   LAYOUT_BREADCRUMB_PROGRAMS: 'layout-breadcrumb-programs',
+  LAYOUT_BREADCRUMB_SECTION: 'layout-breadcrumb-section',
   LAYOUT_SKIP_LINK: 'layout-skip-link',
   REGISTER_PRIVACY_LINK: 'register-privacy-link',
   PROGRAMS_WIZARD_NEXT: 'programs-wizard-next',

@@ -1,6 +1,6 @@
-import { Body, Controller, Delete, Get, Header, HttpCode, Param, Post, Query } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Header, HttpCode, Param, Patch, Post, Query } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
-import { CSV_FILENAME, createProgramSchema, type CreateProgramInput } from '@sigpro/shared';
+import { CSV_FILENAME, createProgramSchema, updateProgramSchema, type CreateProgramInput, type UpdateProgramInput } from '@sigpro/shared';
 import { CurrentUser, RequirePermission, type AuthUser } from '../common/auth.types';
 import { ZodApiBody, ZodPipe } from '../common/zod.pipe';
 import { parseListQuery } from './program-query';
@@ -51,6 +51,14 @@ export class ProgramsController {
   @ZodApiBody(createProgramSchema)
   create(@CurrentUser() user: AuthUser, @Body(new ZodPipe(createProgramSchema)) body: CreateProgramInput) {
     return this.programs.create(user, body);
+  }
+
+  @Patch(':code')
+  @RequirePermission('program.edit')
+  @ApiOperation({ summary: 'Edita un programa (PATCH parcial: solo se modifican los campos enviados). 422 si el nombre ya existe, contiene «duplicado» o las fechas son incoherentes.' })
+  @ZodApiBody(updateProgramSchema)
+  update(@CurrentUser() user: AuthUser, @Param('code') code: string, @Body(new ZodPipe(updateProgramSchema)) body: UpdateProgramInput) {
+    return this.programs.update(user, code, body);
   }
 
   @Post(':code/archive')

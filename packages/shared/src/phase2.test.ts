@@ -141,3 +141,17 @@ describe('cliente HTTP', () => {
     expect((fetchImpl.mock.calls[0] as unknown as [string])[0]).toBe('/api/verification/report?program=PRG-001');
   });
 });
+
+describe('updateProgramSchema (PATCH parcial)', () => {
+  it('no inyecta valores por defecto: un campo ausente sigue ausente', () => {
+    const parsed = updateProgramSchema.parse({ name: 'Nombre nuevo' });
+    expect(parsed).toEqual({ name: 'Nombre nuevo' });
+  });
+
+  it('un cuerpo vacío es inválido y las fechas incoherentes se detectan si llegan las dos', () => {
+    const empty = updateProgramSchema.safeParse({});
+    expect(empty.success ? [] : empty.error.issues.map((i) => i.message)).toEqual(['nothingToUpdate']);
+    expect(updateProgramSchema.safeParse({ startDate: '2026-05-01' }).success).toBe(true);
+    expect(updateProgramSchema.safeParse({ startDate: '2026-05-01', endDate: '2026-04-01' }).success).toBe(false);
+  });
+});

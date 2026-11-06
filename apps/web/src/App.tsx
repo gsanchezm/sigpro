@@ -4,8 +4,10 @@ import { AppShell } from './layout/AppShell';
 import { ComingSoon } from './pages/ComingSoon';
 import { AccessPage } from './pages/access/AccessPage';
 import { LabPage } from './pages/lab/LabPage';
+import { LegalPage } from './pages/legal/LegalPage';
 import { PublicLab } from './pages/lab/PublicLab';
 import { ProgramDetailPage } from './pages/programs/ProgramDetailPage';
+import { ProgramEditPage } from './pages/programs/ProgramEditPage';
 import { ProgramsPage } from './pages/programs/ProgramsPage';
 import { AuthProvider, useAuth } from './state/auth';
 import { I18nProvider, useI18n } from './state/i18n';
@@ -89,10 +91,14 @@ export const App = () => (
                 }
               />
               <Route path="/lab" element={<LabRoute />} />
+              <Route path="/legal/terms" element={<LegalPage kind="terms" />} />
+              <Route path="/legal/privacy" element={<LegalPage kind="privacy" />} />
+              <Route path="/help" element={<LegalPage kind="help" />} />
               <Route element={<RequireAuth />}>
                 <Route element={<AppShell />}>
                   <Route path="/programs" element={<ProgramsPage />} />
                   <Route path="/programs/:code" element={<ProgramDetailPage />} />
+                  <Route path="/programs/:code/edit" element={<ProgramEditPage />} />
                   <Route path="/programs/:code/requirements" element={<Soon label="nav_requirements" />} />
                   <Route path="/mission" element={<Soon label="nav_mission" />} />
                   <Route path="/verification" element={<Soon label="nav_verification" />} />

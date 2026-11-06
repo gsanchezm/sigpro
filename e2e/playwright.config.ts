@@ -3,6 +3,8 @@ import { defineConfig, devices } from '@playwright/test';
 const CI = Boolean(process.env.CI);
 const WEB_URL = process.env.E2E_WEB_URL ?? 'http://localhost:5173';
 const API_URL = process.env.E2E_API_URL ?? 'http://localhost:3000/api';
+// Segunda API con basic auth en /api/docs (support/start-docs-api.mjs); el spec api-docs la usa
+const DOCS_URL = process.env.E2E_DOCS_URL ?? 'http://localhost:3100/api';
 
 export default defineConfig({
   testDir: './tests',
@@ -33,6 +35,13 @@ export default defineConfig({
     { name: 'compare', testMatch: '**/compare.spec.ts', use: { ...devices['Desktop Chrome'] } },
   ],
   webServer: [
+    {
+      command: 'node support/start-docs-api.mjs',
+      url: `${DOCS_URL}/health`,
+      reuseExistingServer: !CI,
+      timeout: 180_000,
+      stdout: 'ignore',
+    },
     {
       // En local se recompila para no probar un dist obsoleto; en CI el build ya se hizo en un paso previo
       command: CI ? 'pnpm --filter api start' : 'pnpm --filter api build && pnpm --filter api start',

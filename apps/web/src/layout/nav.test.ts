@@ -23,7 +23,7 @@ describe('isNavCurrent', () => {
 });
 
 describe('breadcrumbsFor', () => {
-  const labels = { home: 'Inicio', programs: 'Programas', requirements: 'Requisitos', other: (key: string) => key.toUpperCase() };
+  const labels = { home: 'Inicio', programs: 'Programas', requirements: 'Requisitos', edit: 'Editar', other: (key: string) => key.toUpperCase() };
 
   it('lista de programas: Inicio / Programas', () => {
     expect(breadcrumbsFor('/programs', labels)).toEqual([{ label: 'Inicio', to: '/' }, { label: 'Programas' }]);
@@ -44,5 +44,23 @@ describe('breadcrumbsFor', () => {
 
   it('otras secciones usan su propia etiqueta', () => {
     expect(breadcrumbsFor('/lab', labels)).toEqual([{ label: 'Inicio', to: '/' }, { label: 'LAB' }]);
+  });
+});
+
+describe('breadcrumbsFor (fase 2)', () => {
+  const labels = { home: 'Inicio', programs: 'Programas', requirements: 'Requisitos', edit: 'Editar', other: (key: string) => key.toUpperCase() };
+
+  it('edición de un programa', () => {
+    expect(breadcrumbsFor('/programs/PRG-001/edit', labels)).toEqual([
+      { label: 'Inicio', to: '/' },
+      { label: 'Programas', to: '/programs' },
+      { label: 'PRG-001', to: '/programs/PRG-001' },
+      { label: 'Editar' },
+    ]);
+  });
+
+  it('el detalle de otra sección enlaza con su lista', () => {
+    expect(breadcrumbsFor('/verification/TC-001', labels)).toEqual([{ label: 'Inicio', to: '/' }, { label: 'VERIFICATION', to: '/verification' }, { label: 'TC-001' }]);
+    expect(breadcrumbsFor('/documents/DOC-002', labels)).toEqual([{ label: 'Inicio', to: '/' }, { label: 'DOCUMENTS', to: '/documents' }, { label: 'DOC-002' }]);
   });
 });

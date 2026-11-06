@@ -27,6 +27,7 @@ const programasExtraEs = {
   editButton: 'Editar programa',
   editButtonDisabled: 'Tu rol no permite modificar programas',
   codeReadonly: 'El código no se puede cambiar',
+  noChanges: 'No hay cambios que guardar',
 };
 const programasExtraEn: typeof programasExtraEs = {
   roleNoEdit: 'Your role cannot edit programs',
@@ -42,6 +43,7 @@ const programasExtraEn: typeof programasExtraEs = {
   editButton: 'Edit program',
   editButtonDisabled: 'Your role cannot edit programs',
   codeReadonly: 'The code cannot be changed',
+  noChanges: 'There are no changes to save',
 };
 
 export const messages = {

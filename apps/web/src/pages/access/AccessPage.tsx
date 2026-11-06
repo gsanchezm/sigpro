@@ -575,10 +575,10 @@ export const AccessPage = ({ routeView }: { routeView: RouteView }) => {
               />
               <span>
                 {t('acceso', 'terms1')}{' '}
-                <a href="#/legal/condiciones" data-testid={ACCESO_TESTIDS.REGISTER_TERMS_LINK}>
+                <a href="/legal/terms" target="_blank" rel="noopener" data-testid={ACCESO_TESTIDS.REGISTER_TERMS_LINK}>
                   {t('acceso', 'terms2')}
                 </a>{' '}
-                {t('acceso', 'terms3')} <a href="#/legal/privacidad" data-testid={DETALLE_TESTIDS.REGISTER_PRIVACY_LINK}>
+                {t('acceso', 'terms3')} <a href="/legal/privacy" target="_blank" rel="noopener" data-testid={DETALLE_TESTIDS.REGISTER_PRIVACY_LINK}>
                   {t('acceso', 'terms4')}
                 </a>.
               </span>

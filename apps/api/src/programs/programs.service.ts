@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import type { Prisma } from '@prisma/client';
-import { nextProgramCode, programsToCsv, type CreateProgramInput, type ProgramDto, type ProgramListQuery, type ProgramListResponse } from '@sigpro/shared';
+import { nextProgramCode, programsToCsv, type CreateProgramInput, type ProgramDto, type ProgramListQuery, type ProgramListResponse, type UpdateProgramInput } from '@sigpro/shared';
 import { AuditService } from '../audit/audit.service';
 import type { AuthUser } from '../common/auth.types';
 import { fail } from '../common/errors';
@@ -102,6 +102,51 @@ export class ProgramsService {
       return row;
     });
     return toProgramDto(created);
+  }
+
+  /**
+   * PATCH parcial: solo se tocan los campos recibidos. Mismas reglas de servidor que el alta (nombre repetido o con
+   * «duplicado» → 422), comparando con el resto de programas (no con el propio). Audita qué campos cambiaron.
+   */
+  async update(user: AuthUser, code: string, input: UpdateProgramInput): Promise<ProgramDto> {
+    const { tenantId } = user;
+    const current = await this.prisma.program.findUnique({ where: { tenantId_code: { tenantId, code } }, include: WITH_DETAIL });
+    if (!current) throw fail.notFound('program_not_found', 'program_not_found');
+
+    if (input.ownerId !== undefined) {
+      const owner = await this.prisma.user.findUnique({ where: { tenantId_id: { tenantId, id: input.ownerId } }, select: { id: true } });
+      if (!owner) throw fail.unprocessable('validation_failed', 'validation_failed', { ownerId: 'requiredOwner' });
+    }
+    if (input.name !== undefined && input.name !== current.name) {
+      const sameName = await this.prisma.program.findFirst({ where: { tenantId, name: { equals: input.name, mode: 'insensitive' }, NOT: { code } }, select: { code: true } });
+      if (sameName || input.name.toLowerCase().includes('duplicado')) throw fail.unprocessable('duplicate_name', 'duplicate_name', { name: 'dupName' });
+    }
+    // Con una sola fecha en el cuerpo, la otra sale del programa actual
+    const start = input.startDate ?? isoDate(current.startDate);
+    const end = input.endDate ?? isoDate(current.endDate);
+    if (end <= start) throw fail.unprocessable('validation_failed', 'validation_failed', { endDate: 'endAfterStart' });
+
+    const data: Prisma.ProgramUncheckedUpdateInput = {
+      ...(input.name === undefined ? {} : { name: input.name }),
+      ...(input.description === undefined ? {} : { description: input.description }),
+      ...(input.ownerId === undefined ? {} : { ownerId: input.ownerId }),
+      ...(input.status === undefined ? {} : { status: input.status }),
+      ...(input.priority === undefined ? {} : { priority: input.priority }),
+      ...(input.classified === undefined ? {} : { classified: input.classified }),
+      ...(input.budget === undefined ? {} : { budgetEur: Math.round(input.budget) }),
+      ...(input.startDate === undefined ? {} : { startDate: new Date(`${input.startDate}T00:00:00.000Z`) }),
+      ...(input.endDate === undefined ? {} : { endDate: new Date(`${input.endDate}T00:00:00.000Z`) }),
+    };
+    const before = toProgramDto(current);
+    const after = { ...before, ...input, budgetEur: input.budget === undefined ? before.budgetEur : Math.round(input.budget) };
+    const fields = (['name', 'description', 'ownerId', 'status', 'priority', 'classified', 'startDate', 'endDate', 'budgetEur'] as const).filter((field) => before[field] !== after[field]);
+
+    const row = await this.prisma.$transaction(async (tx) => {
+      const updated = await tx.program.update({ where: { tenantId_code: { tenantId, code } }, data, include: WITH_DETAIL });
+      await this.audit.record({ tenantId, actorId: user.id, action: 'program.updated', entity: 'program', entityId: code, diff: { fields: [...fields] } }, tx);
+      return updated;
+    });
+    return toProgramDto(row);
   }
 
   async remove(user: AuthUser, code: string): Promise<void> {

@@ -10,7 +10,7 @@ import {
   type ProgramSortColumn,
 } from '@sigpro/shared';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { downloadCsv } from '../../lib/download';
 import { formatTrace } from '../../lib/errors';
 import { useBreakpoint, useDelayedFlag } from '../../lib/hooks';
@@ -42,6 +42,7 @@ export const ProgramsPage = () => {
   const { user, api } = useAuth();
   const toast = useToast();
   const mobile = useBreakpoint() === 'mobile';
+  const navigate = useNavigate();
   const [params, setParams] = useSearchParams();
   const state = useMemo(() => parseListParams(params), [params]);
 
@@ -148,7 +149,7 @@ export const ProgramsPage = () => {
       reloadOwners();
     });
 
-  const edit = (program: ProgramDto) => toast.push('info', `${t('programas', 'edit')} ${program.code}`, `→ /programs/${program.code}/edit`);
+  const edit = (program: ProgramDto) => navigate(`/programs/${program.code}/edit`);
 
   const confirmDelete = async () => {
     if (!deleteCodes) return;

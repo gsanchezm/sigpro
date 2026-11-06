@@ -48,15 +48,24 @@ interface CrumbLabels {
   readonly home: string;
   readonly programs: string;
   readonly requirements: string;
+  readonly edit: string;
   readonly other: (key: string) => string;
 }
 
-/** Migas de pan por ruta: Inicio / Programas / PRG-001 / Requisitos. */
+/** Migas de pan por ruta: Inicio / Programas / PRG-001 / Requisitos · Inicio / Verificación / TC-001. */
 export const breadcrumbsFor = (pathname: string, labels: CrumbLabels): readonly Crumb[] => {
   const [section, code, sub] = pathname.split('/').filter(Boolean);
   const home: Crumb = { label: labels.home, to: '/' };
-  if (section !== 'programs') return [home, { label: labels.other(section ?? '') }];
+  if (section !== 'programs') {
+    const sectionLabel = labels.other(section ?? '');
+    return code ? [home, { label: sectionLabel, to: `/${section}` }, { label: code }] : [home, { label: sectionLabel }];
+  }
   if (!code) return [home, { label: labels.programs }];
-  if (sub === 'requirements') return [home, { label: labels.programs, to: '/programs' }, { label: code, to: `/programs/${code}` }, { label: labels.requirements }];
+  const subLabels: ReadonlyMap<string, string> = new Map([
+    ['requirements', labels.requirements],
+    ['edit', labels.edit],
+  ]);
+  const subLabel = sub ? subLabels.get(sub) : undefined;
+  if (subLabel) return [home, { label: labels.programs, to: '/programs' }, { label: code, to: `/programs/${code}` }, { label: subLabel }];
   return [home, { label: labels.programs, to: '/programs' }, { label: code }];
 };

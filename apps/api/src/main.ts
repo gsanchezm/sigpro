@@ -3,19 +3,10 @@ import { Logger } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { ADMIN_KEY_HEADER, TENANT_HEADER } from '@sigpro/shared';
-import type { NextFunction, Request, Response } from 'express';
 import { AppModule } from './app.module';
+import { docsBasicAuth } from './common/docs-auth';
 import { API_VERSION } from './config/config.controller';
 import { loadEnv, type Env } from './config/env';
-
-/** Basic auth opcional para /api/docs (entorno del curso). Vacío = sin protección. */
-const docsBasicAuth = (credentials: string) => (request: Request, response: Response, next: NextFunction) => {
-  const [scheme, encoded] = (request.headers.authorization ?? '').split(' ');
-  const provided = scheme?.toLowerCase() === 'basic' && encoded ? Buffer.from(encoded, 'base64').toString('utf8') : '';
-  if (provided === credentials) return next();
-  response.setHeader('WWW-Authenticate', 'Basic realm="SIGPRO API docs"');
-  response.status(401).send('Authentication required');
-};
 
 const setupDocs = (app: Awaited<ReturnType<typeof NestFactory.create>>, env: Env): void => {
   const document = SwaggerModule.createDocument(
@@ -29,7 +20,8 @@ const setupDocs = (app: Awaited<ReturnType<typeof NestFactory.create>>, env: Env
       .addGlobalParameters({ name: TENANT_HEADER, in: 'header', required: false, description: 'Tenant (demo, alumno01…). Por defecto: demo.' })
       .build(),
   );
-  if (env.DOCS_BASIC_AUTH) app.use('/api/docs', docsBasicAuth(env.DOCS_BASIC_AUTH));
+  // Basic auth opcional (entorno del curso): protege Swagger UI y también el JSON de OpenAPI
+  if (env.DOCS_BASIC_AUTH) app.use(['/api/docs', '/api/docs-json'], docsBasicAuth(env.DOCS_BASIC_AUTH));
   SwaggerModule.setup('api/docs', app, document, { jsonDocumentUrl: 'api/docs-json' });
 };
 

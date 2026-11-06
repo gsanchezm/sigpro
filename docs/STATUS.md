@@ -9,7 +9,7 @@ Leyenda: `[x]` hecho · `[~]` en curso · `[ ]` pendiente
 Cada tarea termina con `pnpm lint && pnpm typecheck && pnpm test` en verde y un commit. Cada módulo cierra además con su spec e2e de humo, capturas claro/oscuro a 1440 y 390 px en `docs/screens/` y la pasada por la tabla «Cobertura de locators».
 
 - [x] **T15** Modelo de datos y contratos: migración (`tags`, `position`, `Evidence`, `DocumentVersion`), seed v2 con re-seed por versión, permisos, esquemas Zod, DTOs, cliente (multipart + blob), `testids.ts`, i18n (4 espacios nuevos), helpers puros (HTML enriquecido, diff de líneas, árbol, PDF)
-- [ ] **T16** Pendientes de la fase 1: editar programa (PATCH + formulario), páginas legales y ayuda, spec de basic auth de `/api/docs`
+- [x] **T16** Pendientes de la fase 1: editar programa (PATCH + formulario), páginas legales y ayuda, spec de basic auth de `/api/docs`
 - [ ] **T17** Módulo **Requisitos**: árbol, estados y permisos, edición inline, etiquetas, editor `contenteditable`, reordenar, menú contextual, atajos, copiar código, matriz, CSV
 - [ ] **T18** Módulo **Verificación**: casos de prueba, ejecución (radio), evidencias (simple, múltiple, arrastrar), informe PDF
 - [ ] **T19** Módulo **Documentos**: clasificación por rol, visor en `<iframe>`, nueva pestaña, comparación de versiones
@@ -73,13 +73,11 @@ Recorrida fila a fila para Acceso y Programas. Specs en `e2e/tests/`: `access` =
 - **Render:** desplegado (web <https://sigpro-web.onrender.com/>, API <https://sigpro-api.onrender.com/>); CI en verde. Al desplegar la fase 2, la API re-siembra al arrancar los tenants con `seed_version` antigua (ver `docs/DECISIONS.md`).
 - **CI en GitHub:** la primera ejecución de `ci.yml` (2026-11-06, repositorio `gsanchezm/sigpro`) terminó en verde: lint, typecheck, unit y e2e de humo.
 - **Node 22 en CI/Render** en vez de Node 20: `pnpm@11` exige ≥ 22.13 (ver `docs/DECISIONS.md`).
-- **Editar programa** (PATCH + formulario): hoy muestra el toast del prototipo; llega con el módulo completo en la fase 2.
 - **Deshacer eliminación** (`toast-action`): no se implementa (borrado permanente).
 - **Detalle de programa:** solo la pestaña Resumen; Hitos y Requisitos son marcadores.
-- **Páginas legales** (`#/legal/…`, `#/ayuda`) y **Perfil**: enlaces del handoff sin destino.
+- **Perfil**: el enlace del menú de usuario sigue sin destino (las páginas legales y la ayuda ya existen: `/legal/terms`, `/legal/privacy`, `/help`).
 - **Textos variables del caos** (`flakyLabels`): se guardan y exponen, pero la web aún no alterna etiquetas (fase 3).
 - **Bugs plantados** (`docs/planted-bugs.md`): fase 3.
-- **Basic auth de `/api/docs`** (`DOCS_BASIC_AUTH`): implementado, sin spec e2e (no se activa en local).
 - **Git:** el repositorio es público (`https://github.com/gsanchezm/sigpro`). El zip `SIGPRO Design System Entregables.zip` se eliminó de la rama, pero sigue en el primer commit del historial.
 
 ## Cómo levantar todo en local

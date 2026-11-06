@@ -1,8 +1,20 @@
-import { test } from '@playwright/test';
-import { loginByApi, resetTenant } from '../support/auth';
+import { test, type Page, type APIRequestContext } from '@playwright/test';
+import { loginByApi, resetTenant, type RoleName } from '../support/auth';
 import { capture, prepareStorage, THEMES, VIEWPORTS } from '../support/screens';
 
 // Capturas de cada pantalla en claro/oscuro a 1440 y 390 px → docs/screens/ (se ejecuta con `pnpm e2e:screens`).
+
+/** Inicia sesión por API en `tenant` y deja el token en localStorage antes de cargar la app. */
+const signIn = async (page: Page, request: APIRequestContext, tenant: string, role: RoleName = 'admin'): Promise<void> => {
+  const { refreshToken } = await loginByApi(request, role, tenant);
+  await page.context().addInitScript(
+    ({ token, tenantId }) => {
+      localStorage.setItem('sigpro.tenant', tenantId);
+      localStorage.setItem('sigpro.session', JSON.stringify({ refreshToken: token, remember: true }));
+    },
+    { token: refreshToken, tenantId: tenant },
+  );
+};
 
 for (const theme of THEMES) {
   for (const viewport of VIEWPORTS) {
@@ -73,6 +85,42 @@ for (const theme of THEMES) {
         await page.goto('/lab');
         await page.getByTestId('lab-credentials').getByRole('row').nth(1).waitFor();
         await capture(page, 'lab-admin', theme);
+      });
+
+      test('programas (fase 2): edición, permisos y páginas legales', async ({ page, request }) => {
+        const tenant = 'alumno13';
+        await resetTenant(request, tenant);
+        await signIn(page, request, tenant);
+
+        await page.goto('/programs/PRG-003/edit');
+        await page.getByTestId('program-edit-form').waitFor();
+        await capture(page, 'programas-editar', theme);
+
+        await page.getByLabel('Nombre').fill('ab');
+        await page.getByLabel('Fecha de fin').fill('2020-01-01');
+        await page.getByLabel('Presupuesto (€)').fill('0');
+        await page.getByRole('button', { name: 'Guardar', exact: true }).click();
+        await page.getByTestId('program-edit-name-error').waitFor();
+        await capture(page, 'programas-editar-errores', theme);
+
+        await page.getByLabel('Nombre').fill('Programa duplicado');
+        await page.getByLabel('Fecha de fin').fill('2027-12-31');
+        await page.getByLabel('Presupuesto (€)').fill('1000');
+        await page.getByRole('button', { name: 'Guardar', exact: true }).click();
+        await page.getByTestId('program-edit-server-error').waitFor();
+        await capture(page, 'programas-editar-422', theme);
+
+        await page.getByLabel('Nombre').fill('Enlace de datos seguro LD-9 (rev. B)');
+        await page.getByRole('button', { name: 'Guardar', exact: true }).click();
+        await page.getByTestId('toast-ok').waitFor();
+        await capture(page, 'programas-editar-guardado', theme);
+
+        await page.goto('/legal/terms');
+        await page.getByTestId('legal-title').waitFor();
+        await capture(page, 'legal-condiciones', theme);
+        await page.goto('/help');
+        await page.getByTestId('help-page').waitFor();
+        await capture(page, 'ayuda', theme);
       });
 
       test('programas: lista, estados, menú, asistente, diálogos y detalle', async ({ page, request, browser }) => {
