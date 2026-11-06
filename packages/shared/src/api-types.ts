@@ -177,7 +177,8 @@ export interface TestCaseDto {
 export interface TestCaseListQuery {
   readonly q?: string;
   readonly program?: string;
-  readonly result?: TestResult;
+  /** Último resultado; `none` = casos sin ninguna ejecución. */
+  readonly result?: TestResult | 'none';
   readonly sort?: TestCaseSortColumn;
   readonly dir?: SortDir;
   readonly page?: number;
@@ -186,7 +187,10 @@ export interface TestCaseListQuery {
 
 export interface TestCaseListResponse {
   readonly items: readonly TestCaseDto[];
+  /** Casos que cumplen los filtros. */
   readonly total: number;
+  /** Ejecuciones de esos casos (el subtítulo de la pantalla). */
+  readonly totalRuns: number;
   readonly totalAll: number;
   readonly page: number;
   readonly pageSize: number;

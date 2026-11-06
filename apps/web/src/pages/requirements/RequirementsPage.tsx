@@ -23,7 +23,7 @@ import {
   type UpdateRequirementInput,
 } from '@sigpro/shared';
 import { useCallback, useEffect, useMemo, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { copyText } from '../../lib/clipboard';
 import { downloadCsv } from '../../lib/download';
 import { formatTrace } from '../../lib/errors';
@@ -58,6 +58,7 @@ export const RequirementsPage = () => {
   const { user, api } = useAuth();
   const toast = useToast();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const breakpoint = useBreakpoint();
   const mobile = breakpoint === 'mobile';
   const sideBySide = breakpoint === 'desktop';
@@ -97,6 +98,14 @@ export const RequirementsPage = () => {
     setMenu(null);
     setTab('tree');
   }, [programCode]);
+
+  // `?select=REQ-017` (enlace desde Verificación) abre el detalle de ese requisito una vez cargada la lista
+  useEffect(() => {
+    const wanted = searchParams.get('select');
+    if (!wanted || !items.some((item) => item.code === wanted)) return;
+    setSelected(wanted);
+    setSearchParams({}, { replace: true });
+  }, [items, searchParams, setSearchParams]);
 
   const needle = query.trim().toLowerCase();
   const filtered = useMemo(

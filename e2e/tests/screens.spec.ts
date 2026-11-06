@@ -1,5 +1,6 @@
 import { test, type Page, type APIRequestContext } from '@playwright/test';
 import { loginByApi, resetTenant, type RoleName } from '../support/auth';
+import { png, pdf, text } from '../support/files';
 import { capture, prepareStorage, THEMES, VIEWPORTS } from '../support/screens';
 
 // Capturas de cada pantalla en claro/oscuro a 1440 y 390 px → docs/screens/ (se ejecuta con `pnpm e2e:screens`).
@@ -187,6 +188,68 @@ for (const theme of THEMES) {
         await page.getByTestId('requirements-error').waitFor();
         await capture(page, 'requisitos-error', theme);
         await page.unroute('**/api/programs/PRG-002/requirements');
+      });
+
+      test('verificación: lista, filtros, selección, detalle, evidencias, ejecución y permisos', async ({ page, request }) => {
+        const tenant = 'alumno17';
+        await resetTenant(request, tenant);
+        await signIn(page, request, tenant, 'consultant');
+        const mobile = viewport.width < 640;
+
+        await page.goto('/verification');
+        await page.getByTestId('testcase-row-TC-001').waitFor();
+        await capture(page, 'verificacion-lista', theme);
+
+        if (!mobile) {
+          await page.getByRole('checkbox', { name: 'Seleccionar TC-002' }).check();
+          await page.getByRole('checkbox', { name: 'Seleccionar TC-004' }).check();
+          await capture(page, 'verificacion-seleccion', theme);
+          await page.getByRole('button', { name: 'Quitar selección' }).click();
+          await page.getByRole('button', { name: 'Acciones para TC-003' }).click();
+          await capture(page, 'verificacion-menu-fila', theme);
+          await page.keyboard.press('Escape');
+        }
+
+        await page.getByLabel('Último resultado').selectOption('none');
+        await page.getByTestId('verification-empty').waitFor();
+        await capture(page, 'verificacion-vacio', theme);
+
+        await page.goto('/verification/TC-001');
+        await page.getByAltText('Evidencia TC-001').waitFor();
+        await page.waitForFunction(() => Array.from(document.images).every((image) => image.complete));
+        await capture(page, 'verificacion-detalle', theme);
+
+        await page.goto('/verification/TC-005');
+        await page.getByTestId('run-form').waitFor();
+        await page.getByTestId('run-form').getByRole('button', { name: 'Registrar ejecución' }).click();
+        await page.getByTestId('run-result-error').waitFor();
+        await capture(page, 'verificacion-formulario-errores', theme);
+
+        await page.getByRole('radio', { name: 'Fallido' }).check();
+        await page.getByLabel('Notas').fill('El enlace pierde la sincronización tras 40 s.');
+        await page.getByLabel('Adjuntar varios archivos').setInputFiles([png('captura-fallo.png'), pdf('traza-enlace.pdf')]);
+        await page.getByLabel('Adjuntar un archivo').setInputFiles(text('notas.txt'));
+        await page.getByTestId('run-files-error').waitFor();
+        await capture(page, 'verificacion-evidencias', theme);
+
+        await page.getByTestId('run-form').getByRole('button', { name: 'Registrar ejecución' }).click();
+        await page.getByTestId('toast-ok').waitFor();
+        await page.getByTestId('run-row-RUN-051').getByAltText('Evidencia TC-005').waitFor();
+        await page.waitForFunction(() => Array.from(document.images).every((image) => image.complete));
+        await capture(page, 'verificacion-ejecucion-registrada', theme);
+
+        await signIn(page, request, tenant, 'auditor');
+        await page.goto('/verification/TC-007');
+        await page.getByTestId('run-denied').waitFor();
+        await capture(page, 'verificacion-permisos', theme);
+
+        await page.route('**/api/test-cases?*', (route) =>
+          route.fulfill({ status: 503, contentType: 'application/json', body: JSON.stringify({ statusCode: 503, error: 'Service Unavailable', message: 'down', traceId: '7f3a-c21d' }) }),
+        );
+        await page.goto('/verification');
+        await page.getByTestId('verification-error').waitFor();
+        await capture(page, 'verificacion-error', theme);
+        await page.unroute('**/api/test-cases?*');
       });
 
       test('programas: lista, estados, menú, asistente, diálogos y detalle', async ({ page, request, browser }) => {

@@ -419,11 +419,13 @@ export const VERIFICACION_TESTIDS = {
   RUN_SUBMIT: 'run-submit',
   RUN_SERVER_ERROR: 'run-server-error',
   RUN_DENIED: 'run-denied',
+  DOWNLOAD_ANCHOR: 'download-anchor',
 } as const;
 
 export const VERIFICACION_DYNAMIC_TESTIDS = {
   TESTCASE_ROW: (code: string) => `testcase-row-${code}`,
   TESTCASE_LINK: (code: string) => `testcase-link-${code}`,
+  TESTCASE_REQUIREMENT_LINK: (code: string) => `testcase-requirement-${code}`,
   TESTCASE_SELECT: (code: string) => `testcase-select-${code}`,
   TESTCASE_ROW_MENU: (code: string) => `testcase-row-menu-${code}`,
   TESTCASE_SORT: (column: 'code' | 'title' | 'program' | 'result' | 'runs') => `testcase-sort-${column}`,
@@ -431,6 +433,7 @@ export const VERIFICACION_DYNAMIC_TESTIDS = {
   RUN_RESULT_OPTION: (result: 'pass' | 'fail' | 'blocked') => `run-result-${result}`,
   RUN_FILE_REMOVE: (index: number) => `run-file-remove-${index}`,
   RUN_ROW: (id: string) => `run-row-${id}`,
+  RUN_RESULT_BADGE: (id: string) => `run-result-badge-${id}`,
   EVIDENCE_THUMB: (id: string) => `evidence-thumb-${id}`,
   EVIDENCE_DOWNLOAD: (id: string) => `evidence-download-${id}`,
 } as const;

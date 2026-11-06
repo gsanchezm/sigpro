@@ -126,3 +126,14 @@ Una línea de decisión + una de justificación. Si el plan y el handoff se cont
 - **Transición inválida = 409 (`invalid_transition`)**, rol sin permiso = 403, cuerpo inválido = 422. *Son tres casos de prueba distintos para el alumno.*
 - **Capturas:** el menú contextual solo se captura en escritorio (se cierra al redimensionar y la captura ajusta el viewport a la altura del contenido).
 - **Tenants de los specs:** `alumno09` (Requisitos UI), `alumno10` (Requisitos API, con `alumno11` como segundo tenant para el aislamiento), `alumno13` (capturas de edición de programa y páginas legales) y `alumno14` (capturas de Requisitos).
+
+### Verificación (T18)
+
+- **Las tres entradas de evidencia (un archivo, varios y zona de arrastre) alimentan la misma lista** (máx. 5). Se validan al añadirlas (tipo PNG/JPEG/PDF y ≤ 2 MB): los rechazados no entran y se avisa en un `role="alert"`. Mismo archivo = mismo nombre y tamaño. *Cada alumno practica `setInputFiles`, `filechooser` y el `drop` con `DataTransfer` sobre la misma pantalla.*
+- **El servidor valida lo mismo (422 `errors.files`) y además comprueba la firma real del archivo** (los primeros bytes): un `.png` que no es un PNG se rechaza aunque el `Content-Type` diga `image/png`. multer deja pasar hasta 5 MB y 10 archivos; más de eso es un 413 antes de llegar al servicio.
+- **El `alt` de las miniaturas es `Evidencia TC-001` para todas las de un caso** (no lleva el id de la evidencia): obliga a usar `.first()`, `.nth()` o `filter` con `getByAltText`. Los PDF llevan `Documento PDF <nombre>` y las vistas previas del formulario `Vista previa de <nombre>`.
+- **Listado calculado en memoria** (`test-case-query.ts`, puro y con tests): el último resultado y el nº de ejecuciones son derivados y hay 25 casos por tenant.
+- **Informe PDF:** `informe-verificacion.pdf` (todos), `informe-verificacion-prg-003.pdf` (programa) o `informe-verificacion-seleccion.pdf` (casos elegidos); 404 si no hay casos. Texto plano sin compresión, así los specs pueden leer su contenido.
+- **Enlace cruzado:** el requisito de un caso abre `/programs/:code/requirements?select=REQ-001` con su detalle desplegado.
+- **Ojo con los prefijos de `data-testid`:** `testcase-row-menu-TC-001` también empieza por `testcase-row-`; los specs usan `/^testcase-row-TC-\d+$/`. (El mismo caso existe en Programas.)
+- **Tenants de los specs:** `alumno12` (UI), `alumno15` (API) con `alumno16` de solo lectura para el aislamiento, `alumno17` (capturas). Reservados: `alumno18`–`alumno21` (Documentos: UI, API, aislamiento y capturas) y `alumno22`–`alumno23` (Auditoría: UI/API y capturas).

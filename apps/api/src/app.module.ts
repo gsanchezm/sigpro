@@ -20,12 +20,14 @@ import { RequirementsController } from './requirements/requirements.controller';
 import { RequirementsService } from './requirements/requirements.service';
 import { SeedService } from './seed/seed.service';
 import { UsersController } from './users/users.controller';
+import { VerificationController } from './verification/verification.controller';
+import { VerificationService } from './verification/verification.service';
 
 const env = loadEnv();
 
 @Module({
   imports: [JwtModule.register({ global: true, secret: env.JWT_SECRET })],
-  controllers: [HealthController, ConfigController, AuthController, ProgramsController, RequirementsController, UsersController, AdminController],
+  controllers: [HealthController, ConfigController, AuthController, ProgramsController, RequirementsController, VerificationController, UsersController, AdminController],
   providers: [
     { provide: ENV, useValue: env },
     PrismaService,
@@ -36,6 +38,7 @@ const env = loadEnv();
     AuthService,
     ProgramsService,
     RequirementsService,
+    VerificationService,
     { provide: APP_GUARD, useClass: AuthGuard },
     { provide: APP_INTERCEPTOR, useClass: ChaosInterceptor },
     { provide: APP_FILTER, useClass: AllExceptionsFilter },

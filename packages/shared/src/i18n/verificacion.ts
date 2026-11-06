@@ -91,6 +91,13 @@ export const verificacionEs = {
   tooManyFiles: 'Máximo 5 archivos por ejecución',
   required: 'Campo obligatorio',
   reportTitle: 'Informe del plan de verificación',
+  evidenceCount: '{n} evidencia(s)',
+  noEvidence: 'Sin evidencias',
+  previewAlt: 'Vista previa de {name}',
+  evidenceFailed: 'No se pudo cargar la evidencia',
+  runSavedFiles: 'con {n} archivo(s) de evidencia',
+  openInRequirements: 'Abrir en Requisitos',
+  runAnchor: 'Registrar ejecución de {code}',
 };
 
 export const verificacionEn: typeof verificacionEs = {
@@ -184,4 +191,11 @@ export const verificacionEn: typeof verificacionEs = {
   tooManyFiles: 'At most 5 files per run',
   required: 'Required field',
   reportTitle: 'Verification plan report',
+  evidenceCount: '{n} evidence file(s)',
+  noEvidence: 'No evidence',
+  previewAlt: 'Preview of {name}',
+  evidenceFailed: 'The evidence could not be loaded',
+  runSavedFiles: 'with {n} evidence file(s)',
+  openInRequirements: 'Open in Requirements',
+  runAnchor: 'Record a run of {code}',
 };
