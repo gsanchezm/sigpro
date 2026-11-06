@@ -20,7 +20,7 @@ Una línea de decisión + una de justificación. Si el plan y el handoff se cont
 - **Versiones fijadas** (aunque haya majors más nuevos): Nest 11, Prisma 6, Vite 7, React 18.3, React Router 6, Tailwind 4, Vitest 3, Zod 3, TypeScript 5.9, ESLint 9. *Son las que conozco bien y coinciden con el plan (React 18); Prisma 7 cambia la configuración del datasource.*
 - **Nombres de paquete:** `api`, `web`, `@sigpro/shared`, `@sigpro/e2e`. *El `render.yaml` del plan usa `pnpm --filter api` y `--filter web`.*
 - **`packages/shared` se compila con tsup (CJS + ESM + d.ts).** *La API (CJS) y la web (ESM) lo consumen igual; Turborepo ordena con `dependsOn: ["^build"]`.*
-- **Node:** `.nvmrc` = 20 y `engines >=20` sin `engine-strict`. *El entorno local usa Node 24; CI usa 20.*
+- **Node 22 en CI y Render** (`.nvmrc` = 22, `engines >=22.13`), en lugar del 20 de CLAUDE.md. *`pnpm@11` exige Node ≥ 22.13 y Node 20 salió de soporte en abril de 2026; el código no usa nada propio de 22 (Vite 7 pide ≥ 20.19, Nest ≥ 20). Si hubiera que volver a 20 bastaría con fijar pnpm 10.* El entorno local usa Node 24.
 - **Contraseñas con `bcryptjs`.** *JS puro: sin compilación nativa en Windows ni en Render; el hash de cada contraseña de demo se calcula una vez por proceso y se reutiliza (reset < 2 s).*
 - **Tests:** Vitest para lo puro (Zod, permisos, seed, caos, i18n) en todos los paquetes; la API y la UI se verifican con Playwright (`e2e/`). *El curso es de Playwright: las suites de la API también usan `request`.*
 - **ESLint:** prohíbe `switch`, `any` y `data-testid="…"` literal en JSX. *Convierte en regla automática lo que CLAUDE.md pide en code review.*

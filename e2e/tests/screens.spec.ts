@@ -56,6 +56,25 @@ for (const theme of THEMES) {
         await capture(page, 'acceso-verificacion', theme);
       });
 
+      test('lab: público y con sesión de admin', async ({ page, request }) => {
+        const tenant = 'alumno06';
+        await page.goto('/lab');
+        await page.getByTestId('lab-health').filter({ hasText: 'API operativa' }).waitFor();
+        await capture(page, 'lab-publico', theme);
+
+        const { refreshToken } = await loginByApi(request, 'admin', tenant);
+        await page.context().addInitScript(
+          ({ token, tenantId }) => {
+            localStorage.setItem('sigpro.tenant', tenantId);
+            localStorage.setItem('sigpro.session', JSON.stringify({ refreshToken: token, remember: true }));
+          },
+          { token: refreshToken, tenantId: tenant },
+        );
+        await page.goto('/lab');
+        await page.getByTestId('lab-credentials').getByRole('row').nth(1).waitFor();
+        await capture(page, 'lab-admin', theme);
+      });
+
       test('programas: lista, estados, menú, asistente, diálogos y detalle', async ({ page, request, browser }) => {
         const tenant = 'alumno04';
         await resetTenant(request, tenant);

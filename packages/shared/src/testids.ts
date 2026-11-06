@@ -209,3 +209,32 @@ export const DETALLE_DYNAMIC_TESTIDS = {
   PROGRAM_DETAIL_TAB: (key: 'summary' | 'milestones' | 'requirements') => `program-detail-tab-${key}`,
   PROGRAM_DETAIL_PANEL: (key: 'summary' | 'milestones' | 'requirements') => `program-detail-panel-${key}`,
 } as const;
+
+export const LAB_TESTIDS = {
+  LAB_PAGE: 'lab-page',
+  LAB_TENANT_INFO: 'lab-tenant-info',
+  LAB_CREDENTIALS: 'lab-credentials',
+  LAB_TENANT_SELECT: 'lab-tenant-select',
+  LAB_TENANT_USE: 'lab-tenant-use',
+  LAB_RESET: 'lab-reset',
+  LAB_CHAOS_LATENCY: 'lab-chaos-latency',
+  LAB_CHAOS_ERROR_RATE: 'lab-chaos-error-rate',
+  LAB_CHAOS_FLAKY: 'lab-chaos-flaky',
+  LAB_CHAOS_APPLY: 'lab-chaos-apply',
+  LAB_CHAOS_OFF: 'lab-chaos-off',
+  LAB_XPATH_TABLE: 'lab-xpath-table',
+  LAB_OVERLAP_SAVE: 'lab-overlap-save',
+  LAB_OVERLAP_SAVE_CLOSE: 'lab-overlap-save-close',
+  LAB_OVERLAP_ACTIVE: 'lab-overlap-active',
+  LAB_OVERLAP_ACTIVE_COUNT: 'lab-overlap-active-count',
+  LAB_FAQ: 'lab-faq',
+  LAB_API_DOCS: 'lab-api-docs',
+  LAB_HEALTH: 'lab-health',
+  LAB_LOGIN_LINK: 'lab-login-link',
+} as const;
+
+export const LAB_DYNAMIC_TESTIDS = {
+  /** lab-credential-admin, lab-credential-consultant-locked */
+  LAB_CREDENTIAL: (role: string, status?: 'locked' | 'pending') => `lab-credential-${role}${status ? '-' + status : ''}`,
+  LAB_FAQ_ITEM: (n: number) => `lab-faq-item-${n}`,
+} as const;

@@ -3,6 +3,8 @@ import { BrowserRouter, Navigate, Outlet, Route, Routes } from 'react-router-dom
 import { AppShell } from './layout/AppShell';
 import { ComingSoon } from './pages/ComingSoon';
 import { AccessPage } from './pages/access/AccessPage';
+import { LabPage } from './pages/lab/LabPage';
+import { PublicLab } from './pages/lab/PublicLab';
 import { ProgramDetailPage } from './pages/programs/ProgramDetailPage';
 import { ProgramsPage } from './pages/programs/ProgramsPage';
 import { AuthProvider, useAuth } from './state/auth';
@@ -34,6 +36,19 @@ const PublicOnly = ({ children }: { children: ReactNode }) => {
   const { status } = useAuth();
   if (status === 'loading') return <Splash />;
   return status === 'authenticated' ? <Navigate to="/programs" replace /> : <>{children}</>;
+};
+
+/** /lab es pública: con sesión se ve dentro del shell; sin sesión, con una cabecera mínima. */
+const LabRoute = () => {
+  const { status } = useAuth();
+  if (status === 'loading') return <Splash />;
+  return status === 'authenticated' ? (
+    <AppShell>
+      <LabPage />
+    </AppShell>
+  ) : (
+    <PublicLab />
+  );
 };
 
 const Soon = ({ label }: { label: 'nav_mission' | 'nav_requirements' | 'nav_verification' | 'nav_nc' | 'nav_documents' | 'nav_audit' | 'nav_admin' }) => {
@@ -73,6 +88,7 @@ export const App = () => (
                   </PublicOnly>
                 }
               />
+              <Route path="/lab" element={<LabRoute />} />
               <Route element={<RequireAuth />}>
                 <Route element={<AppShell />}>
                   <Route path="/programs" element={<ProgramsPage />} />

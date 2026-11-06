@@ -1,5 +1,5 @@
 import { DETALLE_TESTIDS, LANGS, PROGRAMAS_DYNAMIC_TESTIDS, PROGRAMAS_TESTIDS, type Lang, type MessageKey } from '@sigpro/shared';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { Link, Outlet, useLocation } from 'react-router-dom';
 import { useBreakpoint } from '../lib/hooks';
 import { useAuth } from '../state/auth';
@@ -29,7 +29,7 @@ const NavGlyph = ({ glyph, size }: { glyph: string; size: number }) => (
 );
 
 /** Estructura común de las pantallas autenticadas: sidebar, cabecera, contenido, tabbar móvil y cookies. */
-export const AppShell = () => {
+export const AppShell = ({ children }: { children?: ReactNode } = {}) => {
   const { t, lang, setLang } = useI18n();
   const { theme, toggleTheme } = useTheme();
   const { user } = useAuth();
@@ -210,7 +210,7 @@ export const AppShell = () => {
         </header>
 
         <main id="main-content" tabIndex={-1} className={`flex min-w-0 flex-1 flex-col ${pagePadding}`}>
-          <Outlet />
+          {children ?? <Outlet />}
         </main>
 
         {isMobile ? (

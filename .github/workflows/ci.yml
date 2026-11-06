@@ -1,0 +1,88 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: Lint · Typecheck · Unit · E2E de humo
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: sigpro
+          POSTGRES_PASSWORD: sigpro
+          POSTGRES_DB: sigpro
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U sigpro -d sigpro"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+
+    env:
+      CI: 'true'
+      DATABASE_URL: postgresql://sigpro:sigpro@localhost:5432/sigpro?schema=public
+      JWT_SECRET: ci-only-secret-change-me
+      ADMIN_KEY: dev-admin-key
+      CORS_ORIGIN: http://localhost:5173
+      SEED_ON_BOOT: 'true'
+      SEED_STUDENT_TENANTS: '25'
+      APP_ENV: dev
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # La versión de pnpm sale del campo `packageManager` del package.json
+      - uses: pnpm/action-setup@v4
+
+      # pnpm 11 exige Node ≥ 22.13 (el código en sí corre en Node 20+)
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Instalar dependencias
+        run: pnpm install --frozen-lockfile
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Tests unitarios
+        run: pnpm test
+
+      - name: Build (shared, api, web)
+        run: pnpm build
+
+      - name: Migraciones de la base
+        run: pnpm --filter api prisma:deploy
+
+      - name: Instalar navegador de Playwright
+        run: pnpm --filter @sigpro/e2e exec playwright install --with-deps chromium
+
+      # Playwright arranca la API (con SEED_ON_BOOT) y sirve el build de la web (vite preview)
+      - name: E2E de humo
+        run: pnpm e2e
+
+      - name: Subir informe de Playwright
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: |
+            e2e/playwright-report/
+            e2e/test-results/
+          retention-days: 7

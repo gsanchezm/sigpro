@@ -5,7 +5,7 @@
   "description": "SIGPRO — laboratorio de pruebas para el curso Playwright + TypeScript",
   "packageManager": "pnpm@11.2.2",
   "engines": {
-    "node": ">=20"
+    "node": ">=22.13"
   },
   "scripts": {
     "dev": "turbo run dev --parallel",
