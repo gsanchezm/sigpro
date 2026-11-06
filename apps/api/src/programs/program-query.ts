@@ -1,0 +1,104 @@
+import type { Prisma } from '@prisma/client';
+import { PAGE_SIZE, PROGRAM_SORT_COLUMNS, PROGRAM_STATUSES, type Lang, type ProgramListQuery, type ProgramSortColumn, type ProgramStatus, type SortDir } from '@sigpro/shared';
+
+const MAX_PAGE_SIZE = 100;
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+
+const asEnum = <T extends string>(value: unknown, allowed: readonly T[]): T | undefined =>
+  typeof value === 'string' && (allowed as readonly string[]).includes(value) ? (value as T) : undefined;
+
+const asPositiveInt = (value: unknown): number | undefined => {
+  const n = typeof value === 'string' ? Number.parseInt(value, 10) : NaN;
+  return Number.isInteger(n) ? n : undefined;
+};
+
+const asDate = (value: unknown): string | undefined => (typeof value === 'string' && ISO_DATE.test(value) ? value : undefined);
+
+const asText = (value: unknown): string | undefined => (typeof value === 'string' && value.trim() ? value.trim() : undefined);
+
+/** Query string cruda → `ProgramListQuery` tipado; lo inválido se descarta en lugar de fallar. */
+export const parseListQuery = (raw: Readonly<Record<string, unknown>>): ProgramListQuery => {
+  const parsed = {
+    q: asText(raw.q),
+    status: asEnum<ProgramStatus>(raw.status, PROGRAM_STATUSES),
+    from: asDate(raw.from),
+    to: asDate(raw.to),
+    owner: asText(raw.owner),
+    sort: asEnum<ProgramSortColumn>(raw.sort, PROGRAM_SORT_COLUMNS),
+    dir: asEnum<SortDir>(raw.dir, ['asc', 'desc']),
+    page: asPositiveInt(raw.page),
+    pageSize: asPositiveInt(raw.pageSize),
+  };
+  return Object.fromEntries(Object.entries(parsed).filter(([, value]) => value !== undefined)) as ProgramListQuery;
+};
+
+export const normalizePaging = (query: Pick<ProgramListQuery, 'page' | 'pageSize'>): { page: number; pageSize: number } => ({
+  page: Math.max(1, query.page ?? 1),
+  pageSize: Math.min(MAX_PAGE_SIZE, Math.max(1, query.pageSize ?? PAGE_SIZE)),
+});
+
+const utcDate = (iso: string): Date => new Date(`${iso}T00:00:00.000Z`);
+
+export const buildWhere = (tenantId: string, query: ProgramListQuery): Prisma.ProgramWhereInput => ({
+  tenantId,
+  ...(query.status ? { status: query.status } : {}),
+  ...(query.owner ? { ownerId: query.owner } : {}),
+  ...(query.from ? { startDate: { gte: utcDate(query.from) } } : {}),
+  ...(query.to ? { endDate: { lte: utcDate(query.to) } } : {}),
+  ...(query.q
+    ? {
+        OR: [
+          { code: { contains: query.q, mode: 'insensitive' as const } },
+          { name: { contains: query.q, mode: 'insensitive' as const } },
+        ],
+      }
+    : {}),
+});
+
+// Mapa de despacho columna → orden de Prisma (sin switch)
+const ORDER_BY: Readonly<Record<ProgramSortColumn, (dir: SortDir) => Prisma.ProgramOrderByWithRelationInput>> = {
+  code: (dir) => ({ code: dir }),
+  name: (dir) => ({ name: dir }),
+  status: (dir) => ({ status: dir }),
+  owner: (dir) => ({ owner: { name: dir } }),
+  dates: (dir) => ({ startDate: dir }),
+  budget: (dir) => ({ budgetEur: dir }),
+};
+
+/** Orden pedido + desempate por código para que la paginación sea estable. */
+export const buildOrderBy = (sort: ProgramSortColumn | undefined, dir: SortDir | undefined): Prisma.ProgramOrderByWithRelationInput[] => {
+  const column: ProgramSortColumn = sort ?? 'code';
+  const primary = ORDER_BY[column](dir ?? 'asc');
+  return column === 'code' ? [primary] : [primary, { code: 'asc' }];
+};
+
+export const progressOf = (done: number, total: number): number => (total === 0 ? 0 : Math.round((done / total) * 100));
+
+export const nextProgramCode = (codes: readonly string[]): string => {
+  const max = codes.reduce((acc, code) => Math.max(acc, Number.parseInt(code.replace(/\D/g, ''), 10) || 0), 0);
+  return `PRG-${String(max + 1).padStart(3, '0')}`;
+};
+
+export interface CsvRow {
+  readonly code: string;
+  readonly name: string;
+  readonly status: string;
+  readonly owner: string;
+  readonly start: string;
+  readonly end: string;
+  readonly budget: number;
+  readonly progress: number;
+}
+
+const CSV_HEADERS: Readonly<Record<Lang, readonly string[]>> = {
+  es: ['Código', 'Nombre', 'Estado', 'Responsable', 'Inicio', 'Fin', 'Presupuesto (EUR)', 'Progreso (%)'],
+  en: ['Code', 'Name', 'Status', 'Owner', 'Start', 'End', 'Budget (EUR)', 'Progress (%)'],
+};
+
+const csvCell = (value: string | number): string => {
+  const text = String(value);
+  return /[",\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+};
+
+export const toCsv = (rows: readonly CsvRow[], lang: Lang): string =>
+  [CSV_HEADERS[lang].join(','), ...rows.map((r) => [r.code, r.name, r.status, r.owner, r.start, r.end, r.budget, r.progress].map(csvCell).join(','))].join('\n');

@@ -1,0 +1,319 @@
+// SIGPRO — modelo de datos.
+// Toda tabla lleva `tenant_id` y forma parte de su clave primaria compuesta: las claves foráneas
+// también incluyen el tenant, así que la propia base impide cruzar datos entre alumnos.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  admin
+  program_manager
+  consultant
+  auditor
+}
+
+enum ProgramStatus {
+  draft
+  active
+  on_hold
+  closed
+  cancelled
+}
+
+enum Priority {
+  low
+  medium
+  high
+}
+
+enum RequirementState {
+  draft
+  approved
+  verified
+  validated
+}
+
+enum TestResult {
+  pass
+  fail
+  blocked
+}
+
+enum NcSeverity {
+  minor
+  major
+  critical
+}
+
+enum NcState {
+  open
+  in_analysis
+  corrective_action
+  closed
+  rejected
+}
+
+enum Classification {
+  public
+  restricted
+}
+
+model Tenant {
+  id          String   @id
+  name        String
+  seedVersion Int      @default(1) @map("seed_version")
+  /// Flags del modo caos: { latencyMs, errorRate, flakyLabels }
+  chaos       Json     @default("{\"latencyMs\":0,\"errorRate\":0,\"flakyLabels\":false}")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  users            User[]
+  programs         Program[]
+  milestones       Milestone[]
+  requirements     Requirement[]
+  testCases        TestCase[]
+  requirementTests RequirementTestCase[]
+  testRuns         TestRun[]
+  nonConformities  NonConformity[]
+  documents        Document[]
+  auditLogs        AuditLog[]
+  suppliers        Supplier[]
+  contracts        Contract[]
+
+  @@map("tenants")
+}
+
+model User {
+  tenantId        String    @map("tenant_id")
+  id              String
+  name            String
+  email           String
+  passwordHash    String    @map("password_hash")
+  role            Role
+  mfaCode         String?   @map("mfa_code")
+  /// Interruptor de administración (activar/desactivar usuario)
+  active          Boolean   @default(true)
+  /// Registro pendiente de aprobación (403 pending_approval)
+  pendingApproval Boolean   @default(false) @map("pending_approval")
+  failedAttempts  Int       @default(0) @map("failed_attempts")
+  lockedAt        DateTime? @map("locked_at")
+  org             String?
+  createdAt       DateTime  @default(now()) @map("created_at")
+
+  tenant           Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  ownedPrograms    Program[]       @relation("ProgramOwner")
+  assignedNcs      NonConformity[] @relation("NcAssignee")
+  executedRuns     TestRun[]       @relation("RunExecutor")
+  auditEntries     AuditLog[]      @relation("AuditActor")
+
+  @@id([tenantId, id])
+  @@unique([tenantId, email])
+  @@map("users")
+}
+
+model Program {
+  tenantId    String        @map("tenant_id")
+  code        String
+  name        String
+  description String        @default("")
+  status      ProgramStatus
+  priority    Priority      @default(medium)
+  classified  Boolean       @default(false)
+  budgetEur   Int           @map("budget_eur")
+  startDate   DateTime      @map("start_date") @db.Date
+  endDate     DateTime      @map("end_date") @db.Date
+  ownerId     String        @map("owner_id")
+  createdAt   DateTime      @default(now()) @map("created_at")
+
+  tenant          Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  owner           User            @relation("ProgramOwner", fields: [tenantId, ownerId], references: [tenantId, id], onDelete: NoAction)
+  milestones      Milestone[]
+  requirements    Requirement[]
+  testCases       TestCase[]
+  nonConformities NonConformity[]
+  documents       Document[]
+  contracts       Contract[]
+
+  @@id([tenantId, code])
+  @@index([tenantId, status])
+  @@map("programs")
+}
+
+model Milestone {
+  tenantId    String   @map("tenant_id")
+  id          String
+  programCode String   @map("program_code")
+  name        String
+  dueDate     DateTime @map("due_date") @db.Date
+  done        Boolean  @default(false)
+
+  tenant  Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  program Program @relation(fields: [tenantId, programCode], references: [tenantId, code], onDelete: Cascade)
+
+  @@id([tenantId, id])
+  @@index([tenantId, programCode])
+  @@map("milestones")
+}
+
+model Requirement {
+  tenantId    String           @map("tenant_id")
+  code        String
+  programCode String           @map("program_code")
+  title       String
+  description String           @default("")
+  priority    Priority         @default(medium)
+  state       RequirementState @default(draft)
+  parentCode  String?          @map("parent_code")
+
+  tenant   Tenant                @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  program  Program               @relation(fields: [tenantId, programCode], references: [tenantId, code], onDelete: Cascade)
+  parent   Requirement?          @relation("RequirementTree", fields: [tenantId, parentCode], references: [tenantId, code], onDelete: NoAction)
+  children Requirement[]         @relation("RequirementTree")
+  tests    RequirementTestCase[]
+
+  @@id([tenantId, code])
+  @@index([tenantId, programCode])
+  @@map("requirements")
+}
+
+model TestCase {
+  tenantId    String @map("tenant_id")
+  code        String
+  programCode String @map("program_code")
+  title       String
+  steps       Json   @default("[]")
+  expected    String @default("")
+
+  tenant       Tenant                @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  program      Program               @relation(fields: [tenantId, programCode], references: [tenantId, code], onDelete: Cascade)
+  requirements RequirementTestCase[]
+  runs         TestRun[]
+
+  @@id([tenantId, code])
+  @@index([tenantId, programCode])
+  @@map("test_cases")
+}
+
+/// N:M requisito ↔ caso de prueba (matriz de trazabilidad)
+model RequirementTestCase {
+  tenantId        String @map("tenant_id")
+  requirementCode String @map("requirement_code")
+  testCaseCode    String @map("test_case_code")
+
+  tenant      Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  requirement Requirement @relation(fields: [tenantId, requirementCode], references: [tenantId, code], onDelete: Cascade)
+  testCase    TestCase    @relation(fields: [tenantId, testCaseCode], references: [tenantId, code], onDelete: Cascade)
+
+  @@id([tenantId, requirementCode, testCaseCode])
+  @@map("requirement_test_cases")
+}
+
+model TestRun {
+  tenantId     String     @map("tenant_id")
+  id           String
+  testCaseCode String     @map("test_case_code")
+  executedAt   DateTime   @map("executed_at")
+  result       TestResult
+  evidenceUrl  String?    @map("evidence_url")
+  executedById String?    @map("executed_by")
+
+  tenant          Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  testCase        TestCase        @relation(fields: [tenantId, testCaseCode], references: [tenantId, code], onDelete: Cascade)
+  executedBy      User?           @relation("RunExecutor", fields: [tenantId, executedById], references: [tenantId, id], onDelete: NoAction)
+  nonConformities NonConformity[]
+
+  @@id([tenantId, id])
+  @@index([tenantId, testCaseCode])
+  @@map("test_runs")
+}
+
+model NonConformity {
+  tenantId    String     @map("tenant_id")
+  code        String
+  programCode String     @map("program_code")
+  severity    NcSeverity
+  description String
+  state       NcState    @default(open)
+  assigneeId  String?    @map("assignee_id")
+  testRunId   String?    @map("test_run_id")
+
+  tenant   Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  program  Program  @relation(fields: [tenantId, programCode], references: [tenantId, code], onDelete: Cascade)
+  assignee User?    @relation("NcAssignee", fields: [tenantId, assigneeId], references: [tenantId, id], onDelete: NoAction)
+  testRun  TestRun? @relation(fields: [tenantId, testRunId], references: [tenantId, id], onDelete: NoAction)
+
+  @@id([tenantId, code])
+  @@index([tenantId, programCode])
+  @@map("non_conformities")
+}
+
+model Document {
+  tenantId       String         @map("tenant_id")
+  id             String
+  programCode    String         @map("program_code")
+  title          String
+  classification Classification @default(public)
+  fileUrl        String         @map("file_url")
+  version        Int            @default(1)
+
+  tenant  Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  program Program @relation(fields: [tenantId, programCode], references: [tenantId, code], onDelete: Cascade)
+
+  @@id([tenantId, id])
+  @@index([tenantId, programCode])
+  @@map("documents")
+}
+
+model AuditLog {
+  tenantId String   @map("tenant_id")
+  id       String
+  actorId  String?  @map("actor_id")
+  action   String
+  entity   String
+  entityId String   @map("entity_id")
+  at       DateTime
+  diff     Json?
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  actor  User?  @relation("AuditActor", fields: [tenantId, actorId], references: [tenantId, id], onDelete: NoAction)
+
+  @@id([tenantId, id])
+  @@index([tenantId, at])
+  @@map("audit_logs")
+}
+
+model Supplier {
+  tenantId     String  @map("tenant_id")
+  id           String
+  name         String
+  nif          String
+  contactEmail String  @map("contact_email")
+  approved     Boolean @default(false)
+
+  tenant    Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  contracts Contract[]
+
+  @@id([tenantId, id])
+  @@map("suppliers")
+}
+
+/// N:M programa ↔ proveedor
+model Contract {
+  tenantId    String   @map("tenant_id")
+  programCode String   @map("program_code")
+  supplierId  String   @map("supplier_id")
+  amountEur   Int      @map("amount_eur")
+  signedAt    DateTime @map("signed_at") @db.Date
+
+  tenant   Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  program  Program  @relation(fields: [tenantId, programCode], references: [tenantId, code], onDelete: Cascade)
+  supplier Supplier @relation(fields: [tenantId, supplierId], references: [tenantId, id], onDelete: Cascade)
+
+  @@id([tenantId, programCode, supplierId])
+  @@map("contracts")
+}

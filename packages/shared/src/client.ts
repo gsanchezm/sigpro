@@ -15,6 +15,7 @@ import type {
   TenantInfo,
   TestUserDto,
 } from './api-types';
+import type { Lang } from './i18n';
 import type { ChaosConfig, CreateProgramInput, ForgotInput, LoginInput, MfaInput, RegisterInput } from './schemas';
 
 /** Error HTTP con el cuerpo de la API y la traza `POST /api/x → 401 Unauthorized`. */
@@ -130,7 +131,7 @@ export const createApiClient = (options: ApiClientOptions) => {
       remove: (code: string) => empty('DELETE', `/programs/${encodeURIComponent(code)}`),
       archive: (code: string) => json<ProgramDto>('POST', `/programs/${encodeURIComponent(code)}/archive`),
       duplicate: (code: string) => json<ProgramDto>('POST', `/programs/${encodeURIComponent(code)}/duplicate`),
-      exportCsv: async (query: ProgramListQuery = {}): Promise<string> => (await request('GET', '/programs/export', { query: { ...query } })).text(),
+      exportCsv: async (query: ProgramListQuery = {}, lang: Lang = 'es'): Promise<string> => (await request('GET', '/programs/export', { query: { ...query, lang } })).text(),
     },
     users: {
       owners: () => json<readonly OwnerDto[]>('GET', '/users/owners'),

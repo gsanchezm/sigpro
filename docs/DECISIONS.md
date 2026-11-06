@@ -33,3 +33,15 @@ Una línea de decisión + una de justificación. Si el plan y el handoff se cont
 - **Sesión:** access JWT corto + refresh token; el refresh se guarda en `localStorage` solo si "Mantener la sesión" está marcado, si no en `sessionStorage`. *Enseña reuse de sesión con `storageState`.*
 - **Bloqueo:** 5.º intento fallido → 423. `bloqueado@sigpro.test` nace bloqueado; `pendiente@sigpro.test` devuelve 403.
 - **`flakyLabels` del caos** solo se almacena y se expone en fase 1; la web lo consume en la fase 3.
+
+## Modelo de datos y API
+
+- **Claves primarias compuestas `(tenant_id, …)` y claves foráneas que incluyen el tenant.** *La propia base impide cruzar datos entre alumnos; borrar el tenant limpia todo por cascada, de ahí el reset en ~120 ms.*
+- **Códigos como clave natural:** `Program.code`, `Requirement.code`, `TestCase.code`, `NonConformity.code` forman parte de la PK; las demás tablas usan un `id` determinista (`u1`, `RUN-001`, `DOC-001`, `s1`).
+- **Refresh token sin estado** (JWT con `type=refresh`, 7 días con "recordar", 12 h sin él); `logout` es 204 y el cliente descarta los tokens. *Evita una tabla de sesiones que la fase 1 no necesita.*
+- **Validación 422 en toda la API** (no 400) con `errors: { campo: claveI18n }`. *El plan pide "mensajes inline vs. error 422 de API".*
+- **Caos:** solo latencia (0–`latencyMs`) y 500 en escrituras (POST/PATCH/PUT/DELETE); `/api/admin`, `/api/auth`, `/api/health`, `/api/docs`, `/api/config` están exentos. *El instructor siempre puede apagarlo y el login sigue estable.*
+- **Reset conserva la configuración de caos** del tenant. *Un alumno que reinicia datos no debe apagar el caos que activó el instructor.*
+- **Archivar = estado `closed`; duplicar = copia en `draft` sin hitos.** *Comportamiento del prototipo.*
+- **Registro:** crea un usuario `pendingApproval` en el tenant de la cabecera (`demo` por defecto). El reset nocturno lo elimina.
+- **`/api/docs-json`** expone el OpenAPI; `/api/docs` admite basic auth con `DOCS_BASIC_AUTH`.
