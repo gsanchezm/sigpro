@@ -21,6 +21,7 @@ import {
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
 import { formatTrace } from '../../lib/errors';
+import { useSaveLabel } from '../../state/config';
 import { useI18n } from '../../state/i18n';
 import { RichTextEditor } from '../../ui/RichTextEditor';
 import { Spinner } from '../../ui/Spinner';
@@ -44,6 +45,7 @@ const sameTags = (a: readonly string[], b: readonly string[]): boolean => a.leng
 /** Panel de detalle: título, prioridad, etiquetas (chips), descripción enriquecida, transiciones de estado y casos enlazados. */
 export const RequirementDetail = ({ requirement, role, onClose, onSave, onTransition, onCopy }: RequirementDetailProps) => {
   const { t } = useI18n();
+  const saveLabel = useSaveLabel();
   const canEdit = can(role, 'requirement.edit');
   const [title, setTitle] = useState(requirement.title);
   const [priority, setPriority] = useState<Priority>(requirement.priority);
@@ -281,7 +283,7 @@ export const RequirementDetail = ({ requirement, role, onClose, onSave, onTransi
             className="btn btn-primary"
           >
             {saving === 'save' ? <Spinner /> : null}
-            {t('requisitos', 'save')}
+            {saveLabel}
           </button>
         </div>
       </form>

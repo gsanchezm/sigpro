@@ -16,6 +16,7 @@ import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { formatTrace } from '../../lib/errors';
 import { useAuth } from '../../state/auth';
+import { useSaveLabel } from '../../state/config';
 import { useI18n } from '../../state/i18n';
 import { useToast } from '../../state/toast';
 import { OwnerCombobox } from '../../ui/OwnerCombobox';
@@ -60,6 +61,7 @@ const fieldClass = (invalid: boolean) => `input !h-8 !bg-surface ${invalid ? '!b
 export const ProgramEditPage = () => {
   const { code = '' } = useParams();
   const { t } = useI18n();
+  const saveLabel = useSaveLabel();
   const { api, user } = useAuth();
   const toast = useToast();
   const navigate = useNavigate();
@@ -407,7 +409,7 @@ export const ProgramEditPage = () => {
               className="btn btn-primary"
             >
               {saving === 'save' ? <Spinner /> : null}
-              {t('programas', 'save')}
+              {saveLabel}
             </button>
           </div>
         </div>
