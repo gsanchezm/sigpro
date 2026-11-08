@@ -41,6 +41,16 @@ describe('seed v3: no conformidades', () => {
   });
 });
 
+describe('seed v3: ejecuciones enlazadas a las NC', () => {
+  it('cada NC enlaza una ejecución de un caso de SU programa (borrar un programa nunca queda bloqueado por NC ajenas)', () => {
+    const caseProgram = new Map(seed.testCases.map((testCase) => [testCase.code, testCase.programCode]));
+    const runCase = new Map(seed.testRuns.map((run) => [run.id, run.testCaseCode]));
+    const linked = seed.nonConformities.filter((nc) => nc.testRunId !== null);
+    expect(linked.length).toBeGreaterThan(0);
+    linked.forEach((nc) => expect(caseProgram.get(runCase.get(nc.testRunId as string) ?? '')).toBe(nc.programCode));
+  });
+});
+
 describe('seed v3: comentarios de NC', () => {
   it('cada comentario pertenece a una NC y a un usuario del tenant, con ids únicos', () => {
     const codes = new Set(seed.nonConformities.map((nc) => nc.code));

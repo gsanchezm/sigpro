@@ -311,7 +311,16 @@ const buildEvidences = (tenantId: string): readonly Evidence[] =>
 const NC_SEVERITY: readonly NonConformity['severity'][] = ['minor', 'major', 'critical'];
 const NC_STATE: readonly NonConformity['state'][] = ['open', 'in_analysis', 'corrective_action', 'closed', 'rejected', 'open'];
 
-const buildNonConformities = (tenantId: string): readonly NonConformity[] =>
+/**
+ * Ejecución enlazada a una NC: siempre de un caso de prueba DEL MISMO PROGRAMA que la NC. Si apuntara a una ejecución de otro
+ * programa, borrar ese programa fallaría con un 500 (la FK de la NC a la ejecución es NO ACTION).
+ */
+const runOfProgram = (programCode: string, n: number, runs: readonly TestRun[], cases: readonly TestCase[]): string | null => {
+  const own = runs.filter((run) => cases.find((testCase) => testCase.code === run.testCaseCode)?.programCode === programCode);
+  return own.length === 0 ? null : (own[(n * 3) % own.length] as TestRun).id;
+};
+
+const buildNonConformities = (tenantId: string, runs: readonly TestRun[], cases: readonly TestCase[]): readonly NonConformity[] =>
   range(12).map((n) => ({
     tenantId,
     code: `NC-${pad(n)}`,
@@ -321,7 +330,7 @@ const buildNonConformities = (tenantId: string): readonly NonConformity[] =>
     state: pick(NC_STATE, n - 1),
     // Cada quinta NC queda sin asignar (tarjetas kanban sin responsable)
     assigneeId: n % 5 === 0 ? null : `u${(n % 4) + 1}`,
-    testRunId: n % 2 === 0 ? `RUN-${pad(n * 2)}` : null,
+    testRunId: n % 2 === 0 ? runOfProgram(`PRG-${pad(Math.floor((n - 1) / 4) + 1)}`, n, runs, cases) : null,
     createdAt: addDays(EPOCH, 20 + n),
   }));
 
@@ -510,7 +519,7 @@ export const buildTenantSeed = (tenantId: string, hash: (plain: string) => strin
   const requirements = buildRequirements(tenantId);
   const testCases = buildTestCases(tenantId);
   const documents = buildDocuments(tenantId, programs);
-  const nonConformities = buildNonConformities(tenantId);
+  const nonConformities = buildNonConformities(tenantId, buildTestRuns(tenantId), testCases);
   return {
     tenant: { id: tenantId, name: tenantId === 'demo' ? 'Demo' : `Alumno ${tenantId.slice('alumno'.length)}`, seedVersion: SEED_VERSION },
     users: buildUsers(tenantId, hash),
