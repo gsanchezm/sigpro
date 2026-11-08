@@ -38,6 +38,11 @@ services:
         value: 'true'
       - key: SEED_STUDENT_TENANTS
         value: '25'
+      # Fase 3: defectos plantados (ejercicio de reporte de defectos) y simulador del panel de misión (Socket.IO)
+      - key: PLANTED_BUGS
+        value: 'true'
+      - key: SIMULATOR_MS
+        value: '4000'
       # Opcional: basic auth para /api/docs en el entorno del curso ("usuario:contraseña")
       - key: DOCS_BASIC_AUTH
         sync: false

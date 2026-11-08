@@ -15,3 +15,6 @@ Thumbs.db
 .vite/
 .superpowers/
 e2e/.compare/
+
+# Defectos plantados: solo para el instructor. El repositorio es público, así que NO se versiona (git add -f si es privado)
+docs/planted-bugs.md

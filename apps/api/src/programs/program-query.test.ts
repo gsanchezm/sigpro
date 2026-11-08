@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildOrderBy, buildWhere, normalizePaging, nextProgramCode, parseListQuery, progressOf } from './program-query';
+import { buildOrderBy, buildWhere, listOrderBy, normalizePaging, nextProgramCode, parseListQuery, progressOf } from './program-query';
 
 describe('parseListQuery', () => {
   it('convierte la query string en valores tipados y descarta los inválidos', () => {
@@ -72,5 +72,26 @@ describe('nextProgramCode', () => {
   it('sigue la numeración existente, aunque haya huecos', () => {
     expect(nextProgramCode(['PRG-001', 'PRG-002', 'PRG-024'])).toBe('PRG-025');
     expect(nextProgramCode([])).toBe('PRG-001');
+  });
+});
+
+describe('defectos plantados de Programas (PLANTED_BUGS)', () => {
+  it('B1: «Hasta» es inclusivo (lte) y con el defecto excluye el último día (lt)', () => {
+    const query = { to: '2026-12-31' };
+    expect(buildWhere('demo', query)).toMatchObject({ endDate: { lte: new Date('2026-12-31T00:00:00.000Z') } });
+    expect(buildWhere('demo', query, { plantedBugs: false })).toMatchObject({ endDate: { lte: new Date('2026-12-31T00:00:00.000Z') } });
+    expect(buildWhere('demo', query, { plantedBugs: true })).toMatchObject({ endDate: { lt: new Date('2026-12-31T00:00:00.000Z') } });
+  });
+
+  it('B1: el filtro «Desde» no cambia con el defecto', () => {
+    expect(buildWhere('demo', { from: '2026-01-01' }, { plantedBugs: true })).toMatchObject({ startDate: { gte: new Date('2026-01-01T00:00:00.000Z') } });
+  });
+
+  it('B2: el orden pedido se conserva en todas las páginas y con el defecto se pierde a partir de la segunda', () => {
+    const query = { sort: 'budget', dir: 'desc' } as const;
+    expect(listOrderBy(query, 2, false)).toEqual(buildOrderBy('budget', 'desc'));
+    expect(listOrderBy(query, 1, true)).toEqual(buildOrderBy('budget', 'desc'));
+    expect(listOrderBy(query, 2, true)).toEqual([{ code: 'asc' }]);
+    expect(listOrderBy(query, 5, true)).toEqual([{ code: 'asc' }]);
   });
 });

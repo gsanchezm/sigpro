@@ -173,6 +173,16 @@ La fase 2 añade tablas y columnas (etiquetas y posición de requisitos, evidenc
 - **`DOCS_BASIC_AUTH`** protege ahora también `/api/docs-json`. El spec `api-docs.spec.ts` lee las credenciales de `E2E_DOCS_AUTH` (`usuario:contraseña`); para probar Render, ponlo al valor que hayas definido allí. El valor por defecto del spec (`curso:docs-2026`) es solo para la API local de pruebas: no lo uses en producción.
 - **Comprobación rápida:** `https://<api>.onrender.com/api/health` y, con sesión de admin, `GET /api/audit` debe devolver 130 eventos en un tenant recién sembrado.
 
+## Actualizar a la fase 3
+
+La fase 3 añade `Milestone.progress`, `NonConformity.created_at` y la tabla `nc_comments`, todo con valores por defecto: la migración `phase3` se aplica sola con el `prisma migrate deploy` del comando de arranque de la API.
+
+- **Re-siembra al arrancar:** los tenants con `seed_version` anterior a 3 se vuelven a sembrar (conservando el caos). Los cambios que los alumnos hubieran hecho en la fase 2 se pierden, igual que con el reset nocturno.
+- **Tiempo real (Socket.IO):** la web abre un WebSocket contra el origen de `VITE_API_URL` (sin `/api`), en la ruta `/socket.io`. Render lo admite en los Web Services sin configuración extra; `CORS_ORIGIN` también gobierna el handshake de Socket.IO. Si pones otro proxy delante de la API, debe dejar pasar el *upgrade* a WebSocket.
+- **Variables nuevas** (ya en `render.yaml`): `PLANTED_BUGS` (`true` por defecto: los 8 defectos del ejercicio de reporte; `false` deja la aplicación limpia) y `SIMULATOR_MS` (`4000`: intervalo del simulador del panel de misión; `0` lo desactiva). El simulador solo emite a los tenants con algún cliente conectado y nunca escribe en la base.
+- **`docs/planted-bugs.md` no está en el repositorio** (es público): consérvalo en privado. `/api/config` solo expone `plantedBugs: true|false`.
+- **Comprobación rápida:** `GET /api/config` (cabecera `x-tenant`) devuelve `plantedBugs`; con sesión, `GET /api/mission/summary` devuelve los KPIs (8 NC abiertas en un tenant recién sembrado) y el panel `/mission` muestra «En vivo».
+
 ## 9. Rollback
 
 - **Código:** servicio → **Events** (o **Deploys**) → elige un despliegue anterior correcto → **Rollback**. Aplica a la API y a la web.

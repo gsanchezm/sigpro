@@ -26,9 +26,15 @@ Laboratorio de pruebas para el curso **Playwright + TypeScript**: un gestor fict
 | `/verification`, `/verification/:code` | Verificación | Casos de prueba, ejecución con radio, subida simple / múltiple / zona de arrastre, `getByAltText`, informe PDF |
 | `/documents`, `/documents/:id`, `/documents/:id/view` | Documentos | Clasificación por rol (403), `<iframe>` con `frameLocator`, `target="_blank"`, comparación de versiones, descargas |
 | `/audit` | Auditoría | Feed con scroll infinito (`role="feed"`, cursor), filtros por fecha, entidad y texto |
+| `/nc`, `/nc/:code` | No conformidades | Kanban con drag & drop entre columnas, `<sigpro-severity-picker>` (Shadow DOM abierto), combobox de asignación, comentarios, cierre con mínimo 20 caracteres, `prompt()` nativo |
+| `/mission` | Panel de misión | 4 KPIs, gráficas, feed en tiempo real por Socket.IO (`waitForEvent`, `expect.poll`), campana con contador, tooltips |
+| `/admin` | Administración | Usuarios (switch y select de rol), auditoría por rango de fechas, modo caos (sliders y textos alternos), reset con `confirm()` nativo |
+| `/programs/:code` (pestaña Hitos), `/profile` | Hitos y Perfil | Edición inline de celdas, slider con `aria-valuenow`; radios, checkbox y switch |
 | `/lab`, `/legal/terms`, `/legal/privacy`, `/help` | Laboratorio y páginas públicas | Credenciales, reset, caos, contraejemplos de locators, pestañas nuevas |
 
-Pendiente: Panel de misión, No conformidades y Administración (fase 3) y la app móvil (fase 4).
+Pendiente: la app móvil (fase 4).
+
+La fase 3 trae además **8 defectos plantados** para el ejercicio de reporte de defectos (`PLANTED_BUGS`, activos por defecto; `false` deja la aplicación limpia) y un **simulador de misión** (`SIMULATOR_MS`). El catálogo de defectos es solo para el instructor y no se versiona (`docs/planted-bugs.md` está en `.gitignore`).
 
 ## Arranque local
 
@@ -81,8 +87,10 @@ E2E_API_URL=http://localhost:3001/api E2E_WEB_URL=http://localhost:5174 pnpm e2e
 
 El spec de basic auth (`api-docs.spec.ts`) usa una segunda API con `DOCS_BASIC_AUTH=curso:docs-2026` que Playwright arranca solo en el puerto 3100 (`E2E_DOCS_URL` y `E2E_DOCS_AUTH` lo cambian).
 
-> En Windows, `prisma generate` no puede reemplazar el motor de consultas mientras otra API lo tenga cargado (`EPERM … query_engine-windows.dll.node`): para `pnpm typecheck` y `pnpm build` detén antes las APIs en marcha.
+> En Windows, `prisma generate` no puede sobrescribir el motor de consultas mientras otra API lo tenga cargado (`EPERM … query_engine-windows.dll.node`). `apps/api/scripts/generate-prisma.mjs` (lo usan `build` y `typecheck`) aparta el motor en uso y reintenta, así que ya no hace falta detener la API.
+
+**Varias ejecuciones de Playwright a la vez** contra la misma pila: con `E2E_SKIP_GLOBAL_RESET=1` se salta el reset global de `globalSetup` (cada spec ya reinicia su propio tenant en `beforeAll`) y no se pisan los datos entre sí.
 
 ## Despliegue
 
-`render.yaml` declara la API (Web Service), la web (Static Site), PostgreSQL y el Cron Job de reset nocturno. `JWT_SECRET`, `ADMIN_KEY` y `DOCS_BASIC_AUTH` se piden al crear el Blueprint. Al desplegar la fase 2, la API aplica la migración `phase2` y vuelve a sembrar los tenants con `seed_version` antigua (ver [`docs/DEPLOY-RENDER.md`](docs/DEPLOY-RENDER.md#actualizar-a-la-fase-2)). El workflow [`ci.yml`](.github/workflows/ci.yml) ejecuta lint, typecheck, tests unitarios, build y los specs e2e de humo con un PostgreSQL de servicio.
+`render.yaml` declara la API (Web Service), la web (Static Site), PostgreSQL y el Cron Job de reset nocturno. `JWT_SECRET`, `ADMIN_KEY` y `DOCS_BASIC_AUTH` se piden al crear el Blueprint. Al desplegar una fase nueva, la API aplica sus migraciones y vuelve a sembrar los tenants con `seed_version` antigua (ver [`docs/DEPLOY-RENDER.md`](docs/DEPLOY-RENDER.md#actualizar-a-la-fase-3)); la fase 3 añade Socket.IO, `PLANTED_BUGS` y `SIMULATOR_MS`. El workflow [`ci.yml`](.github/workflows/ci.yml) ejecuta lint, typecheck, tests unitarios, build y los specs e2e de humo con un PostgreSQL de servicio.

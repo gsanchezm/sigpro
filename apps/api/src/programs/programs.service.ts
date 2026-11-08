@@ -6,7 +6,7 @@ import type { AuthUser } from '../common/auth.types';
 import { fail } from '../common/errors';
 import { ENV, type Env } from '../config/env';
 import { PrismaService } from '../prisma/prisma.service';
-import { buildOrderBy, buildWhere, normalizePaging, progressOf } from './program-query';
+import { buildOrderBy, buildWhere, listOrderBy, normalizePaging, progressOf } from './program-query';
 
 const WITH_DETAIL = { owner: { select: { name: true } }, milestones: { select: { done: true } } } as const;
 type ProgramRow = Prisma.ProgramGetPayload<{ include: typeof WITH_DETAIL }>;
@@ -53,8 +53,7 @@ export class ProgramsService {
     const safePage = Math.min(page, pages);
     const rows = await this.prisma.program.findMany({
       where,
-      // Defecto plantado: al pasar de la primera página se pierde el orden pedido (vuelve al orden por código)
-      orderBy: this.env.PLANTED_BUGS && safePage > 1 ? buildOrderBy(undefined, undefined) : buildOrderBy(query.sort, query.dir),
+      orderBy: listOrderBy(query, safePage, this.env.PLANTED_BUGS),
       skip: (safePage - 1) * pageSize,
       take: pageSize,
       include: WITH_DETAIL,

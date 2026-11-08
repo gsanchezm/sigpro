@@ -77,6 +77,13 @@ export const buildOrderBy = (sort: ProgramSortColumn | undefined, dir: SortDir |
   return column === 'code' ? [primary] : [primary, { code: 'asc' }];
 };
 
+/**
+ * Orden de la lista según la página. Defecto plantado (`PLANTED_BUGS`): al pasar de la primera página se pierde el orden
+ * pedido y vuelve el orden por código.
+ */
+export const listOrderBy = (query: Pick<ProgramListQuery, 'sort' | 'dir'>, page: number, plantedBugs: boolean): Prisma.ProgramOrderByWithRelationInput[] =>
+  plantedBugs && page > 1 ? buildOrderBy(undefined, undefined) : buildOrderBy(query.sort, query.dir);
+
 export const progressOf = (done: number, total: number): number => (total === 0 ? 0 : Math.round((done / total) * 100));
 
 export { nextProgramCode } from '@sigpro/shared';
