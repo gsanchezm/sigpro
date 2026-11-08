@@ -26,11 +26,11 @@ export default defineConfig({
   projects: [
     {
       name: 'chromium',
-      testIgnore: ['**/screens.spec.ts', '**/compare.spec.ts'],
+      testIgnore: ['**/screens*.spec.ts', '**/compare.spec.ts'],
       use: { ...devices['Desktop Chrome'], viewport: { width: 1440, height: 900 } },
     },
     // Capturas en claro/oscuro a 1440 y 390 px → docs/screens/
-    { name: 'screens', testMatch: '**/screens.spec.ts', use: { ...devices['Desktop Chrome'] } },
+    { name: 'screens', testMatch: '**/screens*.spec.ts', use: { ...devices['Desktop Chrome'] } },
     // Comparación visual con los prototipos del handoff (servidos por HTTP)
     { name: 'compare', testMatch: '**/compare.spec.ts', use: { ...devices['Desktop Chrome'] } },
   ],

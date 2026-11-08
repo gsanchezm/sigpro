@@ -40,4 +40,6 @@ export const STORAGE_KEYS = {
   tenant: 'sigpro.tenant',
   session: 'sigpro.session',
   cookies: 'sigpro.cookies',
+  live: 'sigpro.live',
+  digest: 'sigpro.digest',
 } as const;

@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import { BrowserRouter, Navigate, Outlet, Route, Routes } from 'react-router-dom';
 import { AppShell } from './layout/AppShell';
-import { ComingSoon } from './pages/ComingSoon';
+import { AdminPage } from './pages/admin/AdminPage';
 import { AuditPage } from './pages/audit/AuditPage';
 import { DocumentDetailPage } from './pages/documents/DocumentDetailPage';
 import { DocumentViewerPage } from './pages/documents/DocumentViewerPage';
@@ -10,6 +10,9 @@ import { AccessPage } from './pages/access/AccessPage';
 import { LabPage } from './pages/lab/LabPage';
 import { LegalPage } from './pages/legal/LegalPage';
 import { PublicLab } from './pages/lab/PublicLab';
+import { MissionPage } from './pages/mission/MissionPage';
+import { NcPage } from './pages/nc/NcPage';
+import { ProfilePage } from './pages/profile/ProfilePage';
 import { ProgramDetailPage } from './pages/programs/ProgramDetailPage';
 import { ProgramEditPage } from './pages/programs/ProgramEditPage';
 import { ProgramsPage } from './pages/programs/ProgramsPage';
@@ -17,7 +20,9 @@ import { RequirementsPage } from './pages/requirements/RequirementsPage';
 import { TestCaseDetailPage } from './pages/verification/TestCaseDetailPage';
 import { VerificationPage } from './pages/verification/VerificationPage';
 import { AuthProvider, useAuth } from './state/auth';
+import { ConfigProvider } from './state/config';
 import { I18nProvider, useI18n } from './state/i18n';
+import { LiveProvider } from './state/live';
 import { ThemeProvider } from './state/theme';
 import { ToastProvider } from './state/toast';
 
@@ -60,16 +65,13 @@ const LabRoute = () => {
   );
 };
 
-const Soon = ({ label }: { label: 'nav_mission' | 'nav_nc' | 'nav_admin' }) => {
-  const { t } = useI18n();
-  return <ComingSoon title={t('programas', label)} />;
-};
-
 export const App = () => (
   <ThemeProvider>
     <I18nProvider>
       <ToastProvider>
         <AuthProvider>
+          <ConfigProvider>
+            <LiveProvider>
           <BrowserRouter>
             <Routes>
               <Route path="/" element={<Navigate to="/programs" replace />} />
@@ -109,19 +111,23 @@ export const App = () => (
                   <Route path="/programs/:code" element={<ProgramDetailPage />} />
                   <Route path="/programs/:code/edit" element={<ProgramEditPage />} />
                   <Route path="/programs/:code/requirements" element={<RequirementsPage />} />
-                  <Route path="/mission" element={<Soon label="nav_mission" />} />
+                  <Route path="/mission" element={<MissionPage />} />
                   <Route path="/verification" element={<VerificationPage />} />
                   <Route path="/verification/:code" element={<TestCaseDetailPage />} />
-                  <Route path="/nc" element={<Soon label="nav_nc" />} />
+                  <Route path="/nc" element={<NcPage />} />
+                  <Route path="/nc/:code" element={<NcPage />} />
                   <Route path="/documents" element={<DocumentsPage />} />
                   <Route path="/documents/:id" element={<DocumentDetailPage />} />
                   <Route path="/audit" element={<AuditPage />} />
-                  <Route path="/admin" element={<Soon label="nav_admin" />} />
+                  <Route path="/admin" element={<AdminPage />} />
+                  <Route path="/profile" element={<ProfilePage />} />
                 </Route>
               </Route>
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
           </BrowserRouter>
+            </LiveProvider>
+          </ConfigProvider>
         </AuthProvider>
       </ToastProvider>
     </I18nProvider>

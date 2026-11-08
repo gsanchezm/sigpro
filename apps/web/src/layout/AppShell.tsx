@@ -1,9 +1,10 @@
-import { DETALLE_TESTIDS, LANGS, PROGRAMAS_DYNAMIC_TESTIDS, PROGRAMAS_TESTIDS, type Lang, type MessageKey } from '@sigpro/shared';
+import { DETALLE_TESTIDS, LANGS, MISION_DYNAMIC_TESTIDS, PROGRAMAS_DYNAMIC_TESTIDS, PROGRAMAS_TESTIDS, type Lang, type MessageKey } from '@sigpro/shared';
 import { useEffect, useState, type ReactNode } from 'react';
 import { Link, Outlet, useLocation } from 'react-router-dom';
 import { useBreakpoint } from '../lib/hooks';
 import { useAuth } from '../state/auth';
 import { isSupportedLang, useI18n } from '../state/i18n';
+import { useLive } from '../state/live';
 import { useTheme } from '../state/theme';
 import { Logo } from '../ui/Logo';
 import { MenuIcon, MoonIcon, SearchIcon, SunIcon } from '../ui/icons';
@@ -42,6 +43,7 @@ export const AppShell = ({ children }: { children?: ReactNode } = {}) => {
   const breakpoint = useBreakpoint();
   const isMobile = breakpoint === 'mobile';
   const { draft, setDraft } = useGlobalSearch();
+  const { ncOpen } = useLive();
 
   const [userCollapsed, setUserCollapsed] = useState<boolean | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -66,6 +68,7 @@ export const AppShell = ({ children }: { children?: ReactNode } = {}) => {
     requirements: t('programas', 'nav_requirements'),
     edit: t('programas', 'edit'),
     other: (key) => {
+      if (key === 'profile') return t('perfil', 'title');
       const item = nav.find((candidate) => candidate.key === key);
       return item ? t('programas', navLabelKey(item)) : key;
     },
@@ -111,7 +114,11 @@ export const AppShell = ({ children }: { children?: ReactNode } = {}) => {
                 >
                   <NavGlyph glyph={item.glyph} size={18} />
                   {sidebarExpanded ? <span className="flex-1 whitespace-nowrap">{t('programas', navLabelKey(item))}</span> : null}
-                  {item.badge && sidebarExpanded ? <span className="rounded-full bg-danger-soft px-[5px] font-mono text-[10.5px] text-danger">{item.badge}</span> : null}
+                  {item.key === 'nc' && ncOpen !== null && sidebarExpanded ? (
+                    <span data-testid={MISION_DYNAMIC_TESTIDS.NAV_BADGE('nc')} className="rounded-full bg-danger-soft px-[5px] font-mono text-[10.5px] text-danger">
+                      {ncOpen}
+                    </span>
+                  ) : null}
                 </Link>
               );
             })}

@@ -1,48 +1,60 @@
-import { PROGRAMAS_TESTIDS } from '@sigpro/shared';
+import { MISION_DYNAMIC_TESTIDS, MISION_TESTIDS, PROGRAMAS_TESTIDS, type MissionEventDto } from '@sigpro/shared';
 import { useCallback, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useDismiss, type Breakpoint } from '../lib/hooks';
+import { missionEventText } from '../pages/mission/event-text';
 import { useAuth } from '../state/auth';
 import { useI18n } from '../state/i18n';
+import { useLive } from '../state/live';
 import { useToast } from '../state/toast';
 import { Avatar } from '../ui/Avatar';
 import { BellIcon } from '../ui/icons';
 
-const NOTIFICATIONS = [
-  { key: 'notif1', time: '09:42', tone: 'var(--danger)' },
-  { key: 'notif2', time: '08:15', tone: 'var(--ok)' },
-  { key: 'notif3', time: 'yesterday', tone: 'var(--warn)' },
-] as const;
+const SEVERITY_COLOR: Readonly<Record<MissionEventDto['severity'], string>> = {
+  info: 'var(--info)',
+  ok: 'var(--ok)',
+  warn: 'var(--warn)',
+  danger: 'var(--danger)',
+};
 
-/** Campana con popover de notificaciones (estáticas en la fase 1; en tiempo real en la fase 3). */
+/** Campana con contador y popover de notificaciones en tiempo real (los avisos que llegan por Socket.IO). */
 export const NotificationsMenu = () => {
   const { t, lang } = useI18n();
+  const { notifications, unread, markAllRead } = useLive();
   const [open, setOpen] = useState(false);
-  const [unread, setUnread] = useState(true);
   const rootRef = useRef<HTMLDivElement>(null);
   const close = useCallback(() => setOpen(false), []);
   useDismiss(open, [rootRef], close);
+  const time = (iso: string): string => new Date(iso).toLocaleTimeString(lang === 'es' ? 'es-ES' : 'en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
 
   return (
     <div ref={rootRef} className="relative">
       <button
         type="button"
         data-testid={PROGRAMAS_TESTIDS.LAYOUT_NOTIFICATIONS}
-        aria-label={t('programas', 'notifications')}
+        aria-label={unread > 0 ? t('mision', 'notificationsAria', { count: unread }) : t('programas', 'notifications')}
         aria-haspopup="dialog"
         aria-expanded={open}
         onClick={() => setOpen((current) => !current)}
         className="icon-btn relative"
       >
         <BellIcon />
-        {unread ? <span aria-hidden="true" className="absolute top-[5px] right-[5px] size-[7px] rounded-full border-[1.5px] border-surface bg-danger" /> : null}
+        {unread > 0 ? (
+          <span
+            aria-hidden="true"
+            data-testid={MISION_TESTIDS.LAYOUT_NOTIFICATIONS_COUNT}
+            className="absolute -top-px -right-px grid h-[15px] min-w-[15px] place-items-center rounded-full border-[1.5px] border-surface bg-danger px-[3px] font-mono text-[9.5px] leading-none font-semibold text-white"
+          >
+            {unread > 9 ? '9+' : unread}
+          </span>
+        ) : null}
       </button>
       {open ? (
         <div
           role="dialog"
           aria-label={t('programas', 'notifications')}
           data-testid={PROGRAMAS_TESTIDS.LAYOUT_NOTIFICATIONS_POPOVER}
-          className="absolute top-[38px] right-0 z-40 flex w-[300px] flex-col rounded-[6px] border border-border bg-surface shadow-pop"
+          className="absolute top-[38px] right-0 z-40 flex w-[min(320px,calc(100vw-24px))] flex-col rounded-[6px] border border-border bg-surface shadow-pop"
         >
           <div className="flex items-center justify-between border-b border-border px-3 py-2.5 font-semibold">
             {t('programas', 'notifications')}
@@ -50,7 +62,7 @@ export const NotificationsMenu = () => {
               type="button"
               data-testid={PROGRAMAS_TESTIDS.LAYOUT_NOTIFICATIONS_MARKREAD}
               onClick={() => {
-                setUnread(false);
+                markAllRead();
                 setOpen(false);
               }}
               className="link-btn text-[12px]"
@@ -58,15 +70,23 @@ export const NotificationsMenu = () => {
               {t('programas', 'markRead')}
             </button>
           </div>
-          {NOTIFICATIONS.map((item) => (
-            <div key={item.key} className="flex gap-2.5 border-b border-border px-3 py-2.5 last:border-b-0">
-              <span aria-hidden="true" className="mt-1.5 size-2 flex-none rounded-full" style={{ background: item.tone }} />
-              <div className="min-w-0 flex-1">
-                <div className="text-[12.5px]">{t('programas', item.key)}</div>
-                <div className="font-mono text-[11px] text-fg-3">{item.time === 'yesterday' ? (lang === 'es' ? 'ayer' : 'yesterday') : item.time}</div>
-              </div>
-            </div>
-          ))}
+          <div aria-live="polite" data-testid={MISION_TESTIDS.LAYOUT_NOTIFICATIONS_LIVE} className="max-h-[320px] overflow-y-auto">
+            {notifications.length === 0 ? (
+              <p data-testid={MISION_TESTIDS.LAYOUT_NOTIFICATIONS_EMPTY} className="m-0 px-3 py-6 text-center text-[12.5px] text-fg-3">
+                {t('mision', 'notificationsEmpty')}
+              </p>
+            ) : (
+              notifications.map((item) => (
+                <div key={item.id} data-testid={MISION_DYNAMIC_TESTIDS.LAYOUT_NOTIFICATION(item.seq)} data-severity={item.severity} className="flex gap-2.5 border-b border-border px-3 py-2.5 last:border-b-0">
+                  <span aria-hidden="true" className="mt-1.5 size-2 flex-none rounded-full" style={{ background: SEVERITY_COLOR[item.severity] }} />
+                  <div className="min-w-0 flex-1">
+                    <div className="text-[12.5px]">{missionEventText(item, t)}</div>
+                    <div className="font-mono text-[11px] text-fg-3">{time(item.at)}</div>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
         </div>
       ) : null}
     </div>
@@ -119,7 +139,16 @@ export const UserMenu = ({ breakpoint }: { breakpoint: Breakpoint }) => {
           data-testid={PROGRAMAS_TESTIDS.LAYOUT_USER_MENU_POPOVER}
           className="absolute top-[38px] right-0 z-40 flex w-[200px] flex-col rounded-[6px] border border-border bg-surface p-1.5 shadow-pop"
         >
-          <button type="button" role="menuitem" data-testid={PROGRAMAS_TESTIDS.LAYOUT_USER_PROFILE} onClick={close} className="menu-item">
+          <button
+            type="button"
+            role="menuitem"
+            data-testid={PROGRAMAS_TESTIDS.LAYOUT_USER_PROFILE}
+            onClick={() => {
+              close();
+              navigate('/profile');
+            }}
+            className="menu-item"
+          >
             {t('programas', 'profile')}
           </button>
           <button
@@ -150,3 +179,4 @@ export const UserMenu = ({ breakpoint }: { breakpoint: Breakpoint }) => {
     </div>
   );
 };
+

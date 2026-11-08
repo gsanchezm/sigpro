@@ -19,6 +19,8 @@ interface AuthValue {
   readonly publicApi: ApiClient;
   readonly signIn: (session: SessionResponse, remember: boolean) => void;
   readonly signOut: () => Promise<void>;
+  /** Access token vigente (o null); el handshake de Socket.IO lo lee en cada conexión. */
+  readonly getToken: () => string | null;
 }
 
 const AuthContext = createContext<AuthValue | null>(null);
@@ -109,7 +111,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     await publicApi.auth.logout(refreshToken).catch(() => undefined);
   }, [drop, publicApi]);
 
-  const value = useMemo<AuthValue>(() => ({ status, user, api, publicApi, signIn: apply, signOut }), [status, user, api, publicApi, apply, signOut]);
+  const getToken = useCallback(() => accessToken.current, []);
+  const value = useMemo<AuthValue>(() => ({ status, user, api, publicApi, signIn: apply, signOut, getToken }), [status, user, api, publicApi, apply, signOut, getToken]);
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };
 

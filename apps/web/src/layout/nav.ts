@@ -6,7 +6,6 @@ export interface NavItem {
   readonly key: NavKey;
   readonly href: string;
   readonly glyph: string;
-  readonly badge?: number;
   readonly roles?: readonly Role[];
 }
 
@@ -15,7 +14,7 @@ const NAV_ITEMS: readonly NavItem[] = [
   { key: 'programs', href: '/programs', glyph: 'P' },
   { key: 'requirements', href: '/programs/PRG-001/requirements', glyph: 'R' },
   { key: 'verification', href: '/verification', glyph: 'V' },
-  { key: 'nc', href: '/nc', glyph: 'NC', badge: 3 },
+  { key: 'nc', href: '/nc', glyph: 'NC' },
   { key: 'documents', href: '/documents', glyph: 'D' },
   { key: 'audit', href: '/audit', glyph: 'A', roles: ['admin', 'auditor'] },
   { key: 'admin', href: '/admin', glyph: '⚙', roles: ['admin'] },

@@ -328,12 +328,16 @@ test.describe('Programas · shell, atajos y detalle', () => {
     await openAs(page, 'admin');
     await page.getByRole('button', { name: 'Notificaciones' }).click();
     const popover = page.getByRole('dialog', { name: 'Notificaciones' });
-    await expect(popover).toContainText('NC-004 escalada a crítica en PRG-002');
+    // Las notificaciones llegan por WebSocket (fase 3): al abrir sin eventos recibidos solo hay el estado vacío
+    await expect(popover).toBeVisible();
     await page.getByRole('button', { name: 'Marcar leídas' }).click();
     await expect(popover).toBeHidden();
 
     await page.getByRole('button', { name: 'Menú de usuario' }).click();
     await expect(page.getByRole('menuitem', { name: 'Perfil' })).toBeVisible();
+    await page.getByRole('menuitem', { name: 'Perfil' }).click();
+    await expect(page).toHaveURL(/\/profile$/);
+    await page.getByRole('button', { name: 'Menú de usuario' }).click();
     await expect(page.getByTestId('layout-user-menu').getByAltText('Marta Ruiz')).toBeVisible();
   });
 
@@ -370,10 +374,15 @@ test.describe('Programas · shell, atajos y detalle', () => {
     await expect(page.getByTestId('program-detail-not-found')).toContainText('No se encontró el programa');
   });
 
-  test('las secciones futuras del menú existen como marcador', async ({ page }) => {
+  test('el menú lleva a las secciones de la fase 3', async ({ page }) => {
     await openAs(page, 'admin');
     await page.getByTestId('nav-nc').click();
-    await expect(page.getByTestId('coming-soon')).toContainText('No conformidades');
+    await expect(page).toHaveURL(/\/nc$/);
+    await expect(page.getByRole('heading', { name: 'No conformidades', level: 1 })).toBeVisible();
+    await page.getByTestId('nav-mission').click();
+    await expect(page.getByRole('heading', { name: 'Panel de misión', level: 1 })).toBeVisible();
+    await page.getByTestId('nav-admin').click();
+    await expect(page.getByRole('heading', { name: 'Administración', level: 1 })).toBeVisible();
   });
 });
 
