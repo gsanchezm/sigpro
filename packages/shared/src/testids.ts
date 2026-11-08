@@ -677,6 +677,7 @@ export const ADMIN_TESTIDS = {
   ADMIN_CHAOS_PREVIEW: 'admin-chaos-preview',
   ADMIN_DATA_PANEL: 'admin-data-panel',
   ADMIN_RESET: 'admin-reset',
+  ADMIN_TENANT_INFO: 'admin-tenant-info',
 } as const;
 
 export const ADMIN_DYNAMIC_TESTIDS = {

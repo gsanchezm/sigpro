@@ -311,3 +311,25 @@ test('datos: «Restaurar datos del tenant» usa confirm() nativo (cancelar y ace
   await expect(page.getByTestId('toast-ok')).toContainText(TENANT);
   await expect.poll(roleOfU4).toBe('auditor');
 });
+
+test('datos: «Información del tenant» lanza un alert() nativo con el tenant y los usuarios', async ({ page, request }) => {
+  const headers = await authHeaders(request, 'admin', TENANT);
+  const users = (await (await request.get(`${API_URL}/admin/users`, { headers })).json()) as { active: boolean }[];
+  const active = users.filter((user) => user.active).length;
+
+  await openAs(page, 'admin', '/admin?tab=data', { tenant: TENANT });
+  const seen: { type: string; message: string }[] = [];
+  // El manejador va ANTES del clic: el aviso nativo bloquea la página hasta que se resuelve
+  page.once('dialog', async (dialog) => {
+    seen.push({ type: dialog.type(), message: dialog.message() });
+    await dialog.accept();
+  });
+  await page.getByRole('button', { name: 'Información del tenant' }).click();
+  await expect.poll(() => seen.length).toBe(1);
+  expect(seen[0]?.type).toBe('alert');
+  expect(seen[0]?.message).toContain('Información del tenant');
+  expect(seen[0]?.message).toContain(`Tenant: ${TENANT}`);
+  expect(seen[0]?.message).toContain(`Usuarios: ${users.length} (${active} activos)`);
+  // Un alert() solo tiene «Aceptar»: la página sigue operativa después
+  await expect(page.getByRole('button', { name: 'Restaurar datos del tenant' })).toBeEnabled();
+});

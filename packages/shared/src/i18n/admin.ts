@@ -73,6 +73,11 @@ export const adminEs = {
   reset: 'Restaurar datos del tenant',
   resetConfirm: '¿Restaurar los datos del tenant al estado inicial? Se perderán los cambios que hayas hecho.',
   resetDone: 'Datos restaurados',
+  tenantInfo: 'Información del tenant',
+  tenantInfoHint: 'Muestra un aviso nativo del navegador (alert()) con los datos del tenant.',
+  tenantInfoTitle: 'Información del tenant',
+  tenantInfoTenant: 'Tenant: {tenant}',
+  tenantInfoUsers: 'Usuarios: {total} ({active} activos)',
   updateErrorTitle: 'No se pudo guardar el cambio',
 };
 
@@ -145,5 +150,10 @@ export const adminEn: typeof adminEs = {
   reset: 'Restore tenant data',
   resetConfirm: 'Restore the tenant data to its initial state? The changes you made will be lost.',
   resetDone: 'Data restored',
+  tenantInfo: 'Tenant information',
+  tenantInfoHint: 'Shows a native browser alert (alert()) with the tenant data.',
+  tenantInfoTitle: 'Tenant information',
+  tenantInfoTenant: 'Tenant: {tenant}',
+  tenantInfoUsers: 'Users: {total} ({active} active)',
   updateErrorTitle: 'The change could not be saved',
 };
