@@ -1,6 +1,7 @@
 import type { ChaosConfig } from './schemas';
 import type { Classification, Priority, ProgramSortColumn, ProgramStatus, RequirementState, RequirementTag, Role, SortDir, TestCaseSortColumn, TestResult } from './domain';
 import type { DiffRow, DiffStats } from './documents';
+import type { NcCommentKind, NcSeverity, NcState } from './nc';
 
 // Contrato HTTP compartido: la API lo implementa y la web (y la futura app móvil) lo consume.
 
@@ -103,6 +104,8 @@ export interface PublicConfig {
   readonly version: string;
   readonly testUsers: boolean;
   readonly chaos: ChaosConfig;
+  /** Defectos plantados activos (`PLANTED_BUGS`); la web aplica su parte sin saber cuáles son. */
+  readonly plantedBugs: boolean;
 }
 
 export interface HealthResponse {
@@ -305,4 +308,78 @@ export interface AuditPageDto {
   readonly nextCursor: string | null;
   /** Eventos que cumplen los filtros (no solo los de esta página). */
   readonly total: number;
+}
+
+// --- No conformidades (fase 3) ------------------------------------------------
+
+export interface NcDto {
+  readonly code: string;
+  readonly programCode: string;
+  readonly programName: string;
+  readonly severity: NcSeverity;
+  /** HTML saneado (lista blanca de `sanitizeRichText`). */
+  readonly description: string;
+  readonly state: NcState;
+  readonly assigneeId: string | null;
+  readonly assigneeName: string | null;
+  readonly testRunId: string | null;
+  readonly commentCount: number;
+  readonly createdAt: string;
+}
+
+export interface NcCommentDto {
+  readonly id: string;
+  readonly authorId: string | null;
+  readonly authorName: string | null;
+  readonly body: string;
+  readonly kind: NcCommentKind;
+  readonly createdAt: string;
+}
+
+export interface NcDetailDto extends NcDto {
+  /** Comentarios de más antiguo a más reciente. */
+  readonly comments: readonly NcCommentDto[];
+  /** Estados a los que se puede pasar desde el actual (la máquina de estados, sin mirar permisos). */
+  readonly transitions: readonly NcState[];
+}
+
+export interface NcListQuery {
+  readonly q?: string;
+  readonly program?: string;
+  readonly severity?: NcSeverity;
+  /** Id de usuario o `none` (sin asignar). */
+  readonly assignee?: string;
+}
+
+export interface NcListResponse {
+  readonly items: readonly NcDto[];
+  /** NC que cumplen los filtros. */
+  readonly total: number;
+  readonly totalAll: number;
+}
+
+// --- Hitos (fase 3) -------------------------------------------------------------
+
+export interface MilestoneDto {
+  readonly id: string;
+  readonly programCode: string;
+  readonly name: string;
+  /** `YYYY-MM-DD`. */
+  readonly dueDate: string;
+  /** 0–100; con 100 el hito está cumplido. */
+  readonly progress: number;
+  readonly done: boolean;
+}
+
+// --- Administración (fase 3) ---------------------------------------------------
+
+export interface AdminUserDto {
+  readonly id: string;
+  readonly name: string;
+  readonly email: string;
+  readonly role: Role;
+  readonly active: boolean;
+  readonly locked: boolean;
+  readonly pending: boolean;
+  readonly org: string | null;
 }

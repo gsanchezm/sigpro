@@ -1,7 +1,9 @@
 import { z } from 'zod';
-import { PRIORITIES, PROGRAM_STATUSES, REGISTER_ROLES, REQUIREMENT_STATES, REQUIREMENT_TAGS, TEST_RESULTS } from './domain';
+import { PRIORITIES, PROGRAM_STATUSES, REGISTER_ROLES, REQUIREMENT_STATES, REQUIREMENT_TAGS, ROLES, TEST_RESULTS } from './domain';
+import { MILESTONE_NAME_MAX, MILESTONE_NAME_MIN } from './milestones';
+import { NC_COMMENT_MAX_LENGTH, NC_DESCRIPTION_MIN_LENGTH, NC_SEVERITIES, NC_STATES } from './nc';
 import { isPasswordValid } from './password';
-import { sanitizeRichText } from './richtext';
+import { richTextToPlain, sanitizeRichText } from './richtext';
 
 // Los mensajes de error son CLAVES i18n (espacio `acceso` o `programas`); la UI las traduce.
 // Esto permite validar igual en cliente y servidor y mostrar el texto en el idioma activo.
@@ -160,3 +162,66 @@ export const flattenIssues = (issues: readonly { path: readonly (string | number
     const key = issue.path.join('.');
     return key in acc ? acc : { ...acc, [key]: issue.message };
   }, {});
+
+// --- Fase 3: no conformidades (mensajes = claves del espacio `nc`) ---------------
+
+const ncDescription = z
+  .string()
+  .max(12000, 'descLong')
+  .transform(sanitizeRichText)
+  .pipe(z.string().max(4000, 'descLong').refine((html) => richTextToPlain(html).trim().length >= NC_DESCRIPTION_MIN_LENGTH, 'descShort'));
+const ncAssignee = z.string().min(1).nullable();
+
+export const createNcSchema = z.object({
+  programCode: z.string().min(1, 'programRequired'),
+  severity: z.enum(NC_SEVERITIES, { errorMap: () => ({ message: 'severityRequired' }) }),
+  description: ncDescription,
+  assigneeId: ncAssignee.default(null),
+});
+export type CreateNcInput = z.infer<typeof createNcSchema>;
+
+export const updateNcSchema = z
+  .object({
+    severity: z.enum(NC_SEVERITIES, { errorMap: () => ({ message: 'severityRequired' }) }).optional(),
+    description: ncDescription.optional(),
+    assigneeId: ncAssignee.optional(),
+  })
+  .refine((value) => Object.values(value).some((field) => field !== undefined), { message: 'nothingToUpdate' });
+export type UpdateNcInput = z.infer<typeof updateNcSchema>;
+
+/** `comment` es obligatorio solo al cerrar (la longitud mínima la valida el servicio: depende de `PLANTED_BUGS`). */
+export const transitionNcSchema = z.object({
+  to: z.enum(NC_STATES, { errorMap: () => ({ message: 'badState' }) }),
+  comment: z.string().max(NC_COMMENT_MAX_LENGTH, 'commentLong').optional(),
+});
+export type TransitionNcInput = z.infer<typeof transitionNcSchema>;
+
+export const ncCommentSchema = z.object({
+  body: z.string().trim().min(1, 'commentRequired').max(NC_COMMENT_MAX_LENGTH, 'commentLong'),
+  kind: z.enum(['comment', 'quick']).default('comment'),
+});
+export type NcCommentInput = z.infer<typeof ncCommentSchema>;
+
+// --- Fase 3: hitos (mensajes = claves del espacio `hitos`) -------------------------
+
+const milestoneName = z.string().trim().min(MILESTONE_NAME_MIN, 'nameShort').max(MILESTONE_NAME_MAX, 'nameLong');
+const milestoneDate = z.string().regex(ISO_DATE, 'dateInvalid');
+
+export const createMilestoneSchema = z.object({ name: milestoneName, dueDate: milestoneDate });
+export type CreateMilestoneInput = z.infer<typeof createMilestoneSchema>;
+
+export const updateMilestoneSchema = z
+  .object({
+    name: milestoneName.optional(),
+    dueDate: milestoneDate.optional(),
+    progress: z.number({ invalid_type_error: 'progressInvalid' }).int('progressInvalid').min(0, 'progressInvalid').max(100, 'progressInvalid').optional(),
+  })
+  .refine((value) => Object.values(value).some((field) => field !== undefined), { message: 'nothingToUpdate' });
+export type UpdateMilestoneInput = z.infer<typeof updateMilestoneSchema>;
+
+// --- Fase 3: administración de usuarios (mensajes = claves del espacio `admin`) ------
+
+export const updateUserSchema = z
+  .object({ active: z.boolean().optional(), role: z.enum(ROLES, { errorMap: () => ({ message: 'roleInvalid' }) }).optional() })
+  .refine((value) => Object.values(value).some((field) => field !== undefined), { message: 'nothingToUpdate' });
+export type UpdateUserInput = z.infer<typeof updateUserSchema>;

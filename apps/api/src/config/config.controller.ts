@@ -23,7 +23,7 @@ export class ConfigController {
   @ApiOperation({ summary: 'Configuración pública: entorno, versión y flags de caos del tenant (cabecera x-tenant).' })
   async get(@Headers(TENANT_HEADER) tenantHeader: string | undefined): Promise<PublicConfig> {
     const tenant = tenantHeader?.trim() || DEFAULT_TENANT;
-    return { env: this.env.APP_ENV, tenant, version: API_VERSION, testUsers: showsTestUsers(this.env), chaos: await this.chaos.get(tenant) };
+    return { env: this.env.APP_ENV, tenant, version: API_VERSION, testUsers: showsTestUsers(this.env), chaos: await this.chaos.get(tenant), plantedBugs: this.env.PLANTED_BUGS };
   }
 
   @Get('tenants')

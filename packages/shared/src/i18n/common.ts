@@ -3,6 +3,7 @@
 export const commonEs = {
   appName: 'SIGPRO',
   loading: 'Cargando…',
+  saveAlt: 'Guardar cambios',
   genericError: 'Ha ocurrido un error inesperado',
   networkError: 'No se pudo contactar con el servidor',
   sessionExpired: 'La sesión ha caducado. Vuelve a iniciar sesión.',
@@ -53,6 +54,7 @@ export const commonEs = {
 export const commonEn: typeof commonEs = {
   appName: 'SIGPRO',
   loading: 'Loading…',
+  saveAlt: 'Save changes',
   genericError: 'An unexpected error occurred',
   networkError: 'Could not reach the server',
   sessionExpired: 'Your session has expired. Please sign in again.',

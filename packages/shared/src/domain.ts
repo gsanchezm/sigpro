@@ -61,7 +61,7 @@ export const TEST_CASE_SORT_COLUMNS = ['code', 'title', 'program', 'result', 'ru
 export type TestCaseSortColumn = (typeof TEST_CASE_SORT_COLUMNS)[number];
 
 /** Entidades que escribe la auditoría (filtro del feed). */
-export const AUDIT_ENTITIES = ['program', 'requirement', 'testrun', 'document', 'tenant'] as const;
+export const AUDIT_ENTITIES = ['program', 'requirement', 'testrun', 'document', 'tenant', 'nc', 'milestone', 'user'] as const;
 export type AuditEntity = (typeof AUDIT_ENTITIES)[number];
 
 export const AUDIT_PAGE_SIZE = 20;

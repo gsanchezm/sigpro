@@ -2,6 +2,7 @@ import { ADMIN_KEY_HEADER, HTTP_STATUS_TEXT, TENANT_HEADER, type RequirementStat
 import type {
   ApiErrorBody,
   AuditPageDto,
+  AdminUserDto,
   AuditQuery,
   DocumentCompareDto,
   DocumentContentDto,
@@ -10,6 +11,12 @@ import type {
   FileDownload,
   HealthResponse,
   LoginResponse,
+  MilestoneDto,
+  NcDetailDto,
+  NcListQuery,
+  NcListResponse,
+  NcCommentDto,
+  NcDto,
   OwnerDto,
   ProgramDto,
   ProgramListQuery,
@@ -29,19 +36,32 @@ import type {
   TestUserDto,
   TraceabilityDto,
 } from './api-types';
+import type { MissionEventDto, MissionSummaryDto } from './mission';
 import type {
   ChaosConfig,
+  CreateMilestoneInput,
+  CreateNcInput,
   CreateProgramInput,
   CreateRequirementInput,
   ForgotInput,
   LoginInput,
   MfaInput,
   MoveRequirementInput,
+  NcCommentInput,
   PublishVersionInput,
   RegisterInput,
+  TransitionNcInput,
+  UpdateMilestoneInput,
+  UpdateNcInput,
   UpdateProgramInput,
   UpdateRequirementInput,
+  UpdateUserInput,
 } from './schemas';
+
+/** Respuesta de `POST /mission/tick`: el evento que acaba de emitir el simulador. */
+export interface MissionEventTickResponse {
+  readonly event: MissionEventDto;
+}
 
 /** Error HTTP con el cuerpo de la API y la traza `POST /api/x → 401 Unauthorized`. */
 export class ApiError extends Error {
@@ -214,6 +234,26 @@ export const createApiClient = (options: ApiClientOptions) => {
     audit: {
       list: (query: AuditQuery = {}) => json<AuditPageDto>('GET', '/audit', { query: { ...query } }),
     },
+    nc: {
+      list: (query: NcListQuery = {}) => json<NcListResponse>('GET', '/nc', { query: { ...query } }),
+      get: (code: string) => json<NcDetailDto>('GET', `/nc/${enc(code)}`),
+      create: (input: CreateNcInput) => json<NcDto>('POST', '/nc', { body: input }),
+      update: (code: string, input: UpdateNcInput) => json<NcDetailDto>('PATCH', `/nc/${enc(code)}`, { body: input }),
+      /** Mueve la NC a otra columna; cerrar exige `comment` (mínimo 20 caracteres). */
+      transition: (code: string, input: TransitionNcInput) => json<NcDetailDto>('POST', `/nc/${enc(code)}/transition`, { body: input }),
+      comment: (code: string, input: NcCommentInput) => json<NcCommentDto>('POST', `/nc/${enc(code)}/comments`, { body: input }),
+    },
+    milestones: {
+      list: (programCode: string) => json<readonly MilestoneDto[]>('GET', `/programs/${enc(programCode)}/milestones`),
+      create: (programCode: string, input: CreateMilestoneInput) => json<MilestoneDto>('POST', `/programs/${enc(programCode)}/milestones`, { body: input }),
+      update: (id: string, input: UpdateMilestoneInput) => json<MilestoneDto>('PATCH', `/milestones/${enc(id)}`, { body: input }),
+      remove: (id: string) => empty('DELETE', `/milestones/${enc(id)}`),
+    },
+    mission: {
+      summary: () => json<MissionSummaryDto>('GET', '/mission/summary'),
+      /** Emite ya el siguiente evento del simulador (admin); así los specs no esperan al temporizador. */
+      tick: () => json<MissionEventTickResponse>('POST', '/mission/tick'),
+    },
     users: {
       owners: () => json<readonly OwnerDto[]>('GET', '/users/owners'),
     },
@@ -222,6 +262,8 @@ export const createApiClient = (options: ApiClientOptions) => {
       resetAll: (adminKey: string) => json<readonly ResetResponse[]>('POST', '/admin/reset', { query: { all: 'true' }, headers: { [ADMIN_KEY_HEADER]: adminKey } }),
       getChaos: () => json<ChaosConfig>('GET', '/admin/chaos'),
       setChaos: (input: Partial<ChaosConfig>) => json<ChaosConfig>('PATCH', '/admin/chaos', { body: input }),
+      users: () => json<readonly AdminUserDto[]>('GET', '/admin/users'),
+      updateUser: (id: string, input: UpdateUserInput) => json<AdminUserDto>('PATCH', `/admin/users/${enc(id)}`, { body: input }),
     },
   } as const;
 };

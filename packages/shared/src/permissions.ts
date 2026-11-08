@@ -18,6 +18,15 @@ export const PERMISSIONS = {
   'document.publish': ['admin', 'program_manager'],
   'audit.view': ['admin', 'auditor'],
   'users.manage': ['admin'],
+  // Fase 3 — no conformidades: todos pueden abrirlas y comentarlas; mover y editar, los roles operativos; cerrar, quien gestiona
+  'nc.create': ROLES,
+  'nc.comment': ROLES,
+  'nc.edit': ['admin', 'program_manager', 'consultant'],
+  'nc.transition': ['admin', 'program_manager', 'consultant'],
+  'nc.close': ['admin', 'program_manager'],
+  // Fase 3 — hitos del programa
+  'milestone.edit': ['admin', 'program_manager'],
+  'milestone.delete': ['admin', 'program_manager'],
 } as const satisfies Readonly<Record<string, readonly Role[]>>;
 
 export type Permission = keyof typeof PERMISSIONS;

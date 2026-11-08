@@ -1,9 +1,10 @@
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import type { Prisma } from '@prisma/client';
 import { nextProgramCode, programsToCsv, type CreateProgramInput, type ProgramDto, type ProgramListQuery, type ProgramListResponse, type UpdateProgramInput } from '@sigpro/shared';
 import { AuditService } from '../audit/audit.service';
 import type { AuthUser } from '../common/auth.types';
 import { fail } from '../common/errors';
+import { ENV, type Env } from '../config/env';
 import { PrismaService } from '../prisma/prisma.service';
 import { buildOrderBy, buildWhere, normalizePaging, progressOf } from './program-query';
 
@@ -37,10 +38,11 @@ export class ProgramsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
+    @Inject(ENV) private readonly env: Pick<Env, 'PLANTED_BUGS'>,
   ) {}
 
   async list(tenantId: string, query: ProgramListQuery): Promise<ProgramListResponse> {
-    const where = buildWhere(tenantId, query);
+    const where = buildWhere(tenantId, query, { plantedBugs: this.env.PLANTED_BUGS });
     const { page, pageSize } = normalizePaging(query);
     const [total, totalAll, activeCount] = await Promise.all([
       this.prisma.program.count({ where }),
@@ -51,7 +53,8 @@ export class ProgramsService {
     const safePage = Math.min(page, pages);
     const rows = await this.prisma.program.findMany({
       where,
-      orderBy: buildOrderBy(query.sort, query.dir),
+      // Defecto plantado: al pasar de la primera página se pierde el orden pedido (vuelve al orden por código)
+      orderBy: this.env.PLANTED_BUGS && safePage > 1 ? buildOrderBy(undefined, undefined) : buildOrderBy(query.sort, query.dir),
       skip: (safePage - 1) * pageSize,
       take: pageSize,
       include: WITH_DETAIL,

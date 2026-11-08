@@ -1,8 +1,20 @@
 # SIGPRO — Estado de la construcción
 
-Última actualización: 2026-11-06 · **Fase 1 (Base) cerrada** · **Fase 2 (Núcleo del dominio) cerrada** · La fase 3 no se ha empezado
+Última actualización: 2026-11-07 · **Fase 1 (Base) cerrada** · **Fase 2 (Núcleo del dominio) cerrada** · **Fase 3 (Dinámica y caos) en curso**
 
 Leyenda: `[x]` hecho · `[~]` en curso · `[ ]` pendiente
+
+## Fase 3 — Dinámica y caos
+
+Cada tarea termina con `pnpm lint && pnpm typecheck && pnpm test` en verde, su spec e2e de humo, capturas claro/oscuro a 1440 y 390 px en `docs/screens/`, una línea en `docs/CHANGELOG.md` y un commit. Una sola pila (API :3000, web :5173).
+
+- [x] **T22** Contratos y datos: migración `phase3` (`Milestone.progress`, `NcComment`, `NonConformity.createdAt`), seed v3, permisos, esquemas Zod, DTOs, cliente, `testids.ts`, i18n (5 espacios), dependencias Socket.IO
+- [ ] **T23** **No conformidades**: API (lista, detalle, alta, edición, transición con cierre ≥ 20 caracteres, comentarios), tablero kanban con drag & drop, `<sigpro-severity-picker>` (Shadow DOM abierto), modal con combobox de asignación, comentario rápido con `prompt()` nativo
+- [ ] **T24** **Panel de misión**: Socket.IO (rooms por tenant, JWT en el handshake), simulador de eventos, 4 KPIs, gráficas SVG (hitos cumplidos, NC por severidad), feed en vivo, campana con contador, tooltips
+- [ ] **T25** **Administración**: usuarios (switch de activo + select de rol), auditoría con rango de fechas, modo caos (slider de latencia, % de 500, textos alternos) y reset con `confirm()` nativo; la web consume `flakyLabels`
+- [ ] **T26** **Hitos** del detalle de programa (tabla con edición inline y slider con `aria-valuenow`) y ruta de **Perfil**
+- [ ] **T27** **Bugs plantados**: 8 defectos (4 del plan + 4 propios) tras `PLANTED_BUGS`, documentados en `docs/planted-bugs.md`, con un spec que los reproduce
+- [ ] **T28** Cierre de fase: README, CHANGELOG, STATUS final, filas de locators (Shadow DOM, `prompt()`), catálogo de componentes UI completo y pasada completa (lint, typecheck, unit, e2e, capturas)
 
 ## Fase 2 — Núcleo del dominio
 

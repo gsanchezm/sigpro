@@ -39,12 +39,17 @@ export const normalizePaging = (query: Pick<ProgramListQuery, 'page' | 'pageSize
 
 const utcDate = (iso: string): Date => new Date(`${iso}T00:00:00.000Z`);
 
-export const buildWhere = (tenantId: string, query: ProgramListQuery): Prisma.ProgramWhereInput => ({
+export interface WhereOptions {
+  /** Defecto plantado del laboratorio (`PLANTED_BUGS`): el filtro «Hasta» deja fuera el último día del rango. */
+  readonly plantedBugs?: boolean;
+}
+
+export const buildWhere = (tenantId: string, query: ProgramListQuery, options: WhereOptions = {}): Prisma.ProgramWhereInput => ({
   tenantId,
   ...(query.status ? { status: query.status } : {}),
   ...(query.owner ? { ownerId: query.owner } : {}),
   ...(query.from ? { startDate: { gte: utcDate(query.from) } } : {}),
-  ...(query.to ? { endDate: { lte: utcDate(query.to) } } : {}),
+  ...(query.to ? { endDate: options.plantedBugs ? { lt: utcDate(query.to) } : { lte: utcDate(query.to) } } : {}),
   ...(query.q
     ? {
         OR: [

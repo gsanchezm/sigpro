@@ -1,9 +1,14 @@
 import { accesoEn, accesoEs } from './acceso';
+import { adminEn, adminEs } from './admin';
 import { auditoriaEn, auditoriaEs } from './auditoria';
 import { commonEn, commonEs } from './common';
 import { documentosEn, documentosEs } from './documentos';
+import { hitosEn, hitosEs } from './hitos';
 import { labEn, labEs } from './lab';
 import { legalEn, legalEs } from './legal';
+import { misionEn, misionEs } from './mision';
+import { ncEn, ncEs } from './nc';
+import { perfilEn, perfilEs } from './perfil';
 import { programasEn, programasEs } from './programas';
 import { requisitosEn, requisitosEs } from './requisitos';
 import { verificacionEn, verificacionEs } from './verificacion';
@@ -57,6 +62,11 @@ export const messages = {
     documentos: documentosEs,
     auditoria: auditoriaEs,
     legal: legalEs,
+    nc: ncEs,
+    mision: misionEs,
+    admin: adminEs,
+    hitos: hitosEs,
+    perfil: perfilEs,
   },
   en: {
     acceso: accesoEn,
@@ -68,6 +78,11 @@ export const messages = {
     documentos: documentosEn,
     auditoria: auditoriaEn,
     legal: legalEn,
+    nc: ncEn,
+    mision: misionEn,
+    admin: adminEn,
+    hitos: hitosEn,
+    perfil: perfilEn,
   },
 } as const;
 
@@ -88,6 +103,16 @@ export const createTranslator =
 export {
   accesoEn,
   accesoEs,
+  adminEn,
+  adminEs,
+  hitosEn,
+  hitosEs,
+  misionEn,
+  misionEs,
+  ncEn,
+  ncEs,
+  perfilEn,
+  perfilEs,
   auditoriaEn,
   auditoriaEs,
   commonEn,

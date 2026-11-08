@@ -64,6 +64,7 @@ export class SeedService implements OnApplicationBootstrap {
       this.prisma.testRun.createMany({ data: copy(rows.testRuns) }),
       this.prisma.evidence.createMany({ data: copy(rows.evidences) }),
       this.prisma.nonConformity.createMany({ data: copy(rows.nonConformities) }),
+      this.prisma.ncComment.createMany({ data: copy(rows.ncComments) }),
       this.prisma.document.createMany({ data: copy(rows.documents) }),
       this.prisma.documentVersion.createMany({ data: copy(rows.documentVersions).map((row) => ({ ...row, lines: row.lines ?? [] })) }),
       this.prisma.contract.createMany({ data: copy(rows.contracts) }),

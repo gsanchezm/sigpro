@@ -59,6 +59,12 @@ enum NcState {
   rejected
 }
 
+enum NcCommentKind {
+  comment
+  quick
+  closure
+}
+
 enum Classification {
   public
   restricted
@@ -81,6 +87,7 @@ model Tenant {
   testRuns         TestRun[]
   evidences        Evidence[]
   nonConformities  NonConformity[]
+  ncComments       NcComment[]
   documents        Document[]
   documentVersions DocumentVersion[]
   auditLogs        AuditLog[]
@@ -113,6 +120,7 @@ model User {
   executedRuns     TestRun[]       @relation("RunExecutor")
   auditEntries     AuditLog[]      @relation("AuditActor")
   authoredVersions DocumentVersion[] @relation("VersionAuthor")
+  ncComments       NcComment[]       @relation("NcCommentAuthor")
 
   @@id([tenantId, id])
   @@unique([tenantId, email])
@@ -154,6 +162,8 @@ model Milestone {
   name        String
   dueDate     DateTime @map("due_date") @db.Date
   done        Boolean  @default(false)
+  /// Avance 0–100 del slider; con 100 el hito está cumplido (`done`)
+  progress    Int      @default(0)
 
   tenant  Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   program Program @relation(fields: [tenantId, programCode], references: [tenantId, code], onDelete: Cascade)
@@ -270,15 +280,36 @@ model NonConformity {
   state       NcState    @default(open)
   assigneeId  String?    @map("assignee_id")
   testRunId   String?    @map("test_run_id")
+  createdAt   DateTime   @default(now()) @map("created_at")
 
-  tenant   Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  program  Program  @relation(fields: [tenantId, programCode], references: [tenantId, code], onDelete: Cascade)
-  assignee User?    @relation("NcAssignee", fields: [tenantId, assigneeId], references: [tenantId, id], onDelete: NoAction)
-  testRun  TestRun? @relation(fields: [tenantId, testRunId], references: [tenantId, id], onDelete: NoAction)
+  tenant   Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  program  Program     @relation(fields: [tenantId, programCode], references: [tenantId, code], onDelete: Cascade)
+  assignee User?       @relation("NcAssignee", fields: [tenantId, assigneeId], references: [tenantId, id], onDelete: NoAction)
+  testRun  TestRun?    @relation(fields: [tenantId, testRunId], references: [tenantId, id], onDelete: NoAction)
+  comments NcComment[]
 
   @@id([tenantId, code])
   @@index([tenantId, programCode])
   @@map("non_conformities")
+}
+
+/// Comentarios de una no conformidad (también el de cierre y los «rápidos» del `prompt()` nativo)
+model NcComment {
+  tenantId  String        @map("tenant_id")
+  id        String
+  ncCode    String        @map("nc_code")
+  authorId  String?       @map("author_id")
+  body      String
+  kind      NcCommentKind @default(comment)
+  createdAt DateTime      @default(now()) @map("created_at")
+
+  tenant Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  nc     NonConformity @relation(fields: [tenantId, ncCode], references: [tenantId, code], onDelete: Cascade)
+  author User?         @relation("NcCommentAuthor", fields: [tenantId, authorId], references: [tenantId, id], onDelete: NoAction)
+
+  @@id([tenantId, id])
+  @@index([tenantId, ncCode])
+  @@map("nc_comments")
 }
 
 model Document {

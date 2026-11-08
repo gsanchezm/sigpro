@@ -16,6 +16,10 @@ export const envSchema = z.object({
   DOCS_BASIC_AUTH: z.string().default(''),
   APP_ENV: z.string().default('dev'),
   ACCESS_TOKEN_TTL_S: z.coerce.number().int().positive().default(900),
+  // Defectos plantados del laboratorio (docs/planted-bugs.md): activos por defecto; `false` deja la app «limpia»
+  PLANTED_BUGS: bool,
+  // Intervalo del simulador de misión en ms (0 = desactivado). Solo emite a tenants con algún cliente conectado
+  SIMULATOR_MS: z.coerce.number().int().min(0).max(60000).default(4000),
 });
 
 export type Env = z.infer<typeof envSchema>;

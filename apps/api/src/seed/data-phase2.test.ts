@@ -7,9 +7,9 @@ const fakeHash = (plain: string) => `hash(${plain})`;
 const seed = buildTenantSeed('demo', fakeHash);
 
 describe('seed v2: requisitos', () => {
-  it('SEED_VERSION = 2 y el tenant lo declara (la API re-siembra los que tengan una versión menor)', () => {
-    expect(SEED_VERSION).toBe(2);
-    expect(seed.tenant.seedVersion).toBe(2);
+  it('el tenant declara la SEED_VERSION vigente (la API re-siembra los que tengan una versión menor); la fase 3 la subió a 3', () => {
+    expect(SEED_VERSION).toBe(3);
+    expect(seed.tenant.seedVersion).toBe(SEED_VERSION);
   });
 
   it('forma un árbol de hasta 3 niveles dentro de cada programa, sin padres de otro programa ni ciclos', () => {

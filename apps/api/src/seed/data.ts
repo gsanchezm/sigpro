@@ -5,6 +5,7 @@ import type {
   DocumentVersion,
   Evidence,
   Milestone,
+  NcComment,
   NonConformity,
   Program,
   Requirement,
@@ -34,6 +35,7 @@ export interface SeedRows {
   readonly testRuns: readonly TestRun[];
   readonly evidences: readonly Evidence[];
   readonly nonConformities: readonly NonConformity[];
+  readonly ncComments: readonly NcComment[];
   readonly documents: readonly Document[];
   readonly documentVersions: readonly DocumentVersion[];
   readonly auditLogs: readonly AuditLog[];
@@ -41,8 +43,8 @@ export interface SeedRows {
   readonly contracts: readonly Contract[];
 }
 
-/** v2 (fase 2): árbol de requisitos con etiquetas, casos enlazados por programa, evidencias, versiones de documentos y 130 eventos de auditoría. */
-export const SEED_VERSION = 2;
+/** v3 (fase 3): avance (`progress`) de los hitos, `createdAt` y comentarios de las NC. v2 (fase 2): árbol de requisitos con etiquetas, casos enlazados por programa, evidencias, versiones de documentos y 130 eventos de auditoría. */
+export const SEED_VERSION = 3;
 export const MFA_CODE = '123456';
 
 /** Fecha base fija para createdAt y marcas de tiempo del seed. */
@@ -178,6 +180,8 @@ const buildMilestones = (tenantId: string, programs: readonly Program[]): readon
       name: pick(MILESTONE_NAMES, k - 1),
       dueDate: addDays(program.startDate, Math.round((span * k) / total)),
       done: k <= done,
+      // Cumplidos al 100 %; el primero pendiente va «en curso» (10–60 %) y el resto sin empezar
+      progress: k <= done ? 100 : k === done + 1 ? 10 + ((i * 17) % 11) * 5 : 0,
     }));
   });
 
@@ -318,7 +322,36 @@ const buildNonConformities = (tenantId: string): readonly NonConformity[] =>
     // Cada quinta NC queda sin asignar (tarjetas kanban sin responsable)
     assigneeId: n % 5 === 0 ? null : `u${(n % 4) + 1}`,
     testRunId: n % 2 === 0 ? `RUN-${pad(n * 2)}` : null,
+    createdAt: addDays(EPOCH, 20 + n),
   }));
+
+const NC_COMMENT_BODIES = [
+  'Se revisa el informe de la ejecución y se confirma la desviación.',
+  'Pendiente de confirmar con el proveedor el plazo de la acción correctiva.',
+  'Se adjunta el análisis de causa raíz al expediente.',
+  'El equipo de verificación repetirá la prueba tras el parche.',
+] as const;
+const NC_CLOSURE_BODY = 'Acción correctiva verificada por el equipo de calidad; se aprueba el cierre.';
+
+/** 0–3 comentarios por NC (según su número) y, en las cerradas, el comentario de cierre (≥ 20 caracteres). */
+const buildNcComments = (tenantId: string, ncs: readonly NonConformity[]): readonly NcComment[] =>
+  ncs.flatMap((nc) => {
+    const n = Number.parseInt(nc.code.replace(/\D/g, ''), 10);
+    const regular = range(n % 4).map((k) => ({
+      tenantId,
+      id: `NCC-${pad(n)}-${k}`,
+      ncCode: nc.code,
+      authorId: `u${((n + k) % 6) + 1}`,
+      body: pick(NC_COMMENT_BODIES, n + k),
+      kind: (n + k) % 5 === 0 ? ('quick' as const) : ('comment' as const),
+      createdAt: new Date(addDays(EPOCH, 21 + n).getTime() + k * 3_600_000),
+    }));
+    const closure =
+      nc.state === 'closed'
+        ? [{ tenantId, id: `NCC-${pad(n)}-C`, ncCode: nc.code, authorId: 'u2', body: NC_CLOSURE_BODY, kind: 'closure' as const, createdAt: new Date(addDays(EPOCH, 25 + n).getTime()) }]
+        : [];
+    return [...regular, ...closure];
+  });
 
 const DOCUMENT_KINDS = ['Plan de verificación', 'Especificación técnica'] as const;
 
@@ -477,6 +510,7 @@ export const buildTenantSeed = (tenantId: string, hash: (plain: string) => strin
   const requirements = buildRequirements(tenantId);
   const testCases = buildTestCases(tenantId);
   const documents = buildDocuments(tenantId, programs);
+  const nonConformities = buildNonConformities(tenantId);
   return {
     tenant: { id: tenantId, name: tenantId === 'demo' ? 'Demo' : `Alumno ${tenantId.slice('alumno'.length)}`, seedVersion: SEED_VERSION },
     users: buildUsers(tenantId, hash),
@@ -487,7 +521,8 @@ export const buildTenantSeed = (tenantId: string, hash: (plain: string) => strin
     requirementTestCases: buildRequirementTestCases(tenantId, requirements, testCases),
     testRuns: buildTestRuns(tenantId),
     evidences: buildEvidences(tenantId),
-    nonConformities: buildNonConformities(tenantId),
+    nonConformities,
+    ncComments: buildNcComments(tenantId, nonConformities),
     documents,
     documentVersions: buildDocumentVersions(tenantId, documents),
     auditLogs: buildAuditLogs(tenantId),
