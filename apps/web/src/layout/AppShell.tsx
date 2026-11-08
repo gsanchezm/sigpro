@@ -4,7 +4,7 @@ import { Link, Outlet, useLocation } from 'react-router-dom';
 import { useBreakpoint } from '../lib/hooks';
 import { useAuth } from '../state/auth';
 import { isSupportedLang, useI18n } from '../state/i18n';
-import { useLive } from '../state/live';
+import { useLiveCore } from '../state/live';
 import { useTheme } from '../state/theme';
 import { Logo } from '../ui/Logo';
 import { MenuIcon, MoonIcon, SearchIcon, SunIcon } from '../ui/icons';
@@ -43,7 +43,7 @@ export const AppShell = ({ children }: { children?: ReactNode } = {}) => {
   const breakpoint = useBreakpoint();
   const isMobile = breakpoint === 'mobile';
   const { draft, setDraft } = useGlobalSearch();
-  const { ncOpen } = useLive();
+  const { ncOpen } = useLiveCore();
 
   const [userCollapsed, setUserCollapsed] = useState<boolean | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);

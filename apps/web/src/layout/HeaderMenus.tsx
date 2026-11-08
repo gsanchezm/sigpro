@@ -5,7 +5,7 @@ import { useDismiss, type Breakpoint } from '../lib/hooks';
 import { missionEventText } from '../pages/mission/event-text';
 import { useAuth } from '../state/auth';
 import { useI18n } from '../state/i18n';
-import { useLive } from '../state/live';
+import { useLiveFeed } from '../state/live';
 import { useToast } from '../state/toast';
 import { Avatar } from '../ui/Avatar';
 import { BellIcon } from '../ui/icons';
@@ -20,7 +20,7 @@ const SEVERITY_COLOR: Readonly<Record<MissionEventDto['severity'], string>> = {
 /** Campana con contador y popover de notificaciones en tiempo real (los avisos que llegan por Socket.IO). */
 export const NotificationsMenu = () => {
   const { t, lang } = useI18n();
-  const { notifications, unread, markAllRead } = useLive();
+  const { notifications, unread, markAllRead } = useLiveFeed();
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
   const close = useCallback(() => setOpen(false), []);

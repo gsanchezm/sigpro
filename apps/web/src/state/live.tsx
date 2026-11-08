@@ -9,6 +9,7 @@ import {
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { io, type Socket } from 'socket.io-client';
 import { API_URL } from '../lib/env';
+import { socketOrigin } from '../lib/socket-origin';
 import { STORAGE_KEYS, readStorage, writeStorage } from '../lib/storage';
 import { useAuth } from './auth';
 import { useConfig } from './config';
@@ -18,27 +19,32 @@ import { useConfig } from './config';
 
 export type LiveConnection = 'connecting' | 'live' | 'offline';
 
-interface LiveValue {
+/** Lo que cambia poco: el shell (menú lateral) solo se vuelve a pintar cuando varía la conexión o las NC abiertas. */
+interface LiveCoreValue {
   readonly connection: LiveConnection;
+  /** Preferencia del Perfil: contar los avisos en la campana. */
+  readonly liveEnabled: boolean;
+  readonly setLiveEnabled: (enabled: boolean) => void;
+  /** NC abiertas: valor inicial de la API y, después, el que llega en cada evento `nc_*`. */
+  readonly ncOpen: number | null;
+}
+
+/** Lo que cambia con cada evento (cada pocos segundos): feed, campana y gráfica de NC. */
+interface LiveFeedValue {
   /** Eventos recibidos en esta sesión, el más reciente primero (máx. 50). */
   readonly events: readonly MissionEventDto[];
   /** Avisos (`warn`/`danger`) recibidos en esta sesión, el más reciente primero (máx. 20). */
   readonly notifications: readonly MissionEventDto[];
   readonly unread: number;
   readonly markAllRead: () => void;
-  /** Preferencia del Perfil: contar los avisos en la campana. */
-  readonly liveEnabled: boolean;
-  readonly setLiveEnabled: (enabled: boolean) => void;
-  /** NC abiertas: valor inicial de la API y, después, el que llega en cada evento `nc_*`. */
-  readonly ncOpen: number | null;
   /** NC abiertas por severidad según el último evento `nc_*` (null hasta que llega uno). */
   readonly ncBySeverity: NonNullable<MissionEventDto['ncBySeverity']> | null;
 }
 
-const LiveContext = createContext<LiveValue | null>(null);
+type LiveValue = LiveCoreValue & LiveFeedValue;
 
-/** Origen de Socket.IO: el de la API (sin `/api`); con la API relativa (proxy de Vite), el de la propia página. */
-export const socketOrigin = (apiUrl: string = API_URL, pageHref: string = window.location.href): string => new URL(apiUrl, pageHref).origin;
+const LiveCoreContext = createContext<LiveCoreValue | null>(null);
+const LiveFeedContext = createContext<LiveFeedValue | null>(null);
 
 const INVALID_TOKEN_RETRY_MS = 1500;
 const MAX_TOKEN_RETRIES = 3;
@@ -95,7 +101,7 @@ export const LiveProvider = ({ children }: { children: ReactNode }) => {
     }
     let retries = 0;
     let retryTimer: ReturnType<typeof setTimeout> | undefined;
-    const socket: Socket = io(socketOrigin(), {
+    const socket: Socket = io(socketOrigin(API_URL, window.location.href), {
       path: MISSION_SOCKET_PATH,
       transports: ['websocket'],
       // función: se evalúa en cada (re)conexión, así usa siempre el access token vigente
@@ -132,15 +138,28 @@ export const LiveProvider = ({ children }: { children: ReactNode }) => {
     setReadSeq(plantedBugs ? Math.max(readSeq, latest - 1) : latest);
   }, [notifications, readSeq, plantedBugs]);
 
-  const value = useMemo<LiveValue>(
-    () => ({ connection, events, notifications, unread, markAllRead, liveEnabled, setLiveEnabled, ncOpen, ncBySeverity }),
-    [connection, events, notifications, unread, markAllRead, liveEnabled, setLiveEnabled, ncOpen, ncBySeverity],
+  const core = useMemo<LiveCoreValue>(() => ({ connection, liveEnabled, setLiveEnabled, ncOpen }), [connection, liveEnabled, setLiveEnabled, ncOpen]);
+  const feed = useMemo<LiveFeedValue>(() => ({ events, notifications, unread, markAllRead, ncBySeverity }), [events, notifications, unread, markAllRead, ncBySeverity]);
+  return (
+    <LiveCoreContext.Provider value={core}>
+      <LiveFeedContext.Provider value={feed}>{children}</LiveFeedContext.Provider>
+    </LiveCoreContext.Provider>
   );
-  return <LiveContext.Provider value={value}>{children}</LiveContext.Provider>;
 };
 
-export const useLive = (): LiveValue => {
-  const value = useContext(LiveContext);
-  if (!value) throw new Error('useLive debe usarse dentro de LiveProvider');
+/** Conexión, preferencia y NC abiertas (cambia poco): lo usa el shell. */
+export const useLiveCore = (): LiveCoreValue => {
+  const value = useContext(LiveCoreContext);
+  if (!value) throw new Error('useLiveCore debe usarse dentro de LiveProvider');
   return value;
 };
+
+/** Feed y notificaciones (cambia con cada evento): lo usan la campana y el panel de misión. */
+export const useLiveFeed = (): LiveFeedValue => {
+  const value = useContext(LiveFeedContext);
+  if (!value) throw new Error('useLiveFeed debe usarse dentro de LiveProvider');
+  return value;
+};
+
+/** Todo junto (se repinta con cada evento). */
+export const useLive = (): LiveValue => ({ ...useLiveCore(), ...useLiveFeed() });
