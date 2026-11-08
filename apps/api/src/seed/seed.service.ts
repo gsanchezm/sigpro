@@ -1,7 +1,8 @@
-import { Inject, Injectable, Logger, type OnApplicationBootstrap } from '@nestjs/common';
+import { Inject, Injectable, Logger, Optional, type OnApplicationBootstrap } from '@nestjs/common';
 import type { ChaosConfig, ResetResponse } from '@sigpro/shared';
 import { hashSync } from 'bcryptjs';
 import { ENV, type Env } from '../config/env';
+import { MissionEventsService } from '../mission/mission-events.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { SEED_VERSION, buildTenantSeed, tenantIds } from './data';
 
@@ -16,6 +17,8 @@ export class SeedService implements OnApplicationBootstrap {
   constructor(
     private readonly prisma: PrismaService,
     @Inject(ENV) private readonly env: Pick<Env, 'SEED_ON_BOOT' | 'SEED_STUDENT_TENANTS'>,
+    // Opcional: el CLI `pnpm seed` crea el servicio sin Nest y no tiene eventos en memoria que limpiar
+    @Optional() private readonly events?: MissionEventsService,
   ) {}
 
   readonly hash = (plain: string): string => {
@@ -70,6 +73,7 @@ export class SeedService implements OnApplicationBootstrap {
       this.prisma.contract.createMany({ data: copy(rows.contracts) }),
       this.prisma.auditLog.createMany({ data: copy(rows.auditLogs).map((row) => ({ ...row, diff: row.diff ?? undefined })) }),
     ]);
+    this.events?.clear(tenantId);
     return { tenant: tenantId, ms: Date.now() - started };
   }
 

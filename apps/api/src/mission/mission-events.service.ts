@@ -63,6 +63,13 @@ export class MissionEventsService {
     return this.emit(tenantId, simulatorEvent(this.nextSimulatedIndex(tenantId), programCodes));
   }
 
+  /** Olvida los eventos de un tenant (al restaurar sus datos el feed no debe mostrar sucesos de datos que ya no existen). */
+  clear(tenantId: string): void {
+    this.buffers.delete(tenantId);
+    this.counters.delete(tenantId);
+    this.simulated.delete(tenantId);
+  }
+
   /** Últimos eventos, el más reciente primero. */
   recent(tenantId: string, limit = FEED_MAX_ITEMS): readonly MissionEventDto[] {
     this.ensureBootstrapped(tenantId);
