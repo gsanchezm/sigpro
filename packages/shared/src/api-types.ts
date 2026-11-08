@@ -383,3 +383,59 @@ export interface AdminUserDto {
   readonly pending: boolean;
   readonly org: string | null;
 }
+
+// --- Proveedores (catálogo: combobox «buscar proveedor») -----------------------------
+
+export interface SupplierContractDto {
+  readonly programCode: string;
+  readonly programName: string;
+  readonly amountEur: number;
+  /** `YYYY-MM-DD`. */
+  readonly signedAt: string;
+}
+
+export interface SupplierDto {
+  readonly id: string;
+  readonly name: string;
+  readonly nif: string;
+  readonly contactEmail: string;
+  readonly approved: boolean;
+  /** Contratos con programas del tenant, por código de programa. */
+  readonly contracts: readonly SupplierContractDto[];
+}
+
+export interface SupplierListQuery {
+  /** Nombre o NIF (sin distinguir mayúsculas). */
+  readonly q?: string;
+  /** Solo proveedores con contrato en este programa. */
+  readonly program?: string;
+}
+
+// --- Búsqueda global agrupada (cabecera) -------------------------------------------
+
+export const SEARCH_GROUP_KINDS = ['program', 'requirement', 'testcase', 'nc', 'document'] as const;
+export type SearchGroupKind = (typeof SEARCH_GROUP_KINDS)[number];
+
+export interface SearchItemDto {
+  readonly id: string;
+  readonly title: string;
+  readonly subtitle: string;
+  /** Ruta interna de la web a la que lleva el resultado. */
+  readonly href: string;
+}
+
+export interface SearchGroupDto {
+  readonly kind: SearchGroupKind;
+  /** Coincidencias totales del grupo (los `items` son como máximo 5). */
+  readonly total: number;
+  readonly items: readonly SearchItemDto[];
+}
+
+export interface SearchResponse {
+  readonly query: string;
+  /** Solo los grupos con resultados, en orden fijo: programas, requisitos, casos de prueba, NC y documentos. */
+  readonly groups: readonly SearchGroupDto[];
+}
+
+export const SEARCH_MIN_CHARS = 2;
+export const SEARCH_ITEMS_PER_GROUP = 5;

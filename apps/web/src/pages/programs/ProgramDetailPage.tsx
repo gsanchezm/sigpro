@@ -7,6 +7,7 @@ import { useI18n } from '../../state/i18n';
 import { ProgressBar } from '../../ui/ProgressBar';
 import { StatusBadge } from '../../ui/StatusBadge';
 import { MilestonesPanel } from './MilestonesPanel';
+import { SuppliersPanel } from './SuppliersPanel';
 
 type TabKey = 'summary' | 'milestones' | 'requirements';
 const TABS: readonly TabKey[] = ['summary', 'milestones', 'requirements'];
@@ -145,14 +146,17 @@ export const ProgramDetailPage = () => {
         </div>
         <div role="tabpanel" id={`panel-${tab}`} aria-labelledby={`tab-${tab}`} data-testid={DETALLE_DYNAMIC_TESTIDS.PROGRAM_DETAIL_PANEL(tab)} className="card mt-3 p-4">
           {tab === 'summary' ? (
-            <dl className="m-0 grid grid-cols-[auto_1fr] gap-x-6 gap-y-2 text-[12.5px]">
-              {rows.map(([label, value]) => (
-                <div key={label} className="contents">
-                  <dt className="text-fg-3">{label}</dt>
-                  <dd className="m-0">{value}</dd>
-                </div>
-              ))}
-            </dl>
+            <>
+              <dl className="m-0 grid grid-cols-[auto_1fr] gap-x-6 gap-y-2 text-[12.5px]">
+                {rows.map(([label, value]) => (
+                  <div key={label} className="contents">
+                    <dt className="text-fg-3">{label}</dt>
+                    <dd className="m-0">{value}</dd>
+                  </div>
+                ))}
+              </dl>
+              <SuppliersPanel programCode={program.code} />
+            </>
           ) : tab === 'requirements' ? (
             <Link to={`/programs/${program.code}/requirements`} data-testid={REQUISITOS_TESTIDS.PROGRAM_DETAIL_OPEN_REQUIREMENTS} className="font-medium">
               {t('requisitos', 'openFromProgram')}

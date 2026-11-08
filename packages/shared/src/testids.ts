@@ -739,3 +739,48 @@ export const PERFIL_TESTIDS = {
   PROFILE_SAVE: 'profile-save',
   PROFILE_LOGOUT: 'profile-logout',
 } as const;
+
+// --- Catálogo de componentes: proveedores y búsqueda global agrupada ---------
+
+export const PROVEEDORES_TESTIDS = {
+  SUPPLIERS_PANEL: 'suppliers-panel',
+  SUPPLIERS_TABLE: 'suppliers-table',
+  SUPPLIERS_COUNT: 'suppliers-count',
+  SUPPLIERS_EMPTY: 'suppliers-empty',
+  SUPPLIERS_ERROR: 'suppliers-error',
+  SUPPLIERS_ERROR_RETRY: 'suppliers-error-retry',
+  SUPPLIER_SEARCH: 'supplier-search',
+  SUPPLIER_SEARCH_LIST: 'supplier-search-list',
+  SUPPLIER_SEARCH_CLEAR: 'supplier-search-clear',
+  SUPPLIER_SEARCH_STATUS: 'supplier-search-status',
+  SUPPLIER_DETAIL: 'supplier-detail',
+  SUPPLIER_DETAIL_NIF: 'supplier-detail-nif',
+  SUPPLIER_DETAIL_EMAIL: 'supplier-detail-email',
+  SUPPLIER_DETAIL_STATE: 'supplier-detail-state',
+  SUPPLIER_DETAIL_BADGE: 'supplier-detail-badge',
+  SUPPLIER_DETAIL_CONTRACTS: 'supplier-detail-contracts',
+} as const;
+
+export const PROVEEDORES_DYNAMIC_TESTIDS = {
+  SUPPLIER_ROW: (id: string) => `supplier-row-${id}`,
+  SUPPLIER_BADGE: (id: string) => `supplier-badge-${id}`,
+  SUPPLIER_OPTION: (id: string) => `supplier-option-${id}`,
+  SUPPLIER_CONTRACT: (programCode: string) => `supplier-contract-${programCode}`,
+} as const;
+
+export const BUSQUEDA_TESTIDS = {
+  GLOBAL_SEARCH_RESULTS: 'global-search-results',
+  GLOBAL_SEARCH_LIST: 'global-search-list',
+  GLOBAL_SEARCH_STATUS: 'global-search-status',
+  GLOBAL_SEARCH_EMPTY: 'global-search-empty',
+  GLOBAL_SEARCH_ERROR: 'global-search-error',
+  GLOBAL_SEARCH_LOADING: 'global-search-loading',
+} as const;
+
+export const BUSQUEDA_DYNAMIC_TESTIDS = {
+  /** `global-search-group-program`, `…-requirement`, `…-testcase`, `…-nc`, `…-document`. */
+  GLOBAL_SEARCH_GROUP: (kind: string) => `global-search-group-${kind}`,
+  GLOBAL_SEARCH_GROUP_TOTAL: (kind: string) => `global-search-group-total-${kind}`,
+  /** `global-search-item-program-PRG-001`. */
+  GLOBAL_SEARCH_ITEM: (kind: string, id: string) => `global-search-item-${kind}-${id}`,
+} as const;

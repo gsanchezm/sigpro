@@ -30,7 +30,11 @@ import { ProgramsController } from './programs/programs.controller';
 import { ProgramsService } from './programs/programs.service';
 import { RequirementsController } from './requirements/requirements.controller';
 import { RequirementsService } from './requirements/requirements.service';
+import { SearchController } from './search/search.controller';
+import { SearchService } from './search/search.service';
 import { SeedService } from './seed/seed.service';
+import { SuppliersController } from './suppliers/suppliers.controller';
+import { SuppliersService } from './suppliers/suppliers.service';
 import { UsersAdminService } from './users/users-admin.service';
 import { UsersController } from './users/users.controller';
 import { VerificationController } from './verification/verification.controller';
@@ -40,7 +44,7 @@ const env = loadEnv();
 
 @Module({
   imports: [JwtModule.register({ global: true, secret: env.JWT_SECRET })],
-  controllers: [HealthController, ConfigController, AuthController, ProgramsController, RequirementsController, VerificationController, DocumentsController, AuditController, NcController, MilestonesController, MissionController, UsersController, AdminController],
+  controllers: [HealthController, ConfigController, AuthController, ProgramsController, RequirementsController, VerificationController, DocumentsController, AuditController, NcController, MilestonesController, MissionController, SuppliersController, SearchController, UsersController, AdminController],
   providers: [
     { provide: ENV, useValue: env },
     PrismaService,
@@ -60,6 +64,8 @@ const env = loadEnv();
     MissionGateway,
     MissionSimulator,
     UsersAdminService,
+    SuppliersService,
+    SearchService,
     { provide: APP_GUARD, useClass: AuthGuard },
     { provide: APP_INTERCEPTOR, useClass: ChaosInterceptor },
     { provide: APP_FILTER, useClass: AllExceptionsFilter },

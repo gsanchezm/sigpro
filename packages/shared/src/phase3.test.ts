@@ -212,7 +212,7 @@ describe('feed de misión', () => {
 
 describe('i18n de la fase 3', () => {
   it('cada espacio tiene las mismas claves en español e inglés', () => {
-    (['nc', 'mision', 'admin', 'hitos', 'perfil'] as const).forEach((ns) => {
+    (['nc', 'mision', 'admin', 'hitos', 'perfil', 'busqueda', 'proveedores'] as const).forEach((ns) => {
       expect(Object.keys(messages.en[ns]).sort()).toEqual(Object.keys(messages.es[ns]).sort());
     });
   });

@@ -1,6 +1,7 @@
 import { accesoEn, accesoEs } from './acceso';
 import { adminEn, adminEs } from './admin';
 import { auditoriaEn, auditoriaEs } from './auditoria';
+import { busquedaEn, busquedaEs } from './busqueda';
 import { commonEn, commonEs } from './common';
 import { documentosEn, documentosEs } from './documentos';
 import { hitosEn, hitosEs } from './hitos';
@@ -10,6 +11,7 @@ import { misionEn, misionEs } from './mision';
 import { ncEn, ncEs } from './nc';
 import { perfilEn, perfilEs } from './perfil';
 import { programasEn, programasEs } from './programas';
+import { proveedoresEn, proveedoresEs } from './proveedores';
 import { requisitosEn, requisitosEs } from './requisitos';
 import { verificacionEn, verificacionEs } from './verificacion';
 
@@ -67,6 +69,8 @@ export const messages = {
     admin: adminEs,
     hitos: hitosEs,
     perfil: perfilEs,
+    busqueda: busquedaEs,
+    proveedores: proveedoresEs,
   },
   en: {
     acceso: accesoEn,
@@ -83,6 +87,8 @@ export const messages = {
     admin: adminEn,
     hitos: hitosEn,
     perfil: perfilEn,
+    busqueda: busquedaEn,
+    proveedores: proveedoresEn,
   },
 } as const;
 
@@ -113,6 +119,10 @@ export {
   ncEs,
   perfilEn,
   perfilEs,
+  busquedaEn,
+  busquedaEs,
+  proveedoresEn,
+  proveedoresEs,
   auditoriaEn,
   auditoriaEs,
   commonEn,

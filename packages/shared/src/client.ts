@@ -34,6 +34,9 @@ import type {
   TestCaseListResponse,
   TestRunDto,
   TestUserDto,
+  SearchResponse,
+  SupplierDto,
+  SupplierListQuery,
   TraceabilityDto,
 } from './api-types';
 import type { MissionEventDto, MissionSummaryDto } from './mission';
@@ -230,6 +233,14 @@ export const createApiClient = (options: ApiClientOptions) => {
       compare: (id: string, from: number, to: number) => json<DocumentCompareDto>('GET', `/documents/${enc(id)}/compare`, { query: { from, to } }),
       publish: (id: string, input: PublishVersionInput) => json<DocumentDetailDto>('POST', `/documents/${enc(id)}/versions`, { body: input }),
       download: (id: string, version?: number) => file('GET', `/documents/${enc(id)}/download`, { query: { version } }),
+    },
+    suppliers: {
+      /** Proveedores del tenant por nombre o NIF (`q`), o solo los contratados en un programa (`program`). */
+      list: (query: SupplierListQuery = {}) => json<readonly SupplierDto[]>('GET', '/suppliers', { query: { ...query } }),
+    },
+    search: {
+      /** Búsqueda global agrupada (programas, requisitos, casos, NC y documentos); mínimo 2 caracteres. */
+      global: (q: string) => json<SearchResponse>('GET', '/search', { query: { q } }),
     },
     audit: {
       list: (query: AuditQuery = {}) => json<AuditPageDto>('GET', '/audit', { query: { ...query } }),
