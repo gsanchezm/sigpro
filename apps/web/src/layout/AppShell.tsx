@@ -7,11 +7,12 @@ import { isSupportedLang, useI18n } from '../state/i18n';
 import { useLiveCore } from '../state/live';
 import { useTheme } from '../state/theme';
 import { Logo } from '../ui/Logo';
-import { MenuIcon, MoonIcon, SearchIcon, SunIcon } from '../ui/icons';
+import { CloseIcon, MenuIcon, MoonIcon, SearchIcon, SunIcon } from '../ui/icons';
 import { CookieBanner } from './CookieBanner';
 import { NotificationsMenu, UserMenu } from './HeaderMenus';
 import { MOBILE_TABS, breadcrumbsFor, isNavCurrent, navFor, type NavItem } from './nav';
-import { useGlobalSearch } from './useGlobalSearch';
+import { GlobalSearch } from './GlobalSearch';
+import { isProgramsRoute } from './global-search';
 
 type ProgramasKey = MessageKey<'programas'>;
 
@@ -42,7 +43,8 @@ export const AppShell = ({ children }: { children?: ReactNode } = {}) => {
   const location = useLocation();
   const breakpoint = useBreakpoint();
   const isMobile = breakpoint === 'mobile';
-  const { draft, setDraft } = useGlobalSearch();
+  // Móvil: la búsqueda global se abre desde un icono y ocupa la cabecera (en /programs la propia página ya trae su buscador)
+  const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
   const { ncOpen } = useLiveCore();
 
   const [userCollapsed, setUserCollapsed] = useState<boolean | null>(null);
@@ -53,6 +55,7 @@ export const AppShell = ({ children }: { children?: ReactNode } = {}) => {
 
   // El drawer móvil se cierra al navegar y al pasar a otro breakpoint
   useEffect(() => setDrawerOpen(false), [location.pathname, breakpoint]);
+  useEffect(() => setMobileSearchOpen(false), [location.pathname, location.search, breakpoint]);
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => event.key === 'Escape' && setDrawerOpen(false);
     document.addEventListener('keydown', onKey);
@@ -171,28 +174,24 @@ export const AppShell = ({ children }: { children?: ReactNode } = {}) => {
                 </span>
               ))}
             </nav>
-          ) : (
+          ) : mobileSearchOpen ? null : (
             <span className="text-[15px] font-semibold">{currentLabel}</span>
           )}
-          <div className="flex-1" />
+          {mobileSearchOpen ? (
+            <>
+              <div className="min-w-0 flex-1">
+                <GlobalSearch variant="mobile" />
+              </div>
+              <button type="button" aria-label={t('programas', 'close')} onClick={() => setMobileSearchOpen(false)} className="icon-btn">
+                <CloseIcon />
+              </button>
+            </>
+          ) : (
+            <div className="flex-1" />
+          )}
           {!isMobile ? (
             <>
-              <div className="relative w-[min(320px,30vw)]">
-                <SearchIcon size={14} className="pointer-events-none absolute top-[9px] left-[9px] text-fg-3" />
-                <input
-                  type="search"
-                  data-testid={PROGRAMAS_TESTIDS.LAYOUT_SEARCH}
-                  aria-label={t('programas', 'globalSearch')}
-                  placeholder={t('programas', 'searchPlaceholder')}
-                  value={draft}
-                  onChange={(event) => setDraft(event.target.value)}
-                  className="input input-header !bg-bg pr-2.5 pl-7 text-[12.5px]"
-                  style={{ borderColor: 'var(--border)' }}
-                />
-                <kbd aria-hidden="true" className="kbd absolute top-2 right-2 bg-surface text-fg-3">
-                  /
-                </kbd>
-              </div>
+              <GlobalSearch />
               <select
                 data-testid={PROGRAMAS_TESTIDS.LAYOUT_LANG}
                 aria-label={t('programas', 'language')}
@@ -208,18 +207,27 @@ export const AppShell = ({ children }: { children?: ReactNode } = {}) => {
               </select>
             </>
           ) : null}
-          <button
-            type="button"
-            data-testid={PROGRAMAS_TESTIDS.LAYOUT_THEME}
-            aria-label={t('programas', 'toggleTheme')}
-            aria-pressed={theme === 'dark'}
-            onClick={toggleTheme}
-            className="icon-btn"
-          >
-            {theme === 'dark' ? <SunIcon /> : <MoonIcon />}
-          </button>
-          <NotificationsMenu />
-          <UserMenu breakpoint={breakpoint} />
+          {mobileSearchOpen ? null : (
+            <>
+              {isMobile && !isProgramsRoute(location.pathname) ? (
+                <button type="button" data-testid={PROGRAMAS_TESTIDS.LAYOUT_SEARCH_TOGGLE} aria-label={t('programas', 'globalSearch')} onClick={() => setMobileSearchOpen(true)} className="icon-btn">
+                  <SearchIcon size={16} />
+                </button>
+              ) : null}
+              <button
+                type="button"
+                data-testid={PROGRAMAS_TESTIDS.LAYOUT_THEME}
+                aria-label={t('programas', 'toggleTheme')}
+                aria-pressed={theme === 'dark'}
+                onClick={toggleTheme}
+                className="icon-btn"
+              >
+                {theme === 'dark' ? <SunIcon /> : <MoonIcon />}
+              </button>
+              <NotificationsMenu />
+              <UserMenu breakpoint={breakpoint} />
+            </>
+          )}
         </header>
 
         <main id="main-content" tabIndex={-1} className={`flex min-w-0 flex-1 flex-col ${pagePadding}`}>

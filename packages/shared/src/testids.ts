@@ -80,6 +80,7 @@ export const PROGRAMAS_TESTIDS = {
   LAYOUT_NOTIFICATIONS_MARKREAD: 'layout-notifications-markread',
   LAYOUT_NOTIFICATIONS_POPOVER: 'layout-notifications-popover',
   LAYOUT_SEARCH: 'layout-search',
+  LAYOUT_SEARCH_TOGGLE: 'layout-search-toggle',
   LAYOUT_SIDEBAR: 'layout-sidebar',
   LAYOUT_SIDEBAR_COLLAPSE: 'layout-sidebar-collapse',
   LAYOUT_SIDEBAR_TOGGLE: 'layout-sidebar-toggle',

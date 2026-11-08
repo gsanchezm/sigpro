@@ -5,8 +5,9 @@ import { useDebouncedValue } from '../lib/hooks';
 const DEBOUNCE_MS = 250;
 
 /**
- * Búsqueda global de cabecera: en la fase 1 filtra Programas por código o nombre (`/programs?q=…`).
+ * Búsqueda global de cabecera EN `/programs`: filtra la tabla de Programas por código o nombre (`/programs?q=…`).
  * El valor se aplica con debounce de 250 ms; si la URL cambia desde fuera ("Limpiar filtros") el campo la sigue.
+ * En el resto de rutas la cabecera enseña resultados agrupados (`GlobalSearch`) y este hook no navega.
  */
 export const useGlobalSearch = () => {
   const location = useLocation();
@@ -27,6 +28,8 @@ export const useGlobalSearch = () => {
 
   // campo → URL
   useEffect(() => {
+    // Fuera de /programs la búsqueda no navega: abre el popover de resultados agrupados
+    if (!onPrograms) return;
     const next = debounced.trim();
     if (next === lastPushed.current) return;
     lastPushed.current = next;
