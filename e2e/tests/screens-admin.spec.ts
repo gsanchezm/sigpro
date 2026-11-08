@@ -136,6 +136,25 @@ for (const theme of THEMES) {
         await table.waitFor();
         await capture(page, 'hitos-solo-lectura', theme);
       });
+
+      test('perfil: cuenta, permisos por rol y preferencias en borrador', async ({ page, request }) => {
+        await signIn(page, request);
+        await page.goto('/profile');
+        await page.getByTestId('profile-name').waitFor();
+        await capture(page, 'perfil', theme);
+
+        // borrador sin guardar: cambios en los cuatro controles y «Guardar» habilitado
+        await page.getByRole('switch', { name: 'Notificaciones en tiempo real' }).click();
+        await page.getByRole('checkbox', { name: /resumen semanal/i }).check();
+        await page.getByRole('radio', { name: theme === 'dark' ? 'Claro' : 'Oscuro' }).check();
+        await capture(page, 'perfil-borrador', theme);
+
+        // el auditor tiene otros permisos
+        await signIn(page, request, 'auditor');
+        await page.goto('/profile');
+        await page.getByTestId('profile-name').waitFor();
+        await capture(page, 'perfil-auditor', theme);
+      });
     });
   }
 }
