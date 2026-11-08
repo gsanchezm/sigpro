@@ -83,7 +83,7 @@ test('filtros: búsqueda, programa, severidad y «Solo sin asignar» (los pide e
   await openBoard(page);
   const visible = () => page.getByTestId(CARD).evaluateAll((items) => items.map((item) => item.getAttribute('data-testid')?.replace('nc-card-', '') ?? ''));
 
-  await page.getByRole('searchbox', { name: 'Buscar no conformidades' }).fill('012');
+  await page.getByPlaceholder('Código o descripción…').fill('012'); // getByPlaceholder: el placeholder es distinto del label
   await expect(page.getByTestId('nc-count')).toHaveText('1 de 12 no conformidades');
   expect(await visible()).toEqual(['NC-012']);
 

@@ -91,6 +91,7 @@ test('combobox: al enfocar pide todos al servidor, enseña como mucho 5 y avisa 
   const listbox = page.getByRole('listbox', { name: 'Proveedores encontrados' });
   await expect(input).toHaveAttribute('aria-controls', (await listbox.getAttribute('id')) ?? '');
   await expect(input).toHaveAttribute('placeholder', 'Buscar proveedor…');
+  await expect(page.getByPlaceholder('Buscar proveedor…')).toBeVisible();
 });
 
 test('combobox: escribir espera 250 ms (una sola petición con el texto final) y filtra en el servidor', async ({ page }) => {
