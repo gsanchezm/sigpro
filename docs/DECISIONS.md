@@ -207,6 +207,24 @@ Una línea de decisión + una de justificación. Si el plan y el handoff se cont
 - **Specs en paralelo contra una sola pila:** con `E2E_SKIP_GLOBAL_RESET=1` no se reinicia todo el seed al arrancar y cada ejecución simultánea usa `--output=<dir propio>` (si no, Playwright limpia `e2e/test-results` y borra las trazas de la otra). *Hacen falta al correr dos agentes o dos terminales a la vez.*
 - **Tenants de los specs:** `alumno04` (Administración UI), `alumno05` (API de usuarios y caos) con `alumno06` de solo lectura para el aislamiento, y `alumno14` (capturas).
 
+### Hitos del programa (T26)
+
+- **Pestaña «Hitos» del detalle de programa = tabla `<table>`** (Hito · Fecha límite · Avance · Estado · Acciones) ordenada por fecha límite y, a igualdad, por id (se reordena sola al cambiar una fecha). Contador «n de N hitos cumplidos» con `aria-live`; el detalle vuelve a pedir el programa tras cada cambio, así cambian el avance y los hitos cumplidos de la cabecera (`aria-valuenow` de la barra).
+- **Edición inline sin librería:** el texto de la celda es un `<button>` (nombre accesible = su texto); **doble clic, F2 o Intro** abren un `<input>` (texto o `type="date"`); **Intro guarda, Esc y salir del campo cancelan** (misma decisión que Requisitos). Un valor inválido (esquema Zod compartido) deja el campo abierto con `aria-invalid` y el motivo en `title`. «Renombrar» del menú ⋯ abre la misma edición.
+- **Slider de avance:** `<input type="range">` 0–100 en pasos de 5 con `aria-label` «Avance de {hito}», `aria-valuenow` y `aria-valuetext` explícitos. **Se confirma con el evento nativo `change`** (no con `input`): `fill()` de Playwright, las flechas y soltar el arrastre guardan una vez. La UI aplica el valor al instante y **solo la última petición de cada hito manda** (`progressSeq`): si no, la respuesta de la primera pulsación de flecha pisaba el valor de las siguientes y se perdían pasos.
+- **El badge de estado sale del `done` del servidor, no del slider:** con el 100 % de avance el hito queda «Cumplido» porque la API lo marca; así el defecto plantado de los hitos (un salto desde < 50 % a 100 % deja `done=false`) se ve como «En curso» al 100 %.
+- **Alta con diálogo** (nombre y fecha, validación con `createMilestoneSchema`, 422 por campo) y **eliminación con `alertdialog`** («eliminar hito» del plan). Con otro rol que admin o gestor todo es de solo lectura (slider deshabilitado, botones con `title` de motivo).
+- **Tenants de los specs:** `alumno07` (UI y API de hitos; también `PRG-004` para la API y `PRG-003` para el estado vacío).
+
+### Perfil (T26)
+
+- **`/profile` = cuenta + permisos del rol + preferencias.** La lista de permisos sale de `can()` (la misma tabla que usa la API) y cada fila lleva `data-allowed`, ✓ / — visuales y «Permitido» / «No permitido» para lectores de pantalla.
+- **Las preferencias son un borrador y «Guardar» las aplica todas a la vez** (idioma, tema, avisos en tiempo real, resumen semanal): el botón está deshabilitado con `title` mientras no haya cambios y vuelve a deshabilitarse si se deshacen. Tema = grupo de **radios** dentro de un `fieldset`; avisos = **switch** (`STORAGE_KEYS.live`); resumen semanal = **casilla** (`STORAGE_KEYS.digest`, simulado: solo se guarda).
+- **El switch de avisos solo decide si la campana cuenta los avisos nuevos** (la conexión de Socket.IO y el feed del panel de misión siguen vivos).
+- **Nombre accesible único por pantalla:** el selector de la cabecera ya se llamaba «Idioma», así que el del perfil es «Idioma de la interfaz». *Lo descubrió el propio spec (`getByLabel` resolvía dos elementos).*
+- **Los specs de Perfil no usan `openAs`:** su script de inicio reescribe tema e idioma en cada carga y ocultaría la persistencia; inician sesión por API y dejan que la app decida tema e idioma.
+- **Tenant del spec:** `alumno08` (capturas en `alumno14`).
+
 ### No conformidades (T23)
 
 - **Máquina de estados** (compartida por API y web): `open → in_analysis → corrective_action → closed`; `rejected` sale de `in_analysis`; `in_analysis → open` (volver atrás), `corrective_action → in_analysis` y `rejected → open` (reabrir). `closed` es terminal. *Los retrocesos permiten rectificar un arrastre sin romper la regla de cierre.* El orden de comprobación de la API es 403 (rol) → 409 (paso inexistente) → 422 (comentario de cierre), tres casos de prueba distintos.
