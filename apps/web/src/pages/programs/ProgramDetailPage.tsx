@@ -1,11 +1,12 @@
 import { ApiError, DETALLE_DYNAMIC_TESTIDS, DETALLE_TESTIDS, EDITAR_PROGRAMA_TESTIDS, REQUISITOS_TESTIDS, can, formatDate, formatMoney, type ProgramDto } from '@sigpro/shared';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { formatTrace } from '../../lib/errors';
 import { useAuth } from '../../state/auth';
 import { useI18n } from '../../state/i18n';
 import { ProgressBar } from '../../ui/ProgressBar';
 import { StatusBadge } from '../../ui/StatusBadge';
+import { MilestonesPanel } from './MilestonesPanel';
 
 type TabKey = 'summary' | 'milestones' | 'requirements';
 const TABS: readonly TabKey[] = ['summary', 'milestones', 'requirements'];
@@ -19,6 +20,11 @@ export const ProgramDetailPage = () => {
   const [failure, setFailure] = useState<unknown>(null);
   const [tab, setTab] = useState<TabKey>('summary');
   const canEdit = user ? can(user.role, 'program.edit') : false;
+
+  /** Vuelve a pedir el programa sin vaciarlo: tras editar un hito cambian el avance y los hitos cumplidos de la cabecera. */
+  const reloadProgram = useCallback(() => {
+    api.programs.get(code).then(setProgram, () => undefined);
+  }, [api, code]);
 
   useEffect(() => {
     let cancelled = false;
@@ -152,7 +158,7 @@ export const ProgramDetailPage = () => {
               {t('requisitos', 'openFromProgram')}
             </Link>
           ) : (
-            <p className="m-0 text-fg-2">{t('common', 'comingSoon')}</p>
+            <MilestonesPanel programCode={program.code} onChanged={reloadProgram} />
           )}
         </div>
       </div>

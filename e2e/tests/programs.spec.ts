@@ -368,7 +368,9 @@ test.describe('Programas · shell, atajos y detalle', () => {
     await expect(page.getByRole('tab', { name: 'Resumen' })).toHaveAttribute('aria-selected', 'true');
     await page.getByRole('tab', { name: 'Hitos' }).click();
     await expect(page.getByRole('tab', { name: 'Hitos' })).toHaveAttribute('aria-selected', 'true');
-    await expect(page.getByRole('tabpanel')).toContainText('Disponible en una fase posterior');
+    // La pestaña Hitos (fase 3) muestra la tabla de hitos del programa con su contador
+    await expect(page.getByRole('tabpanel').getByRole('heading', { name: 'Hitos del programa' })).toBeVisible();
+    await expect(page.getByTestId('milestones-count')).toHaveText('1 de 9 hitos cumplidos');
 
     await page.goto('/programs/PRG-999');
     await expect(page.getByTestId('program-detail-not-found')).toContainText('No se encontró el programa');

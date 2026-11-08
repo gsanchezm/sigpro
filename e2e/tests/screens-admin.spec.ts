@@ -87,6 +87,55 @@ for (const theme of THEMES) {
         await capture(page, 'admin-usuarios-error', theme);
         await page.unroute('**/api/admin/users');
       });
+
+      test('hitos: tabla, edición inline, avance, alta con errores, eliminación y solo lectura', async ({ page, request }) => {
+        await signIn(page, request, 'program_manager');
+        await page.goto('/programs/PRG-001');
+        await page.getByRole('tab', { name: 'Hitos' }).click();
+        const table = page.locator('[data-testid="milestones-table"][aria-busy="false"]');
+        await table.waitFor();
+        await capture(page, 'hitos-tabla', theme);
+
+        // celda de nombre en edición, y el avance del slider ya guardado
+        await page.getByTestId('milestone-name-PRG-001-M03').dblclick();
+        await page.getByRole('textbox', { name: 'Nombre del hito' }).fill('CDR revisado');
+        await capture(page, 'hitos-edicion', theme);
+        await page.keyboard.press('Enter');
+        await page.getByTestId('toast-ok').first().waitFor();
+        await page.getByTestId('milestone-progress-PRG-001-M02').fill('60');
+        await page.getByTestId('milestone-status-PRG-001-M02').filter({ hasText: 'En curso' }).waitFor();
+        await capture(page, 'hitos-avance', theme);
+
+        // validación inline
+        await page.getByTestId('milestone-name-PRG-001-M04').dblclick();
+        await page.getByRole('textbox', { name: 'Nombre del hito' }).fill('a');
+        await page.keyboard.press('Enter');
+        await page.locator('[aria-invalid="true"]').waitFor();
+        await capture(page, 'hitos-edicion-error', theme);
+        await page.keyboard.press('Escape');
+
+        // alta con errores y confirmación de borrado
+        await page.getByRole('button', { name: 'Nuevo hito' }).click();
+        await page.getByRole('button', { name: 'Crear hito' }).click();
+        await page.getByTestId('milestone-new-name-error').waitFor();
+        await capture(page, 'hitos-nuevo-errores', theme);
+        await page.keyboard.press('Escape');
+        // la tabla se desplaza en horizontal en móvil y el menú se cierra con cualquier scroll: primero se lleva el botón a la vista
+        const rowMenu = page.getByRole('button', { name: 'Acciones para el hito SAT' });
+        await rowMenu.scrollIntoViewIfNeeded();
+        await rowMenu.click();
+        await page.getByRole('menuitem', { name: 'Eliminar' }).click();
+        await page.getByRole('alertdialog').waitFor();
+        await capture(page, 'hitos-eliminar', theme);
+        await page.keyboard.press('Escape');
+
+        // el consultor solo lee
+        await signIn(page, request, 'consultant');
+        await page.goto('/programs/PRG-001');
+        await page.getByRole('tab', { name: 'Hitos' }).click();
+        await table.waitFor();
+        await capture(page, 'hitos-solo-lectura', theme);
+      });
     });
   }
 }
