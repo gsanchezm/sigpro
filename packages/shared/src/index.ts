@@ -14,3 +14,4 @@ export * from './documents';
 export * from './nc';
 export * from './mission';
 export * from './milestones';
+export * from './error-view';

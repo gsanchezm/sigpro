@@ -10,7 +10,7 @@ export const envSchema = z.object({
   PORT: z.coerce.number().int().default(3000),
   JWT_SECRET: z.string().min(8).default('dev-only-change-me'),
   ADMIN_KEY: z.string().min(1).default('dev-admin-key'),
-  CORS_ORIGIN: z.string().default('http://localhost:5173'),
+  CORS_ORIGIN: z.string().default('http://localhost:5173,http://localhost:8081'),
   SEED_ON_BOOT: bool,
   SEED_STUDENT_TENANTS: z.coerce.number().int().min(0).max(100).default(25),
   DOCS_BASIC_AUTH: z.string().default(''),

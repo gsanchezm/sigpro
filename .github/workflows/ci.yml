@@ -35,7 +35,7 @@ jobs:
       DATABASE_URL: postgresql://sigpro:sigpro@localhost:5432/sigpro?schema=public
       JWT_SECRET: ci-only-secret-change-me
       ADMIN_KEY: dev-admin-key
-      CORS_ORIGIN: http://localhost:5173
+      CORS_ORIGIN: http://localhost:5173,http://localhost:8081
       SEED_ON_BOOT: 'true'
       SEED_STUDENT_TENANTS: '25'
       APP_ENV: dev

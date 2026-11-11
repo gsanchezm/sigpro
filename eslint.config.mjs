@@ -17,8 +17,14 @@ const NO_LITERAL_TESTID = {
   message: 'No escribas data-testid como string suelto: impórtalo de @sigpro/shared (testids.ts).',
 };
 
+// En la app móvil (React Native) el `data-testid` de la web se escribe `testID` y se toma igualmente de testids.ts.
+const NO_LITERAL_TEST_ID = {
+  selector: 'JSXAttribute[name.name="testID"] > Literal',
+  message: 'No escribas testID como string suelto: impórtalo de @sigpro/shared (testids.ts).',
+};
+
 export default tseslint.config(
-  { ignores: ['**/dist/**', '**/node_modules/**', '**/.turbo/**', '**/coverage/**', '**/playwright-report/**', '**/test-results/**', 'docs/**', 'apps/api/prisma/migrations/**', '**/*.d.ts'] },
+  { ignores: ['**/.expo/**', 'apps/mobile/metro.config.js', '**/dist/**', '**/node_modules/**', '**/.turbo/**', '**/coverage/**', '**/playwright-report/**', '**/test-results/**', 'docs/**', 'apps/api/prisma/migrations/**', '**/*.d.ts'] },
   js.configs.recommended,
   ...tseslint.configs.recommended,
   {
@@ -39,6 +45,16 @@ export default tseslint.config(
       'react-hooks/rules-of-hooks': 'error',
       'react-hooks/exhaustive-deps': 'warn',
       'no-restricted-syntax': ['error', NO_SWITCH, NO_LITERAL_TESTID],
+    },
+  },
+  {
+    files: ['apps/mobile/**/*.{ts,tsx}'],
+    languageOptions: { globals: { ...globals.browser, __DEV__: 'readonly' } },
+    plugins: { 'react-hooks': reactHooks },
+    rules: {
+      'react-hooks/rules-of-hooks': 'error',
+      'react-hooks/exhaustive-deps': 'warn',
+      'no-restricted-syntax': ['error', NO_SWITCH, NO_LITERAL_TEST_ID],
     },
   },
   {

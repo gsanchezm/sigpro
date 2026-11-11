@@ -1,0 +1,39 @@
+{
+  "name": "mobile",
+  "version": "0.1.0",
+  "private": true,
+  "description": "SIGPRO móvil — Expo + Expo Router (mismas rutas y mismo cliente que la web)",
+  "main": "expo-router/entry",
+  "scripts": {
+    "dev": "node scripts/expo.mjs start --web --port 8081",
+    "start": "node scripts/expo.mjs start --port 8081",
+    "web": "node scripts/expo.mjs start --web --port 8081",
+    "build": "node scripts/expo.mjs export --platform web",
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "seed": "echo \"(mobile) nada que sembrar\""
+  },
+  "dependencies": {
+    "@expo/metro-runtime": "~58.0.17",
+    "@react-native-async-storage/async-storage": "2.2.0",
+    "@sigpro/shared": "workspace:*",
+    "expo": "~58.0.24",
+    "expo-constants": "~58.0.16",
+    "expo-linking": "~58.0.17",
+    "expo-router": "~58.0.31",
+    "expo-status-bar": "~58.0.5",
+    "react": "19.3.0",
+    "react-dom": "19.3.0",
+    "react-native": "0.88.1",
+    "react-native-safe-area-context": "~5.11.1",
+    "react-native-screens": "~4.30.1",
+    "react-native-web": "^0.21.4",
+    "socket.io-client": "4.8.4"
+  },
+  "devDependencies": {
+    "@types/react": "~19.3.0",
+    "typescript": "5.9.3",
+    "vitest": "3.2.7"
+  }
+}

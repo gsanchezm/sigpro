@@ -754,6 +754,28 @@ export const PERFIL_TESTIDS = {
   PROFILE_LOGOUT: 'profile-logout',
 } as const;
 
+// --- Fase 4: app móvil (los mismos ids de la web se reutilizan como `testID`; aquí solo lo que no tiene equivalente) ----
+
+export const MOVIL_TESTIDS = {
+  LOGIN_PAGE: 'login-page',
+  SPLASH: 'splash',
+  PROGRAM_DETAIL_PAGE: 'program-detail-page',
+  DOCUMENT_DETAIL_PAGE: 'document-detail-page',
+  /** Campo del tenant (en la web se elige con `?tenant=` o en /lab). */
+  LOGIN_TENANT: 'login-tenant',
+  MOBILE_TABS: 'mobile-tabs',
+  /** Pantalla de programas: lista de tarjetas y filtros por estado. */
+  PROGRAMS_PAGE: 'programs-page',
+  PROGRAMS_CARDS: 'programs-cards',
+  PROGRAMS_LOAD_MORE: 'programs-load-more',
+  PROGRAMS_FILTER_STATUS_GROUP: 'programs-filter-status-group',
+} as const;
+
+export const MOVIL_DYNAMIC_TESTIDS = {
+  /** programs-filter-status-on_hold, programs-filter-status-all */
+  PROGRAMS_FILTER_STATUS: (value: string) => `programs-filter-status-${value}`,
+} as const;
+
 // --- Catálogo de componentes: proveedores y búsqueda global agrupada ---------
 
 export const PROVEEDORES_TESTIDS = {

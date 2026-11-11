@@ -4,7 +4,15 @@
     "lib": ["ES2022", "DOM", "DOM.Iterable"],
     "jsx": "react-jsx",
     "noEmit": true,
-    "types": ["vite/client", "vite-plugin-pwa/client"]
+    "types": ["vite/client", "vite-plugin-pwa/client"],
+    // La app móvil usa React 19 en el mismo workspace: sin esto, los tipos de react-router (que no declaran @types/react)
+    // resolverían el @types/react 19 que pnpm hoistea en `.pnpm/node_modules`. Fija React 18 para todo el programa.
+    "paths": {
+      "react": ["./node_modules/@types/react"],
+      "react/*": ["./node_modules/@types/react/*"],
+      "react-dom": ["./node_modules/@types/react-dom"],
+      "react-dom/*": ["./node_modules/@types/react-dom/*"]
+    }
   },
   "include": ["src", "vite.config.ts", "vitest.config.ts"]
 }
