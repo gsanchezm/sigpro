@@ -1,8 +1,26 @@
 # SIGPRO — Estado de la construcción
 
-Última actualización: 2026-11-07 · **Fase 1 (Base) cerrada** · **Fase 2 (Núcleo del dominio) cerrada** · **Fase 3 (Dinámica y caos) cerrada** · La fase 4 (móvil) no se ha empezado
+Última actualización: 2026-11-11 · **Fases 1, 2 y 3 cerradas** · **Fase 4 (material del curso y móvil) en curso**
 
 Leyenda: `[x]` hecho · `[~]` en curso · `[ ]` pendiente
+
+## Fase 4 — Material para alumnos y móvil
+
+Orden fijo (el móvil va el último). Cada tarea termina con `pnpm lint && pnpm typecheck && pnpm test` en verde, su spec, capturas cuando aplica, una línea en `docs/CHANGELOG.md` y un commit. Una sola pila (API :3000, web :5173).
+
+- [x] **T30** `examples/`: proyecto Playwright + TypeScript independiente del monorepo (su `package.json`), fixtures por rol con `storageState`, Page Object de Programas, un spec por sesión 2–11 y `.github/workflows/students-e2e.yml` (tenant parametrizado, sharding en 2, informe HTML como artefacto). **90 tests (86 + 4 de `setup`), 90/90 en dos pasadas seguidas en un solo tenant con 2 workers y sin reset entre ellas** (~55 s); 3 de ellos `@visual`
+- [x] **T31** `/lab` completa: lista de 22 endpoints con enlaces a Swagger y al OpenAPI, contraejemplo de texto variable con el caos, FAQ de 8 preguntas y descarga del zip de `examples/` generado en el build. `lab.spec.ts` 15/15, capturas regeneradas, + 7 tests unitarios de endpoints y 11 del zip (web: 114). Arreglada de paso la anchura de `/nc` en móvil
+- [x] **T32** `docs/GUIA-ALUMNO.md`: levantar SIGPRO en local con Docker, apuntar la suite a Render, usuarios, permisos y códigos fijos del seed (tablas obtenidas de la API real); viaja dentro del zip
+- [ ] **T33** `apps/mobile` (Expo + Expo Router): Login con MFA, Programas (cards con filtros), kanban de NC y Panel de misión; Requisitos y Documentos en lectura; sin Administración; `testID` = `data-testid`; capturas a 390 px
+- [ ] **T34** Cierre de fase: README con el estado final, STATUS final
+
+## Resumen de la fase 4 (hasta T32)
+
+- **`examples/`** (proyecto independiente, `npm`): 10 specs (86 tests: s02 11 · s03 9 · s04 7 · s05 9 · s06 8 · s07 7 · s08 8 · s09 9 · s10 9 · s11 9), 4 tests de `setup` que guardan `.auth/<tenant>-<rol>.json`, fixtures `role` / `pageAs` / `adminPage`… / `apiAs` / `programsPage`, 9 Page Objects y ayudas, `npm run reset` (restaura el tenant y apaga el caos). **Verificado: 90/90 dos veces seguidas contra un único tenant (`alumno21`) con 2 workers, sin reset entre pasadas.** Reglas de convivencia (datos distintos por spec, tests repetibles, caos acotado) en `examples/README.md` y `docs/DECISIONS.md`.
+- **Workflow `students-e2e.yml`:** `plan → prepare → e2e (tenant × shard 1/2) → report`; informe HTML único como artefacto. Validado con `actionlint`; **no se ha podido ejecutar en GitHub desde aquí** y contra Render solo pasaría las sesiones 2–9 hasta desplegar la fase 3.
+- **`/lab`:** endpoints, contraejemplos, FAQ, usuario personal y descarga de `sigpro-examples.zip` (40 archivos, 77 KB, generado en `build` y `dev`).
+- **Hallazgo corregido:** a 390 px `/nc` medía 1303 px de ancho (los `span` `sr-only` de las tarjetas escapaban del tablero); con `isMobile` el navegador incluso renderizaba el escritorio. `NcBoard` es ahora `relative` y el spec de la sesión 11 usa la emulación completa del iPhone 14.
+- **Calidad:** `pnpm lint && pnpm typecheck && pnpm test` en verde (shared 119, web 114, api 139); `lab.spec.ts` 15/15 y `nc.spec.ts` 17/17.
 
 ## Fase 3 — Dinámica y caos
 
@@ -211,7 +229,7 @@ Recorrida fila a fila para Acceso y Programas. Specs en `e2e/tests/`: `access` =
 
 ## Pendiente / deuda conocida
 
-- **Render:** desplegado (web <https://sigpro-web.onrender.com/>, API <https://sigpro-api.onrender.com/>); CI en verde. **La fase 3 aún no está desplegada** (los commits están en local, sin push): al desplegarla la API aplica la migración `phase3`, re-siembra los tenants con `seed_version` < 3 y abre Socket.IO; hay variables nuevas (`PLANTED_BUGS`, `SIMULATOR_MS`, ya en `render.yaml`). Pasos y comprobación rápida en `docs/DEPLOY-RENDER.md` («Actualizar a la fase 3»).
+- **Render (comprobado el 2026-11-11):** la web (<https://sigpro-web.onrender.com/>) y la API (<https://sigpro-api.onrender.com/>) responden, pero **siguen en la fase 2**: `origin/main` está en `f5d4b7e` («close phase 2») y los 17 commits de la fase 3 no se han subido (`git status`: *ahead 17*); `GET /api/config` no trae `plantedBugs` y `/api/nc`, `/api/mission/summary`, `/api/search` y `/socket.io` dan 404. **Hasta hacer `git push` y desplegar, el workflow `students-e2e.yml` solo puede pasar las sesiones 2–9 contra Render** (las 10 y 11 usan el panel de misión, las NC y los defectos plantados de la fase 3). Al desplegar, la API aplica la migración `phase3`, re-siembra los tenants con `seed_version` < 3 y abre Socket.IO; hay variables nuevas (`PLANTED_BUGS`, `SIMULATOR_MS`, ya en `render.yaml`). Pasos y comprobación rápida en `docs/DEPLOY-RENDER.md` («Actualizar a la fase 3»).
 - **CI en GitHub:** la primera ejecución de `ci.yml` (2026-11-06, repositorio `gsanchezm/sigpro`) terminó en verde: lint, typecheck, unit y e2e de humo.
 - **Node 22** (resuelto): CI, Render y `CLAUDE.md` usan Node 22 y pnpm 11 (`pnpm@11` exige ≥ 22.13; ver `docs/DECISIONS.md`).
 - **Deshacer eliminación** (`toast-action`): no se implementa (borrado permanente).
