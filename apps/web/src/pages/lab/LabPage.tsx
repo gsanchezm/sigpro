@@ -9,16 +9,36 @@ import {
 } from '@sigpro/shared';
 import { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { getTenant, setTenant } from '../../lib/env';
+import { API_URL, getTenant, setTenant } from '../../lib/env';
 import { formatTrace } from '../../lib/errors';
 import { useAuth } from '../../state/auth';
+import { useConfig, useSaveLabel } from '../../state/config';
 import { useI18n } from '../../state/i18n';
 import { useToast } from '../../state/toast';
+import { ACCESS_LABEL, LAB_ENDPOINTS, docsLinks } from './endpoints';
 
 const sectionTitle = 'm-0 text-[15px] font-semibold';
 const hint = 'm-0 text-[12.5px] text-fg-2';
 
 type Health = 'checking' | 'ok' | 'down';
+
+/** Descarga del proyecto de `examples/`: el zip lo genera `scripts/zip-examples.mjs` en cada build (y al arrancar `dev`). */
+const EXAMPLES_ZIP = `${import.meta.env.BASE_URL}downloads/sigpro-examples.zip`;
+
+/** Preguntas de la FAQ: pares de claves de i18n (las tres primeras son las de la fase 1). */
+const FAQ_KEYS = [
+  ['faqQ1', 'faqA1'],
+  ['faqQ2', 'faqA2'],
+  ['faqQ3', 'faqA3'],
+  ['faqQ4', 'faqA4'],
+  ['faqQ5', 'faqA5'],
+  ['faqQ6', 'faqA6'],
+  ['faqQ7', 'faqA7'],
+  ['faqQ8', 'faqA8'],
+] as const;
+
+/** Un usuario `alumnoNN@sigpro.lab` por tenant de alumno; para `demo` u otros se muestra la plantilla. */
+const studentEmail = (tenant: string): string => (/^alumno\d+$/.test(tenant) ? `${tenant}@sigpro.lab` : 'alumnoNN@sigpro.lab');
 
 /** Página /lab: credenciales de demo, tenants, reset, modo caos, contraejemplos y FAQ. Pública (sirve también antes de iniciar sesión). */
 export const LabPage = () => {
@@ -35,6 +55,9 @@ export const LabPage = () => {
   const [chaos, setChaos] = useState<ChaosConfig>({ latencyMs: 0, errorRate: 0, flakyLabels: false });
   const [openFaq, setOpenFaq] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
+  const { flakyLabels } = useConfig();
+  const flakySaveLabel = useSaveLabel();
+  const docs = docsLinks(API_URL);
 
   useEffect(() => {
     let alive = true;
@@ -95,11 +118,7 @@ export const LabPage = () => {
     });
 
   const credentialNote = (u: TestUserDto): string => (u.status === 'locked' ? t('lab', 'noteLocked') : u.status === 'pending' ? t('lab', 'notePending') : u.mfa ? t('lab', 'noteMfa') : t('lab', 'noteNone'));
-  const faq = [
-    { q: t('lab', 'faqQ1'), a: t('lab', 'faqA1') },
-    { q: t('lab', 'faqQ2'), a: t('lab', 'faqA2') },
-    { q: t('lab', 'faqQ3'), a: t('lab', 'faqA3') },
-  ];
+  const faq = FAQ_KEYS.map(([question, answer]) => ({ q: t('lab', question), a: t('lab', answer) }));
   const resetTitle = isAdmin ? undefined : t('lab', 'resetNeedsLogin');
   const chaosTitle = isAdmin ? undefined : t('lab', 'chaosNeedsLogin');
 
@@ -163,6 +182,10 @@ export const LabPage = () => {
             </tbody>
           </table>
         </div>
+        <p data-testid={LAB_TESTIDS.LAB_STUDENT_USER} className="m-0 flex flex-col gap-0.5">
+          <span className="font-mono text-[12px]">{t('lab', 'studentUser', { email: studentEmail(getTenant()), password: 'Alumno1234!' })}</span>
+          <span className={hint}>{t('lab', 'studentUserHint')}</span>
+        </p>
       </section>
 
       <div className="grid grid-cols-[repeat(auto-fit,minmax(320px,1fr))] gap-5">
@@ -277,6 +300,50 @@ export const LabPage = () => {
         </div>
       </section>
 
+      <section aria-labelledby="lab-endpoints-title" data-testid={LAB_TESTIDS.LAB_ENDPOINTS} className="card flex flex-col gap-3 p-4">
+        <div>
+          <h2 id="lab-endpoints-title" className={sectionTitle}>
+            {t('lab', 'endpoints')}
+          </h2>
+          <p className={hint}>{t('lab', 'endpointsHint', { base: API_URL })}</p>
+        </div>
+        <div className="flex flex-wrap gap-3 text-[12.5px]">
+          <a href={docs.swagger} target="_blank" rel="noreferrer" data-testid={LAB_TESTIDS.LAB_ENDPOINTS_SWAGGER}>
+            {t('lab', 'endpointsSwagger')}
+          </a>
+          <a href={docs.json} target="_blank" rel="noreferrer" data-testid={LAB_TESTIDS.LAB_ENDPOINTS_JSON}>
+            {t('lab', 'endpointsJson')}
+          </a>
+        </div>
+        <div className="overflow-x-auto">
+          <table data-testid={LAB_TESTIDS.LAB_ENDPOINTS_TABLE} aria-label={t('lab', 'endpoints')} className="w-full min-w-[720px] border-collapse text-[12.5px]">
+            <thead>
+              <tr className="border-b border-border bg-surface-2 text-left text-[11.5px] tracking-[.04em] text-fg-2 uppercase">
+                {(['colMethod', 'colPath', 'colAccess', 'colWhat'] as const).map((key) => (
+                  <th key={key} scope="col" className="h-8 px-2 font-medium">
+                    {t('lab', key)}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {LAB_ENDPOINTS.map((endpoint) => (
+                <tr key={endpoint.id} data-testid={LAB_DYNAMIC_TESTIDS.LAB_ENDPOINT(endpoint.id)} data-method={endpoint.method} className="h-9 border-b border-border last:border-b-0">
+                  <td className="px-2 font-mono text-[12px] font-semibold">{endpoint.method}</td>
+                  <td className="px-2 font-mono text-[12px]">{endpoint.path}</td>
+                  <td className="px-2">
+                    <span className="pill" data-tone={endpoint.access === 'public' ? 'ok' : endpoint.access === 'admin' ? 'info' : 'neutral'} data-access={endpoint.access}>
+                      {t('lab', ACCESS_LABEL[endpoint.access])}
+                    </span>
+                  </td>
+                  <td className="px-2 text-fg-2">{t('lab', endpoint.description)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
       <section aria-labelledby="lab-counter-title" className="card flex flex-col gap-3 p-4">
         <div>
           <h2 id="lab-counter-title" className={sectionTitle}>
@@ -296,9 +363,12 @@ export const LabPage = () => {
               ))}
             </tbody>
           </table>
+          <p className={hint}>{t('lab', 'xpathWhy')}</p>
         </div>
-        <div className="flex flex-col gap-2">
-          <span className="label">{t('lab', 'overlapExample')}</span>
+        <div role="group" aria-labelledby="lab-overlap-title" className="flex flex-col gap-2">
+          <span id="lab-overlap-title" className="label">
+            {t('lab', 'overlapExample')}
+          </span>
           <div className="flex flex-wrap items-center gap-2">
             <button type="button" data-testid={LAB_TESTIDS.LAB_OVERLAP_SAVE} className="btn btn-primary" onClick={() => toast.push('ok', t('lab', 'overlapSave'))}>
               {t('lab', 'overlapSave')}
@@ -314,6 +384,38 @@ export const LabPage = () => {
             </span>
           </div>
         </div>
+        <div role="group" aria-labelledby="lab-flaky-title" data-testid={LAB_TESTIDS.LAB_FLAKY_GROUP} className="flex flex-col gap-2">
+          <span id="lab-flaky-title" className="label">
+            {t('lab', 'flakyExample')}
+          </span>
+          <div className="flex flex-wrap items-center gap-2">
+            {/* El texto de este botón lo decide el modo caos (useSaveLabel): es justo lo que NO se debe localizar por texto exacto */}
+            <button type="button" data-testid={LAB_TESTIDS.LAB_FLAKY_SAVE} className="btn btn-primary" onClick={() => toast.push('ok', t('lab', 'flakySaved'))}>
+              {flakySaveLabel}
+            </button>
+            <span data-testid={LAB_TESTIDS.LAB_FLAKY_STATE} data-state={flakyLabels ? 'on' : 'off'} className="badge" data-tone={flakyLabels ? 'warn' : 'neutral'}>
+              {flakyLabels ? t('lab', 'flakyStateOn') : t('lab', 'flakyStateOff')}
+            </span>
+          </div>
+          <p className={hint}>{t('lab', 'flakyExampleHint')}</p>
+        </div>
+      </section>
+
+      <section aria-labelledby="lab-material-title" data-testid={LAB_TESTIDS.LAB_COURSE_MATERIAL} className="card flex flex-col gap-3 p-4">
+        <div>
+          <h2 id="lab-material-title" className={sectionTitle}>
+            {t('lab', 'courseMaterial')}
+          </h2>
+          <p className={hint}>{t('lab', 'courseMaterialHint')}</p>
+        </div>
+        <ul className="m-0 flex list-disc flex-col gap-0.5 pl-5 text-[12.5px] text-fg-2">
+          <li>{t('lab', 'courseMaterialIncludes1')}</li>
+          <li>{t('lab', 'courseMaterialIncludes2')}</li>
+          <li>{t('lab', 'courseMaterialIncludes3')}</li>
+        </ul>
+        <a href={EXAMPLES_ZIP} download="sigpro-examples.zip" data-testid={LAB_TESTIDS.LAB_DOWNLOAD_EXAMPLES} className="btn btn-secondary self-start no-underline">
+          {t('lab', 'downloadExamples')}
+        </a>
       </section>
 
       <section aria-labelledby="lab-faq-title" data-testid={LAB_TESTIDS.LAB_FAQ} className="card flex flex-col gap-2 p-4">
@@ -351,7 +453,7 @@ export const LabPage = () => {
       </section>
 
       <footer className="flex flex-wrap items-center gap-4 text-[12.5px] text-fg-2">
-        <a href="/api/docs" target="_blank" rel="noreferrer" data-testid={LAB_TESTIDS.LAB_API_DOCS}>
+        <a href={docs.swagger} target="_blank" rel="noreferrer" data-testid={LAB_TESTIDS.LAB_API_DOCS}>
           {t('lab', 'apiDocs')}
         </a>
         <span data-testid={LAB_TESTIDS.LAB_HEALTH} data-state={health} role="status" className="badge" data-tone={health === 'ok' ? 'ok' : health === 'down' ? 'danger' : 'neutral'}>

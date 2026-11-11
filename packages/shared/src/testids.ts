@@ -233,6 +233,17 @@ export const LAB_TESTIDS = {
   LAB_API_DOCS: 'lab-api-docs',
   LAB_HEALTH: 'lab-health',
   LAB_LOGIN_LINK: 'lab-login-link',
+  // --- Fase 4: lab completo ---
+  LAB_STUDENT_USER: 'lab-student-user',
+  LAB_ENDPOINTS: 'lab-endpoints',
+  LAB_ENDPOINTS_TABLE: 'lab-endpoints-table',
+  LAB_ENDPOINTS_SWAGGER: 'lab-endpoints-swagger',
+  LAB_ENDPOINTS_JSON: 'lab-endpoints-json',
+  LAB_FLAKY_GROUP: 'lab-flaky-group',
+  LAB_FLAKY_SAVE: 'lab-flaky-save',
+  LAB_FLAKY_STATE: 'lab-flaky-state',
+  LAB_COURSE_MATERIAL: 'lab-course-material',
+  LAB_DOWNLOAD_EXAMPLES: 'lab-download-examples',
 } as const;
 
 export const LAB_DYNAMIC_TESTIDS = {
@@ -240,6 +251,8 @@ export const LAB_DYNAMIC_TESTIDS = {
   LAB_CREDENTIAL: (role: string, status?: 'locked' | 'pending') => `lab-credential-${role}${status ? '-' + status : ''}`,
   LAB_FAQ_ITEM: (n: number) => `lab-faq-item-${n}`,
   LAB_FAQ_TOGGLE: (n: number) => `lab-faq-toggle-${n}`,
+  /** lab-endpoint-programs-list, lab-endpoint-admin-reset */
+  LAB_ENDPOINT: (id: string) => `lab-endpoint-${id}`,
 } as const;
 
 // --- Ampliaciones de la fase 2 ---------------------------------------------

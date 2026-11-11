@@ -44,7 +44,7 @@ export const NcBoard = ({ items, loading, role, canMove, plantedBugs, onOpen, on
       aria-label={t('nc', 'board')}
       aria-busy={loading}
       data-testid={NC_TESTIDS.NC_BOARD}
-      className="grid snap-x snap-mandatory auto-cols-[minmax(264px,82vw)] grid-flow-col gap-3 overflow-x-auto pb-2 sm:auto-cols-[minmax(212px,1fr)]"
+      className="relative grid snap-x snap-mandatory auto-cols-[minmax(264px,82vw)] grid-flow-col gap-3 overflow-x-auto pb-2 sm:auto-cols-[minmax(212px,1fr)]"
     >
       {NC_STATES.map((state) => {
         const cards = grouped[state];
