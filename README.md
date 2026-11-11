@@ -18,9 +18,9 @@ Las **cuatro fases del plan están construidas y verificadas en local**:
 | 3 · Dinámica y caos | No conformidades (kanban), Panel de misión (Socket.IO), Administración, modo caos, 8 defectos plantados | idem |
 | 4 · Material y móvil | `examples/` + workflow de alumnos, `/lab` completa, guía del alumno, app Expo | idem + e2e móvil |
 
-Cifras de la última pasada: **tests unitarios** shared 119 · web 114 · api 139 · móvil 95; **e2e de la web** 292 specs; **e2e del móvil** 21 specs y 32 capturas; **`examples/`** 90 tests (86 + 4 de `setup`) en dos pasadas seguidas, con 2 workers y un solo tenant.
+Cifras de la última pasada: **tests unitarios** shared 119 · web 114 · api 139 · móvil 95; **e2e de la web** 292 specs; **e2e del móvil** 21 specs y 32 capturas (ambos también en el CI de GitHub); **`examples/`** 90 tests (86 + 4 de `setup`) en dos pasadas seguidas, con 2 workers y un solo tenant.
 
-> **Despliegue pendiente.** Render (<https://sigpro-web.onrender.com> y <https://sigpro-api.onrender.com>) sigue en la **fase 2**: los commits de las fases 3 y 4 no se han subido a `origin/main`. Hasta hacer `git push` y desplegar (pasos en [`docs/DEPLOY-RENDER.md`](docs/DEPLOY-RENDER.md#actualizar-a-la-fase-3)), el workflow de alumnos solo puede pasar las sesiones 2–9 contra Render. La app móvil no se aloja en Render.
+> **Desplegado (2026-11-11).** Las fases 3 y 4 están en `origin/main` y Render las desplegó solas: <https://sigpro-web.onrender.com> (sirve `sigpro-examples.zip`) y <https://sigpro-api.onrender.com> (Socket.IO y `plantedBugs` en `/api/config`). El workflow [`students-e2e.yml`](.github/workflows/students-e2e.yml) se ejecutó contra Render con el tenant `alumno25`: 2 shards (48 + 43 tests, todos en verde) e informe HTML unido como artefacto. La app móvil no se aloja en Render.
 
 ## Estructura
 

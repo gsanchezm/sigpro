@@ -1,6 +1,6 @@
 # SIGPRO — Estado de la construcción
 
-Última actualización: 2026-11-11 · **Las 4 fases están construidas y verificadas en local** · **Pendiente: `git push` y desplegar en Render** (el entorno público sigue en la fase 2)
+Última actualización: 2026-11-11 · **Las 4 fases están construidas, subidas a `origin/main` y desplegadas en Render** · el workflow de alumnos se ejecutó contra Render en verde
 
 Leyenda: `[x]` hecho · `[~]` en curso · `[ ]` pendiente
 
@@ -17,12 +17,12 @@ Orden fijo (el móvil va el último). Cada tarea termina con `pnpm lint && pnpm 
 ## Resumen de la fase 4
 
 - **`examples/`** (proyecto independiente, `npm`): 10 specs (86 tests: s02 11 · s03 9 · s04 7 · s05 9 · s06 8 · s07 7 · s08 8 · s09 9 · s10 9 · s11 9), 4 tests de `setup` que guardan `.auth/<tenant>-<rol>.json`, fixtures `role` / `pageAs` / `adminPage`… / `apiAs` / `programsPage`, 9 Page Objects y ayudas, `npm run reset` (restaura el tenant y apaga el caos). **Verificado: 90/90 dos veces seguidas contra un único tenant (`alumno21`) con 2 workers, sin reset entre pasadas.** `npm test` ejecuta el proyecto `chromium` (los 3 `@visual` van aparte: `npm run test:visual`). Reglas de convivencia en `examples/README.md` y `docs/DECISIONS.md`.
-- **Workflow `students-e2e.yml`:** `plan → prepare → e2e (tenant × shard 1/2) → report`; informe HTML único como artefacto. Validado con `actionlint`; **no se ha podido ejecutar en GitHub desde aquí** y contra Render solo pasaría las sesiones 2–9 hasta desplegar la fase 3.
+- **Workflow `students-e2e.yml`:** `plan → prepare → e2e (tenant × shard 1/2) → report`; informe HTML único como artefacto. Validado con `actionlint` y **ejecutado en GitHub contra Render con `alumno25`** (run 43092572209): los 5 jobs en verde, 48 + 43 tests (83 de las sesiones 2–11 + el `setup` de cada shard) y artefacto `playwright-report-alumno25` de ~284 KB.
 - **`/lab`:** endpoints (contrastados con el OpenAPI real), contraejemplos (XPath, par que se solapa, texto que cambia con el caos), FAQ de 8 preguntas, usuario personal y descarga de `sigpro-examples.zip` (40 archivos, ~78 KB, generado en `build` y `dev`).
 - **`docs/GUIA-ALUMNO.md`:** Docker en local, apuntar la suite a Render, usuarios, permisos, códigos fijos del seed (de la API real) y la app móvil.
 - **App móvil (`apps/mobile`):** Expo SDK 58 + Expo Router con React 19 **solo en ese paquete** (la web sigue en React 18); mismas rutas, mismo cliente HTTP y mismos ids que la web, AsyncStorage con las mismas claves (las ayudas e2e de la web sirven en `:8081`). Pantallas: acceso con MFA, Programas, No conformidades (kanban con «Mover a…»), Panel de misión (Socket.IO), Requisitos y Documentos en lectura, Perfil. **`pnpm dev` levanta también Expo web en `:8081`; `pnpm build` exporta la web móvil.**
 - **Hallazgos corregidos por el camino:** `/nc` medía 1303 px a 390 px (los `span` `sr-only` escapaban del tablero); en un clon limpio `npm test` de `examples/` fallaba por faltar las líneas base `@visual`; al añadir React 19 al workspace los tipos de `react-router-dom` resolvían `@types/react@19` (la web lo fija ahora en su `tsconfig`); la barra de pestañas móvil recortaba sus etiquetas (la caja de 9 px de la etiqueta, vista en la captura); React Native Web no pinta `aria-description` (el motivo de un botón deshabilitado va en `data-reason` y en un texto visible); un Vite arrancado antes de `pnpm install` responde `504 Outdated Optimize Dep` y hay que reiniciarlo.
-- **Calidad:** `pnpm lint && pnpm typecheck && pnpm test` en verde (shared 119, web 114, api 139, móvil 95) y `pnpm build` (shared, api, web, mobile). **e2e web: 292 specs** (286 + 6 nuevos de `/lab`); **e2e móvil: 21 specs** y 32 capturas.
+- **Calidad:** `pnpm lint && pnpm typecheck && pnpm test` en verde (shared 119, web 114, api 139, móvil 95) y `pnpm build` (shared, api, web, mobile). **e2e web: 292 specs** (286 + 6 nuevos de `/lab`); **e2e móvil: 21 specs** y 32 capturas. **En GitHub**, el primer CI de las fases 3–4 dio 285/286 en la web (la carrera de `search.spec.ts`, corregida; ver `DECISIONS.md`) y los dos pasos e2e, web y móvil, quedaron en verde tras la corrección.
 
 ## Cobertura de locators — móvil (React Native Web a 390 px)
 
@@ -252,7 +252,7 @@ Recorrida fila a fila para Acceso y Programas. Specs en `e2e/tests/`: `access` =
 
 ## Pendiente / deuda conocida
 
-- **Render (comprobado el 2026-11-11):** la web (<https://sigpro-web.onrender.com/>) y la API (<https://sigpro-api.onrender.com/>) responden, pero **siguen en la fase 2**: `origin/main` está en `f5d4b7e` («close phase 2») y los 17 commits de la fase 3 no se han subido (`git status`: *ahead 17*); `GET /api/config` no trae `plantedBugs` y `/api/nc`, `/api/mission/summary`, `/api/search` y `/socket.io` dan 404. **Hasta hacer `git push` y desplegar, el workflow `students-e2e.yml` solo puede pasar las sesiones 2–9 contra Render** (las 10 y 11 usan el panel de misión, las NC y los defectos plantados de la fase 3). Al desplegar, la API aplica la migración `phase3`, re-siembra los tenants con `seed_version` < 3 y abre Socket.IO; hay variables nuevas (`PLANTED_BUGS`, `SIMULATOR_MS`, ya en `render.yaml`). Pasos y comprobación rápida en `docs/DEPLOY-RENDER.md` («Actualizar a la fase 3»).
+- **Render (2026-11-11):** `origin/main` recibió las fases 3 y 4 (`f5d4b7e..30891a2` y la corrección `5e7b12a`) y Render desplegó solo: la API aplicó la migración `phase3` y re-sembró los tenants, `/api/config` expone `plantedBugs`, `/socket.io` responde y la web sirve `/downloads/sigpro-examples.zip` (~80 KB). Antes de subir, el entorno público seguía en la fase 2 (el encargo de la fase decía lo contrario; ver `DECISIONS.md`). Pasos y comprobación rápida en `docs/DEPLOY-RENDER.md` («Actualizar a la fase 3» y «a la fase 4»).
 - **CI en GitHub:** la primera ejecución de `ci.yml` (2026-11-06, repositorio `gsanchezm/sigpro`) terminó en verde: lint, typecheck, unit y e2e de humo.
 - **Node 22** (resuelto): CI, Render y `CLAUDE.md` usan Node 22 y pnpm 11 (`pnpm@11` exige ≥ 22.13; ver `docs/DECISIONS.md`).
 - **Deshacer eliminación** (`toast-action`): no se implementa (borrado permanente).
@@ -262,7 +262,7 @@ Recorrida fila a fila para Acceso y Programas. Specs en `e2e/tests/`: `access` =
 - **Procesos locales:** la pila de trabajo es API `:3000` + web `:5173` (+ Expo web en `:8081` si se lanza `pnpm dev`). Sigue viva una API de basic auth en `:3100` (la deja Playwright para `api-docs.spec.ts`; la vuelve a arrancar sola). El Vite de `:5174` de una sesión anterior se detuvo.
 - **`pnpm dev` y Expo:** sin terminal interactiva (turbo, CI) `scripts/expo.mjs` pone `CI=1` y Metro no recarga solo; en una terminal normal sí. Si dejas el Vite de `:5173` arrancado durante un `pnpm install` responde `504 Outdated Optimize Dep`: reinícialo.
 - **App móvil:** probada en Expo web (React Native Web); **no se ha probado en un dispositivo ni emulador** (`EXPO_PUBLIC_API_URL` con la IP del PC o `10.0.2.2`). `pnpm-workspace.yaml` tiene 28 entradas nuevas en `minimumReleaseAgeExclude` (versiones recientes de Expo). `@sigpro/shared` debe estar compilado antes de `expo start` (`pnpm dev` y `pnpm build` ya lo hacen).
-- **Workflow de alumnos (`students-e2e.yml`):** validado con `actionlint` y con la suite de `examples/` en local, pero **no ejecutado en GitHub Actions**; el artefacto `playwright-report-<tenant>` y el `merge-reports` entre shards no se han visto funcionar.
+- **Workflow de alumnos (`students-e2e.yml`):** ejecutado en GitHub contra Render (ver arriba). Las pruebas visuales `@visual` no se ejecutan en él por defecto (`visual: skip`); los modos `compare` y `update` no se han probado en GitHub. Corre sobre `alumno25`: cada ejecución **reinicia ese tenant** en Render.
 - **Evolución del modelo:** la FK `NonConformity → TestRun` es `NO ACTION`; el seed v3 enlaza solo ejecuciones del propio programa. Si se permitiera enlazar ejecuciones de otro programa, el borrado de ese programa volvería a dar 500.
 - **Git:** el repositorio es público (`https://github.com/gsanchezm/sigpro`). El zip `SIGPRO Design System Entregables.zip` se eliminó de la rama, pero sigue en el primer commit del historial.
 
