@@ -147,7 +147,7 @@ export const MilestonesPanel = ({ programCode, onChanged }: MilestonesPanelProps
     <section data-testid={HITOS_TESTIDS.MILESTONES_PANEL} aria-labelledby="milestones-title" className="flex flex-col gap-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex flex-col gap-0.5">
-          <h2 id="milestones-title" className="m-0 text-[14px] font-semibold">
+          <h2 id="milestones-title" className="section-title">
             {t('hitos', 'title')}
           </h2>
           <p data-testid={HITOS_TESTIDS.MILESTONES_COUNT} aria-live="polite" className="m-0 font-mono text-[12px] text-fg-2">
@@ -178,11 +178,11 @@ export const MilestonesPanel = ({ programCode, onChanged }: MilestonesPanelProps
           </button>
         </div>
       ) : (
-        <div className="overflow-hidden rounded-[6px] border border-border">
+        <div className="overflow-hidden rounded-card border border-border">
           <div className="overflow-x-auto">
-            <table data-testid={HITOS_TESTIDS.MILESTONES_TABLE} aria-busy={loading} aria-label={t('hitos', 'table', { code: programCode })} className="w-full min-w-[640px] border-collapse text-[12.5px]">
+            <table data-testid={HITOS_TESTIDS.MILESTONES_TABLE} aria-busy={loading} aria-label={t('hitos', 'table', { code: programCode })} className="data-table w-full min-w-[640px] border-collapse text-[12.5px]">
               <thead>
-                <tr className="border-b border-border bg-surface-2">
+                <tr className="border-b border-border">
                   {columns.map((key) => (
                     <th key={key} scope="col" className="h-9 px-3 text-left text-[11.5px] font-medium text-fg-2">
                       {t('hitos', key)}
@@ -441,7 +441,7 @@ const EditableCell = ({ field, edit, canEdit, display, buttonTestId, inputTestId
           onStartEdit(field);
         }
       }}
-      className={`max-w-[260px] cursor-text truncate rounded-[4px] border border-transparent bg-transparent px-1.5 py-0.5 text-left text-[12.5px] text-fg hover:border-border ${mono ? 'font-mono text-[12px]' : 'font-medium'}`}
+      className={`max-w-[260px] cursor-text truncate rounded-ctl border border-transparent bg-transparent px-1.5 py-0.5 text-left text-[12.5px] text-fg hover:border-border ${mono ? 'font-mono text-[12px]' : 'font-medium'}`}
     >
       {display}
     </button>

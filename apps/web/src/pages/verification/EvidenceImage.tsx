@@ -6,12 +6,12 @@ import { useI18n } from '../../state/i18n';
 import { useToast } from '../../state/toast';
 
 const toUri = (svg: string): string => `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
-const FRAME = '<rect width="64" height="48" rx="4" fill="#e6eaf0" stroke="#b7c0cc"/>';
+const FRAME = '<rect width="64" height="48" rx="4" fill="#f4f0f6" stroke="#cfc4d6"/>';
 /** Mientras llega la imagen (o si falla) se muestra un marco gris; el `alt` y el `data-state` siguen siendo observables. */
-const PLACEHOLDER = toUri(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 48">${FRAME}<path d="M12 36l12-14 9 10 6-6 13 10z" fill="#b7c0cc"/></svg>`);
-const FAILED = toUri(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 48">${FRAME}<path d="M22 14l20 20M42 14L22 34" stroke="#c62f2f" stroke-width="3"/></svg>`);
+const PLACEHOLDER = toUri(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 48">${FRAME}<path d="M12 36l12-14 9 10 6-6 13 10z" fill="#cfc4d6"/></svg>`);
+const FAILED = toUri(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 48">${FRAME}<path d="M22 14l20 20M42 14L22 34" stroke="#b93232" stroke-width="3"/></svg>`);
 const PDF_ICON = toUri(
-  `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 48"><rect width="64" height="48" rx="4" fill="#fbe3e3" stroke="#c62f2f"/><text x="32" y="29" text-anchor="middle" font-family="IBM Plex Sans, sans-serif" font-size="14" font-weight="700" fill="#c62f2f">PDF</text></svg>`,
+  `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 48"><rect width="64" height="48" rx="4" fill="#fbe4e4" stroke="#b93232"/><text x="32" y="29" text-anchor="middle" font-family="Geist Sans, sans-serif" font-size="14" font-weight="700" fill="#b93232">PDF</text></svg>`,
 );
 
 export const formatBytes = (bytes: number): string => (bytes < 1024 ? `${bytes} B` : bytes < 1024 * 1024 ? `${(bytes / 1024).toFixed(1)} KB` : `${(bytes / (1024 * 1024)).toFixed(2)} MB`);
@@ -60,7 +60,7 @@ export const EvidenceImage = ({ evidence, testCaseCode }: { evidence: EvidenceDt
       data-testid={VERIFICACION_DYNAMIC_TESTIDS.EVIDENCE_THUMB(evidence.id)}
       data-state={state}
       title={state === 'error' ? t('verificacion', 'evidenceFailed') : evidence.filename}
-      className="h-12 w-16 flex-none rounded-[4px] border border-border bg-surface-2 object-cover"
+      className="h-12 w-16 flex-none rounded-ctl-sm border border-border bg-surface-2 object-cover"
     />
   );
 };

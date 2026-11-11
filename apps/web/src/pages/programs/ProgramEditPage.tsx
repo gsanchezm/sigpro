@@ -110,7 +110,7 @@ export const ProgramEditPage = () => {
     return (
       <div aria-busy="true" role="status" className="flex flex-col gap-3">
         <span className="skeleton h-6 w-64" />
-        <span className="skeleton h-40 w-full max-w-[720px] !rounded-[6px]" />
+        <span className="skeleton h-40 w-full max-w-[720px] !rounded-card" />
       </div>
     );
   }
@@ -173,7 +173,7 @@ export const ProgramEditPage = () => {
   return (
     <div data-testid={EDITAR_PROGRAMA_TESTIDS.PROGRAM_EDIT_PAGE} className="flex max-w-[720px] flex-col gap-4">
       <header className="flex flex-col gap-1">
-        <h1 className="m-0 text-[20px] font-semibold tracking-[-.01em]">{t('programas', 'editProgram')}</h1>
+        <h1 className="page-title">{t('programas', 'editProgram')}</h1>
         <p className="m-0 text-[12.5px] text-fg-2">
           <span className="font-mono">{program.code}</span> · {program.name}
         </p>

@@ -62,7 +62,7 @@ export const TestCaseDetailPage = () => {
     return (
       <div aria-busy="true" role="status" className="flex flex-col gap-3">
         <span className="skeleton h-6 w-64" />
-        <span className="skeleton h-32 w-full max-w-[860px] !rounded-[6px]" />
+        <span className="skeleton h-32 w-full max-w-[860px] !rounded-card" />
       </div>
     );
   }
@@ -81,12 +81,12 @@ export const TestCaseDetailPage = () => {
             {t('verificacion', 'report')}
           </button>
         </div>
-        <h1 className="m-0 text-[20px] font-semibold tracking-[-.01em]">{data.title}</h1>
+        <h1 className="page-title">{data.title}</h1>
       </header>
 
       <div className="grid gap-4 md:grid-cols-2">
         <section aria-labelledby="steps-title" className="card flex flex-col gap-2 p-4">
-          <h2 id="steps-title" className="m-0 text-[14px] font-semibold">
+          <h2 id="steps-title" className="section-title">
             {t('verificacion', 'stepsTitle')}
           </h2>
           <ol data-testid={VERIFICACION_TESTIDS.TESTCASE_STEPS} className="m-0 flex list-decimal flex-col gap-1 pl-5">
@@ -101,7 +101,7 @@ export const TestCaseDetailPage = () => {
         </section>
 
         <section aria-labelledby="requirements-title" className="card flex flex-col gap-2 p-4">
-          <h2 id="requirements-title" className="m-0 text-[14px] font-semibold">
+          <h2 id="requirements-title" className="section-title">
             {t('verificacion', 'requirementsTitle')}
           </h2>
           {data.requirements.length === 0 ? (
@@ -122,7 +122,7 @@ export const TestCaseDetailPage = () => {
       </div>
 
       <section aria-labelledby="runs-title" className="card flex flex-col gap-2 p-4">
-        <h2 id="runs-title" className="m-0 text-[14px] font-semibold">
+        <h2 id="runs-title" className="section-title">
           {t('verificacion', 'runsTitle')}
         </h2>
         {data.runs.length === 0 ? (
@@ -131,7 +131,7 @@ export const TestCaseDetailPage = () => {
           </p>
         ) : (
           <div className="overflow-x-auto">
-            <table data-testid={VERIFICACION_TESTIDS.TESTCASE_RUNS} aria-label={t('verificacion', 'runsTitle')} className="w-full min-w-[640px] border-collapse text-[12.5px]">
+            <table data-testid={VERIFICACION_TESTIDS.TESTCASE_RUNS} aria-label={t('verificacion', 'runsTitle')} className="data-table w-full min-w-[640px] border-collapse text-[12.5px]">
               <thead>
                 <tr className="border-b border-border text-left text-[11.5px] font-medium text-fg-2">
                   <th scope="col" className="px-2 py-1.5">

@@ -345,7 +345,7 @@ export const RequirementsPage = () => {
     <div data-testid={REQUISITOS_TESTIDS.REQUIREMENTS_PAGE} className="flex flex-col gap-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="flex min-w-0 flex-col gap-1">
-          {!mobile ? <h1 className="m-0 text-[20px] font-semibold tracking-[-.01em]">{t('requisitos', 'title')}</h1> : null}
+          {!mobile ? <h1 className="page-title">{t('requisitos', 'title')}</h1> : null}
           <div className="flex flex-wrap items-center gap-2 text-[12.5px] text-fg-2">
             <label htmlFor="requirements-program" className="label">
               {t('requisitos', 'programLabel')}
@@ -474,7 +474,7 @@ export const RequirementsPage = () => {
             ) : null}
 
             <div className={`flex items-start gap-4 ${sideBySide ? '' : 'flex-col'}`}>
-              <div aria-busy={loading} className="min-w-0 flex-1 self-stretch overflow-hidden rounded-[6px] border border-border bg-surface">
+              <div aria-busy={loading} className="min-w-0 flex-1 self-stretch overflow-hidden rounded-card border border-border bg-surface">
                 {showSkeleton ? (
                   <div role="status" className="flex flex-col">
                     {Array.from({ length: 6 }, (_, index) => (

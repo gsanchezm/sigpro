@@ -69,7 +69,7 @@ export const UsersPanel = () => {
   return (
     <section aria-labelledby="admin-users-title" className="flex flex-col gap-3">
       <div className="flex flex-wrap items-end justify-between gap-3">
-        <h2 id="admin-users-title" className="m-0 text-[15px] font-semibold">
+        <h2 id="admin-users-title" className="section-title">
           {t('admin', 'usersTitle')}
         </h2>
         <div className="flex w-full flex-col gap-1 sm:w-[260px]">
@@ -108,9 +108,9 @@ export const UsersPanel = () => {
       ) : (
         <div className="card overflow-hidden">
           <div className="overflow-x-auto">
-            <table data-testid={ADMIN_TESTIDS.ADMIN_USERS_TABLE} aria-busy={loading} className="w-full min-w-[760px] border-collapse text-[12.5px]">
+            <table data-testid={ADMIN_TESTIDS.ADMIN_USERS_TABLE} aria-busy={loading} className="data-table w-full min-w-[760px] border-collapse text-[12.5px]">
               <thead>
-                <tr className="border-b border-border bg-surface-2">
+                <tr className="border-b border-border">
                   {(['colUser', 'colEmail', 'colRole', 'colActive', 'colStatus'] as const).map((key) => (
                     <th key={key} scope="col" className="h-9 px-3 text-left text-[11.5px] font-medium text-fg-2">
                       {t('admin', key)}

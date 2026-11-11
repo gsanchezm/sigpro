@@ -52,7 +52,7 @@ export const DataPanel = () => {
   return (
     <section data-testid={ADMIN_TESTIDS.ADMIN_DATA_PANEL} aria-labelledby="admin-data-title" className="card flex max-w-[640px] flex-col gap-3 p-4">
       <div className="flex flex-col gap-1">
-        <h2 id="admin-data-title" className="m-0 text-[15px] font-semibold">
+        <h2 id="admin-data-title" className="section-title">
           {t('admin', 'dataTitle')}
         </h2>
         <p className="m-0 text-[12.5px] text-fg-2">{t('admin', 'dataHint')}</p>

@@ -7,7 +7,7 @@ export const ComingSoon = ({ title }: { title: string }) => {
   const { t } = useI18n();
   return (
     <section data-testid={DETALLE_TESTIDS.COMING_SOON} className="card flex max-w-[560px] flex-col gap-2 p-6">
-      <h1 className="m-0 text-[20px] font-semibold tracking-[-.01em]">{title}</h1>
+      <h1 className="page-title">{title}</h1>
       <p className="m-0 text-fg-2">{t('common', 'comingSoon')}</p>
       <Link to="/programs" data-testid={DETALLE_TESTIDS.COMING_SOON_BACK} className="mt-2 self-start text-[12.5px] font-medium">
         {t('common', 'backToPrograms')}

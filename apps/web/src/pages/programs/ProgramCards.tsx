@@ -16,13 +16,13 @@ export const ProgramCards = ({ rows, loading, showSkeleton }: CardsProps) => {
   return (
     <div data-testid={PROGRAMAS_TESTIDS.PROGRAMS_LIST} aria-busy={loading} className="flex flex-col gap-2">
       {showSkeleton
-        ? Array.from({ length: 4 }, (_, index) => <div key={index} data-testid={PROGRAMAS_TESTIDS.SKELETON_ROW} aria-hidden="true" className="skeleton h-[84px] !rounded-[6px]" />)
+        ? Array.from({ length: 4 }, (_, index) => <div key={index} data-testid={PROGRAMAS_TESTIDS.SKELETON_ROW} aria-hidden="true" className="skeleton h-[84px] !rounded-card" />)
         : rows.map((program) => (
             <Link
               key={program.code}
               to={`/programs/${program.code}`}
               data-testid={PROGRAMAS_DYNAMIC_TESTIDS.PROGRAMS_ROW(program.code)}
-              className="flex min-h-11 flex-col gap-2 rounded-[6px] border border-border bg-surface p-3 !text-fg no-underline"
+              className="flex min-h-11 flex-col gap-2 rounded-card border border-border bg-surface p-3 !text-fg no-underline"
             >
               <div className="flex items-center justify-between gap-2">
                 <span className="font-mono text-[12px] font-medium">{program.code}</span>

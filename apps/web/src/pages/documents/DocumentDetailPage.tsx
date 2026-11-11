@@ -43,7 +43,7 @@ export const DocumentDetailPage = () => {
     return (
       <div aria-busy="true" role="status" className="flex flex-col gap-3">
         <span className="skeleton h-6 w-64" />
-        <span className="skeleton h-80 w-full max-w-[860px] !rounded-[6px]" />
+        <span className="skeleton h-80 w-full max-w-[860px] !rounded-card" />
       </div>
     );
   }
@@ -80,7 +80,7 @@ export const DocumentDetailPage = () => {
             {data.programCode}
           </Link>
         </div>
-        <h1 data-testid={DOCUMENTOS_TESTIDS.DOCUMENT_TITLE} className="m-0 text-[20px] font-semibold tracking-[-.01em]">
+        <h1 data-testid={DOCUMENTOS_TESTIDS.DOCUMENT_TITLE} className="page-title">
           {data.title}
         </h1>
       </header>
@@ -129,11 +129,11 @@ export const DocumentDetailPage = () => {
         title={t('documentos', 'viewerTitle')}
         src={viewerPath}
         data-testid={DOCUMENTOS_TESTIDS.DOCUMENT_VIEWER}
-        className="h-[540px] w-full rounded-[6px] border border-border bg-bg"
+        className="h-[540px] w-full rounded-card border border-border bg-bg"
       />
 
       <section aria-labelledby="versions-title" className="card flex flex-col gap-2 p-4">
-        <h2 id="versions-title" className="m-0 text-[14px] font-semibold">
+        <h2 id="versions-title" className="section-title">
           {t('documentos', 'versionsTitle')}
         </h2>
         <ol data-testid={DOCUMENTOS_TESTIDS.DOCUMENT_VERSIONS} className="m-0 flex list-none flex-col gap-1.5 p-0">

@@ -130,7 +130,7 @@ export const NcPage = () => {
     <div data-testid={NC_TESTIDS.NC_PAGE} className="flex flex-col gap-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="flex flex-col gap-0.5">
-          <h1 className="m-0 text-[20px] font-semibold tracking-[-.01em]">{t('nc', 'title')}</h1>
+          <h1 className="page-title">{t('nc', 'title')}</h1>
           <p className="m-0 text-[12.5px] text-fg-2">{t('nc', 'subtitle')}</p>
         </div>
         <button

@@ -120,7 +120,7 @@ export const TagPicker = ({ inputId, selected, options, onChange, placeholder, n
           aria-label={listLabel}
           aria-multiselectable="true"
           data-testid={testIds.list}
-          className="absolute top-full right-0 left-0 z-[25] mt-1 max-h-[200px] list-none overflow-auto rounded-[6px] border border-border bg-surface p-1 shadow-pop"
+          className="absolute top-full right-0 left-0 z-[25] mt-1 max-h-[200px] list-none overflow-auto rounded-card border border-border bg-surface p-1 shadow-pop"
         >
           {available.map((option, index) => (
             <li
@@ -135,7 +135,7 @@ export const TagPicker = ({ inputId, selected, options, onChange, placeholder, n
                 event.preventDefault();
                 add(option.value);
               }}
-              className="cursor-pointer rounded-[4px] px-2 py-1.5 text-[12.5px]"
+              className="cursor-pointer rounded-ctl-sm px-2 py-1.5 text-[12.5px]"
               style={{ background: index === active ? 'var(--accent-soft)' : 'transparent' }}
             >
               {option.label}

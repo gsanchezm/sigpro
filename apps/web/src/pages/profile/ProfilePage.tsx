@@ -73,12 +73,12 @@ export const ProfilePage = () => {
   return (
     <div data-testid={PERFIL_TESTIDS.PROFILE_PAGE} className="flex max-w-[720px] flex-col gap-4">
       <div className="flex flex-col gap-0.5">
-        <h1 className="m-0 text-[20px] font-semibold tracking-[-.01em]">{t('perfil', 'title')}</h1>
+        <h1 className="page-title">{t('perfil', 'title')}</h1>
         <p className="m-0 text-[12.5px] text-fg-2">{t('perfil', 'subtitle')}</p>
       </div>
 
       <section aria-labelledby="profile-account-title" className="card flex flex-col gap-3 p-4">
-        <h2 id="profile-account-title" className="m-0 text-[14px] font-semibold">
+        <h2 id="profile-account-title" className="section-title">
           {t('perfil', 'accountTitle')}
         </h2>
         <div className="flex items-center gap-4">
@@ -99,7 +99,7 @@ export const ProfilePage = () => {
       </section>
 
       <section aria-labelledby="profile-permissions-title" className="card flex flex-col gap-2 p-4">
-        <h2 id="profile-permissions-title" className="m-0 text-[14px] font-semibold">
+        <h2 id="profile-permissions-title" className="section-title">
           {t('perfil', 'permissionsTitle')}
         </h2>
         <ul data-testid={PERFIL_TESTIDS.PROFILE_PERMISSIONS} className="m-0 grid list-none grid-cols-[repeat(auto-fit,minmax(220px,1fr))] gap-x-4 gap-y-1.5 p-0 text-[12.5px]">
@@ -119,7 +119,7 @@ export const ProfilePage = () => {
       </section>
 
       <form noValidate onSubmit={save} className="card flex flex-col gap-4 p-4">
-        <h2 className="m-0 text-[14px] font-semibold">{t('perfil', 'preferencesTitle')}</h2>
+        <h2 className="section-title">{t('perfil', 'preferencesTitle')}</h2>
 
         <div className="flex max-w-[260px] flex-col gap-1">
           <label htmlFor="profile-lang" className="label">

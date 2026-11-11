@@ -61,3 +61,21 @@ El tema se aplica con `[data-theme="light|dark"]` en `<html>`. Un contenedor con
 Las utilidades de Tailwind equivalentes son `rounded-ctl`, `rounded-card` y `rounded-ctl-sm`.
 
 **Densidad:** por defecto «aireada». `data-density="media"` en un contenedor raíz (p. ej. `<html>`) deja la fila en 38 px, el padding de página en 20 px, el gap en 16 px y el padding de tarjeta en 16 px² .
+
+## Componentes base (fase 2)
+
+| Componente | Clase | Detalle |
+| --- | --- | --- |
+| Botón | `.btn` + `.btn-primary` / `-secondary` / `-ghost` / `-danger` | 36 px (`.btn-sm` 30, `.btn-lg` 40), radio 10. Primario: `--accent` sobre `--on-accent`, **sin borde**. Secundario: `--surface`, borde `--border` y `--shadow`. Peligro: texto `--on-accent`. Foco: `outline 2px --accent`, offset 2 |
+| Input | `.input` (`.input-filter` 30 px, `.input-header` 36 px) | 36 px, radio 10, 14 px, fondo `--surface`, borde `--border-strong` |
+| Tarjeta / popover | `.card`, `.popover` | `--surface`, borde `--border`, radio 12, `--shadow` (popover: `--shadow-pop`) |
+| Badge | `.badge` + `data-tone` | píldora 999, **22 px**, 0 9 px, 12/500, fondo `*-soft` y texto del tono, **sin borde**; punto de 6 px. `data-state="validated"` = fondo `--ok` con texto `--surface`. `data-state`/`data-severity` no cambian |
+| Chip de filtro | `.chip` (+ `.chip-x`) | 30 px píldora. Vacío: borde discontinuo `--border-strong` con «+ Etiqueta». `data-active="true"`: `--accent-soft` + texto `--accent` + «×». Envuelve el control nativo |
+| Segmentado | `.segmented` + `.segmented-opt` | `--surface-2`, radio 10, padding 3; la opción activa (`aria-selected`/`aria-pressed`/`aria-checked`) es una pastilla `--surface` con `--shadow` |
+| Tarjeta de métrica | `.metric` + `.metric-label` / `.metric-value` / `.metric-aux` / `.metric-bar` | etiqueta 13 `--text-2`, cifra 28/600, línea auxiliar 12 `--text-3`, barra de 6 px en `--accent` |
+| Tabla | `.data-table` | cabecera sin fondo, 12/500 `--text-3` con borde inferior (40 px), fila 48 px, fila seleccionada `--accent-soft`, código en mono `--text-2`, mono 12,5 px |
+| Búsqueda global | `.input.input-header` + `.kbd` | 36 px sobre `--surface-2`, sin borde, `kbd` «/» a la derecha |
+| Barra superior | — | `--topbar-h` = 60 px (también el bloque del logo en la barra lateral) |
+| Spinner | `.spinner` | hereda `currentColor` (sobre el botón primario = `--on-accent`) |
+
+**Excepciones sin variables CSS** (un data-URI no las lee): el logo, los avatares, las miniaturas de evidencia y `public/icon.svg`; sus colores están en `apps/web/src/lib/images.ts` y repiten los tokens.

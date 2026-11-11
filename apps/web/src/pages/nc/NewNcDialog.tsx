@@ -57,10 +57,10 @@ export const NewNcDialog = ({ programs, onClose, onSubmit }: NewNcDialogProps) =
       labelledBy="nc-new-heading"
       onClose={onClose}
       initialFocus={programRef}
-      className={mobile ? 'inset-0 rounded-none' : 'top-1/2 left-1/2 max-h-[calc(100vh-48px)] w-[min(560px,calc(100%-32px))] -translate-x-1/2 -translate-y-1/2 rounded-[6px]'}
+      className={mobile ? 'inset-0 rounded-none' : 'top-1/2 left-1/2 max-h-[calc(100vh-48px)] w-[min(560px,calc(100%-32px))] -translate-x-1/2 -translate-y-1/2 rounded-card'}
     >
       <form noValidate onSubmit={(event) => void submit(event)} className="flex flex-1 flex-col gap-3.5 overflow-auto p-5">
-        <h2 id="nc-new-heading" className="m-0 text-[16px] font-semibold">
+        <h2 id="nc-new-heading" className="section-title">
           {t('nc', 'newTitle')}
         </h2>
 

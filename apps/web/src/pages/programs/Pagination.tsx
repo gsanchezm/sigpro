@@ -28,7 +28,7 @@ interface PaginationProps {
   readonly labels?: PaginationLabels;
 }
 
-const pageButton = 'h-[26px] min-w-[26px] cursor-pointer rounded-[4px] border border-border bg-surface px-1.5 text-[12px] text-fg hover:bg-surface-2 disabled:cursor-not-allowed disabled:opacity-50';
+const pageButton = 'h-[26px] min-w-[26px] cursor-pointer rounded-ctl-sm border border-border bg-surface px-1.5 text-[12px] text-fg hover:bg-surface-2 disabled:cursor-not-allowed disabled:opacity-50';
 
 /** Paginación de 10 en 10: anterior, números (con huecos si hay más de 7 páginas) y siguiente. */
 export const Pagination = ({ page, pages, onPage, compact = false, ids, labels }: PaginationProps) => {
@@ -83,7 +83,7 @@ export const Pagination = ({ page, pages, onPage, compact = false, ids, labels }
           aria-label={`${text.page} ${n}`}
           aria-current={n === page ? 'page' : undefined}
           onClick={() => onPage(n)}
-          className={`${pageButton} ${n === page ? '!border-accent !bg-accent !text-white' : ''}`}
+          className={`${pageButton} ${n === page ? '!border-accent !bg-accent !text-on-accent' : ''}`}
         >
           {n}
         </button>

@@ -20,10 +20,10 @@ export const CloseNcDialog = ({ code, onClose, onSubmit }: CloseNcDialogProps) =
       testId={NC_TESTIDS.NC_CLOSE_DIALOG}
       labelledBy="nc-close-heading"
       onClose={onClose}
-      className={mobile ? 'inset-x-0 bottom-0 top-16 rounded-t-[10px]' : 'top-1/2 left-1/2 w-[min(520px,calc(100%-32px))] -translate-x-1/2 -translate-y-1/2 rounded-[6px]'}
+      className={mobile ? 'inset-x-0 bottom-0 top-16 rounded-t-[10px]' : 'top-1/2 left-1/2 w-[min(520px,calc(100%-32px))] -translate-x-1/2 -translate-y-1/2 rounded-card'}
     >
       <div className="flex flex-1 flex-col gap-3 overflow-auto p-5">
-        <h2 id="nc-close-heading" className="m-0 text-[16px] font-semibold">
+        <h2 id="nc-close-heading" className="section-title">
           {t('nc', 'closeTitle', { code })}
         </h2>
         <CloseNcForm onSubmit={onSubmit} onCancel={onClose} />

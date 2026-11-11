@@ -44,7 +44,7 @@ const FilePreview = ({ file, onRemove, index }: { file: File; onRemove: () => vo
   }, [file, isImage]);
 
   return (
-    <li className="flex items-center gap-2 rounded-[4px] border border-border bg-surface px-2 py-1.5">
+    <li className="flex items-center gap-2 rounded-ctl-sm border border-border bg-surface px-2 py-1.5">
       {isImage && url ? (
         <img src={url} alt={t('verificacion', 'previewAlt', { name: file.name })} width={40} height={30} className="h-[30px] w-10 flex-none rounded-[3px] object-cover" />
       ) : (
@@ -61,7 +61,7 @@ const FilePreview = ({ file, onRemove, index }: { file: File; onRemove: () => vo
         data-testid={VERIFICACION_DYNAMIC_TESTIDS.RUN_FILE_REMOVE(index)}
         aria-label={t('verificacion', 'removeFile', { name: file.name })}
         onClick={onRemove}
-        className="grid size-6 cursor-pointer place-items-center rounded-[4px] border-0 bg-transparent text-[16px] leading-none text-fg-3 hover:bg-surface-2"
+        className="grid size-6 cursor-pointer place-items-center rounded-ctl-sm border-0 bg-transparent text-[16px] leading-none text-fg-3 hover:bg-surface-2"
       >
         ×
       </button>
@@ -161,7 +161,7 @@ export const RunForm = ({ testCaseCode, canExecute, onSaved }: RunFormProps) => 
 
   return (
     <section id="run" aria-labelledby="run-form-title" className="card flex flex-col gap-3 p-4">
-      <h2 id="run-form-title" className="m-0 text-[14px] font-semibold">
+      <h2 id="run-form-title" className="section-title">
         {t('verificacion', 'runFormTitle')}
       </h2>
 
@@ -252,7 +252,7 @@ export const RunForm = ({ testCaseCode, canExecute, onSaved }: RunFormProps) => 
             }}
             onDragLeave={() => setOver(false)}
             onDrop={onDrop}
-            className="dropzone flex cursor-pointer flex-col items-center gap-0.5 rounded-[6px] border-2 border-dashed border-border-strong px-4 py-5 text-center"
+            className="dropzone flex cursor-pointer flex-col items-center gap-0.5 rounded-card border-2 border-dashed border-border-strong px-4 py-5 text-center"
           >
             <span className="font-medium">{t('verificacion', 'dropzone')}</span>
             <span className="text-[12px] text-fg-3">{t('verificacion', 'dropzoneHint')}</span>

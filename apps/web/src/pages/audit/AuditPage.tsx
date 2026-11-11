@@ -25,7 +25,7 @@ export const AuditPage = () => {
   return (
     <div data-testid={AUDITORIA_TESTIDS.AUDIT_PAGE} className="flex flex-col gap-4">
       <div className="flex flex-col gap-0.5">
-        <h1 className="m-0 text-[20px] font-semibold tracking-[-.01em]">{t('auditoria', 'title')}</h1>
+        <h1 className="page-title">{t('auditoria', 'title')}</h1>
         <p className="m-0 text-[12.5px] text-fg-2">{t('auditoria', 'subtitle')}</p>
       </div>
       <AuditFeed />

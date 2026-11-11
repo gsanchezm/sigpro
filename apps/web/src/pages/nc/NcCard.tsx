@@ -78,7 +78,7 @@ export const NcCard = ({ nc, role, canMove, dragging, plantedBugs, onOpen, onQui
       onClick={(event) => {
         if (!(event.target as HTMLElement).closest('button, a, img')) onOpen(nc.code);
       }}
-      className={`flex flex-col gap-2 rounded-[6px] border border-border bg-surface py-2.5 pr-2.5 pl-3 shadow-card data-[dragging=true]:opacity-40 ${canMove ? 'cursor-grab' : 'cursor-default'}`}
+      className={`flex flex-col gap-2 rounded-card border border-border bg-surface py-2.5 pr-2.5 pl-3 shadow-card data-[dragging=true]:opacity-40 ${canMove ? 'cursor-grab' : 'cursor-default'}`}
       style={{ borderLeft: `4px solid ${colors.fg}` }}
     >
       <div className="flex items-center gap-1.5">
@@ -124,7 +124,7 @@ export const NcCard = ({ nc, role, canMove, dragging, plantedBugs, onOpen, onQui
           aria-label={t('nc', 'quickComment', { code: nc.code })}
           title={t('nc', 'quickComment', { code: nc.code })}
           onClick={() => onQuick(nc.code)}
-          className="grid size-[26px] flex-none cursor-pointer place-items-center rounded-[4px] border border-transparent bg-transparent text-fg-2 hover:border-border hover:bg-surface-2"
+          className="grid size-[26px] flex-none cursor-pointer place-items-center rounded-ctl border border-transparent bg-transparent text-fg-2 hover:border-border hover:bg-surface-2"
         >
           <QuickCommentIcon />
         </button>

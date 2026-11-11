@@ -76,7 +76,7 @@ export const LegalPage = ({ kind }: { kind: LegalKind }) => {
           aria-label={t('legal', 'language')}
           value={lang}
           onChange={(event) => isSupportedLang(event.target.value) && setLang(event.target.value as Lang)}
-          className="h-8 cursor-pointer rounded-[4px] border border-border bg-surface px-1.5 text-[12px] font-medium text-fg-2"
+          className="h-8 cursor-pointer rounded-ctl border border-border bg-surface px-1.5 text-[12px] font-medium text-fg-2"
         >
           {LANGS.map((code) => (
             <option key={code} value={code}>
@@ -100,7 +100,7 @@ export const LegalPage = ({ kind }: { kind: LegalKind }) => {
           </header>
           {content.sections.map((section) => (
             <section key={section.title} className="card flex flex-col gap-1 p-4">
-              <h2 className="m-0 text-[14px] font-semibold">{t('legal', section.title)}</h2>
+              <h2 className="section-title">{t('legal', section.title)}</h2>
               <p className="m-0 text-fg-2">{t('legal', section.body)}</p>
             </section>
           ))}

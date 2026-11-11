@@ -71,7 +71,7 @@ export const DocumentViewerPage = () => {
             </span>
             <span className="text-[12px] text-fg-3">{formatDate(content.createdAt.slice(0, 10), lang)}</span>
           </div>
-          <h1 data-testid={DOCUMENTOS_TESTIDS.VIEWER_TITLE} className="m-0 text-[20px] font-semibold tracking-[-.01em]">
+          <h1 data-testid={DOCUMENTOS_TESTIDS.VIEWER_TITLE} className="page-title">
             {content.title}
           </h1>
           {content.note ? <p className="m-0 text-fg-2">{content.note}</p> : null}
@@ -84,7 +84,7 @@ export const DocumentViewerPage = () => {
               key={n}
               data-testid={DOCUMENTOS_DYNAMIC_TESTIDS.VIEWER_PAGE_N(n)}
               aria-label={t('documentos', 'pageOf', { n, total })}
-              className="flex min-h-[260px] flex-col gap-1 rounded-[6px] border border-border bg-surface px-7 py-6 shadow-card"
+              className="flex min-h-[260px] flex-col gap-1 rounded-card border border-border bg-surface px-7 py-6 shadow-card"
             >
               <h2 className="m-0 mb-2 border-b border-border pb-1.5 font-mono text-[11.5px] font-normal text-fg-3">{t('documentos', 'pageOf', { n, total })}</h2>
               {lines.map((line, lineIndex) =>

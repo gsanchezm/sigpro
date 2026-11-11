@@ -173,7 +173,7 @@ export const RowMenuButton = ({ label, buttonTestId, menuTestId, items }: RowMen
         aria-haspopup="menu"
         aria-expanded={point !== null}
         onClick={toggle}
-        className="grid size-[26px] cursor-pointer place-items-center rounded-[4px] border border-transparent bg-transparent text-fg-2 hover:border-border hover:bg-surface"
+        className="grid size-[26px] cursor-pointer place-items-center rounded-ctl border border-transparent bg-transparent text-fg-2 hover:border-border hover:bg-surface"
       >
         <DotsIcon size={14} />
       </button>

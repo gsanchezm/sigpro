@@ -58,7 +58,7 @@ export const RequirementDetail = ({ requirement, role, onClose, onSave, onTransi
   const message = (key: string) => t('requisitos', key as MessageKey<'requisitos'>);
 
   // Foco en el panel al abrir (los atajos de teclado siguen funcionando y Esc lo cierra)
-  useEffect(() => panelRef.current?.focus(), []);
+  useEffect(() => panelRef.current?.focus({ preventScroll: true }), []);
 
   const baselineHtml = useMemo(() => sanitizeRichText(requirement.description), [requirement.description]);
   const textChanged = title !== requirement.title || html !== baselineHtml;
@@ -134,7 +134,7 @@ export const RequirementDetail = ({ requirement, role, onClose, onSave, onTransi
           data-testid={REQUISITOS_TESTIDS.REQUIREMENT_DETAIL_CLOSE}
           aria-label={t('requisitos', 'closeDetail', { code: requirement.code })}
           onClick={onClose}
-          className="size-7 flex-none cursor-pointer rounded-[4px] border-0 bg-transparent text-[18px] leading-none text-fg-3 hover:bg-surface-2"
+          className="size-7 flex-none cursor-pointer rounded-ctl-sm border-0 bg-transparent text-[18px] leading-none text-fg-3 hover:bg-surface-2"
         >
           ×
         </button>

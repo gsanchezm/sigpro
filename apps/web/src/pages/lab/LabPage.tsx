@@ -125,7 +125,7 @@ export const LabPage = () => {
   return (
     <div data-testid={LAB_TESTIDS.LAB_PAGE} className="flex max-w-[980px] flex-col gap-5">
       <header className="flex flex-col gap-1">
-        <h1 className="m-0 text-[20px] font-semibold tracking-[-.01em]">{t('lab', 'title')}</h1>
+        <h1 className="page-title">{t('lab', 'title')}</h1>
         <p className={hint}>{t('lab', 'subtitle')}</p>
         <p data-testid={LAB_TESTIDS.LAB_TENANT_INFO} className="m-0 font-mono text-[12px] text-fg-2">
           {t('lab', 'tenantInfo', { tenant: getTenant() })}
@@ -142,7 +142,7 @@ export const LabPage = () => {
         <div className="overflow-x-auto">
           <table data-testid={LAB_TESTIDS.LAB_CREDENTIALS} aria-busy={testUsers === null} className="w-full min-w-[640px] border-collapse text-[12.5px]">
             <thead>
-              <tr className="border-b border-border bg-surface-2 text-left text-[11.5px] tracking-[.04em] text-fg-2 uppercase">
+              <tr className="border-b border-border text-left text-[11.5px] tracking-[.04em] text-fg-2 uppercase">
                 {(['colName', 'colEmail', 'colPassword', 'colRole', 'colNote'] as const).map((key) => (
                   <th key={key} scope="col" className="h-8 px-2 font-medium">
                     {t('lab', key)}
@@ -318,7 +318,7 @@ export const LabPage = () => {
         <div className="overflow-x-auto">
           <table data-testid={LAB_TESTIDS.LAB_ENDPOINTS_TABLE} aria-label={t('lab', 'endpoints')} className="w-full min-w-[720px] border-collapse text-[12.5px]">
             <thead>
-              <tr className="border-b border-border bg-surface-2 text-left text-[11.5px] tracking-[.04em] text-fg-2 uppercase">
+              <tr className="border-b border-border text-left text-[11.5px] tracking-[.04em] text-fg-2 uppercase">
                 {(['colMethod', 'colPath', 'colAccess', 'colWhat'] as const).map((key) => (
                   <th key={key} scope="col" className="h-8 px-2 font-medium">
                     {t('lab', key)}

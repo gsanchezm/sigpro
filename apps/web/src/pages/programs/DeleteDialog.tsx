@@ -25,9 +25,9 @@ export const DeleteDialog = ({ codes, busy, onCancel, onConfirm }: DeleteDialogP
       describedBy="delete-desc"
       onClose={onCancel}
       initialFocus={confirmRef}
-      className="top-[40%] left-1/2 w-[min(420px,calc(100%-32px))] -translate-x-1/2 -translate-y-1/2 gap-3 rounded-[6px] p-5"
+      className="top-[40%] left-1/2 w-[min(420px,calc(100%-32px))] -translate-x-1/2 -translate-y-1/2 gap-3 rounded-card p-5"
     >
-      <h2 id="delete-title" className="m-0 text-[15px] font-semibold">
+      <h2 id="delete-title" className="section-title">
         {t('programas', 'deleteTitle')}
       </h2>
       <p id="delete-desc" className="m-0 text-fg-2">

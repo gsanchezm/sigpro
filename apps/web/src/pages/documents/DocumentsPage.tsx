@@ -63,7 +63,7 @@ export const DocumentsPage = () => {
   return (
     <div data-testid={DOCUMENTOS_TESTIDS.DOCUMENTS_PAGE} className="flex flex-col gap-4">
       <div className="flex flex-col gap-0.5">
-        {!mobile ? <h1 className="m-0 text-[20px] font-semibold tracking-[-.01em]">{t('documentos', 'title')}</h1> : null}
+        {!mobile ? <h1 className="page-title">{t('documentos', 'title')}</h1> : null}
         <p className="m-0 text-[12.5px] text-fg-2" aria-live="polite">
           {data ? t('documentos', 'subtitle', { n: data.items.length }) : '…'}
         </p>
@@ -131,12 +131,12 @@ export const DocumentsPage = () => {
         </div>
       ) : null}
 
-      <div className="overflow-hidden rounded-[6px] border border-border bg-surface">
+      <div className="overflow-hidden rounded-card border border-border bg-surface">
         {!mobile ? (
           <div className="overflow-x-auto">
-            <table data-testid={DOCUMENTOS_TESTIDS.DOCUMENTS_TABLE} aria-busy={loading} aria-describedby="documents-count" className="w-full min-w-[760px] border-collapse text-[12.5px]">
+            <table data-testid={DOCUMENTOS_TESTIDS.DOCUMENTS_TABLE} aria-busy={loading} aria-describedby="documents-count" className="data-table w-full min-w-[760px] border-collapse text-[12.5px]">
               <thead>
-                <tr className="border-b border-border bg-surface-2 text-left text-[11.5px] font-medium text-fg-2">
+                <tr className="border-b border-border text-left text-[11.5px] font-medium text-fg-2">
                   <th scope="col" className="h-9 w-[100px] px-3">
                     {t('documentos', 'colCode')}
                   </th>

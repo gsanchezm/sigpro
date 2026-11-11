@@ -43,7 +43,7 @@ export const NotificationsMenu = () => {
           <span
             aria-hidden="true"
             data-testid={MISION_TESTIDS.LAYOUT_NOTIFICATIONS_COUNT}
-            className="absolute -top-px -right-px grid h-[15px] min-w-[15px] place-items-center rounded-full border-[1.5px] border-surface bg-danger px-[3px] font-mono text-[9.5px] leading-none font-semibold text-white"
+            className="absolute -top-px -right-px grid h-[15px] min-w-[15px] place-items-center rounded-full border-[1.5px] border-surface bg-danger px-[3px] font-mono text-[9.5px] leading-none font-semibold text-on-accent"
           >
             {unread > 9 ? '9+' : unread}
           </span>
@@ -54,7 +54,7 @@ export const NotificationsMenu = () => {
           role="dialog"
           aria-label={t('programas', 'notifications')}
           data-testid={PROGRAMAS_TESTIDS.LAYOUT_NOTIFICATIONS_POPOVER}
-          className="absolute top-[38px] right-0 z-40 flex w-[min(320px,calc(100vw-24px))] flex-col rounded-[6px] border border-border bg-surface shadow-pop"
+          className="absolute top-[38px] right-0 z-40 flex w-[min(320px,calc(100vw-24px))] flex-col rounded-card border border-border bg-surface shadow-pop"
         >
           <div className="flex items-center justify-between border-b border-border px-3 py-2.5 font-semibold">
             {t('programas', 'notifications')}
@@ -123,7 +123,7 @@ export const UserMenu = ({ breakpoint }: { breakpoint: Breakpoint }) => {
         aria-haspopup="menu"
         aria-expanded={open}
         onClick={() => setOpen((current) => !current)}
-        className="flex h-8 cursor-pointer items-center gap-2 rounded-[4px] border border-border bg-surface py-0 pr-1 pl-0.5 text-fg hover:bg-surface-2"
+        className="flex h-8 cursor-pointer items-center gap-2 rounded-ctl border border-border bg-surface py-0 pr-1 pl-0.5 text-fg hover:bg-surface-2"
       >
         <Avatar name={user.name} size={26} fontPx={10.5} />
         {breakpoint !== 'mobile' ? (
@@ -137,7 +137,7 @@ export const UserMenu = ({ breakpoint }: { breakpoint: Breakpoint }) => {
         <div
           role="menu"
           data-testid={PROGRAMAS_TESTIDS.LAYOUT_USER_MENU_POPOVER}
-          className="absolute top-[38px] right-0 z-40 flex w-[200px] flex-col rounded-[6px] border border-border bg-surface p-1.5 shadow-pop"
+          className="absolute top-[38px] right-0 z-40 flex w-[200px] flex-col rounded-card border border-border bg-surface p-1.5 shadow-pop"
         >
           <button
             type="button"

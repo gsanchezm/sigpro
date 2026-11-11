@@ -211,10 +211,10 @@ export const NcDetailDialog = ({ code, onClose, onChanged }: NcDetailDialogProps
       labelledBy="nc-detail-heading"
       onClose={onClose}
       initialFocus={closeRef}
-      className={mobile ? 'inset-0 rounded-none' : 'top-1/2 left-1/2 max-h-[calc(100vh-48px)] w-[min(760px,calc(100%-32px))] -translate-x-1/2 -translate-y-1/2 rounded-[6px]'}
+      className={mobile ? 'inset-0 rounded-none' : 'top-1/2 left-1/2 max-h-[calc(100vh-48px)] w-[min(760px,calc(100%-32px))] -translate-x-1/2 -translate-y-1/2 rounded-card'}
     >
       <header className="flex flex-wrap items-center gap-2.5 border-b border-border px-5 py-3">
-        <h2 id="nc-detail-heading" className="m-0 text-[16px] font-semibold">
+        <h2 id="nc-detail-heading" className="section-title">
           {t('nc', 'detailTitle', { code })}
         </h2>
         {detail ? (
@@ -245,7 +245,7 @@ export const NcDetailDialog = ({ code, onClose, onChanged }: NcDetailDialogProps
           <div role="status" aria-busy="true" data-testid={NC_TESTIDS.NC_DETAIL_LOADING} className="flex flex-col gap-3">
             <span className="sr-only">{t('nc', 'detailLoading')}</span>
             <span className="skeleton h-5 w-48" />
-            <span className="skeleton h-24 w-full !rounded-[6px]" />
+            <span className="skeleton h-24 w-full !rounded-card" />
             <span className="skeleton h-8 w-64" />
           </div>
         ) : null}
@@ -413,7 +413,7 @@ export const NcDetailDialog = ({ code, onClose, onChanged }: NcDetailDialogProps
               ) : (
                 <ul data-testid={NC_TESTIDS.NC_COMMENTS} className="m-0 flex list-none flex-col gap-2 p-0">
                   {detail.comments.map((comment) => (
-                    <li key={comment.id} data-testid={NC_DYNAMIC_TESTIDS.NC_COMMENT(comment.id)} data-kind={comment.kind} className="flex gap-2.5 rounded-[6px] border border-border bg-surface-2 p-2.5">
+                    <li key={comment.id} data-testid={NC_DYNAMIC_TESTIDS.NC_COMMENT(comment.id)} data-kind={comment.kind} className="flex gap-2.5 rounded-card border border-border bg-surface-2 p-2.5">
                       <Avatar name={comment.authorName ?? t('auditoria', 'system')} size={24} fontPx={9.5} />
                       <div className="min-w-0 flex-1">
                         <div className="flex flex-wrap items-center gap-2 text-[12px]">

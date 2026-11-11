@@ -52,7 +52,7 @@ export const AuthLayout = ({ children, overlay }: { children: ReactNode; overlay
       </aside>
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="flex h-[52px] items-center gap-2 border-b border-border bg-surface px-4">
+        <header className="flex h-[var(--topbar-h)] items-center gap-2 border-b border-border bg-surface px-4">
           <div className="flex items-center gap-2 sm:hidden">
             <Logo size={24} />
             <span className="font-semibold">SIGPRO</span>
@@ -63,7 +63,7 @@ export const AuthLayout = ({ children, overlay }: { children: ReactNode; overlay
             aria-label={t('acceso', 'language')}
             value={lang}
             onChange={(event) => isSupportedLang(event.target.value) && setLang(event.target.value as Lang)}
-            className="h-8 cursor-pointer rounded-[4px] border border-border bg-surface px-1.5 text-[12px] font-medium text-fg-2"
+            className="h-8 cursor-pointer rounded-ctl border border-border bg-surface px-1.5 text-[12px] font-medium text-fg-2"
           >
             {LANGS.map((code) => (
               <option key={code} value={code}>

@@ -130,7 +130,7 @@ export const SupplierSearch = ({ selected, onSelect }: SupplierSearchProps) => {
               onSelect(null);
               setText('');
             }}
-            className="absolute top-[5px] right-1 size-5 cursor-pointer rounded-[4px] border-0 bg-transparent text-[14px] leading-none text-fg-3"
+            className="absolute top-[5px] right-1 size-5 cursor-pointer rounded-ctl-sm border-0 bg-transparent text-[14px] leading-none text-fg-3"
           >
             ×
           </button>
@@ -141,7 +141,7 @@ export const SupplierSearch = ({ selected, onSelect }: SupplierSearchProps) => {
         )}
       </div>
       {open && !selected ? (
-        <div className="absolute top-full right-0 left-0 z-[25] mt-1 overflow-hidden rounded-[6px] border border-border bg-surface shadow-pop">
+        <div className="absolute top-full right-0 left-0 z-[25] mt-1 overflow-hidden rounded-card border border-border bg-surface shadow-pop">
           {showList ? (
             <ul id={listId} role="listbox" aria-label={t('proveedores', 'listLabel')} data-testid={PROVEEDORES_TESTIDS.SUPPLIER_SEARCH_LIST} className="m-0 max-h-[240px] list-none overflow-auto p-1">
               {shown.map((supplier, index) => (
@@ -157,7 +157,7 @@ export const SupplierSearch = ({ selected, onSelect }: SupplierSearchProps) => {
                     event.preventDefault();
                     pick(supplier);
                   }}
-                  className="flex cursor-pointer items-center gap-2 rounded-[4px] px-2 py-1.5 text-[12.5px]"
+                  className="flex cursor-pointer items-center gap-2 rounded-ctl-sm px-2 py-1.5 text-[12.5px]"
                   style={{ background: index === active ? 'var(--accent-soft)' : 'transparent' }}
                 >
                   <span className="min-w-0 flex-1 truncate">{supplier.name}</span>

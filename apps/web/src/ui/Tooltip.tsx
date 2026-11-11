@@ -67,7 +67,7 @@ export const Tooltip = ({ id, text, testId, children, placement = 'bottom', clas
           id={id}
           style={shift === 0 ? undefined : { marginLeft: shift }}
           data-testid={testId}
-          className={`pointer-events-none absolute left-1/2 z-50 w-max max-w-[240px] -translate-x-1/2 rounded-[4px] bg-[var(--text)] px-2 py-1.5 text-left text-[11.5px] leading-[1.35] font-normal text-[var(--bg)] shadow-pop ${
+          className={`pointer-events-none absolute left-1/2 z-50 w-max max-w-[240px] -translate-x-1/2 rounded-ctl-sm bg-[var(--text)] px-2 py-1.5 text-left text-[11.5px] leading-[1.35] font-normal text-[var(--bg)] shadow-pop ${
             placement === 'top' ? 'bottom-[calc(100%+6px)]' : 'top-[calc(100%+6px)]'
           }`}
         >

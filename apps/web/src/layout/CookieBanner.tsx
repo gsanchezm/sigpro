@@ -21,7 +21,7 @@ export const CookieBanner = () => {
       role="region"
       aria-label={t('programas', 'cookiesTitle')}
       data-testid={PROGRAMAS_TESTIDS.COOKIE_BANNER}
-      className="fixed right-4 left-4 z-[55] mx-auto flex max-w-[720px] flex-wrap items-center gap-3 rounded-[6px] bg-fg px-4 py-3 text-[12.5px] text-bg shadow-pop"
+      className="fixed right-4 left-4 z-[55] mx-auto flex max-w-[720px] flex-wrap items-center gap-3 rounded-card bg-fg px-4 py-3 text-[12.5px] text-bg shadow-pop"
       style={{ bottom: breakpoint === 'mobile' ? 64 : 16 }}
     >
       <span className="min-w-[200px] flex-1">{t('programas', 'cookiesText')}</span>
@@ -30,7 +30,7 @@ export const CookieBanner = () => {
           type="button"
           data-testid={PROGRAMAS_TESTIDS.COOKIE_BANNER_ACCEPT}
           onClick={() => answer('accepted')}
-          className="h-[30px] cursor-pointer rounded-[4px] border-0 bg-bg px-3 text-[12px] font-medium text-fg"
+          className="h-[30px] cursor-pointer rounded-ctl border-0 bg-bg px-3 text-[12px] font-medium text-fg"
         >
           {t('programas', 'accept')}
         </button>
@@ -38,7 +38,7 @@ export const CookieBanner = () => {
           type="button"
           data-testid={PROGRAMAS_TESTIDS.COOKIE_BANNER_REJECT}
           onClick={() => answer('rejected')}
-          className="h-[30px] cursor-pointer rounded-[4px] border border-fg-3 bg-transparent px-3 text-[12px] font-medium text-bg"
+          className="h-[30px] cursor-pointer rounded-ctl border border-fg-3 bg-transparent px-3 text-[12px] font-medium text-bg"
         >
           {t('programas', 'reject')}
         </button>

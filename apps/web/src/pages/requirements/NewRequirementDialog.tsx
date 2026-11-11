@@ -65,10 +65,10 @@ export const NewRequirementDialog = ({ programCode, items, parentCode, onClose, 
       labelledBy="requirement-new-heading"
       onClose={onClose}
       initialFocus={titleRef}
-      className={mobile ? 'inset-x-0 bottom-0 top-16 rounded-t-[10px]' : 'top-1/2 left-1/2 w-[min(480px,calc(100%-32px))] -translate-x-1/2 -translate-y-1/2 rounded-[6px]'}
+      className={mobile ? 'inset-x-0 bottom-0 top-16 rounded-t-[10px]' : 'top-1/2 left-1/2 w-[min(480px,calc(100%-32px))] -translate-x-1/2 -translate-y-1/2 rounded-card'}
     >
       <form noValidate onSubmit={(event) => void submit(event)} className="flex flex-1 flex-col gap-3.5 overflow-auto p-5">
-        <h2 id="requirement-new-heading" className="m-0 text-[16px] font-semibold">
+        <h2 id="requirement-new-heading" className="section-title">
           {t('requisitos', 'newDialog')}
         </h2>
         <p className="m-0 font-mono text-[12px] text-fg-3">{programCode}</p>

@@ -191,7 +191,7 @@ export const ProgramsPage = () => {
   const emptyBlock = (
     <div
       data-testid={PROGRAMAS_TESTIDS.PROGRAMS_EMPTY}
-      className={`flex flex-col items-center gap-1.5 text-center ${mobile ? 'rounded-[6px] border border-dashed border-border-strong px-4 py-10' : 'border-t border-border px-4 py-12'}`}
+      className={`flex flex-col items-center gap-1.5 text-center ${mobile ? 'rounded-card border border-dashed border-border-strong px-4 py-10' : 'border-t border-border px-4 py-12'}`}
     >
       <div className="font-medium">{t('programas', 'emptyTitle')}</div>
       <div className="text-[12.5px] text-fg-2">{filtered ? t('programas', 'emptyFiltered') : t('programas', 'emptyNone')}</div>
@@ -207,7 +207,7 @@ export const ProgramsPage = () => {
     <>
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="flex flex-col gap-0.5">
-          {!mobile ? <h1 className="m-0 text-[20px] font-semibold tracking-[-.01em]">{t('programas', 'programs')}</h1> : null}
+          {!mobile ? <h1 className="page-title">{t('programas', 'programs')}</h1> : null}
           <p className="m-0 text-[12.5px] text-fg-2">
             {subtitle}
           </p>
@@ -277,7 +277,7 @@ export const ProgramsPage = () => {
       ) : null}
 
       {!mobile ? (
-        <div className="overflow-hidden rounded-[6px] border border-border bg-surface">
+        <div className="overflow-hidden rounded-card border border-border bg-surface">
           <ProgramsTable
             rows={rows}
             loading={loading}
@@ -317,7 +317,7 @@ export const ProgramsPage = () => {
               data-testid={PROGRAMAS_TESTIDS.PROGRAMS_NEW}
               aria-label={t('programas', 'newProgram')}
               onClick={openWizard}
-              className="fixed right-4 bottom-[72px] z-[21] grid size-[52px] cursor-pointer place-items-center rounded-full border-0 bg-accent text-[26px] leading-none text-white shadow-pop"
+              className="fixed right-4 bottom-[72px] z-[21] grid size-[52px] cursor-pointer place-items-center rounded-full border-0 bg-accent text-[26px] leading-none text-on-accent shadow-pop"
             >
               +
             </button>

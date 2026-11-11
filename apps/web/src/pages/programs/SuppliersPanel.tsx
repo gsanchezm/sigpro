@@ -20,7 +20,7 @@ const ApprovalBadge = ({ supplier, testId }: { supplier: SupplierDto; testId: st
 const SupplierCard = ({ supplier }: { supplier: SupplierDto }) => {
   const { t, lang } = useI18n();
   return (
-    <article data-testid={PROVEEDORES_TESTIDS.SUPPLIER_DETAIL} aria-labelledby="supplier-detail-title" className="flex max-w-[640px] flex-col gap-2 rounded-[6px] border border-border bg-surface-2 p-3">
+    <article data-testid={PROVEEDORES_TESTIDS.SUPPLIER_DETAIL} aria-labelledby="supplier-detail-title" className="flex max-w-[640px] flex-col gap-2 rounded-card border border-border bg-surface-2 p-3">
       <h4 id="supplier-detail-title" className="m-0 text-[13px] font-semibold">
         {t('proveedores', 'detailTitle')}: {supplier.name}
       </h4>
@@ -114,7 +114,7 @@ export const SuppliersPanel = ({ programCode }: { programCode: string }) => {
           {t('proveedores', 'empty')}
         </p>
       ) : (
-        <table data-testid={PROVEEDORES_TESTIDS.SUPPLIERS_TABLE} className="w-full max-w-[640px] border-collapse text-[12.5px]">
+        <table data-testid={PROVEEDORES_TESTIDS.SUPPLIERS_TABLE} className="data-table w-full max-w-[640px] border-collapse text-[12.5px]">
           <caption className="sr-only">{t('proveedores', 'contractedTitle')}</caption>
           <thead>
             <tr className="text-left text-fg-3">

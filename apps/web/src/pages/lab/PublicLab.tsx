@@ -21,7 +21,7 @@ export const PublicLab = () => {
           aria-label={t('programas', 'language')}
           value={lang}
           onChange={(event) => isSupportedLang(event.target.value) && setLang(event.target.value as Lang)}
-          className="h-8 cursor-pointer rounded-[4px] border border-border bg-surface px-1.5 text-[12px] font-medium text-fg-2"
+          className="h-8 cursor-pointer rounded-ctl border border-border bg-surface px-1.5 text-[12px] font-medium text-fg-2"
         >
           {LANGS.map((code) => (
             <option key={code} value={code}>

@@ -135,11 +135,11 @@ export const ProgramWizard = ({ owners, nextCode, onClose, onSubmit }: WizardPro
       labelledBy="wizard-title"
       onClose={onClose}
       initialFocus={nameRef}
-      className={mobile ? 'inset-x-0 bottom-0 top-6 rounded-t-[10px]' : 'top-1/2 left-1/2 max-h-[calc(100%-48px)] w-[min(560px,calc(100%-32px))] -translate-x-1/2 -translate-y-1/2 rounded-[6px]'}
+      className={mobile ? 'inset-x-0 bottom-0 top-6 rounded-t-[10px]' : 'top-1/2 left-1/2 max-h-[calc(100%-48px)] w-[min(560px,calc(100%-32px))] -translate-x-1/2 -translate-y-1/2 rounded-card'}
     >
       <div className="flex items-start justify-between px-5 pt-4">
         <div>
-          <h2 id="wizard-title" className="m-0 text-[16px] font-semibold">
+          <h2 id="wizard-title" className="section-title">
             {t('programas', 'newProgram')}
           </h2>
           <div className="font-mono text-[12px] text-fg-3">{`${t('programas', 'step')} ${step} ${t('programas', 'of')} 3`}</div>
@@ -149,7 +149,7 @@ export const ProgramWizard = ({ owners, nextCode, onClose, onSubmit }: WizardPro
           data-testid={PROGRAMAS_TESTIDS.PROGRAMS_WIZARD_CLOSE}
           aria-label={t('programas', 'close')}
           onClick={onClose}
-          className="size-7 cursor-pointer rounded-[4px] border-0 bg-transparent text-[18px] leading-none text-fg-3 hover:bg-surface-2"
+          className="size-7 cursor-pointer rounded-ctl-sm border-0 bg-transparent text-[18px] leading-none text-fg-3 hover:bg-surface-2"
         >
           ×
         </button>
@@ -167,7 +167,7 @@ export const ProgramWizard = ({ owners, nextCode, onClose, onSubmit }: WizardPro
                 className="grid size-[22px] flex-none place-items-center rounded-full border text-[11px] font-semibold"
                 style={{
                   background: current || done ? 'var(--accent)' : 'var(--surface-2)',
-                  color: current || done ? '#fff' : 'var(--text-3)',
+                  color: current || done ? 'var(--on-accent)' : 'var(--text-3)',
                   borderColor: current || done ? 'var(--accent)' : 'var(--border-strong)',
                 }}
               >
@@ -388,7 +388,7 @@ export const ProgramWizard = ({ owners, nextCode, onClose, onSubmit }: WizardPro
           <>
             <dl
               data-testid={PROGRAMAS_TESTIDS.PROGRAMS_WIZARD_SUMMARY}
-              className="m-0 grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 rounded-[6px] border border-border bg-surface-2 p-3 text-[12.5px]"
+              className="m-0 grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 rounded-card border border-border bg-surface-2 p-3 text-[12.5px]"
             >
               <dt className="text-fg-3">{t('programas', 'code')}</dt>
               <dd className="m-0 font-mono font-medium">{nextCode}</dd>
@@ -417,7 +417,7 @@ export const ProgramWizard = ({ owners, nextCode, onClose, onSubmit }: WizardPro
                 className="flex h-5 w-9 flex-none cursor-pointer rounded-full border-0 p-0.5"
                 style={{ background: form.notify ? 'var(--accent)' : 'var(--border-strong)' }}
               >
-                <span className="block size-4 rounded-full bg-white transition-transform duration-150" style={{ transform: form.notify ? 'translateX(16px)' : 'none' }} />
+                <span className="block size-4 rounded-full transition-transform duration-150" style={{ background: form.notify ? 'var(--on-accent)' : 'var(--text-3)', transform: form.notify ? 'translateX(16px)' : 'none' }} />
               </button>
             </div>
             <p className="m-0 text-[12px] text-fg-3">{t('programas', 'serverHint')}</p>

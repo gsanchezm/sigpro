@@ -612,7 +612,7 @@ export const AccessPage = ({ routeView }: { routeView: RouteView }) => {
               ✓
             </div>
             <AuthHeading title={t('acceso', 'verifyTitle')} hint={`${t('acceso', 'verifyText')} ${verified.email}.`} />
-            <dl className="m-0 grid grid-cols-[auto_1fr] gap-x-3.5 gap-y-1.5 rounded-[6px] border border-border bg-surface-2 p-3 text-[12px]">
+            <dl className="m-0 grid grid-cols-[auto_1fr] gap-x-3.5 gap-y-1.5 rounded-card border border-border bg-surface-2 p-3 text-[12px]">
               <dt className="text-fg-3">{t('acceso', 'status')}</dt>
               <dd className="m-0">
                 <span data-testid={ACCESO_TESTIDS.VERIFY_STATUS_BADGE} className="badge" data-tone="warn" data-state="pending_approval">

@@ -443,10 +443,12 @@ a:hover {
     display: inline-flex;
     align-items: center;
     gap: 6px;
-    padding: 2px 8px;
-    border-radius: 4px;
-    font-size: 11.5px;
+    height: 22px;
+    padding: 0 9px;
+    border-radius: var(--radius-pill);
+    font-size: 12px;
     font-weight: 500;
+    line-height: 1;
     white-space: nowrap;
   }
   .badge::before {
@@ -481,18 +483,19 @@ a:hover {
     background: var(--purple-soft);
     color: var(--purple);
   }
-  /* Badge de las filas de tabla/tarjetas: 20 px, 11/600, borde del tono (prototipo de Programas) */
+  /* Requisito «validado»: fondo --ok con texto --surface (el único badge en color pleno). data-state es el gancho estable */
+  .badge[data-state="validated"] {
+    background: var(--ok);
+    color: var(--surface);
+  }
+  /* Compat.: .badge-row ya no añade nada; se conserva el nombre porque lo usan los componentes */
   .badge-row {
-    height: 20px;
-    padding: 0 7px;
-    font-size: 11px;
-    font-weight: 600;
-    border: 1px solid currentColor;
+    border: 0;
   }
   .pill {
     display: inline-block;
     padding: 1px 6px;
-    border-radius: 999px;
+    border-radius: var(--radius-pill);
     font-family: var(--font-mono);
     font-size: 10px;
     flex: none;
@@ -516,12 +519,147 @@ a:hover {
   .kbd {
     display: inline-flex;
     align-items: center;
-    height: 16px;
-    padding: 0 5px;
+    height: 18px;
+    padding: 0 6px;
     border: 1px solid var(--border);
-    border-radius: 3px;
+    border-radius: 6px;
     font-family: var(--font-mono);
     font-size: 10px;
+  }
+
+  /* ---- Chips de filtro: el control nativo (select, date, combobox) con forma de chip, siempre operable ----
+     Vacío: píldora de borde discontinuo con «+ Etiqueta». Activo: píldora --accent-soft con el valor y «×» para quitarlo. */
+  .chip {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    height: var(--h-ctl-sm);
+    padding: 0 12px;
+    border: 1px dashed var(--border-strong);
+    border-radius: var(--radius-pill);
+    background: transparent;
+    color: var(--text-2);
+    font: inherit;
+    font-size: 13px;
+    font-weight: 500;
+    white-space: nowrap;
+  }
+  .chip:hover {
+    background: var(--surface-2);
+  }
+  .chip[data-active="true"] {
+    border-style: solid;
+    border-color: transparent;
+    background: var(--accent-soft);
+    color: var(--accent);
+  }
+  .chip:focus-within {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+  /* El control nativo dentro del chip: sin caja propia, hereda tipografía y color */
+  .chip select,
+  .chip input {
+    min-width: 0;
+    height: 100%;
+    padding: 0;
+    border: 0;
+    outline: 0;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    cursor: pointer;
+  }
+  .chip select {
+    appearance: none;
+    padding-right: 2px;
+  }
+  .chip select option {
+    background: var(--surface);
+    color: var(--text);
+  }
+  .chip-x {
+    display: inline-grid;
+    place-items: center;
+    width: 18px;
+    height: 18px;
+    flex: none;
+    margin-right: -6px;
+    padding: 0;
+    border: 0;
+    border-radius: var(--radius-pill);
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    line-height: 1;
+    cursor: pointer;
+  }
+  .chip-x:hover {
+    background: color-mix(in srgb, currentColor 14%, transparent);
+  }
+
+  /* ---- Conmutador de vista (segmentado): pastilla --surface con sombra sobre --surface-2 ---- */
+  .segmented {
+    display: inline-flex;
+    gap: 2px;
+    padding: 3px;
+    border-radius: var(--radius-ctl);
+    background: var(--surface-2);
+  }
+  .segmented-opt {
+    height: 30px;
+    padding: 0 14px;
+    border: 0;
+    border-radius: var(--radius-ctl-sm);
+    background: transparent;
+    color: var(--text-2);
+    font: inherit;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+  }
+  .segmented-opt:hover {
+    color: var(--text);
+  }
+  .segmented-opt[aria-selected="true"],
+  .segmented-opt[aria-pressed="true"],
+  .segmented-opt[aria-checked="true"] {
+    background: var(--surface);
+    color: var(--text);
+    box-shadow: var(--shadow);
+  }
+
+  /* ---- Tarjeta de métrica: etiqueta 13/--text-2, cifra 28/600, línea auxiliar 12/--text-3, barra opcional de 6 px ---- */
+  .metric {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: var(--card-pad);
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-card);
+    box-shadow: var(--shadow);
+  }
+  .metric-label {
+    font-size: 13px;
+    color: var(--text-2);
+  }
+  .metric-aux {
+    font-size: 12px;
+    color: var(--text-3);
+  }
+  .metric-bar {
+    height: 6px;
+    overflow: hidden;
+    border-radius: var(--radius-pill);
+    background: var(--surface-2);
+  }
+  .metric-bar > span {
+    display: block;
+    height: 100%;
+    border-radius: var(--radius-pill);
+    background: var(--accent);
   }
 
   /* ---- Carga ---- */
@@ -529,8 +667,8 @@ a:hover {
     display: inline-block;
     width: 12px;
     height: 12px;
-    border: 2px solid rgba(255, 255, 255, 0.4);
-    border-top-color: #fff;
+    border: 2px solid color-mix(in srgb, currentColor 35%, transparent);
+    border-top-color: currentColor;
     border-radius: 50%;
     animation: spin 0.8s linear infinite;
   }
@@ -542,7 +680,7 @@ a:hover {
   }
   .skeleton {
     display: block;
-    border-radius: 3px;
+    border-radius: 6px;
     background: linear-gradient(90deg, var(--surface-2) 25%, var(--border) 50%, var(--surface-2) 75%);
     background-size: 200% 100%;
     animation: shimmer 1.4s infinite;
@@ -631,4 +769,54 @@ a:hover {
   background: color-mix(in srgb, var(--danger) 24%, transparent);
   border-radius: 2px;
   padding: 0 2px;
+}
+
+/* ---- Tablas principales (.data-table): cabecera sin fondo, 12/500 en --text-3 con borde inferior, fila de --row-h ----
+   Reglas sin @layer a propósito: en la cascada, lo que no está en una capa gana a las utilidades de Tailwind de cada celda. */
+.data-table {
+  font-size: 14px;
+}
+.data-table thead tr {
+  background: transparent;
+  border-bottom: 1px solid var(--border);
+}
+.data-table thead th {
+  height: var(--head-h);
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--text-3);
+}
+.data-table thead :is(th, button) {
+  text-transform: none;
+  letter-spacing: 0;
+}
+.data-table thead th[aria-sort='ascending'],
+.data-table thead th[aria-sort='descending'] {
+  color: var(--text);
+}
+.data-table tbody tr {
+  height: var(--row-h);
+}
+.data-table tbody tr[aria-selected='true'],
+.data-table tbody tr[data-selected='true'] {
+  background: var(--accent-soft);
+}
+/* Códigos, fechas e importes en mono a 12,5 px */
+.data-table .font-mono,
+.data-table .mono {
+  font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
+}
+/* El código de la fila es un enlace, pero se lee como dato: mono en --text-2 (acento solo al pasar el ratón o con foco) */
+.data-table a.font-mono,
+.data-table td.font-mono a {
+  color: var(--text-2);
+  text-decoration: none;
+}
+.data-table a.font-mono:hover,
+.data-table td.font-mono a:hover {
+  color: var(--accent);
+  text-decoration: underline;
 }

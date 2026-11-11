@@ -133,7 +133,7 @@ export const AuditFeed = () => {
         aria-label={t('auditoria', 'feedLabel')}
         aria-busy={loading || loadingMore}
         data-testid={AUDITORIA_TESTIDS.AUDIT_FEED}
-        className="max-h-[min(68vh,640px)] overflow-y-auto rounded-[6px] border border-border bg-surface"
+        className="max-h-[min(68vh,640px)] overflow-y-auto rounded-card border border-border bg-surface"
       >
         {loading
           ? Array.from({ length: 6 }, (_, index) => (

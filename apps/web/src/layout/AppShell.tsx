@@ -28,7 +28,7 @@ const navLabelKey = (item: NavItem): ProgramasKey => `nav_${item.key}`;
 const NavGlyph = ({ glyph, size }: { glyph: string; size: number }) => (
   <span
     aria-hidden="true"
-    className="grid flex-none place-items-center rounded-[4px] border-[1.5px] border-current text-[9px] font-semibold opacity-75"
+    className="grid flex-none place-items-center rounded-ctl border-[1.5px] border-current text-[9px] font-semibold opacity-75"
     style={{ width: size, height: size }}
   >
     {glyph}
@@ -84,7 +84,7 @@ export const AppShell = ({ children }: { children?: ReactNode } = {}) => {
       <a
         href="#main-content"
         data-testid={DETALLE_TESTIDS.LAYOUT_SKIP_LINK}
-        className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-[80] focus:rounded-[4px] focus:bg-accent focus:px-3 focus:py-2 focus:text-on-accent"
+        className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-[80] focus:rounded-ctl focus:bg-accent focus:px-3 focus:py-2 focus:text-on-accent"
       >
         {t('common', 'skipToContent')}
       </a>
@@ -97,7 +97,7 @@ export const AppShell = ({ children }: { children?: ReactNode } = {}) => {
             isMobile ? 'fixed inset-y-0 left-0 z-[31] w-[260px]' : `sticky top-0 h-screen ${sidebarExpanded ? 'w-[224px]' : 'w-[56px]'}`
           }`}
         >
-          <div className="flex h-[52px] items-center gap-2.5 overflow-hidden border-b border-border px-3.5">
+          <div className="flex h-[var(--topbar-h)] items-center gap-2.5 overflow-hidden border-b border-border px-3.5">
             <Logo size={24} />
             {sidebarExpanded ? <span className="font-semibold tracking-[.01em] whitespace-nowrap">SIGPRO</span> : null}
           </div>
@@ -111,7 +111,7 @@ export const AppShell = ({ children }: { children?: ReactNode } = {}) => {
                   data-testid={PROGRAMAS_DYNAMIC_TESTIDS.NAV(item.key)}
                   aria-current={current ? 'page' : undefined}
                   title={t('programas', navLabelKey(item))}
-                  className={`flex h-8 items-center gap-2.5 rounded-[4px] text-[12.5px] no-underline hover:bg-surface-2 hover:text-fg ${
+                  className={`flex h-9 items-center gap-2.5 rounded-ctl text-[13px] no-underline hover:bg-surface-2 hover:text-fg ${
                     sidebarExpanded ? 'justify-start px-2' : 'justify-center'
                   } ${current ? 'bg-accent-soft font-medium text-fg' : 'text-fg-2'}`}
                 >
@@ -133,7 +133,7 @@ export const AppShell = ({ children }: { children?: ReactNode } = {}) => {
               aria-label={t('programas', 'collapseSidebar')}
               aria-expanded={sidebarExpanded}
               onClick={() => (isMobile ? setDrawerOpen(false) : setUserCollapsed(!collapsed))}
-              className="flex h-[30px] w-full cursor-pointer items-center gap-2 rounded-[4px] border-0 bg-transparent px-2 text-[12px] text-fg-2 hover:bg-surface-2"
+              className="flex h-[30px] w-full cursor-pointer items-center gap-2 rounded-ctl border-0 bg-transparent px-2 text-[12px] text-fg-2 hover:bg-surface-2"
             >
               <span aria-hidden="true" className="inline-block text-[14px]" style={{ transform: sidebarExpanded ? 'none' : 'rotate(180deg)' }}>
                 «
@@ -146,14 +146,14 @@ export const AppShell = ({ children }: { children?: ReactNode } = {}) => {
       {drawerOpen ? <div role="presentation" data-testid={PROGRAMAS_TESTIDS.LAYOUT_DRAWER_SCRIM} onClick={() => setDrawerOpen(false)} className="fixed inset-0 z-30 bg-[var(--scrim)]" /> : null}
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="sticky top-0 z-20 flex h-[52px] items-center gap-2 border-b border-border bg-surface py-0 pr-3 pl-2">
+        <header className="sticky top-0 z-20 flex h-[var(--topbar-h)] items-center gap-2 border-b border-border bg-surface py-0 pr-4 pl-3">
           <button
             type="button"
             data-testid={PROGRAMAS_TESTIDS.LAYOUT_SIDEBAR_TOGGLE}
             aria-label={t('programas', 'menu')}
             aria-expanded={isMobile ? drawerOpen : !collapsed}
             onClick={() => (isMobile ? setDrawerOpen((open) => !open) : setUserCollapsed(!collapsed))}
-            className="grid size-8 flex-none cursor-pointer place-items-center rounded-[4px] border-0 bg-transparent text-fg-2 hover:bg-surface-2"
+            className="grid size-8 flex-none cursor-pointer place-items-center rounded-ctl-sm border-0 bg-transparent text-fg-2 hover:bg-surface-2"
           >
             <MenuIcon size={16} />
           </button>
@@ -197,7 +197,7 @@ export const AppShell = ({ children }: { children?: ReactNode } = {}) => {
                 aria-label={t('programas', 'language')}
                 value={lang}
                 onChange={(event) => isSupportedLang(event.target.value) && setLang(event.target.value as Lang)}
-                className="h-8 cursor-pointer rounded-[4px] border border-border bg-surface px-1.5 text-[12px] font-medium text-fg-2"
+                className="h-9 cursor-pointer rounded-ctl border border-border bg-surface px-2 text-[12px] font-medium text-fg-2"
               >
                 {LANGS.map((code) => (
                   <option key={code} value={code}>

@@ -37,7 +37,7 @@ export const TraceabilityMatrix = ({ programCode, role, onChanged }: { programCo
 
   if (data.requirements.length === 0 || data.testCases.length === 0) {
     return (
-      <div data-testid={REQUISITOS_TESTIDS.MATRIX_EMPTY} className="flex flex-col items-center gap-1 rounded-[6px] border border-dashed border-border-strong px-4 py-10 text-center">
+      <div data-testid={REQUISITOS_TESTIDS.MATRIX_EMPTY} className="flex flex-col items-center gap-1 rounded-card border border-dashed border-border-strong px-4 py-10 text-center">
         <div className="font-medium">{t('requisitos', 'matrixTitle')}</div>
         <div className="text-[12.5px] text-fg-2">{t('requisitos', 'matrixEmpty')}</div>
       </div>
@@ -71,7 +71,7 @@ export const TraceabilityMatrix = ({ programCode, role, onChanged }: { programCo
           {t('requisitos', 'matrixCoverage', { covered, total: data.requirements.length })}
         </p>
       </div>
-      <div className="overflow-x-auto rounded-[6px] border border-border bg-surface">
+      <div className="overflow-x-auto rounded-card border border-border bg-surface">
         <table data-testid={REQUISITOS_TESTIDS.MATRIX_TABLE} aria-label={t('requisitos', 'matrixTitle')} className="w-full border-collapse text-[12.5px]">
           <thead>
             <tr className="bg-surface-2">

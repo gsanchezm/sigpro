@@ -76,7 +76,7 @@ const ProgressHeader = ({ label }: { label: string }) => {
           role="tooltip"
           id="tip-progress"
           data-testid={PROGRAMAS_TESTIDS.PROGRAMS_PROGRESS_TOOLTIP}
-          className="absolute top-6 right-0 z-[15] rounded-[4px] bg-fg px-2 py-[5px] text-[11.5px] font-normal tracking-normal whitespace-nowrap text-bg normal-case"
+          className="absolute top-6 right-0 z-[15] rounded-ctl-sm bg-fg px-2 py-[5px] text-[11.5px] font-normal tracking-normal whitespace-nowrap text-bg normal-case"
         >
           {t('programas', 'progressHelp')}
         </span>
@@ -112,10 +112,10 @@ export const ProgramsTable = ({ rows, loading, showSkeleton, state, role, select
         data-testid={PROGRAMAS_TESTIDS.PROGRAMS_TABLE}
         aria-busy={loading}
         aria-describedby="programs-count"
-        className="w-full min-w-[860px] border-collapse text-[12.5px]"
+        className="data-table w-full min-w-[860px] border-collapse text-[12.5px]"
       >
         <thead>
-          <tr className="border-b border-border bg-surface-2">
+          <tr className="border-b border-border">
             <th scope="col" className="w-9 py-0 pr-2 pl-3 text-left">
               <input
                 ref={selectAllRef}
@@ -172,7 +172,7 @@ export const ProgramsTable = ({ rows, loading, showSkeleton, state, role, select
                   <td className="px-2">
                     <span className="skeleton h-3" style={{ width: `${55 + ((index * 17) % 40)}%` }} />
                   </td>
-                  <td className="px-2">{skeleton('h-5 w-16 !rounded-[4px]')}</td>
+                  <td className="px-2">{skeleton('h-5 w-16 !rounded-ctl')}</td>
                   <td className="px-2">{skeleton('h-3 w-[110px]')}</td>
                   <td className="px-2">{skeleton('h-3 w-[150px]')}</td>
                   <td className="px-2">{skeleton('ml-auto h-3 w-20')}</td>

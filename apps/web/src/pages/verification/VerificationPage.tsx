@@ -162,7 +162,7 @@ export const VerificationPage = () => {
     <div data-testid={VERIFICACION_TESTIDS.VERIFICATION_PAGE} className="flex flex-col gap-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="flex flex-col gap-0.5">
-          {!mobile ? <h1 className="m-0 text-[20px] font-semibold tracking-[-.01em]">{t('verificacion', 'title')}</h1> : null}
+          {!mobile ? <h1 className="page-title">{t('verificacion', 'title')}</h1> : null}
           <p className="m-0 text-[12.5px] text-fg-2" aria-live="polite">
             {data ? t('verificacion', 'subtitle', { total: data.total, runs: data.totalRuns }) : '…'}
           </p>
@@ -236,7 +236,7 @@ export const VerificationPage = () => {
       </div>
 
       {selected.length > 0 && !mobile ? (
-        <div role="region" aria-label={t('verificacion', 'bulkActions')} data-testid={VERIFICACION_TESTIDS.VERIFICATION_BULK_BAR} className="flex flex-wrap items-center gap-2 rounded-[6px] border border-accent bg-accent-soft px-3 py-2">
+        <div role="region" aria-label={t('verificacion', 'bulkActions')} data-testid={VERIFICACION_TESTIDS.VERIFICATION_BULK_BAR} className="flex flex-wrap items-center gap-2 rounded-card border border-accent bg-accent-soft px-3 py-2">
           <span data-testid={VERIFICACION_TESTIDS.VERIFICATION_BULK_COUNT} className="font-medium">
             {t('verificacion', 'bulkSelected', { n: selected.length })}
           </span>
@@ -263,11 +263,11 @@ export const VerificationPage = () => {
       ) : null}
 
       {!mobile ? (
-        <div className="overflow-hidden rounded-[6px] border border-border bg-surface">
+        <div className="overflow-hidden rounded-card border border-border bg-surface">
           <div className="overflow-x-auto">
-            <table data-testid={VERIFICACION_TESTIDS.VERIFICATION_TABLE} aria-busy={loading} aria-describedby="verification-count" className="w-full min-w-[760px] border-collapse text-[12.5px]">
+            <table data-testid={VERIFICACION_TESTIDS.VERIFICATION_TABLE} aria-busy={loading} aria-describedby="verification-count" className="data-table w-full min-w-[760px] border-collapse text-[12.5px]">
               <thead>
-                <tr className="border-b border-border bg-surface-2">
+                <tr className="border-b border-border">
                   <th scope="col" className="w-9 py-0 pr-2 pl-3 text-left">
                     <input
                       ref={selectAllRef}

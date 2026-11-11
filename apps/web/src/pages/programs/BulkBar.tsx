@@ -22,7 +22,7 @@ export const BulkBar = ({ count, role, onExport, onArchive, onDelete, onClear }:
       role="toolbar"
       aria-label={t('programas', 'bulkActions')}
       data-testid={PROGRAMAS_TESTIDS.PROGRAMS_BULK_BAR}
-      className="flex flex-wrap items-center gap-2 rounded-[6px] border border-accent bg-accent-soft px-3 py-2"
+      className="flex flex-wrap items-center gap-2 rounded-card border border-accent bg-accent-soft px-3 py-2"
     >
       <span data-testid={PROGRAMAS_TESTIDS.PROGRAMS_BULK_COUNT} className="text-[12.5px] font-medium">
         {count} {t('programas', 'selected')}
@@ -56,7 +56,7 @@ export const BulkBar = ({ count, role, onExport, onArchive, onDelete, onClear }:
         data-testid={PROGRAMAS_TESTIDS.PROGRAMS_BULK_CLEAR}
         aria-label={t('programas', 'clearSelection')}
         onClick={onClear}
-        className="size-[26px] cursor-pointer rounded-[4px] border-0 bg-transparent text-base leading-none text-fg-2"
+        className="size-[26px] cursor-pointer rounded-ctl border-0 bg-transparent text-base leading-none text-fg-2"
       >
         ×
       </button>

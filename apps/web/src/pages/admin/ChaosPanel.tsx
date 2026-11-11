@@ -96,7 +96,7 @@ export const ChaosPanel = () => {
     <section data-testid={ADMIN_TESTIDS.ADMIN_CHAOS_PANEL} aria-labelledby="admin-chaos-title" className="card flex max-w-[640px] flex-col gap-4 p-4">
       <div className="flex flex-col gap-1">
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <h2 id="admin-chaos-title" className="m-0 text-[15px] font-semibold">
+          <h2 id="admin-chaos-title" className="section-title">
             {t('admin', 'chaosTitle')}
           </h2>
           <span data-testid={ADMIN_TESTIDS.ADMIN_CHAOS_STATUS} data-active={active} className="badge badge-row" data-tone={active ? 'warn' : 'neutral'}>

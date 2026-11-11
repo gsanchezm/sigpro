@@ -81,10 +81,10 @@ export const PublishVersionDialog = ({ doc, onClose, onSubmit }: PublishVersionD
       labelledBy="document-publish-heading"
       onClose={onClose}
       initialFocus={textRef}
-      className={mobile ? 'inset-x-0 bottom-0 top-8 rounded-t-[10px]' : 'top-1/2 left-1/2 max-h-[calc(100%-48px)] w-[min(620px,calc(100%-32px))] -translate-x-1/2 -translate-y-1/2 rounded-[6px]'}
+      className={mobile ? 'inset-x-0 bottom-0 top-8 rounded-t-[10px]' : 'top-1/2 left-1/2 max-h-[calc(100%-48px)] w-[min(620px,calc(100%-32px))] -translate-x-1/2 -translate-y-1/2 rounded-card'}
     >
       <form noValidate onSubmit={(event) => void submit(event)} aria-busy={!loaded || submitting} className="flex flex-1 flex-col gap-3.5 overflow-auto p-5">
-        <h2 id="document-publish-heading" className="m-0 text-[16px] font-semibold">
+        <h2 id="document-publish-heading" className="section-title">
           {t('documentos', 'publishDialog', { code: doc.id })}
         </h2>
 

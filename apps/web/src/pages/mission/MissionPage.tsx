@@ -138,7 +138,7 @@ export const MissionPage = () => {
     <div data-testid={MISION_TESTIDS.MISSION_PAGE} className="flex flex-col gap-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="flex flex-col gap-0.5">
-          <h1 className="m-0 text-[20px] font-semibold tracking-[-.01em]">{t('mision', 'title')}</h1>
+          <h1 className="page-title">{t('mision', 'title')}</h1>
           <p className="m-0 text-[12.5px] text-fg-2">{t('mision', 'subtitle')}</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -183,15 +183,15 @@ export const MissionPage = () => {
         </div>
       ) : loading ? (
         <div aria-busy="true" className="grid gap-3 min-[1100px]:grid-cols-[3fr_2fr]">
-          <span className="skeleton h-[250px] !rounded-[6px]" />
-          <span className="skeleton h-[250px] !rounded-[6px]" />
+          <span className="skeleton h-[250px] !rounded-card" />
+          <span className="skeleton h-[250px] !rounded-card" />
         </div>
       ) : null}
 
       <section aria-labelledby="mission-feed-title" className="card flex min-w-0 flex-col gap-2 p-4">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="flex items-baseline gap-3">
-            <h2 id="mission-feed-title" className="m-0 text-[13px] font-semibold">
+            <h2 id="mission-feed-title" className="section-title">
               {t('mision', 'feedTitle')}
             </h2>
             <span data-testid={MISION_TESTIDS.MISSION_FEED_COUNT} aria-live="polite" className="font-mono text-[12px] text-fg-3">
@@ -213,7 +213,7 @@ export const MissionPage = () => {
             {t('mision', 'pausedNote')} {waiting > 0 ? t('mision', 'buffered', { count: waiting }) : null}
           </p>
         ) : null}
-        <ol aria-label={t('mision', 'feedLabel')} data-testid={MISION_TESTIDS.MISSION_FEED} aria-busy={loading} className="m-0 flex max-h-[360px] list-none flex-col overflow-y-auto rounded-[6px] border border-border p-0">
+        <ol aria-label={t('mision', 'feedLabel')} data-testid={MISION_TESTIDS.MISSION_FEED} aria-busy={loading} className="m-0 flex max-h-[360px] list-none flex-col overflow-y-auto rounded-card border border-border p-0">
           {shown.length === 0 ? (
             <li data-testid={MISION_TESTIDS.MISSION_FEED_EMPTY} className="px-3 py-8 text-center text-[12.5px] text-fg-3">
               {t('mision', 'feedEmpty')}

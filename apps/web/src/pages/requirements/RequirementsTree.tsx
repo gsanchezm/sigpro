@@ -257,7 +257,7 @@ export const RequirementsTree = ({
                   data-testid={REQUISITOS_DYNAMIC_TESTIDS.REQUIREMENT_TOGGLE(item.code)}
                   aria-label={t('requisitos', row.expanded ? 'collapse' : 'expand', { code: item.code })}
                   onClick={() => onToggle(item.code)}
-                  className="grid size-6 flex-none cursor-pointer place-items-center rounded-[4px] border-0 bg-transparent text-fg-2 hover:bg-border"
+                  className="grid size-6 flex-none cursor-pointer place-items-center rounded-ctl-sm border-0 bg-transparent text-fg-2 hover:bg-border"
                 >
                   <ChevronIcon size={12} style={{ transform: row.expanded ? 'none' : 'rotate(-90deg)' }} />
                 </button>
@@ -272,7 +272,7 @@ export const RequirementsTree = ({
                   aria-label={t('requisitos', 'copyCode', { code: item.code })}
                   title={t('requisitos', 'copyCode', { code: item.code })}
                   onClick={() => onCopy(item.code)}
-                  className="grid size-5 cursor-pointer place-items-center rounded-[4px] border-0 bg-transparent text-[11px] text-fg-3 hover:bg-border"
+                  className="grid size-5 cursor-pointer place-items-center rounded-ctl-sm border-0 bg-transparent text-[11px] text-fg-3 hover:bg-border"
                 >
                   ⧉
                 </button>
@@ -314,7 +314,7 @@ export const RequirementsTree = ({
                   const rect = event.currentTarget.getBoundingClientRect();
                   onMenu(item.code, { x: rect.right, y: rect.bottom + 4, align: 'right' });
                 }}
-                className="grid size-[26px] flex-none cursor-pointer place-items-center rounded-[4px] border border-transparent bg-transparent text-fg-2 hover:border-border hover:bg-surface"
+                className="grid size-[26px] flex-none cursor-pointer place-items-center rounded-ctl border border-transparent bg-transparent text-fg-2 hover:border-border hover:bg-surface"
               >
                 <DotsIcon size={14} />
               </button>

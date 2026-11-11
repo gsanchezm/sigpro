@@ -108,7 +108,7 @@ export const ProgramsFilters = ({ state, owners, mobile, search, onSearch, onCha
           type="button"
           data-testid={PROGRAMAS_TESTIDS.PROGRAMS_FILTERS_CLEAR}
           onClick={onClear}
-          className="h-[30px] cursor-pointer rounded-[4px] border-0 bg-transparent px-2.5 text-[12.5px] font-medium text-accent hover:bg-accent-soft"
+          className="h-[30px] cursor-pointer rounded-ctl border-0 bg-transparent px-2.5 text-[12.5px] font-medium text-accent hover:bg-accent-soft"
         >
           {t('programas', 'clearFilters')}
         </button>

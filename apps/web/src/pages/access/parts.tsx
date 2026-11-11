@@ -27,7 +27,7 @@ export const AuthPanel = ({ testId, children }: { testId: string; children: Reac
 
 export const AuthHeading = ({ title, hint }: { title: string; hint: string }) => (
   <div className="flex flex-col gap-1">
-    <h1 className="m-0 text-[20px] font-semibold tracking-[-.01em]">{title}</h1>
+    <h1 className="page-title">{title}</h1>
     <p className="m-0 text-[12.5px] text-fg-2">{hint}</p>
   </div>
 );
@@ -47,7 +47,7 @@ export const PasswordToggle = ({ testId, label, pressed, text, onToggle }: { tes
     aria-label={label}
     aria-pressed={pressed}
     onClick={onToggle}
-    className="absolute top-1 right-1 h-7 cursor-pointer rounded-[4px] border-0 bg-transparent px-2 text-[11.5px] text-fg-3 hover:bg-surface-2 hover:text-fg"
+    className="absolute top-1 right-1 h-7 cursor-pointer rounded-ctl border-0 bg-transparent px-2 text-[11.5px] text-fg-3 hover:bg-surface-2 hover:text-fg"
   >
     {text}
   </button>

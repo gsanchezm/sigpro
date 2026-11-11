@@ -91,7 +91,7 @@ export const RichTextEditor = ({ id, labelledBy, testId, toolbar, placeholder, i
             // Evita que el botón le quite la selección al editor
             onMouseDown={(event) => event.preventDefault()}
             onClick={() => run(button.command)}
-            className={`grid size-7 cursor-pointer place-items-center rounded-[4px] border border-border bg-surface text-[12.5px] text-fg hover:bg-surface-2 disabled:cursor-not-allowed disabled:opacity-50 aria-pressed:border-accent aria-pressed:bg-accent-soft ${button.className}`}
+            className={`grid size-7 cursor-pointer place-items-center rounded-ctl-sm border border-border bg-surface text-[12.5px] text-fg hover:bg-surface-2 disabled:cursor-not-allowed disabled:opacity-50 aria-pressed:border-accent aria-pressed:bg-accent-soft ${button.className}`}
           >
             {button.glyph}
           </button>

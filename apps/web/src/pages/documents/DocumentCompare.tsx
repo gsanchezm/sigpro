@@ -49,7 +49,7 @@ export const DocumentCompare = ({ doc }: { doc: DocumentDetailDto }) => {
 
   return (
     <section aria-labelledby="compare-title" data-testid={DOCUMENTOS_TESTIDS.DOCUMENT_COMPARE} className="card flex flex-col gap-3 p-4">
-      <h2 id="compare-title" className="m-0 text-[14px] font-semibold">
+      <h2 id="compare-title" className="section-title">
         {t('documentos', 'compareTitle')}
       </h2>
 
@@ -106,7 +106,7 @@ export const DocumentCompare = ({ doc }: { doc: DocumentDetailDto }) => {
             <div className="overflow-x-auto" aria-busy={stale}>
               <table data-testid={DOCUMENTOS_TESTIDS.DOCUMENT_DIFF} aria-label={t('documentos', 'compareTitle')} className="w-full min-w-[560px] table-fixed border-collapse text-[12.5px]">
                 <thead>
-                  <tr className="border-b border-border bg-surface-2 text-left text-[11.5px] font-medium text-fg-2">
+                  <tr className="border-b border-border text-left text-[11.5px] font-medium text-fg-2">
                     <th scope="col" className="w-1/2 px-3 py-1.5">
                       {t('documentos', 'diffOld', { n: result.from })}
                     </th>

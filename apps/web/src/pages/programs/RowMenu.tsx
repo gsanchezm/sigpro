@@ -90,7 +90,7 @@ export const RowMenu = ({ program, role, onEdit, onDuplicate, onArchive, onDelet
         aria-haspopup="menu"
         aria-expanded={open}
         onClick={() => setOpen((current) => !current)}
-        className="grid size-[26px] cursor-pointer place-items-center rounded-[4px] border border-transparent bg-transparent text-fg-2 hover:border-border hover:bg-surface"
+        className="grid size-[26px] cursor-pointer place-items-center rounded-ctl border border-transparent bg-transparent text-fg-2 hover:border-border hover:bg-surface"
       >
         <DotsIcon size={14} />
       </button>

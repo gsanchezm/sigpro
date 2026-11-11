@@ -124,7 +124,7 @@ export const GlobalSearch = ({ variant = 'desktop' }: GlobalSearchProps) => {
   let flatIndex = -1;
   return (
     <div className={`relative ${variant === 'mobile' ? 'w-full' : 'w-[min(320px,30vw)]'}`}>
-      <SearchIcon size={14} className="pointer-events-none absolute top-[9px] left-[9px] text-fg-3" />
+      <SearchIcon size={14} className="pointer-events-none absolute top-[11px] left-3 text-fg-3" />
       <input
         ref={inputRef}
         type="search"
@@ -151,11 +151,11 @@ export const GlobalSearch = ({ variant = 'desktop' }: GlobalSearchProps) => {
         onFocus={() => !onPrograms && setOpen(true)}
         onBlur={() => setOpen(false)}
         onKeyDown={onKeyDown}
-        className="input input-header !bg-bg pr-2.5 pl-7 text-[12.5px]"
+        className="input input-header !border-transparent !bg-surface-2 pr-10 pl-9 text-[13.5px]"
         style={{ borderColor: 'var(--border)' }}
       />
       {variant === 'desktop' ? (
-        <kbd aria-hidden="true" className="kbd absolute top-2 right-2 bg-surface text-fg-3">
+        <kbd aria-hidden="true" className="kbd absolute top-[9px] right-2.5 bg-surface text-fg-3">
           /
         </kbd>
       ) : null}
@@ -163,8 +163,8 @@ export const GlobalSearch = ({ variant = 'desktop' }: GlobalSearchProps) => {
       {visible ? (
         <div
           data-testid={BUSQUEDA_TESTIDS.GLOBAL_SEARCH_RESULTS}
-          className={`z-40 flex flex-col overflow-hidden rounded-[6px] border border-border bg-surface shadow-pop ${
-            variant === 'mobile' ? 'fixed top-[56px] right-3 left-3' : 'absolute top-[calc(100%+4px)] right-0 w-[min(440px,calc(100vw-32px))]'
+          className={`z-40 flex flex-col overflow-hidden rounded-card border border-border bg-surface shadow-pop ${
+            variant === 'mobile' ? 'fixed top-[calc(var(--topbar-h)+4px)] right-3 left-3' : 'absolute top-[calc(100%+4px)] right-0 w-[min(440px,calc(100vw-32px))]'
           }`}
         >
           {showList ? (

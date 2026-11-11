@@ -63,7 +63,7 @@ export const ProgramDetailPage = () => {
     return (
       <div aria-busy="true" role="status" className="flex flex-col gap-3">
         <span className="skeleton h-6 w-64" />
-        <span className="skeleton h-24 w-full max-w-[640px] !rounded-[6px]" />
+        <span className="skeleton h-24 w-full max-w-[640px] !rounded-card" />
       </div>
     );
   }
@@ -99,7 +99,7 @@ export const ProgramDetailPage = () => {
             </button>
           )}
         </div>
-        <h1 className="m-0 text-[20px] font-semibold tracking-[-.01em]">{program.name}</h1>
+        <h1 className="page-title">{program.name}</h1>
         {program.description ? <p className="m-0 text-fg-2">{program.description}</p> : null}
       </header>
 

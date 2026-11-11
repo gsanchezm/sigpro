@@ -30,9 +30,9 @@ export const ConfirmDialog = ({ role, testId, title, body, confirmLabel, cancelL
       describedBy={`${testId}-desc`}
       onClose={onCancel}
       initialFocus={confirmRef}
-      className="top-[40%] left-1/2 w-[min(440px,calc(100%-32px))] -translate-x-1/2 -translate-y-1/2 gap-3 rounded-[6px] p-5"
+      className="top-[40%] left-1/2 w-[min(440px,calc(100%-32px))] -translate-x-1/2 -translate-y-1/2 gap-3 rounded-card p-5"
     >
-      <h2 id={`${testId}-title`} className="m-0 text-[15px] font-semibold">
+      <h2 id={`${testId}-title`} className="section-title">
         {title}
       </h2>
       <div id={`${testId}-desc`} className="text-fg-2">

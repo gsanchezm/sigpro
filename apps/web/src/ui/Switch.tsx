@@ -30,6 +30,6 @@ export const Switch = ({ checked, onChange, testId, label, labelledBy, id, disab
       checked ? 'border-accent bg-accent' : 'border-border-strong bg-surface-2'
     }`}
   >
-    <span aria-hidden="true" className={`block size-[14px] rounded-full bg-white shadow-sm transition-transform ${checked ? 'translate-x-[18px]' : 'translate-x-[2px]'}`} />
+    <span aria-hidden="true" className={`block size-[14px] rounded-full shadow-sm transition-transform ${checked ? 'translate-x-[18px] bg-on-accent' : 'translate-x-[2px] bg-fg-3'}`} />
   </button>
 );

@@ -89,7 +89,7 @@ export const NcBoard = ({ items, loading, role, canMove, plantedBugs, onOpen, on
             {loading && items.length === 0 ? (
               <ul role="presentation" className="m-0 flex min-h-0 flex-1 list-none flex-col gap-2 overflow-hidden p-0">
                 {Array.from({ length: SKELETON_CARDS }, (_, index) => (
-                  <li key={index} data-testid={PROGRAMAS_TESTIDS.SKELETON_ROW} className="skeleton h-[96px] w-full !rounded-[6px]" />
+                  <li key={index} data-testid={PROGRAMAS_TESTIDS.SKELETON_ROW} className="skeleton h-[96px] w-full !rounded-card" />
                 ))}
               </ul>
             ) : (

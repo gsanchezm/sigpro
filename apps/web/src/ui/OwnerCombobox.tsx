@@ -115,7 +115,7 @@ export const OwnerCombobox = ({
             onChange(null);
             setTyped('');
           }}
-          className="absolute top-[5px] right-1 size-5 cursor-pointer rounded-[4px] border-0 bg-transparent text-[14px] leading-none text-fg-3"
+          className="absolute top-[5px] right-1 size-5 cursor-pointer rounded-ctl-sm border-0 bg-transparent text-[14px] leading-none text-fg-3"
         >
           ×
         </button>
@@ -130,7 +130,7 @@ export const OwnerCombobox = ({
           role="listbox"
           aria-label={listLabel}
           data-testid={listTestId}
-          className="absolute top-full right-0 left-0 z-[25] mt-1 max-h-[220px] list-none overflow-auto rounded-[6px] border border-border bg-surface p-1 shadow-pop"
+          className="absolute top-full right-0 left-0 z-[25] mt-1 max-h-[220px] list-none overflow-auto rounded-card border border-border bg-surface p-1 shadow-pop"
         >
           {options.map((owner, index) => (
             <li
@@ -144,7 +144,7 @@ export const OwnerCombobox = ({
                 event.preventDefault();
                 pick(owner.id);
               }}
-              className="flex cursor-pointer items-center gap-2 rounded-[4px] px-2 py-1.5 text-[12.5px]"
+              className="flex cursor-pointer items-center gap-2 rounded-ctl-sm px-2 py-1.5 text-[12.5px]"
               style={{ background: index === active ? 'var(--accent-soft)' : owner.id === value ? 'var(--surface-2)' : 'transparent' }}
             >
               <Avatar name={owner.name} size={20} fontPx={9} shape="circle" tone="solid" decorative />
