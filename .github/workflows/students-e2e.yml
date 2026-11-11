@@ -1,0 +1,204 @@
+# Suite de los alumnos contra SIGPRO en Render (sesión 12: CI con GitHub Actions, reportes y trazas).
+#
+# Qué hace, en tres pasos:
+#   1. prepare  → despierta la API de Render, restaura el seed del tenant del alumno y apaga el modo caos.
+#                 Va ANTES de los shards: si cada shard reiniciara el tenant, uno borraría los datos del otro a mitad de ejecución.
+#   2. e2e      → corre la suite partida en 2 shards (`--shard=1/2` y `2/2`), cada uno en su job; guarda un informe «blob».
+#   3. report   → une los blobs de los 2 shards en UN informe HTML y lo publica como artefacto `playwright-report-<tenant>`.
+#
+# Parámetros (Actions → Run workflow):
+#   tenants  → uno o varios tenants separados por comas (`alumno01` o `alumno01,alumno02`). Cada uno es el tenant (`x-tenant`)
+#              y el usuario `alumnoNN@sigpro.lab`. Con varios, la suite corre una vez por tenant, en paralelo.
+#   web_url / api_url → entorno contra el que corre la suite (por defecto, el del curso en Render).
+#   visual   → skip (por defecto: se saltan los tests `@visual`), compare (los ejecuta) o update (regenera las líneas base).
+#
+# Para usarlo como plantilla en tu repositorio:
+#   - copia este archivo a `.github/workflows/` y el contenido de `examples/` donde prefieras;
+#   - cambia `PROJECT_DIR` si el proyecto no está en `examples` (usa `.` si lo has copiado a la raíz);
+#   - si quieres que corra en cada push, activa el bloque `push`/`pull_request` de más abajo y define las variables de
+#     repositorio SIGPRO_STUDENT, SIGPRO_WEB_URL y SIGPRO_API_URL (Settings → Secrets and variables → Actions → Variables).
+name: Students E2E
+
+on:
+  workflow_dispatch:
+    inputs:
+      tenants:
+        description: 'Tenant(s) y usuario(s): alumno01 … alumno25, separados por comas'
+        required: true
+        default: alumno01
+      web_url:
+        description: 'URL de la web'
+        required: false
+        default: https://sigpro-web.onrender.com
+      api_url:
+        description: 'URL de la API (con /api)'
+        required: false
+        default: https://sigpro-api.onrender.com/api
+      visual:
+        description: 'Tests @visual: skip = saltarlos, compare = comparar con las líneas base, update = regenerarlas'
+        type: choice
+        options: [skip, compare, update]
+        default: skip
+  # push:
+  #   branches: [main]
+  # pull_request:
+
+# Dos ejecuciones sobre el mismo tenant se pisarían los datos: se encolan en vez de correr a la vez
+concurrency:
+  group: students-e2e-${{ inputs.tenants || vars.SIGPRO_STUDENT || 'alumno01' }}
+  cancel-in-progress: false
+
+env:
+  PROJECT_DIR: examples
+  CI: 'true'
+  SIGPRO_WEB_URL: ${{ inputs.web_url || vars.SIGPRO_WEB_URL || 'https://sigpro-web.onrender.com' }}
+  SIGPRO_API_URL: ${{ inputs.api_url || vars.SIGPRO_API_URL || 'https://sigpro-api.onrender.com/api' }}
+  # La contraseña de los usuarios alumnoNN@sigpro.lab es pública (está en /lab); un secreto opcional la sustituye
+  SIGPRO_STUDENT_PASSWORD: ${{ secrets.SIGPRO_STUDENT_PASSWORD || 'Alumno1234!' }}
+
+jobs:
+  plan:
+    name: Plan (tenants)
+    runs-on: ubuntu-latest
+    outputs:
+      tenants: ${{ steps.tenants.outputs.list }}
+    steps:
+      # «alumno01, alumno02» → ["alumno01","alumno02"] para la matriz; se descartan espacios y vacíos
+      - id: tenants
+        env:
+          TENANTS: ${{ inputs.tenants || vars.SIGPRO_STUDENT || 'alumno01' }}
+        run: echo "list=$(jq -cR 'split(",") | map(gsub("\\s"; "")) | map(select(length > 0))' <<< "$TENANTS")" >> "$GITHUB_OUTPUT"
+
+  prepare:
+    name: Preparar ${{ matrix.tenant }}
+    needs: plan
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        tenant: ${{ fromJSON(needs.plan.outputs.tenants) }}
+    env:
+      SIGPRO_STUDENT: ${{ matrix.tenant }}
+    defaults:
+      run:
+        working-directory: ${{ env.PROJECT_DIR }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: ${{ env.PROJECT_DIR }}/package-lock.json
+      - run: npm ci
+
+      # El plan gratuito de Render duerme la API tras un rato sin uso; el primer arranque puede tardar un minuto
+      - name: Despertar la API
+        run: curl --fail --silent --show-error --retry 12 --retry-delay 10 --retry-all-errors --max-time 60 "$SIGPRO_API_URL/health"
+
+      # Restaura el seed del tenant y apaga el caos (inicia sesión como alumnoNN@sigpro.lab: no hace falta ninguna clave)
+      - name: Restaurar el tenant
+        run: npm run reset
+
+  e2e:
+    name: ${{ matrix.tenant }} · shard ${{ matrix.shard }}/2
+    needs: [plan, prepare]
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        tenant: ${{ fromJSON(needs.plan.outputs.tenants) }}
+        shard: [1, 2]
+    env:
+      SIGPRO_STUDENT: ${{ matrix.tenant }}
+    defaults:
+      run:
+        working-directory: ${{ env.PROJECT_DIR }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: ${{ env.PROJECT_DIR }}/package-lock.json
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+
+      # skip → sin los tests @visual · compare → todos, contra las líneas base del repositorio · update → regenera las líneas base
+      - name: Ejecutar la suite (shard ${{ matrix.shard }}/2)
+        env:
+          VISUAL: ${{ inputs.visual || 'skip' }}
+        run: |
+          case "$VISUAL" in
+            compare) EXTRA=() ;;
+            update)  EXTRA=(--update-snapshots=all) ;;
+            *)       EXTRA=(--grep-invert '@visual') ;;
+          esac
+          npx playwright test --shard=${{ matrix.shard }}/2 "${EXTRA[@]}"
+
+      # El informe «blob» de cada shard se une después en un único informe HTML
+      - name: Subir el informe del shard
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: blob-report-${{ matrix.tenant }}-${{ matrix.shard }}
+          path: ${{ env.PROJECT_DIR }}/blob-report
+          retention-days: 1
+
+      # Con `visual: update`: las líneas base nuevas, para que las incluyas en tu commit
+      - name: Subir las líneas base regeneradas
+        if: ${{ !cancelled() && inputs.visual == 'update' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: snapshots-${{ matrix.tenant }}-${{ matrix.shard }}
+          path: ${{ env.PROJECT_DIR }}/tests/**/*-snapshots/
+          if-no-files-found: warn
+          retention-days: 7
+
+  report:
+    name: Informe HTML · ${{ matrix.tenant }}
+    needs: [plan, e2e]
+    # Aunque falle algún test, el informe es justo lo que quieres ver (pero no si ni siquiera llegaron a correr)
+    if: ${{ !cancelled() && needs.e2e.result != 'skipped' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        tenant: ${{ fromJSON(needs.plan.outputs.tenants) }}
+    defaults:
+      run:
+        working-directory: ${{ env.PROJECT_DIR }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: ${{ env.PROJECT_DIR }}/package-lock.json
+      - run: npm ci
+
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: blob-report-${{ matrix.tenant }}-*
+          path: ${{ env.PROJECT_DIR }}/all-blob-reports
+          merge-multiple: true
+
+      - name: Unir los informes de los shards en un único informe HTML
+        run: npx playwright merge-reports --reporter html ./all-blob-reports
+
+      - name: Publicar el informe HTML
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report-${{ matrix.tenant }}
+          path: ${{ env.PROJECT_DIR }}/playwright-report
+          retention-days: 14
+
+      - name: Resumen
+        run: |
+          {
+            echo "### Suite de ${{ matrix.tenant }}"
+            echo "Contra \`$SIGPRO_WEB_URL\`. El informe HTML está en los artefactos de esta ejecución: \`playwright-report-${{ matrix.tenant }}\`."
+            echo "Para verlo: descárgalo, descomprímelo y ejecuta \`npx playwright show-report <carpeta>\`."
+          } >> "$GITHUB_STEP_SUMMARY"

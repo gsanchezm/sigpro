@@ -67,6 +67,12 @@ jobs:
       - name: Build (shared, api, web)
         run: pnpm build
 
+      # `examples/` es un proyecto aparte (npm, su propio lockfile): se instala y se comprueba con TypeScript
+      - name: Typecheck del proyecto de ejemplo (examples/)
+        run: |
+          npm ci --prefix examples
+          npm run typecheck --prefix examples
+
       - name: Migraciones de la base
         run: pnpm --filter api prisma:deploy
 

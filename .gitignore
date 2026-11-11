@@ -9,6 +9,10 @@ playwright-report/
 test-results/
 e2e/.auth/
 apps/web/dev-dist/
+# Zip de examples/ generado en cada build (apps/web/scripts/zip-examples.mjs)
+apps/web/public/downloads/
+# Líneas base de capturas (@visual) de examples/: dependen del sistema operativo; cada alumno genera las suyas
+examples/**/*-snapshots/
 .DS_Store
 Thumbs.db
 .claude/settings.local.json
