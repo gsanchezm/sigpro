@@ -1,12 +1,9 @@
-import { MOVIL_TESTIDS } from '@sigpro/shared';
-import { Screen } from '../../../../src/ui/Screen';
-import { Text } from '../../../../src/ui/Text';
+import { useLocalSearchParams } from 'expo-router';
+import { ProgramDetailScreen } from '../../../../src/features/programs/ProgramDetailScreen';
+import { firstParam } from '../../../../src/features/programs/params';
 
-// TODO(T33): pantalla pendiente de implementar.
+/** `/programs/:code`: detalle de solo lectura de un programa. */
 export default function Page() {
-  return (
-    <Screen title="Programa" testID={MOVIL_TESTIDS.PROGRAM_DETAIL_PAGE}>
-      <Text>…</Text>
-    </Screen>
-  );
+  const { code } = useLocalSearchParams<{ code: string }>();
+  return <ProgramDetailScreen code={firstParam(code) ?? ''} />;
 }

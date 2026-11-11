@@ -36,3 +36,9 @@ export const useI18n = (): I18nValue => {
   if (!value) throw new Error('useI18n debe usarse dentro de I18nProvider');
   return value;
 };
+
+/**
+ * Textos propios de una pantalla móvil que no existen en el paquete compartido: una tabla `{ es, en }` local a la
+ * feature y este hook elige el idioma activo. Si el texto ya existe en `@sigpro/shared`, se usa `t(namespace, clave)`.
+ */
+export const useTexts = <T extends Readonly<Record<string, string>>>(table: { readonly es: T; readonly en: T }): T => table[useI18n().lang];

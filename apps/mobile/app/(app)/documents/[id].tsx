@@ -1,12 +1,9 @@
-import { MOVIL_TESTIDS } from '@sigpro/shared';
-import { Screen } from '../../../src/ui/Screen';
-import { Text } from '../../../src/ui/Text';
+import { useLocalSearchParams } from 'expo-router';
+import { DocumentDetailPage } from '../../../src/features/documents/DocumentDetailPage';
 
-// TODO(T33): pantalla pendiente de implementar.
+/** `/documents/:id`. La `key` reinicia la versión elegida al cambiar de documento. */
 export default function Page() {
-  return (
-    <Screen title="Documento" testID={MOVIL_TESTIDS.DOCUMENT_DETAIL_PAGE}>
-      <Text>…</Text>
-    </Screen>
-  );
+  const params = useLocalSearchParams<{ id: string }>();
+  const id = typeof params.id === 'string' ? params.id : '';
+  return <DocumentDetailPage key={id} id={id} />;
 }

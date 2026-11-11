@@ -1,12 +1,6 @@
-import { MISION_TESTIDS } from '@sigpro/shared';
-import { Screen } from '../../src/ui/Screen';
-import { Text } from '../../src/ui/Text';
+import { MissionPanel } from '../../src/features/mission/MissionPanel';
 
-// TODO(T33): pantalla pendiente de implementar.
+/** `/mission`: panel de misión (KPIs, gráficas y feed en directo). La lógica vive en `src/features/mission`. */
 export default function Page() {
-  return (
-    <Screen title="Panel de misión" testID={MISION_TESTIDS.MISSION_PAGE}>
-      <Text>…</Text>
-    </Screen>
-  );
+  return <MissionPanel />;
 }

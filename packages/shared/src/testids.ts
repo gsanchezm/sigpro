@@ -776,6 +776,106 @@ export const MOVIL_DYNAMIC_TESTIDS = {
   PROGRAMS_FILTER_STATUS: (value: string) => `programs-filter-status-${value}`,
 } as const;
 
+// --- Fase 4: pantallas de la app móvil (los ids de la web se reutilizan; aquí solo lo que no tiene equivalente) ---
+
+// programs
+export const MOVIL_PROGRAMS_TESTIDS = {
+  /** Estado de carga de la primera página de la lista (`aria-busy`). */
+  PROGRAMS_LOADING: 'programs-loading',
+  /** Estado de carga del detalle del programa. */
+  PROGRAM_DETAIL_LOADING: 'program-detail-loading',
+  /** Error al cargar el detalle (distinto del 404). */
+  PROGRAM_DETAIL_ERROR: 'program-detail-error',
+  PROGRAM_DETAIL_ERROR_RETRY: 'program-detail-error-retry',
+  /** Datos de la cabecera del detalle, uno por campo, para localizarlos sin depender del orden. */
+  PROGRAM_DETAIL_DESCRIPTION: 'program-detail-description',
+  PROGRAM_DETAIL_OWNER: 'program-detail-owner',
+  PROGRAM_DETAIL_DATES: 'program-detail-dates',
+  PROGRAM_DETAIL_BUDGET: 'program-detail-budget',
+  /** Carga de los hitos del programa. */
+  MILESTONES_LOADING: 'program-milestones-loading',
+} as const;
+
+// nc
+export const MOVIL_NC_TESTIDS = {
+  /** Motivo visible por el que un destino está deshabilitado («Tu rol no permite mover no conformidades»). */
+  TRANSITION_REASON: 'nc-transition-reason',
+  /** Carga inicial del tablero (la primera vez no hay datos que pintar). */
+  BOARD_LOADING: 'nc-board-loading',
+  /** Contenido desplazable del detalle: el `Sheet` no tiene scroll propio. */
+  DETAIL_SCROLL: 'nc-detail-scroll',
+} as const;
+
+export const MOVIL_NC_DYNAMIC_TESTIDS = {
+  /** Chip del filtro de severidad: `nc-filter-severity-all`, `nc-filter-severity-critical`… */
+  SEVERITY_FILTER: (value: string) => `nc-filter-severity-${value}`,
+  /** Resumen en texto plano de la tarjeta: `nc-card-summary-NC-001`. */
+  CARD_SUMMARY: (code: string) => `nc-card-summary-${code}`,
+} as const;
+
+// mission
+export const MOVIL_MISSION_TESTIDS = {
+  /** Reintento de la conexión en tiempo real (solo cuando el indicador está en «disconnected»). */
+  MISSION_CONNECTION_RETRY: 'mission-connection-retry',
+  /** Hoja de información de un KPI (texto de ayuda en móvil, en lugar de tooltip). */
+  MISSION_KPI_SHEET: 'mission-kpi-sheet',
+  MISSION_KPI_SHEET_CLOSE: 'mission-kpi-sheet-close',
+  /** Zona de gráficas mientras llega el resumen. */
+  MISSION_CHARTS_LOADING: 'mission-charts-loading',
+  MISSION_CHART_MILESTONES_LEGEND: 'mission-chart-milestones-legend',
+  MISSION_CHART_NC_LEGEND: 'mission-chart-nc-legend',
+  MISSION_CHART_NC_EMPTY: 'mission-chart-nc-empty',
+  /** Motivo visible (además de `disabledReason`) por el que el botón de simular está deshabilitado. */
+  MISSION_SIMULATE_REASON: 'mission-simulate-reason',
+  MISSION_CONTROLS: 'mission-controls',
+} as const;
+
+// requirements
+export const MOVIL_REQUIREMENTS_TESTIDS = {
+  /** Estado de carga del árbol (`role="status"` con `aria-busy`). */
+  LOADING: 'requirements-loading',
+  /** Enlace de la cabecera de vuelta al detalle del programa (`/programs/:code`). */
+  BACK_TO_PROGRAM: 'requirements-back-program',
+  /** Nombre del programa en la cabecera (el código va en `REQUISITOS_TESTIDS.REQUIREMENTS_PROGRAM`). */
+  PROGRAM_NAME: 'requirements-program-name',
+  /** Enlace de vuelta en la pantalla «Programa no encontrado». */
+  NOT_FOUND_BACK: 'requirements-not-found-back',
+} as const;
+
+export const MOVIL_REQUIREMENTS_DYNAMIC_TESTIDS = {
+  /** Badge de estado dentro de la fila: `requirement-row-state-REQ-017` (`data-state`). */
+  ROW_STATE: (code: string) => `requirement-row-state-${code}`,
+  /** Prioridad dentro de la fila: `requirement-row-priority-REQ-017`. */
+  ROW_PRIORITY: (code: string) => `requirement-row-priority-${code}`,
+  /** Etiquetas dentro de la fila: `requirement-row-tags-REQ-017`. */
+  ROW_TAGS: (code: string) => `requirement-row-tags-${code}`,
+} as const;
+
+// documents
+export const MOVIL_DOCUMENTS_TESTIDS = {
+  /** Carga de la lista (`role="status"` con `aria-busy`). */
+  LIST_LOADING: 'documents-loading',
+  /** Carga de la ficha del documento. */
+  DETAIL_LOADING: 'document-detail-loading',
+  /** Error al cargar la ficha (no es 403 ni 404) y su botón de reintento. */
+  DETAIL_ERROR: 'document-detail-error',
+  DETAIL_ERROR_RETRY: 'document-detail-error-retry',
+  /** Error al cargar el contenido de una versión y su botón de reintento. */
+  VIEWER_ERROR_RETRY: 'viewer-error-retry',
+  /** «Cargar más» páginas del contenido. */
+  VIEWER_LOAD_MORE: 'viewer-load-more',
+  /** Versión sin líneas. */
+  VIEWER_EMPTY: 'viewer-empty',
+  /** Código del documento en la cabecera de la ficha. */
+  DOCUMENT_CODE: 'document-code',
+  /** Fecha y autor de la versión elegida. */
+  VERSION_META: 'document-version-meta',
+  /** Nota de la versión elegida (si la tiene). */
+  VERSION_NOTE: 'document-version-note',
+  /** Fecha de la última actualización del documento. */
+  UPDATED: 'document-updated',
+} as const;
+
 // --- Catálogo de componentes: proveedores y búsqueda global agrupada ---------
 
 export const PROVEEDORES_TESTIDS = {

@@ -1,12 +1,9 @@
-import { REQUISITOS_TESTIDS } from '@sigpro/shared';
-import { Screen } from '../../../../src/ui/Screen';
-import { Text } from '../../../../src/ui/Text';
+import { useLocalSearchParams } from 'expo-router';
+import { RequirementsPage } from '../../../../src/features/requirements/RequirementsPage';
 
-// TODO(T33): pantalla pendiente de implementar.
+/** `/programs/:code/requirements`. La `key` reinicia búsqueda, plegado y selección al cambiar de programa. */
 export default function Page() {
-  return (
-    <Screen title="Requisitos" testID={REQUISITOS_TESTIDS.REQUIREMENTS_PAGE}>
-      <Text>…</Text>
-    </Screen>
-  );
+  const params = useLocalSearchParams<{ code: string }>();
+  const code = typeof params.code === 'string' ? params.code : '';
+  return <RequirementsPage key={code} programCode={code} />;
 }

@@ -12,7 +12,7 @@ interface Props {
   readonly testID: string;
   readonly variant?: ButtonVariant;
   readonly disabled?: boolean;
-  /** Motivo de un botón deshabilitado: React Native no tiene `title`, va en `aria-description` y en `data-reason`. */
+  /** Motivo de un botón deshabilitado: React Native no tiene `title`. Va en `data-reason` (web) y en `aria-description` (nativo); el que lo usa debe mostrarlo también como texto visible. */
   readonly disabledReason?: string;
   readonly busy?: boolean;
   /** Nombre accesible si difiere del texto visible (p. ej. «Acciones para NC-001»). */

@@ -1,12 +1,6 @@
-import { NC_TESTIDS } from '@sigpro/shared';
-import { Screen } from '../../src/ui/Screen';
-import { Text } from '../../src/ui/Text';
+import { NcScreen } from '../../src/features/nc/NcScreen';
 
-// TODO(T33): pantalla pendiente de implementar.
+/** Ruta `/nc`: la pantalla vive en `src/features/nc`. */
 export default function Page() {
-  return (
-    <Screen title="No conformidades" testID={NC_TESTIDS.NC_PAGE}>
-      <Text>…</Text>
-    </Screen>
-  );
+  return <NcScreen />;
 }

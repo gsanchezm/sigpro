@@ -1,12 +1,6 @@
-import { MOVIL_TESTIDS } from '@sigpro/shared';
-import { Screen } from '../../../src/ui/Screen';
-import { Text } from '../../../src/ui/Text';
+import { ProgramsScreen } from '../../../src/features/programs/ProgramsScreen';
 
-// TODO(T33): pantalla pendiente de implementar.
+/** `/programs`: lista de programas (tarjetas, filtros por estado y búsqueda; el estado vive en la URL). */
 export default function Page() {
-  return (
-    <Screen title="Programas" testID={MOVIL_TESTIDS.PROGRAMS_PAGE}>
-      <Text>…</Text>
-    </Screen>
-  );
+  return <ProgramsScreen />;
 }
