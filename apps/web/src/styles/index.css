@@ -1,82 +1,113 @@
 @import 'tailwindcss';
 
-/* Fuentes autoalojadas (el handoff pide no depender de Google Fonts en producción) */
-@import '@fontsource/ibm-plex-sans/latin-400.css';
-@import '@fontsource/ibm-plex-sans/latin-500.css';
-@import '@fontsource/ibm-plex-sans/latin-600.css';
-@import '@fontsource/ibm-plex-mono/latin-400.css';
-@import '@fontsource/ibm-plex-mono/latin-500.css';
+/* Fuentes autoalojadas (el repositorio es público y no depende de Google Fonts en producción) */
+@import '@fontsource/geist-sans/latin-400.css';
+@import '@fontsource/geist-sans/latin-500.css';
+@import '@fontsource/geist-sans/latin-600.css';
+@import '@fontsource/geist-mono/latin-400.css';
+@import '@fontsource/geist-mono/latin-500.css';
 
 /* ---------------------------------------------------------------------------
-   Tokens del design system (docs/design-handoff/README.md) como CSS variables.
-   El tema se aplica con [data-theme="light|dark"] en <html>.
+   Tokens del design system «1a Ciruela» (docs/design-system.md) como CSS variables.
+   El tema se aplica con [data-theme="light|dark"] en <html>; un contenedor con
+   data-theme="dark" (p. ej. el panel de marca de Acceso) vuelve a resolver los tokens a oscuro.
+   Los nombres de token no cambian respecto al sistema anterior: solo sus valores.
    --------------------------------------------------------------------------- */
 [data-theme='light'] {
-  --bg: #f3f5f8;
+  --bg: #faf8fb;
   --surface: #ffffff;
-  --surface-2: #eef1f5;
-  --border: #d5dbe3;
-  --border-strong: #b7c0cc;
-  --text: #0f1620;
-  --text-2: #4b5665;
-  --text-3: #7a8594;
-  --accent: #2f6fed;
-  --accent-hover: #2459c7;
-  --accent-soft: #e3ecfd;
+  --surface-2: #f4f0f6;
+  --border: #e6dfea;
+  --border-strong: #cfc4d6;
+  --text: #1d1424;
+  --text-2: #5b4f66;
+  --text-3: #6f627a;
+  --accent: #7a2e6e;
+  --accent-hover: #632259; /* derivado */
+  --accent-soft: #f3e3f0;
   --on-accent: #ffffff;
-  --danger: #c62f2f;
-  --danger-soft: #fbe3e3;
+  --danger: #b93232;
+  --danger-soft: #fbe4e4;
   --warn: #8a5200;
-  --warn-soft: #fdeccc;
-  --ok: #1a7f4b;
-  --ok-soft: #d9f3e4;
-  --info: #2459c7;
-  --info-soft: #e3ecfd;
-  --neutral: #4b5665;
-  --neutral-soft: #e6eaf0;
+  --warn-soft: #fbecd0;
+  --ok: #1f7a4d;
+  --ok-soft: #dff3e7;
+  --info: #3556b8;
+  --info-soft: #e4eafb;
+  --neutral: #5b4f66;
+  --neutral-soft: #f4f0f6; /* derivado */
   --purple: #6b3fc9;
-  --purple-soft: #ece4fb;
-  --shadow: 0 1px 2px rgba(15, 22, 32, 0.06);
-  --shadow-pop: 0 8px 24px rgba(15, 22, 32, 0.14);
-  --scrim: rgba(15, 22, 32, 0.45);
+  --purple-soft: #ece4fb; /* derivado */
+  --shadow: 0 1px 2px rgba(29, 20, 36, 0.05), 0 4px 14px rgba(29, 20, 36, 0.06);
+  --shadow-pop: 0 12px 32px rgba(29, 20, 36, 0.16); /* derivado */
+  --scrim: rgba(29, 20, 36, 0.45); /* derivado */
   color-scheme: light;
 }
 
 [data-theme='dark'] {
-  --bg: #0d1117;
-  --surface: #151b24;
-  --surface-2: #1c242f;
-  --border: #2a3441;
-  --border-strong: #3b4756;
-  --text: #e8edf3;
-  --text-2: #a3afbe;
-  --text-3: #6f7c8c;
-  --accent: #5b8def;
-  --accent-hover: #7ea3f3;
-  --accent-soft: #1b2a47;
-  --on-accent: #ffffff;
+  --bg: #141017;
+  --surface: #1c1721;
+  --surface-2: #261f2c;
+  --border: #342b3b;
+  --border-strong: #4a3e54;
+  --text: #f0eaf3;
+  --text-2: #b3a7bd;
+  /* Ajustado: el valor del encargo (#85798f) daba 4,30:1 sobre --surface y 3,90:1 sobre --surface-2 (AA pide 4,5:1) */
+  --text-3: #968c9f;
+  --accent: #d68ac9;
+  --accent-hover: #e3a5d8; /* derivado */
+  --accent-soft: #3a2137;
+  --on-accent: #1d1424; /* en oscuro el texto sobre el acento es oscuro */
   --danger: #f0716b;
   --danger-soft: #3a1f21;
   --warn: #e6a23c;
   --warn-soft: #3a2d14;
-  --ok: #49c27f;
-  --ok-soft: #14311f;
-  --info: #7ea3f3;
-  --info-soft: #1b2a47;
-  --neutral: #a3afbe;
-  --neutral-soft: #27303c;
+  --ok: #5fcf93;
+  --ok-soft: #16301f;
+  --info: #8ea6f5;
+  --info-soft: #1d2747;
+  --neutral: #b3a7bd;
+  --neutral-soft: #261f2c; /* derivado */
   --purple: #b394f5;
-  --purple-soft: #2a2140;
+  --purple-soft: #2a2140; /* derivado */
   --shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
-  --shadow-pop: 0 8px 24px rgba(0, 0, 0, 0.5);
-  --scrim: rgba(0, 0, 0, 0.6);
+  --shadow-pop: 0 12px 32px rgba(0, 0, 0, 0.55); /* derivado */
+  --scrim: rgba(0, 0, 0, 0.6); /* derivado */
   color-scheme: dark;
+}
+
+/* Forma y densidad. Por defecto «aireada»; `data-density="media"` en un contenedor raíz (p. ej. <html>) la compacta. */
+:root {
+  --radius-ctl: 10px; /* botones, inputs y controles */
+  --radius-card: 12px; /* tarjetas y paneles */
+  --radius-ctl-sm: 8px; /* controles pequeños */
+  --radius-pill: 999px; /* chips y badges */
+  --h-ctl: 36px;
+  --h-ctl-sm: 30px;
+  --row-h: 48px;
+  --head-h: 40px;
+  --topbar-h: 60px;
+  --page-pad: 28px;
+  --block-gap: 24px;
+  --card-pad: 20px;
+  --font-sans: 'Geist Sans', system-ui, sans-serif;
+  --font-mono: 'Geist Mono', ui-monospace, monospace;
+}
+[data-density='media'] {
+  --row-h: 38px;
+  --page-pad: 20px;
+  --block-gap: 16px;
+  --card-pad: 16px; /* derivado */
 }
 
 /* Tailwind lee los tokens a través de las variables (cambian con el tema) */
 @theme inline {
-  --font-sans: 'IBM Plex Sans', system-ui, sans-serif;
-  --font-mono: 'IBM Plex Mono', ui-monospace, monospace;
+  /* Mismos valores que las variables de :root (aquí literales: una variable no puede apuntar a sí misma) */
+  --font-sans: 'Geist Sans', system-ui, sans-serif;
+  --font-mono: 'Geist Mono', ui-monospace, monospace;
+  --radius-ctl: 10px;
+  --radius-card: 12px;
+  --radius-ctl-sm: 8px;
 
   --color-bg: var(--bg);
   --color-surface: var(--surface);
@@ -139,10 +170,41 @@ body {
   margin: 0;
   background: var(--bg);
   color: var(--text);
-  font-family: 'IBM Plex Sans', system-ui, sans-serif;
-  font-size: 13px;
-  line-height: 1.45;
+  font-family: var(--font-sans);
+  font-size: 14px;
+  line-height: 1.5;
   -webkit-font-smoothing: antialiased;
+}
+
+/* Escala tipográfica: título de página 26/600, h2 18/600, cifra de métrica 28/600, etiquetas 12–13/500 */
+.page-title {
+  margin: 0;
+  font-size: 26px;
+  font-weight: 600;
+  line-height: 1.2;
+  letter-spacing: -0.02em;
+}
+.section-title {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  line-height: 1.3;
+}
+.metric-value {
+  font-size: 28px;
+  font-weight: 600;
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+}
+.mono {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+@media (max-width: 639px) {
+  .page-title {
+    font-size: 22px;
+  }
 }
 
 a {
@@ -165,10 +227,10 @@ a:hover {
     align-items: center;
     justify-content: center;
     gap: 8px;
-    height: 34px;
-    padding: 0 14px;
+    height: var(--h-ctl);
+    padding: 0 16px;
     border: 1px solid transparent;
-    border-radius: 4px;
+    border-radius: var(--radius-ctl);
     font: inherit;
     font-size: 13px;
     font-weight: 500;
@@ -182,16 +244,16 @@ a:hover {
   }
   .btn-primary {
     background: var(--accent);
-    border-color: var(--accent);
+    border-color: transparent;
     color: var(--on-accent);
   }
   .btn-primary:hover:not(:disabled) {
     background: var(--accent-hover);
-    border-color: var(--accent-hover);
   }
   .btn-secondary {
     background: var(--surface);
-    border-color: var(--border-strong);
+    border-color: var(--border);
+    box-shadow: var(--shadow);
     color: var(--text);
   }
   .btn-secondary:hover:not(:disabled) {
@@ -207,8 +269,8 @@ a:hover {
   }
   .btn-danger {
     background: var(--danger);
-    border-color: var(--danger);
-    color: #fff;
+    border-color: transparent;
+    color: var(--on-accent);
   }
   .btn-danger:hover:not(:disabled) {
     filter: brightness(0.92);
@@ -225,22 +287,23 @@ a:hover {
     width: 100%;
   }
   .btn-lg {
-    height: 38px;
+    height: 40px;
   }
   .btn-sm {
-    height: 30px;
-    padding: 0 10px;
+    height: var(--h-ctl-sm);
+    padding: 0 12px;
+    border-radius: var(--radius-ctl-sm);
     font-size: 12.5px;
   }
 
   .icon-btn {
     display: inline-grid;
     place-items: center;
-    width: 32px;
-    height: 32px;
+    width: var(--h-ctl);
+    height: var(--h-ctl);
     flex: none;
     border: 1px solid var(--border);
-    border-radius: 4px;
+    border-radius: var(--radius-ctl);
     background: var(--surface);
     color: var(--text-2);
     cursor: pointer;
@@ -269,14 +332,14 @@ a:hover {
   }
   .input {
     width: 100%;
-    height: 36px;
-    padding: 0 10px;
-    border-radius: 4px;
+    height: var(--h-ctl);
+    padding: 0 12px;
+    border-radius: var(--radius-ctl);
     border: 1px solid var(--border-strong);
-    background: var(--bg);
+    background: var(--surface);
     color: var(--text);
     font: inherit;
-    font-size: 13px;
+    font-size: 14px;
   }
   .input:focus {
     outline: 2px solid var(--accent);
@@ -287,14 +350,13 @@ a:hover {
     color: var(--text-3);
   }
   .input-filter {
-    height: 30px;
-    padding: 0 8px;
-    background: var(--surface);
+    height: var(--h-ctl-sm);
+    padding: 0 10px;
+    border-radius: var(--radius-ctl-sm);
     font-size: 12.5px;
   }
   .input-header {
-    height: 32px;
-    background: var(--surface);
+    height: var(--h-ctl);
   }
   .field-error {
     font-size: 11.5px;
@@ -309,13 +371,13 @@ a:hover {
   .card {
     background: var(--surface);
     border: 1px solid var(--border);
-    border-radius: 6px;
+    border-radius: var(--radius-card);
     box-shadow: var(--shadow);
   }
   .popover {
     background: var(--surface);
     border: 1px solid var(--border);
-    border-radius: 6px;
+    border-radius: var(--radius-card);
     box-shadow: var(--shadow-pop);
     padding: 6px;
   }
@@ -324,9 +386,9 @@ a:hover {
     align-items: center;
     gap: 8px;
     width: 100%;
-    padding: 7px 10px;
+    padding: 8px 10px;
     border: 0;
-    border-radius: 4px;
+    border-radius: var(--radius-ctl-sm);
     background: transparent;
     color: var(--text);
     font: inherit;
@@ -351,7 +413,7 @@ a:hover {
   /* ---- Alertas ---- */
   .alert {
     padding: 10px 12px;
-    border-radius: 6px;
+    border-radius: var(--radius-ctl);
     border: 1px solid var(--border);
   }
   .alert-danger {
@@ -371,7 +433,7 @@ a:hover {
     border-color: var(--info);
   }
   .trace {
-    font-family: 'IBM Plex Mono', monospace;
+    font-family: var(--font-mono);
     font-size: 11.5px;
     color: var(--text-2);
   }
@@ -431,7 +493,7 @@ a:hover {
     display: inline-block;
     padding: 1px 6px;
     border-radius: 999px;
-    font-family: 'IBM Plex Mono', monospace;
+    font-family: var(--font-mono);
     font-size: 10px;
     flex: none;
   }
@@ -458,7 +520,7 @@ a:hover {
     padding: 0 5px;
     border: 1px solid var(--border);
     border-radius: 3px;
-    font-family: 'IBM Plex Mono', monospace;
+    font-family: var(--font-mono);
     font-size: 10px;
   }
 

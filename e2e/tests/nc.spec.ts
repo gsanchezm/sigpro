@@ -64,9 +64,9 @@ test('estructura: cinco columnas con las tarjetas del seed, severidad por color 
   await expect(page.getByTestId('nc-card-severity-NC-003')).toHaveText('Crítica');
   await expect(page.getByTestId('nc-card-severity-NC-001')).toHaveAttribute('data-severity', 'minor');
   // Color de la severidad en el borde izquierdo (claro): crítica = --danger, mayor = --warn, menor = --info
-  await expect(card(page, 'NC-003')).toHaveCSS('border-left-color', 'rgb(198, 47, 47)');
+  await expect(card(page, 'NC-003')).toHaveCSS('border-left-color', 'rgb(185, 50, 50)');
   await expect(card(page, 'NC-002')).toHaveCSS('border-left-color', 'rgb(138, 82, 0)');
-  await expect(card(page, 'NC-001')).toHaveCSS('border-left-color', 'rgb(36, 89, 199)');
+  await expect(card(page, 'NC-001')).toHaveCSS('border-left-color', 'rgb(53, 86, 184)');
 
   // filter({ hasNot }): sin asignar = sin <img> de avatar
   const unassigned = page.getByTestId('nc-board').getByRole('listitem').filter({ hasNot: page.getByRole('img') });

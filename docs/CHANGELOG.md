@@ -47,3 +47,7 @@ Una línea por módulo cerrado.
 ## Auditoría de código (2026-11-11)
 
 - **Seguridad de sesión y códigos concurrentes:** el segundo paso de MFA rechaza cuentas bloqueadas, pendientes o desactivadas (`accountBlock()`, compartido con login y refresh) y las altas con código correlativo (programas, duplicar, requisitos, NC, ejecuciones) se serializan por tenant con un candado de Postgres: antes, 8 altas simultáneas daban 500 en 6–7 de ellas. 3 tests unitarios y 7 specs de API nuevos (`admin-api.spec.ts`, `codes-concurrency-api.spec.ts`); e2e web 299/299. El JWT sigue sin estado, a propósito (`docs/DECISIONS.md`).
+
+## Rediseño «1a Ciruela» (2026-11-11)
+
+- **Fase 1 — tokens, fuentes y forma:** valores nuevos de todos los tokens claro/oscuro (los nombres no cambian), Geist y Geist Mono autoalojadas en lugar de IBM Plex, base 14 px/1,5, escala tipográfica (`.page-title`, `.section-title`, `.metric-value`), radios 10/12/8/999, alturas 36/30, variables de densidad (`data-density="media"`) y contraste AA verificado por script (un ajuste: `--text-3` oscuro). Referencia nueva: `docs/design-system.md`. nc, access y programs: 71/71.
