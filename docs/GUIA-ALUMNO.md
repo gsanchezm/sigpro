@@ -266,3 +266,35 @@ El consultor **no ve** los restringidos en la lista y recibe un 403 si abre uno 
 - **Idioma y tema**: selector ES/EN y claro/oscuro en la cabecera; la preferencia se guarda en `localStorage`.
 
 Buena suerte, y recuerda el orden de preferencia de locators: `getByRole` → `getByLabel` → `getByPlaceholder` / `getByAltText` / `getByTitle` → `getByTestId` como red de seguridad.
+
+---
+
+## 6. App móvil (Expo)
+
+SIGPRO tiene una versión móvil con **las mismas rutas, la misma API y los mismos `data-testid`** (en React Native se llaman `testID`, y en la versión web de Expo se pintan como `data-testid`). Incluye: acceso con MFA, **Programas** (tarjetas con filtros), **No conformidades** (tablero kanban), **Panel de misión** (tiempo real) y, en solo lectura, **Requisitos** y **Documentos**. No tiene Administración.
+
+### Arrancarla
+
+```bash
+pnpm dev                          # levanta API :3000, web :5173 y la app móvil en web :8081
+# o solo la móvil:
+pnpm --filter mobile web          # equivale a `expo start --web --port 8081`
+```
+
+Abre <http://localhost:8081/login?tenant=alumno07>. Es la misma app que verías en un teléfono, servida como web: es lo que se automatiza con Playwright (viewport de 390 × 844, por ejemplo).
+
+| Dónde quieres verla | Cómo |
+| --- | --- |
+| Navegador (para automatizar) | `pnpm --filter mobile web` → <http://localhost:8081> |
+| Teléfono con Expo Go | `EXPO_PUBLIC_API_URL=http://<IP-de-tu-PC>:3000/api pnpm --filter mobile start` y escanea el QR |
+| Emulador de Android | `EXPO_PUBLIC_API_URL=http://10.0.2.2:3000/api pnpm --filter mobile start` |
+| Contra Render | `EXPO_PUBLIC_API_URL=https://sigpro-api.onrender.com/api EXPO_PUBLIC_TENANT=alumno07 pnpm --filter mobile web` |
+
+La app móvil no se aloja en Render (no es un sitio web): se usa con Expo Go o con una build de EAS. En su versión web, la API debe permitir el origen `http://localhost:8081` (`CORS_ORIGIN`; ya viene así en `.env.example`).
+
+### Automatizarla con Playwright
+
+- **La sesión es compatible con la web:** las mismas claves de `localStorage` (`sigpro.session`, `sigpro.tenant`, `sigpro.theme`, `sigpro.lang`), así que un `storageState` o un `addInitScript` como los de la sesión 3 funcionan igual en `:8081`.
+- **Locators:** `getByRole('tab', { name: 'No conformidades' })` para la barra inferior, `getByRole('radio', { name: 'En pausa' })` para los filtros de selección única, `getByRole('button', …)`, `getByLabel` y `getByTestId` (los ids son los de la web: `programs-row-PRG-001`, `nc-column-open`…). Los badges llevan `data-state` / `data-severity`.
+- **No hay drag & drop en el móvil:** mover una no conformidad se hace desde su detalle con **«Mover a…»**. Cerrarla exige un comentario de al menos 20 caracteres, igual que en la web.
+- **Los botones deshabilitados** explican el motivo en un texto visible junto al botón y en el atributo `data-reason`, no en `title` (React Native no tiene `title`): `await expect(boton).toHaveAttribute('data-reason', '…')`.

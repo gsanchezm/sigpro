@@ -13,7 +13,7 @@ jobs:
   verify:
     name: Lint · Typecheck · Unit · E2E de humo
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 35
 
     services:
       postgres:
@@ -83,6 +83,10 @@ jobs:
       - name: E2E de humo
         run: pnpm e2e
 
+      # La app móvil (Expo web, exportada por `pnpm build` en apps/mobile/dist) se sirve con un servidor estático en :8081
+      - name: E2E de humo (app móvil)
+        run: pnpm e2e:mobile
+
       - name: Subir informe de Playwright
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v4
@@ -90,5 +94,6 @@ jobs:
           name: playwright-report
           path: |
             e2e/playwright-report/
+            e2e/playwright-report-mobile/
             e2e/test-results/
           retention-days: 7

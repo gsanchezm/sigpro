@@ -7,6 +7,8 @@
     "e2e": "playwright test --project=chromium",
     "screens": "playwright test --project=screens",
     "compare": "playwright test --project=compare",
+    "mobile": "playwright test -c playwright.mobile.config.ts --project=mobile",
+    "mobile:screens": "playwright test -c playwright.mobile.config.ts --project=mobile-screens",
     "install:browsers": "playwright install chromium",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit"

@@ -1,6 +1,6 @@
 # SIGPRO — Estado de la construcción
 
-Última actualización: 2026-11-11 · **Fases 1, 2 y 3 cerradas** · **Fase 4 (material del curso y móvil) en curso**
+Última actualización: 2026-11-11 · **Las 4 fases están construidas y verificadas en local** · **Pendiente: `git push` y desplegar en Render** (el entorno público sigue en la fase 2)
 
 Leyenda: `[x]` hecho · `[~]` en curso · `[ ]` pendiente
 
@@ -11,16 +11,39 @@ Orden fijo (el móvil va el último). Cada tarea termina con `pnpm lint && pnpm 
 - [x] **T30** `examples/`: proyecto Playwright + TypeScript independiente del monorepo (su `package.json`), fixtures por rol con `storageState`, Page Object de Programas, un spec por sesión 2–11 y `.github/workflows/students-e2e.yml` (tenant parametrizado, sharding en 2, informe HTML como artefacto). **90 tests (86 + 4 de `setup`), 90/90 en dos pasadas seguidas en un solo tenant con 2 workers y sin reset entre ellas** (~55 s). `npm test` ejecuta 83 (+ 4 de `setup`); los 3 `@visual` van en su propio proyecto (`npm run test:visual`, con líneas base propias de cada alumno)
 - [x] **T31** `/lab` completa: lista de 22 endpoints con enlaces a Swagger y al OpenAPI, contraejemplo de texto variable con el caos, FAQ de 8 preguntas y descarga del zip de `examples/` generado en el build. `lab.spec.ts` 15/15, capturas regeneradas, + 7 tests unitarios de endpoints y 11 del zip (web: 114). Arreglada de paso la anchura de `/nc` en móvil
 - [x] **T32** `docs/GUIA-ALUMNO.md`: levantar SIGPRO en local con Docker, apuntar la suite a Render, usuarios, permisos y códigos fijos del seed (tablas obtenidas de la API real); viaja dentro del zip
-- [ ] **T33** `apps/mobile` (Expo + Expo Router): Login con MFA, Programas (cards con filtros), kanban de NC y Panel de misión; Requisitos y Documentos en lectura; sin Administración; `testID` = `data-testid`; capturas a 390 px
-- [ ] **T34** Cierre de fase: README con el estado final, STATUS final
+- [x] **T33** `apps/mobile` (Expo SDK 58 + Expo Router): Login con MFA, Programas (cards con filtros), kanban de NC y Panel de misión; Requisitos y Documentos en lectura; sin Administración; `testID` = `data-testid`; capturas a 390 px. **95 tests unitarios, 21 specs de humo (`pnpm e2e:mobile`, con la exportación estática y con `expo start --web`) y 32 capturas** en `docs/screens/mobile-*`
+- [x] **T34** Cierre de fase: README con el estado final, STATUS final, guía del alumno con la sección móvil
 
-## Resumen de la fase 4 (hasta T32)
+## Resumen de la fase 4
 
-- **`examples/`** (proyecto independiente, `npm`): 10 specs (86 tests: s02 11 · s03 9 · s04 7 · s05 9 · s06 8 · s07 7 · s08 8 · s09 9 · s10 9 · s11 9), 4 tests de `setup` que guardan `.auth/<tenant>-<rol>.json`, fixtures `role` / `pageAs` / `adminPage`… / `apiAs` / `programsPage`, 9 Page Objects y ayudas, `npm run reset` (restaura el tenant y apaga el caos). **Verificado: 90/90 dos veces seguidas contra un único tenant (`alumno21`) con 2 workers, sin reset entre pasadas.** Reglas de convivencia (datos distintos por spec, tests repetibles, caos acotado) en `examples/README.md` y `docs/DECISIONS.md`.
+- **`examples/`** (proyecto independiente, `npm`): 10 specs (86 tests: s02 11 · s03 9 · s04 7 · s05 9 · s06 8 · s07 7 · s08 8 · s09 9 · s10 9 · s11 9), 4 tests de `setup` que guardan `.auth/<tenant>-<rol>.json`, fixtures `role` / `pageAs` / `adminPage`… / `apiAs` / `programsPage`, 9 Page Objects y ayudas, `npm run reset` (restaura el tenant y apaga el caos). **Verificado: 90/90 dos veces seguidas contra un único tenant (`alumno21`) con 2 workers, sin reset entre pasadas.** `npm test` ejecuta el proyecto `chromium` (los 3 `@visual` van aparte: `npm run test:visual`). Reglas de convivencia en `examples/README.md` y `docs/DECISIONS.md`.
 - **Workflow `students-e2e.yml`:** `plan → prepare → e2e (tenant × shard 1/2) → report`; informe HTML único como artefacto. Validado con `actionlint`; **no se ha podido ejecutar en GitHub desde aquí** y contra Render solo pasaría las sesiones 2–9 hasta desplegar la fase 3.
-- **`/lab`:** endpoints, contraejemplos, FAQ, usuario personal y descarga de `sigpro-examples.zip` (40 archivos, 77 KB, generado en `build` y `dev`).
-- **Hallazgo corregido:** a 390 px `/nc` medía 1303 px de ancho (los `span` `sr-only` de las tarjetas escapaban del tablero); con `isMobile` el navegador incluso renderizaba el escritorio. `NcBoard` es ahora `relative` y el spec de la sesión 11 usa la emulación completa del iPhone 14.
-- **Calidad:** `pnpm lint && pnpm typecheck && pnpm test` en verde (shared 119, web 114, api 139); `lab.spec.ts` 15/15 y `nc.spec.ts` 17/17.
+- **`/lab`:** endpoints (contrastados con el OpenAPI real), contraejemplos (XPath, par que se solapa, texto que cambia con el caos), FAQ de 8 preguntas, usuario personal y descarga de `sigpro-examples.zip` (40 archivos, ~78 KB, generado en `build` y `dev`).
+- **`docs/GUIA-ALUMNO.md`:** Docker en local, apuntar la suite a Render, usuarios, permisos, códigos fijos del seed (de la API real) y la app móvil.
+- **App móvil (`apps/mobile`):** Expo SDK 58 + Expo Router con React 19 **solo en ese paquete** (la web sigue en React 18); mismas rutas, mismo cliente HTTP y mismos ids que la web, AsyncStorage con las mismas claves (las ayudas e2e de la web sirven en `:8081`). Pantallas: acceso con MFA, Programas, No conformidades (kanban con «Mover a…»), Panel de misión (Socket.IO), Requisitos y Documentos en lectura, Perfil. **`pnpm dev` levanta también Expo web en `:8081`; `pnpm build` exporta la web móvil.**
+- **Hallazgos corregidos por el camino:** `/nc` medía 1303 px a 390 px (los `span` `sr-only` escapaban del tablero); en un clon limpio `npm test` de `examples/` fallaba por faltar las líneas base `@visual`; al añadir React 19 al workspace los tipos de `react-router-dom` resolvían `@types/react@19` (la web lo fija ahora en su `tsconfig`); la barra de pestañas móvil recortaba sus etiquetas (la caja de 9 px de la etiqueta, vista en la captura); React Native Web no pinta `aria-description` (el motivo de un botón deshabilitado va en `data-reason` y en un texto visible); un Vite arrancado antes de `pnpm install` responde `504 Outdated Optimize Dep` y hay que reiniciarlo.
+- **Calidad:** `pnpm lint && pnpm typecheck && pnpm test` en verde (shared 119, web 114, api 139, móvil 95) y `pnpm build` (shared, api, web, mobile). **e2e web: 292 specs** (286 + 6 nuevos de `/lab`); **e2e móvil: 21 specs** y 32 capturas.
+
+## Cobertura de locators — móvil (React Native Web a 390 px)
+
+Los mismos ids que la web (`testID` → `data-testid`) y roles ARIA con `role=` / `aria-*`. Specs en `e2e/tests/mobile/mobile.spec.ts`.
+
+| Locator | Elemento móvil | Estado |
+| --- | --- | --- |
+| `getByRole` | `tab` (barra inferior), `radio` (filtros y versiones), `dialog` (hoja de detalle), `alert`, `status`, `progressbar` (`aria-valuenow`), `list` / `listitem`, `region` (columnas del kanban), `group`, `img` (avatares), `button` | ✓ |
+| `getByRole` + `exact` | «EN» frente a «En pausa»; `Mover a «En análisis»` | ✓ |
+| `getByLabel` | Correo, contraseña, código MFA, tenant, buscadores, «Comentario de cierre», «Añadir comentario» (`aria-label` en `TextInput`) | ✓ |
+| `getByPlaceholder` | «Buscar código o nombre…», «000000» | ✓ |
+| `getByAltText` | **No aplica**: los avatares son `role="img"` con nombre (`getByRole('img', { name })`) | n/a |
+| `getByTitle` | **No aplica**: React Native no tiene `title`; el motivo va en `data-reason` y en texto visible | n/a |
+| `getByTestId` | Todo elemento interactivo (ESLint prohíbe el `testID` literal) | ✓ |
+| CSS (`data-state`, `data-severity`) | `dataSet` en badges de estado, severidad y conexión | ✓ |
+| `filter({ hasNot })` | Tarjetas de NC sin avatar (NC-005 y NC-010) | ✓ |
+| Tiempo real | `expect.poll` sobre el feed, `waitForResponse` en `Promise.all`, KPI que cambia por un evento real | ✓ |
+| Interceptación de red | 503 con traza y reintento (Programas) | ✓ |
+| Sesión | `storageState` / `addInitScript` con las claves de la web; persistencia al recargar y cierre de sesión | ✓ |
+| Drag & drop | **No hay** en el móvil: «Mover a…» desde el detalle | n/a |
+
 
 ## Fase 3 — Dinámica y caos
 
@@ -236,7 +259,10 @@ Recorrida fila a fila para Acceso y Programas. Specs en `e2e/tests/`: `access` =
 - **Windows + Prisma** (resuelto en la fase 3): `apps/api/scripts/generate-prisma.mjs` aparta el motor de consultas en uso y reintenta, así `pnpm typecheck` y `pnpm build` funcionan con la API en marcha. Si algún día falla, el síntoma es `EPERM … query_engine-windows.dll.node`.
 - **Evidencias en PostgreSQL:** hasta 5 archivos de 2 MB por ejecución; el reset nocturno las elimina con el resto del tenant (ver `docs/DEPLOY-RENDER.md`).
 - **Bugs plantados:** `docs/planted-bugs.md` existe **solo en local** (está en `.gitignore` porque el repositorio es público); guárdalo en un lugar privado o haz `git add -f` si el repositorio pasa a ser privado. El código con `PLANTED_BUGS` sigue siendo legible en GitHub.
-- **Procesos locales ajenos a la pila:** siguen vivos una API de basic auth en `:3100` (la deja Playwright para `api-docs.spec.ts`; Playwright la vuelve a arrancar sola si falta) y un Vite en `:5174` de una sesión anterior. El segundo no hace falta; deténlo cuando quieras. La pila de trabajo es API `:3000` + web `:5173`.
+- **Procesos locales:** la pila de trabajo es API `:3000` + web `:5173` (+ Expo web en `:8081` si se lanza `pnpm dev`). Sigue viva una API de basic auth en `:3100` (la deja Playwright para `api-docs.spec.ts`; la vuelve a arrancar sola). El Vite de `:5174` de una sesión anterior se detuvo.
+- **`pnpm dev` y Expo:** sin terminal interactiva (turbo, CI) `scripts/expo.mjs` pone `CI=1` y Metro no recarga solo; en una terminal normal sí. Si dejas el Vite de `:5173` arrancado durante un `pnpm install` responde `504 Outdated Optimize Dep`: reinícialo.
+- **App móvil:** probada en Expo web (React Native Web); **no se ha probado en un dispositivo ni emulador** (`EXPO_PUBLIC_API_URL` con la IP del PC o `10.0.2.2`). `pnpm-workspace.yaml` tiene 28 entradas nuevas en `minimumReleaseAgeExclude` (versiones recientes de Expo). `@sigpro/shared` debe estar compilado antes de `expo start` (`pnpm dev` y `pnpm build` ya lo hacen).
+- **Workflow de alumnos (`students-e2e.yml`):** validado con `actionlint` y con la suite de `examples/` en local, pero **no ejecutado en GitHub Actions**; el artefacto `playwright-report-<tenant>` y el `merge-reports` entre shards no se han visto funcionar.
 - **Evolución del modelo:** la FK `NonConformity → TestRun` es `NO ACTION`; el seed v3 enlaza solo ejecuciones del propio programa. Si se permitiera enlazar ejecuciones de otro programa, el borrado de ese programa volvería a dar 500.
 - **Git:** el repositorio es público (`https://github.com/gsanchezm/sigpro`). El zip `SIGPRO Design System Entregables.zip` se eliminó de la rama, pero sigue en el primer commit del historial.
 
@@ -261,6 +287,8 @@ pnpm dev                              # API :3000 (siembra los tenants al arranc
 | Defectos plantados / simulador | `PLANTED_BUGS=false` deja la app limpia · `SIMULATOR_MS=0` apaga el simulador de misión (variables de la API) |
 | Comparar con el handoff | `pnpm --filter @sigpro/e2e compare` (`COMPARE_ONLY=programas` filtra) |
 | Reiniciar todos los tenants | `pnpm seed` (CLI) · `node scripts/reset-all.mjs` (API, con `ADMIN_KEY`) |
+| App móvil | `pnpm --filter mobile web` (Expo web :8081) · `pnpm e2e:mobile` (specs; `MOBILE_SERVER=expo` usa `expo start --web`) · `pnpm e2e:mobile:screens` (capturas a 390 px) |
+| Proyecto de los alumnos | `cd examples && npm install && npm run reset && npm test` (ver `examples/README.md`) |
 | Ver los prototipos | `pnpm handoff` |
 
-URLs: web <http://localhost:5173> · `/lab` <http://localhost:5173/lab> · API <http://localhost:3000/api> · Swagger <http://localhost:3000/api/docs>.
+URLs: web <http://localhost:5173> · `/lab` <http://localhost:5173/lab> · API <http://localhost:3000/api> · Swagger <http://localhost:3000/api/docs> · app móvil (Expo web) <http://localhost:8081>.

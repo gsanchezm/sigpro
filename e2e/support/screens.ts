@@ -40,3 +40,17 @@ export const prepareStorage = async (page: Page, theme: ThemeName, options: { co
     { themeName: theme, withCookies: options.cookies ?? true },
   );
 };
+
+/**
+ * Captura de la app móvil: la pantalla visible (390 × 844), no la página entera. En la app móvil el contenido hace scroll
+ * dentro de la propia pantalla (`ScrollView`), así que la captura de viewport es lo que ve el usuario.
+ * Guarda `docs/screens/mobile-<nombre>-<tema>-390.png`.
+ */
+export const captureMobile = async (page: Page, name: string, theme: ThemeName): Promise<string> => {
+  mkdirSync(SCREENS_DIR, { recursive: true });
+  const file = join(SCREENS_DIR, `mobile-${name}-${theme}-390.png`);
+  // Deja terminar animaciones de entrada (toast, hoja inferior) antes de capturar
+  await page.waitForTimeout(400);
+  await page.screenshot({ path: file });
+  return file;
+};
