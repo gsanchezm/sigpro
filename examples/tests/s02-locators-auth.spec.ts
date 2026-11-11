@@ -1,6 +1,6 @@
 import { test, expect } from '../fixtures';
 import { LoginPage } from '../pages/LoginPage';
-import { API_URL, ROLES, TENANT } from '../support/env';
+import { API_URL, ROLES, STUDENT_USER, TENANT } from '../support/env';
 
 // SESIÓN 2 · Locators (`getByRole`, `getByLabel`, `data-testid`) y autenticación
 // Ejercicio tipo: login válido, inválido y bloqueo tras 5 intentos.
@@ -63,10 +63,9 @@ test.describe('login válido', () => {
   });
 
   test('tu usuario alumnoNN@sigpro.lab también entra (sin MFA)', async ({ page }) => {
-    const student = process.env.SIGPRO_STUDENT ?? 'alumno01';
     const login = new LoginPage(page);
     await login.goto();
-    await login.signIn({ email: `${student}@sigpro.lab`, password: process.env.SIGPRO_STUDENT_PASSWORD ?? 'Alumno1234!' });
+    await login.signIn(STUDENT_USER);
     await expect(page).toHaveURL(/\/programs$/);
   });
 

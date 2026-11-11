@@ -2,6 +2,7 @@ import { defineConfig, devices } from '@playwright/test';
 import { WEB_URL } from './support/env';
 
 const CI = Boolean(process.env.CI);
+const desktop = { ...devices['Desktop Chrome'], viewport: { width: 1440, height: 900 } };
 
 export default defineConfig({
   testDir: './tests',
@@ -28,12 +29,10 @@ export default defineConfig({
   projects: [
     // 1) Inicia sesión una vez por rol y guarda .auth/*.json
     { name: 'setup', testMatch: /auth\.setup\.ts/ },
-    // 2) Los specs de las sesiones, ya autenticados
-    {
-      name: 'chromium',
-      testIgnore: /auth\.setup\.ts/,
-      dependencies: ['setup'],
-      use: { ...devices['Desktop Chrome'], viewport: { width: 1440, height: 900 } },
-    },
+    // 2) Los specs de las sesiones, ya autenticados. Sin los tests `@visual`: necesitan líneas base que dependen del
+    //    sistema operativo y no existen en un clon recién hecho (ver «Pruebas visuales» en el README)
+    { name: 'chromium', testIgnore: /auth\.setup\.ts/, grepInvert: /@visual/, dependencies: ['setup'], use: desktop },
+    // 3) Solo los tests `@visual` (`npm run test:visual`): comparan capturas con tus líneas base
+    { name: 'visual', testIgnore: /auth\.setup\.ts/, grep: /@visual/, dependencies: ['setup'], use: desktop },
   ],
 });

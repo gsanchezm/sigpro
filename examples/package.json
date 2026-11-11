@@ -10,8 +10,10 @@
   "scripts": {
     "browsers": "playwright install chromium",
     "reset": "tsx scripts/reset-tenant.ts",
-    "test": "playwright test",
-    "test:fresh": "npm run reset && playwright test",
+    "test": "playwright test --project=chromium",
+    "test:fresh": "npm run reset && playwright test --project=chromium",
+    "test:visual": "playwright test --project=visual",
+    "test:visual:update": "playwright test --project=visual --update-snapshots",
     "test:headed": "playwright test --headed",
     "test:ui": "playwright test --ui",
     "report": "playwright show-report",

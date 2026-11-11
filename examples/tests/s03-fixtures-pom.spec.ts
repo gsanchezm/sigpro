@@ -1,5 +1,6 @@
 import { ProgramsPage } from '../pages/ProgramsPage';
 import { test, expect } from '../fixtures';
+import { TENANT } from '../support/env';
 
 // SESIÓN 3 · Fixtures, `storageState` y Page Object Model
 // Ejercicio tipo: un fixture por rol y un POM de la lista de programas.
@@ -19,7 +20,7 @@ test.describe('storageState: la sesión llega hecha', () => {
     await programsPage.goto();
     await expect(page.getByTestId('cookie-banner')).toHaveCount(0);
     const tenant = await page.evaluate(() => localStorage.getItem('sigpro.tenant'));
-    expect(tenant).toBe(process.env.SIGPRO_TENANT ?? process.env.SIGPRO_STUDENT ?? 'alumno01');
+    expect(tenant).toBe(TENANT);
   });
 });
 

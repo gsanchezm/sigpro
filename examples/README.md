@@ -20,7 +20,7 @@ npm test
 npm run report                      # abre el informe HTML
 ```
 
-`npm run test:fresh` hace `reset` + `test` de una vez. `npm run test:ui` abre el modo interactivo de Playwright y `npm run test:headed` muestra el navegador.
+`npm run test:fresh` hace `reset` + `test` de una vez. `npm run test:ui` abre el modo interactivo de Playwright y `npm run test:headed` muestra el navegador. `npm test` no ejecuta las pruebas visuales (`@visual`): ver más abajo.
 
 ## ¿Contra qué se ejecuta? El archivo `.env`
 
@@ -48,7 +48,7 @@ SIGPRO_API_URL=https://sigpro-api.onrender.com/api
 
 | Ruta | Qué contiene |
 | --- | --- |
-| `playwright.config.ts` | 2 proyectos: `setup` (inicia sesión una vez por rol) y `chromium` (los specs, que dependen de `setup`). 2 workers en local y 1 en CI |
+| `playwright.config.ts` | 3 proyectos: `setup` (inicia sesión una vez por rol), `chromium` (los specs, que dependen de `setup`) y `visual` (solo los tests `@visual`). 2 workers en local y 1 en CI |
 | `tests/auth.setup.ts` | Inicia sesión por la pantalla de acceso con cada rol y guarda `.auth/<tenant>-<rol>.json` |
 | `fixtures/index.ts` | `test` y `expect` que importan todos los specs: `role`, `pageAs`, `adminPage`…, `apiAs`, `programsPage` |
 | `pages/` | Page Objects: `ProgramsPage`, `LoginPage` |
@@ -108,13 +108,14 @@ Qué datos toca cada spec (si añades specs, mantén esta regla):
 
 ## Pruebas visuales (`@visual`)
 
-Los tests con `toHaveScreenshot` comparan contra una **línea base que depende del sistema operativo**, así que van etiquetados `@visual` y no se incluyen en el zip. La primera vez genera las tuyas:
+Los tests con `toHaveScreenshot` comparan contra una **línea base que depende del sistema operativo** (la tuya no se parece a la de otro sistema), así que van etiquetados `@visual`, viven en su propio proyecto de Playwright (`visual`) y **`npm test` no los ejecuta**. Un clon recién hecho no tiene líneas base: genera las tuyas una vez y compara después.
 
 ```bash
-npx playwright test --grep @visual --update-snapshots
+npm run test:visual:update   # crea (o regenera) tus líneas base en tests/*-snapshots/
+npm run test:visual          # compara contra ellas
 ```
 
-A partir de ahí `npm test` las compara. En el workflow de GitHub el parámetro `visual` elige entre `skip` (por defecto), `compare` y `update`.
+Las carpetas `*-snapshots/` son tuyas: súbelas a tu repositorio si quieres que el CI compare. En el workflow de GitHub el parámetro `visual` elige entre `skip` (por defecto: no se ejecutan), `compare` (también el proyecto `visual`) y `update` (regenera las líneas base y las sube como artefacto).
 
 ## Sesión 12: CI con GitHub Actions
 
@@ -141,4 +142,4 @@ Parámetros del workflow: `tenants` (uno o varios, separados por comas: corre la
 | `ECONNREFUSED` o *timeout* en `reset` | SIGPRO no está levantado (local) o la API de Render está despertando (reintenta) |
 | Un test falla solo cuando otro alumno trabaja | No debería: cada alumno tiene su tenant. Revisa que `SIGPRO_STUDENT` sea el tuyo |
 | «Guardar» no se encuentra a veces | Modo caos con textos variables: usa `/^Guardar( cambios)?$/` |
-| Faltan líneas base de capturas | Ejecuta `npx playwright test --grep @visual --update-snapshots` una vez |
+| `A snapshot doesn't exist` | Faltan tus líneas base: `npm run test:visual:update` una vez (y `npm test` no las necesita) |
