@@ -136,9 +136,12 @@ test('clic en un resultado navega a su pantalla y cierra el popover', async ({ p
   await searchbox(page).fill('REQ-017');
   await requirement;
   await results(page).getByTestId('global-search-item-requirement-REQ-017').click();
-  await expect(page).toHaveURL(/\/programs\/PRG-002\/requirements\?select=REQ-017$/);
+  // El árbol consume `?select=` en cuanto carga la lista y lo quita de la URL (replace): en un equipo rápido esa URL
+  // intermedia dura menos que un sondeo de Playwright. Se afirma el estado final, que sí es estable.
+  await expect(page).toHaveURL(/\/programs\/PRG-002\/requirements(\?select=REQ-017)?$/);
   await expect(results(page)).toHaveCount(0);
   await expect(page.getByTestId('requirement-detail')).toBeVisible();
+  await expect(page.getByTestId('requirement-code')).toHaveText('REQ-017');
 });
 
 test('Esc y salir del campo cierran el popover; ↓ lo reabre; cerrado no intercepta clics', async ({ page }) => {
