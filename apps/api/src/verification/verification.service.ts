@@ -6,6 +6,7 @@ import type { AuthUser } from '../common/auth.types';
 import { safeFilename } from '../common/content-disposition';
 import { fail } from '../common/errors';
 import { buildPdf } from '../common/pdf';
+import { lockTenantCodes } from '../common/tenant-lock';
 import { PrismaService } from '../prisma/prisma.service';
 import { nextId, validateEvidence, type UploadedFile } from './evidence-files';
 import { buildReportLines } from './report';
@@ -96,6 +97,7 @@ export class VerificationService {
     if (problem) throw fail.unprocessable('validation_failed', 'validation_failed', { files: problem });
 
     const run = await this.prisma.$transaction(async (tx) => {
+      await lockTenantCodes(tx, tenantId);
       const runId = nextId('RUN', (await tx.testRun.findMany({ where: { tenantId }, select: { id: true } })).map((r) => r.id));
       const firstEvidence = nextId('EV', (await tx.evidence.findMany({ where: { tenantId }, select: { id: true } })).map((e) => e.id));
       // Ids de evidencia consecutivos a partir del primero libre

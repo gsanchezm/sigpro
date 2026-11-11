@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { API_URL, resetTenant, type RoleName } from '../support/auth';
+import { API_URL, loginByApi, resetTenant, USERS, type RoleName } from '../support/auth';
 import { authHeaders, chaosOff, loginWithPassword, readConfig } from '../support/admin';
 
 // Spec de la API de Administración (fase 3): usuarios (GET/PATCH /admin/users con 401/403/404/409/422), auditoría de cada
@@ -148,6 +148,45 @@ test('409: no puedes tocar tu propia cuenta ni dejar el tenant sin admin activo'
   // reactivar a u7 lo deja todo como estaba
   expect((await request.patch(`${API_URL}/admin/users/u7`, { headers: admin, data: { active: true } })).status()).toBe(200);
   expect((await listUsers(request, TENANT)).filter((user) => user.role === 'admin' && user.active).map((user) => user.id)).toEqual(['u1', 'u7']);
+});
+
+test('MFA: si la cuenta se desactiva entre el paso 1 y el paso 2 no se emite sesión (403 account_disabled)', async ({ request }) => {
+  const tenant = { 'x-tenant': TENANT };
+  // u1 (admin con MFA) completa el paso 1 y, antes del paso 2, otro admin (u7) le desactiva la cuenta
+  const step1 = await request.post(`${API_URL}/auth/login`, { headers: tenant, data: { ...USERS.admin, remember: false } });
+  const { mfaToken } = (await step1.json()) as { mfaToken: string };
+  const u7 = { Authorization: `Bearer ${await loginWithPassword(request, TENANT, `${TENANT}@sigpro.lab`, 'Alumno1234!')}`, ...tenant };
+  expect((await request.patch(`${API_URL}/admin/users/u1`, { headers: u7, data: { active: false } })).status()).toBe(200);
+
+  try {
+    const blocked = await request.post(`${API_URL}/auth/mfa`, { headers: tenant, data: { mfaToken, code: '123456' } });
+    expect(blocked.status()).toBe(403);
+    expect(((await blocked.json()) as { code: string }).code).toBe('account_disabled');
+  } finally {
+    // pase lo que pase, u1 vuelve a estar activo: el resto de la suite inicia sesión con él
+    expect((await request.patch(`${API_URL}/admin/users/u1`, { headers: u7, data: { active: true } })).status()).toBe(200);
+  }
+
+  // con la cuenta reactivada el mismo mfaToken (5 min) completa el login: lo que falló fue el estado, no el token
+  const ok = await request.post(`${API_URL}/auth/mfa`, { headers: tenant, data: { mfaToken, code: '123456' } });
+  expect(ok.status()).toBe(200);
+});
+
+test('JWT sin estado (decisión documentada): el access token anterior a desactivar la cuenta vale hasta caducar; el refresh ya no', async ({ request }) => {
+  // u4 (auditor) se desactiva con su sesión abierta. DECISIONS: sin tabla de sesiones; el access dura 15 min y el refresh sí consulta la cuenta
+  const { accessToken, refreshToken } = await loginByApi(request, 'auditor', TENANT);
+  const admin = await authHeaders(request, 'admin', TENANT);
+  expect((await request.patch(`${API_URL}/admin/users/u4`, { headers: admin, data: { active: false } })).status()).toBe(200);
+
+  try {
+    const stale = await request.get(`${API_URL}/programs`, { headers: { Authorization: `Bearer ${accessToken}`, 'x-tenant': TENANT } });
+    expect(stale.status(), 'el access token anterior sigue vigente').toBe(200);
+    const refresh = await request.post(`${API_URL}/auth/refresh`, { headers: { 'x-tenant': TENANT }, data: { refreshToken } });
+    expect(refresh.status(), 'el refresh consulta la cuenta').toBe(401);
+    expect(((await refresh.json()) as { code: string }).code).toBe('invalid_token');
+  } finally {
+    expect((await request.patch(`${API_URL}/admin/users/u4`, { headers: admin, data: { active: true } })).status()).toBe(200);
+  }
 });
 
 test('aislamiento: los cambios de un tenant no se ven en otro y el JWT manda sobre la cabecera x-tenant', async ({ request }) => {

@@ -18,6 +18,7 @@ import {
 import { AuditService } from '../audit/audit.service';
 import type { AuthUser } from '../common/auth.types';
 import { fail } from '../common/errors';
+import { lockTenantCodes } from '../common/tenant-lock';
 import { PrismaService } from '../prisma/prisma.service';
 
 const WITH_TESTS = { tests: { select: { testCaseCode: true } } } as const;
@@ -87,6 +88,7 @@ export class RequirementsService {
     }
 
     const created = await this.prisma.$transaction(async (tx) => {
+      await lockTenantCodes(tx, tenantId);
       const codes = (await tx.requirement.findMany({ where: { tenantId }, select: { code: true } })).map((r) => r.code);
       const code = nextRequirementCode(codes);
       const position = await tx.requirement.count({ where: { tenantId, programCode: input.programCode, parentCode: input.parentCode } });

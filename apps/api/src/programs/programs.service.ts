@@ -4,6 +4,7 @@ import { nextProgramCode, programsToCsv, type CreateProgramInput, type ProgramDt
 import { AuditService } from '../audit/audit.service';
 import type { AuthUser } from '../common/auth.types';
 import { fail } from '../common/errors';
+import { lockTenantCodes } from '../common/tenant-lock';
 import { ENV, type Env } from '../config/env';
 import { PrismaService } from '../prisma/prisma.service';
 import { buildOrderBy, buildWhere, listOrderBy, normalizePaging, progressOf } from './program-query';
@@ -82,6 +83,7 @@ export class ProgramsService {
     if (sameName || input.name.toLowerCase().includes('duplicado')) throw fail.unprocessable('duplicate_name', 'duplicate_name', { name: 'dupName' });
 
     const created = await this.prisma.$transaction(async (tx) => {
+      await lockTenantCodes(tx, tenantId);
       const codes = (await tx.program.findMany({ where: { tenantId }, select: { code: true } })).map((p) => p.code);
       const code = nextProgramCode(codes);
       const row = await tx.program.create({
@@ -179,6 +181,7 @@ export class ProgramsService {
     if (!source) throw fail.notFound('program_not_found', 'program_not_found');
 
     const row = await this.prisma.$transaction(async (tx) => {
+      await lockTenantCodes(tx, tenantId);
       const codes = (await tx.program.findMany({ where: { tenantId }, select: { code: true } })).map((p) => p.code);
       const newCode = nextProgramCode(codes);
       const copy = await tx.program.create({

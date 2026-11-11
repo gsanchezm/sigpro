@@ -1,5 +1,24 @@
 import { describe, expect, it } from 'vitest';
-import { registerFailure, resolveTenantId, unknownUserAttempts } from './lockout';
+import { accountBlock, registerFailure, resolveTenantId, unknownUserAttempts } from './lockout';
+
+describe('accountBlock', () => {
+  const ok = { lockedAt: null, pendingApproval: false, active: true };
+
+  it('una cuenta activa, aprobada y sin bloquear puede abrir sesión', () => {
+    expect(accountBlock(ok)).toBeNull();
+  });
+
+  it('devuelve el motivo que ya usa el login: bloqueada, pendiente de aprobación o desactivada', () => {
+    expect(accountBlock({ ...ok, lockedAt: new Date() })).toBe('account_locked');
+    expect(accountBlock({ ...ok, pendingApproval: true })).toBe('pending_approval');
+    expect(accountBlock({ ...ok, active: false })).toBe('account_disabled');
+  });
+
+  it('si hay varios motivos manda el mismo orden que el login: bloqueada, pendiente, desactivada', () => {
+    expect(accountBlock({ lockedAt: new Date(), pendingApproval: true, active: false })).toBe('account_locked');
+    expect(accountBlock({ lockedAt: null, pendingApproval: true, active: false })).toBe('pending_approval');
+  });
+});
 
 describe('registerFailure', () => {
   it('cuenta los intentos fallidos y no bloquea antes del quinto', () => {

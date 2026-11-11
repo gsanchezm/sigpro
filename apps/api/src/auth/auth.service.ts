@@ -8,10 +8,13 @@ import { AuditService } from '../audit/audit.service';
 import type { MfaPayload, RefreshPayload } from '../common/auth.types';
 import { fail } from '../common/errors';
 import { PrismaService } from '../prisma/prisma.service';
-import { registerFailure, resolveTenantId, unknownUserAttempts } from './lockout';
+import { accountBlock, registerFailure, resolveTenantId, unknownUserAttempts, type AccountBlock } from './lockout';
 import { TokenService, toSessionUser } from './token.service';
 
 const normalizeEmail = (email: string): string => email.trim().toLowerCase();
+
+/** Bloqueada → 423; pendiente de aprobación o desactivada → 403 (el `code` es el motivo). */
+const blockError = (block: AccountBlock) => (block === 'account_locked' ? fail.locked(block, block) : fail.forbidden(block, block));
 
 @Injectable()
 export class AuthService {
@@ -46,8 +49,8 @@ export class AuthService {
     if (user.failedAttempts > 0) await this.prisma.user.update({ where: { tenantId_id: { tenantId, id: user.id } }, data: { failedAttempts: 0 } });
     this.unknownAttempts.clear(tenantId, email);
 
-    if (user.pendingApproval) throw fail.forbidden('pending_approval', 'pending_approval');
-    if (!user.active) throw fail.forbidden('account_disabled', 'account_disabled');
+    const block = accountBlock(user);
+    if (block) throw blockError(block);
 
     if (user.mfaCode) return { mfaRequired: true, mfaToken: this.tokens.issueMfaToken(user, input.remember), email: user.email };
     return { mfaRequired: false, ...this.tokens.issueSession(user, input.remember) };
@@ -70,13 +73,16 @@ export class AuthService {
     const payload = this.tokens.verify<MfaPayload>(input.mfaToken, 'mfa');
     const user = await this.prisma.user.findUnique({ where: { tenantId_id: { tenantId: payload.tenant, id: payload.sub } } });
     if (!user || user.mfaCode !== input.code) throw fail.unauthorized('invalid_mfa', 'invalid_mfa');
+    // La cuenta pudo bloquearse o desactivarse entre el paso 1 y el 2 (el mfaToken dura 5 min): mismo criterio que el login
+    const block = accountBlock(user);
+    if (block) throw blockError(block);
     return this.tokens.issueSession(user, payload.remember);
   }
 
   async refresh(refreshToken: string): Promise<SessionResponse> {
     const payload = this.tokens.verify<RefreshPayload>(refreshToken, 'refresh');
     const user = await this.prisma.user.findUnique({ where: { tenantId_id: { tenantId: payload.tenant, id: payload.sub } } });
-    if (!user || user.lockedAt || !user.active) throw fail.unauthorized('invalid_token', 'invalid_token');
+    if (!user || accountBlock(user)) throw fail.unauthorized('invalid_token', 'invalid_token');
     return this.tokens.issueSession(user, payload.remember);
   }
 

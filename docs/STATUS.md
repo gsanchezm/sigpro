@@ -1,8 +1,18 @@
 # SIGPRO — Estado de la construcción
 
-Última actualización: 2026-11-11 · **Las 4 fases están construidas, subidas a `origin/main` y desplegadas en Render** · el workflow de alumnos se ejecutó contra Render en verde
+Última actualización: 2026-11-11 (auditoría de código aplicada, sin subir) · **Las 4 fases están construidas, subidas a `origin/main` y desplegadas en Render** · el workflow de alumnos se ejecutó contra Render en verde
 
 Leyenda: `[x]` hecho · `[~]` en curso · `[ ]` pendiente
+
+## Auditoría de código (2026-11-11)
+
+Revisión externa contrastada con el código; el detalle y lo descartado está en `docs/DECISIONS.md` («Auditoría de código»).
+
+- [x] **MFA:** el segundo paso comprueba la cuenta (bloqueada 423, pendiente/desactivada 403) con `accountBlock()`, compartido con login y refresh. Test unitario + spec de API (`admin-api.spec.ts`)
+- [x] **Códigos correlativos concurrentes:** 8 altas simultáneas daban 500 en 5 sitios (programas alta y duplicar, requisitos, NC, ejecuciones); ahora `lockTenantCodes()` (candado de Postgres por tenant) las serializa. `codes-concurrency-api.spec.ts`: 5 specs, 20/20 con `--repeat-each=4` y 0 errores `P2002` en el log de la API
+- [x] **JWT sin estado: se mantiene** (decisión de la fase 1, `last_admin` depende de ello); un spec fija la ventana de 15 min
+- [ ] **Pendiente, sin urgencia:** separar `AccessPage.tsx` (641 líneas) y extraer el hook de lista común de Programas/Verificación cuando se vuelvan a tocar
+- **Verificado:** `pnpm lint && pnpm typecheck && pnpm test` en verde (shared 119, web 114, api 142, móvil 95) y **e2e web 299/299** contra la API reconstruida. **No se ha probado en Render ni en GitHub**: los cambios no están subidos
 
 ## Fase 4 — Material para alumnos y móvil
 
@@ -22,7 +32,7 @@ Orden fijo (el móvil va el último). Cada tarea termina con `pnpm lint && pnpm 
 - **`docs/GUIA-ALUMNO.md`:** Docker en local, apuntar la suite a Render, usuarios, permisos, códigos fijos del seed (de la API real) y la app móvil.
 - **App móvil (`apps/mobile`):** Expo SDK 58 + Expo Router con React 19 **solo en ese paquete** (la web sigue en React 18); mismas rutas, mismo cliente HTTP y mismos ids que la web, AsyncStorage con las mismas claves (las ayudas e2e de la web sirven en `:8081`). Pantallas: acceso con MFA, Programas, No conformidades (kanban con «Mover a…»), Panel de misión (Socket.IO), Requisitos y Documentos en lectura, Perfil. **`pnpm dev` levanta también Expo web en `:8081`; `pnpm build` exporta la web móvil.**
 - **Hallazgos corregidos por el camino:** `/nc` medía 1303 px a 390 px (los `span` `sr-only` escapaban del tablero); en un clon limpio `npm test` de `examples/` fallaba por faltar las líneas base `@visual`; al añadir React 19 al workspace los tipos de `react-router-dom` resolvían `@types/react@19` (la web lo fija ahora en su `tsconfig`); la barra de pestañas móvil recortaba sus etiquetas (la caja de 9 px de la etiqueta, vista en la captura); React Native Web no pinta `aria-description` (el motivo de un botón deshabilitado va en `data-reason` y en un texto visible); un Vite arrancado antes de `pnpm install` responde `504 Outdated Optimize Dep` y hay que reiniciarlo.
-- **Calidad:** `pnpm lint && pnpm typecheck && pnpm test` en verde (shared 119, web 114, api 139, móvil 95) y `pnpm build` (shared, api, web, mobile). **e2e web: 292 specs** (286 + 6 nuevos de `/lab`); **e2e móvil: 21 specs** y 32 capturas. **En GitHub**, el primer CI de las fases 3–4 dio 285/286 en la web (la carrera de `search.spec.ts`, corregida; ver `DECISIONS.md`) y los dos pasos e2e, web y móvil, quedaron en verde tras la corrección.
+- **Calidad:** `pnpm lint && pnpm typecheck && pnpm test` en verde (shared 119, web 114, api 139, móvil 95; tras la auditoría, api 142) y `pnpm build` (shared, api, web, mobile). **e2e web: 292 specs** al cerrar la fase (286 + 6 nuevos de `/lab`; 299 tras la auditoría); **e2e móvil: 21 specs** y 32 capturas. **En GitHub**, el primer CI de las fases 3–4 dio 285/286 en la web (la carrera de `search.spec.ts`, corregida; ver `DECISIONS.md`) y los dos pasos e2e, web y móvil, quedaron en verde tras la corrección.
 
 ## Cobertura de locators — móvil (React Native Web a 390 px)
 

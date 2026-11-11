@@ -22,6 +22,7 @@ import { randomBytes } from 'node:crypto';
 import { AuditService } from '../audit/audit.service';
 import type { AuthUser } from '../common/auth.types';
 import { fail } from '../common/errors';
+import { lockTenantCodes } from '../common/tenant-lock';
 import { ENV, type Env } from '../config/env';
 import { MissionEventsService } from '../mission/mission-events.service';
 import { PrismaService } from '../prisma/prisma.service';
@@ -122,6 +123,7 @@ export class NcService {
     if (input.assigneeId) await this.assertAssignee(tenantId, input.assigneeId);
 
     const created = await this.prisma.$transaction(async (tx) => {
+      await lockTenantCodes(tx, tenantId);
       const codes = (await tx.nonConformity.findMany({ where: { tenantId }, select: { code: true } })).map((nc) => nc.code);
       const code = nextNcCode(codes);
       const row = await tx.nonConformity.create({

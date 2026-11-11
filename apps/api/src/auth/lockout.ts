@@ -1,4 +1,18 @@
+import type { User } from '@prisma/client';
 import { DEFAULT_TENANT, MAX_LOGIN_ATTEMPTS } from '@sigpro/shared';
+
+export type AccountBlock = 'account_locked' | 'pending_approval' | 'account_disabled';
+
+/** Motivos por los que una cuenta no puede abrir sesión, en el orden en que los evalúa el login. */
+const BLOCK_RULES: ReadonlyArray<readonly [AccountBlock, (user: Pick<User, 'lockedAt' | 'pendingApproval' | 'active'>) => boolean]> = [
+  ['account_locked', (user) => user.lockedAt !== null],
+  ['pending_approval', (user) => user.pendingApproval],
+  ['account_disabled', (user) => !user.active],
+];
+
+/** Por qué la cuenta no puede abrir sesión (`null` = puede). Lo comparten el login, el segundo paso MFA y el refresh. */
+export const accountBlock = (user: Pick<User, 'lockedAt' | 'pendingApproval' | 'active'>): AccountBlock | null =>
+  BLOCK_RULES.find(([, applies]) => applies(user))?.[0] ?? null;
 
 /** Resultado de un intento fallido: nº de intentos acumulados y si la cuenta debe bloquearse. */
 export const registerFailure = (previousAttempts: number): { attempts: number; locked: boolean } => {
