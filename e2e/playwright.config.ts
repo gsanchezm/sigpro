@@ -15,10 +15,9 @@ export default defineConfig({
   testDir: './tests',
   // Los specs comparten la base: se ejecutan en serie y cada archivo usa su propio tenant
   fullyParallel: false,
-  // 2 workers en local y 1 en CI. La suite responsive (`pnpm e2e:responsive`) no escribe datos compartidos y los usa;
-  // la suite completa de escritorio (`pnpm e2e`) va con `--workers=1` porque sus specs comparten tenants entre archivos
-  // (ver docs/DECISIONS.md).
-  workers: CI ? 1 : 2,
+  // En serie: los specs comparten tenants entre archivos (las capturas, p. ej., resetean alumno13 y alumno14). Solo la suite
+  // responsive, que no escribe datos compartidos, pide 2 workers (`pnpm e2e:responsive`; ver docs/DECISIONS.md).
+  workers: 1,
   retries: CI ? 1 : 0,
   reporter: CI ? [['list'], ['html', { open: 'never' }]] : [['list']],
   globalSetup: './global-setup.ts',

@@ -124,14 +124,16 @@ test.describe('panel de misión en escritorio', () => {
 test.describe('emulación móvil: iPhone 14 (390 px)', () => {
   test.use(iphone14);
 
-  test('breakpoint móvil: la barra inferior sustituye a la lateral, el menú «Menú» abre el cajón y no hay scroll horizontal', async ({ page }) => {
+  test('diseño responsive (< 1024 px): sin barra lateral, el menú «Menú» abre el cajón y no hay scroll horizontal', async ({ page }) => {
     const mission = new MissionPage(page);
     await mission.goto();
     await mission.waitUntilLive();
 
-    await expect(page.getByTestId('mobile-tabbar')).toBeVisible(); // respaldo: la barra no tiene nombre accesible propio
-    await expect(page.getByTestId(/^mobile-tab-/)).toHaveCount(4);
-    await expect(page.getByTestId('layout-sidebar')).toHaveCount(0); // el cajón está cerrado: ni siquiera se renderiza
+    // Un solo corte a 1024 px: por debajo SIGPRO monta el cajón (drawer) en lugar de la barra lateral, y no hay barra inferior.
+    // El cajón cerrado ni siquiera se renderiza; la hamburguesa es la variante responsive: `layout-sidebar-toggle-mobile`
+    await expect(page.getByTestId('mobile-tabbar')).toHaveCount(0);
+    await expect(page.getByTestId('layout-sidebar')).toHaveCount(0);
+    await expect(page.getByTestId('layout-sidebar-mobile')).toHaveCount(0);
     expect(await horizontalOverflow(page)).toBeLessThanOrEqual(1);
 
     // «Menú» exacto: sin `exact`, también casaría con «Menú de usuario»
@@ -148,31 +150,34 @@ test.describe('emulación móvil: iPhone 14 (390 px)', () => {
   });
 
   test.describe('kanban de No conformidades', () => {
-    test('tablero de NC en 390 px: el desplazamiento horizontal lo absorbe el tablero, no la ventana', async ({ page }) => {
-      // En móvil las columnas no caben: el tablero es el que se desplaza (su propio scroll). Comprobamos dos cosas:
-      // el tablero tiene más ancho que su caja y, al llevar «Rechazada» a la vista, la ventana sigue en x = 0.
-      const board = new NcBoardPage(page);
+    test('tablero de NC en 390 px: una pestaña por estado y solo se monta la lista del estado elegido', async ({ page }) => {
+      // Por debajo de 1024 px no hay columnas ni arrastre: el tablero son pestañas (`role="tab"`) y un panel con las tarjetas del
+      // estado elegido. Las demás listas no existen en el DOM, así que la ventana no se desplaza en horizontal.
+      const board = new NcBoardPage(page, true);
       await board.goto();
 
-      expect(await board.board.evaluate((element) => element.scrollWidth > element.clientWidth)).toBe(true);
-      await expect(board.column('rejected')).not.toBeInViewport();
-      await board.column('rejected').scrollIntoViewIfNeeded();
-      // Basta con que la columna asome: la alineación exacta del scroll varía y un umbral de ratio sería inestable
-      await expect(board.column('rejected')).toBeInViewport();
+      await expect(page.getByRole('tab')).toHaveCount(5);
+      await expect(board.column('rejected')).toHaveCount(0); // «Rechazada» no está montada: la pestaña activa es «Abierta»
+      expect(await board.codesIn('open')).toContain('NC-001');
 
+      await board.tab('rejected').click();
+      await expect(board.column('rejected')).toBeVisible();
+      await expect(board.column('open')).toHaveCount(0);
+      expect(await horizontalOverflow(page)).toBeLessThanOrEqual(1);
       expect(await page.evaluate(() => window.scrollX)).toBe(0);
     });
 
-    test('menú ⋯ de NC-001: muestra las acciones, se cierra con Escape y la tarjeta no se mueve', async ({ page }) => {
-      // Alternativa al arrastre en móvil. Es solo lectura: se abre el menú, se mira y se cierra sin elegir nada.
-      const board = new NcBoardPage(page);
+    test('«Mover a…» de NC-001: muestra los destinos, se cierra con Escape y la tarjeta no se mueve', async ({ page }) => {
+      // La alternativa al arrastre en responsive. Es solo lectura: se abre la hoja, se mira y se cierra sin elegir nada.
+      const board = new NcBoardPage(page, true);
       await board.goto();
       const stateBefore = await board.card('NC-001').getAttribute('data-state');
       expect(stateBefore).not.toBeNull();
 
       const menu = await board.openMenu('NC-001');
-      await expect(menu.getByRole('menuitem', { name: 'Abrir detalle' })).toBeVisible();
-      await expect(menu.getByRole('menuitem', { name: /^Comentario rápido/ })).toBeVisible();
+      // Solo los estados a los que la máquina permite pasar desde «Abierta»
+      await expect(menu.getByRole('button', { name: 'Mover a «En análisis»' })).toBeVisible();
+      await expect(menu.getByRole('button', { name: 'Mover a «Cerrada»' })).toHaveCount(0);
       await page.keyboard.press('Escape');
       await expect(menu).toBeHidden();
 
@@ -181,7 +186,7 @@ test.describe('emulación móvil: iPhone 14 (390 px)', () => {
 
     test('captura del kanban en iPhone 14 (claro): tablero con los contadores de comentarios enmascarados', { tag: '@visual' }, async ({ page }) => {
       await forceTheme(page, 'light');
-      const board = new NcBoardPage(page);
+      const board = new NcBoardPage(page, true);
       await board.goto();
       await settle(page);
 

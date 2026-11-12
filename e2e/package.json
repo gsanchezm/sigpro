@@ -4,8 +4,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "e2e": "playwright test --project=desktop --workers=1",
-    "e2e:responsive": "playwright test --project=desktop --project=tablet --project=mobile tests/responsive",
+    "e2e": "playwright test --project=desktop",
+    "e2e:responsive": "playwright test --project=desktop --project=tablet --project=mobile --workers=2 tests/responsive",
     "screens": "playwright test --project=screens",
     "mobile": "playwright test -c playwright.mobile.config.ts --project=mobile",
     "mobile:screens": "playwright test -c playwright.mobile.config.ts --project=mobile-screens",
