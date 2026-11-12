@@ -18,7 +18,7 @@ Las **cuatro fases del plan están construidas y verificadas en local**:
 | 3 · Dinámica y caos | No conformidades (kanban), Panel de misión (Socket.IO), Administración, modo caos, 8 defectos plantados | idem |
 | 4 · Material y móvil | `examples/` + workflow de alumnos, `/lab` completa, guía del alumno, app Expo | idem + e2e móvil |
 
-Cifras de la última pasada: **tests unitarios** shared 119 · web 114 · api 139 · móvil 95; **e2e de la web** 292 specs; **e2e del móvil** 21 specs y 32 capturas (ambos también en el CI de GitHub); **`examples/`** 90 tests (86 + 4 de `setup`) en dos pasadas seguidas, con 2 workers y un solo tenant.
+Cifras de la última pasada (CI de GitHub en verde, run 43256636909): **tests unitarios** shared 125 · web 114 · api 145 · móvil 337; **e2e de la web** 331 specs; **e2e del móvil** 167 specs más 34 capturas en local; **`examples/`** 90 tests (86 + 4 de `setup`) en dos pasadas seguidas, con 2 workers y un solo tenant. La app móvil ya es un espejo funcional de la web y se compila para emuladores (ver abajo); lo que **no** está verificado: iOS en un Simulador (hace falta un Mac) y, en nativo, los selectores de imagen y documento, la hoja de compartir y la descarga de archivos.
 
 > **Desplegado (2026-11-11).** Las fases 3 y 4 están en `origin/main` y Render las desplegó solas: <https://sigpro-web.onrender.com> (sirve `sigpro-examples.zip`) y <https://sigpro-api.onrender.com> (Socket.IO y `plantedBugs` en `/api/config`). El workflow [`students-e2e.yml`](.github/workflows/students-e2e.yml) se ejecutó contra Render con el tenant `alumno25`: 2 shards (48 + 43 tests, todos en verde) e informe HTML unido como artefacto. La app móvil no se aloja en Render.
 
@@ -89,6 +89,7 @@ Usuarios demo (existen en cada tenant; `?tenant=alumno01` o el selector de `/lab
 | `pnpm e2e` | Specs de humo de la web (arranca API y web; `CI=true` sirve el build con `vite preview`) |
 | `pnpm e2e:mobile` | Specs de humo de la app móvil a 390 px (exportación estática en :8081; `MOBILE_SERVER=expo` usa `expo start --web`) |
 | `pnpm e2e:screens` · `pnpm e2e:mobile:screens` | Generan las capturas en `docs/screens/` (web / móvil); la carpeta está en `.gitignore` |
+| `gh workflow run mobile-builds.yml -f platforms=both` | Compila en GitHub el `.app` para el Simulador de iOS y el `.apk` para el emulador de Android (artefactos `sigpro-ios-simulator` y `sigpro-android-emulator`); guía en [`docs/MOBILE-EMULADORES.md`](docs/MOBILE-EMULADORES.md). En Windows no se puede compilar Gradle en local (CMake/ninja): usa el runner |
 | `pnpm handoff` | Sirve `docs/design-handoff/` por HTTP (`npx serve`) para ver los prototipos anteriores (histórico, ya no son la referencia visual) |
 | `node scripts/reset-all.mjs` | Reinicia todos los tenants (lo usa el Cron Job de Render) |
 

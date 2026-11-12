@@ -94,6 +94,8 @@ Elementos transversales que se reparten entre módulos:
 
 Lo que el móvil (Expo) replica en la fase 1: módulos 1, 2, 5 y 7. Requisitos y documentos solo en lectura; administración no existe en móvil.
 
+> **Superado (2026-11-12):** por decisión del usuario el móvil es hoy un espejo **funcional** de la web (todos los módulos, incluida Administración, salvo `/lab`, el arrastrar y soltar y los atajos de teclado). Estado por módulo y lagunas en `docs/MOBILE-PARITY.md`; decisión en `docs/DECISIONS.md` («Paridad funcional del móvil»).
+
 ## Catálogo de componentes UI
 
 La app debe cubrir todos los tipos de elemento que un alumno se va a encontrar en producción; cada uno vive en una pantalla concreta para que ningún componente exista solo como demo. Es la lista de verificación del frontend: nada se da por terminado hasta que cada fila tiene su sitio.

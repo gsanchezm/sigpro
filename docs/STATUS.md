@@ -1,6 +1,6 @@
 # SIGPRO — Estado de la construcción
 
-Última actualización: 2026-11-12 (auditoría y rediseño «Ciruela» fases 1–4 en `origin/main` con el CI en verde; fase 5 en curso) · **Las 4 fases están construidas y desplegadas en Render** · el workflow de alumnos se ejecutó contra Render en verde
+Última actualización: 2026-11-12 (`origin/main` = `a3d1294`: auditoría, rediseño «Ciruela» fases 1–5 y móvil espejo funcional con builds para emuladores, todo subido; CI en verde: 331 e2e web + 167 móvil) · **Las 4 fases están construidas y desplegadas en Render** (Render redespliega con cada push a `main`; no se ha comprobado el despliegue de este último push) · el workflow de alumnos se ejecutó contra Render en verde
 
 Leyenda: `[x]` hecho · `[~]` en curso · `[ ]` pendiente
 
@@ -33,7 +33,7 @@ Orden fijo (el móvil va el último). Cada tarea termina con `pnpm lint && pnpm 
 - [x] **T30** `examples/`: proyecto Playwright + TypeScript independiente del monorepo (su `package.json`), fixtures por rol con `storageState`, Page Object de Programas, un spec por sesión 2–11 y `.github/workflows/students-e2e.yml` (tenant parametrizado, sharding en 2, informe HTML como artefacto). **90 tests (86 + 4 de `setup`), 90/90 en dos pasadas seguidas en un solo tenant con 2 workers y sin reset entre ellas** (~55 s). `npm test` ejecuta 83 (+ 4 de `setup`); los 3 `@visual` van en su propio proyecto (`npm run test:visual`, con líneas base propias de cada alumno)
 - [x] **T31** `/lab` completa: lista de 22 endpoints con enlaces a Swagger y al OpenAPI, contraejemplo de texto variable con el caos, FAQ de 8 preguntas y descarga del zip de `examples/` generado en el build. `lab.spec.ts` 15/15, capturas regeneradas, + 7 tests unitarios de endpoints y 11 del zip (web: 114). Arreglada de paso la anchura de `/nc` en móvil
 - [x] **T32** `docs/GUIA-ALUMNO.md`: levantar SIGPRO en local con Docker, apuntar la suite a Render, usuarios, permisos y códigos fijos del seed (tablas obtenidas de la API real); viaja dentro del zip
-- [x] **T33** `apps/mobile` (Expo SDK 58 + Expo Router): Login con MFA, Programas (cards con filtros), kanban de NC y Panel de misión; Requisitos y Documentos en lectura; sin Administración; `testID` = `data-testid`; capturas a 390 px. **95 tests unitarios, 21 specs de humo (`pnpm e2e:mobile`, con la exportación estática y con `expo start --web`) y 32 capturas** en `docs/screens/mobile-*`
+- [x] **T33** `apps/mobile` (Expo SDK 58 + Expo Router): Login con MFA, Programas (cards con filtros), kanban de NC y Panel de misión; Requisitos y Documentos en lectura; sin Administración (**ampliado después a espejo funcional completo: ver la línea «Móvil “espejo” FUNCIONAL» de arriba**); `testID` = `data-testid`; capturas a 390 px. **95 tests unitarios, 21 specs de humo (`pnpm e2e:mobile`, con la exportación estática y con `expo start --web`) y 32 capturas** al cerrar la fase (hoy 337 unitarios, 167 specs y 34 capturas); las capturas no se versionan
 - [x] **T34** Cierre de fase: README con el estado final, STATUS final, guía del alumno con la sección móvil
 
 ## Resumen de la fase 4
@@ -48,7 +48,7 @@ Orden fijo (el móvil va el último). Cada tarea termina con `pnpm lint && pnpm 
 
 ## Cobertura de locators — móvil (React Native Web a 390 px)
 
-Los mismos ids que la web (`testID` → `data-testid`) y roles ARIA con `role=` / `aria-*`. Specs en `e2e/tests/mobile/mobile.spec.ts`.
+Los mismos ids que la web (`testID` → `data-testid`) y roles ARIA con `role=` / `aria-*`. Specs en `e2e/tests/mobile/`: `mobile.spec.ts` (humo por rol) y uno por módulo (`requirements-edit`, `programs-edit`, `verification`, `nc-edit`, `documents-edit`, `audit-admin`, `access-extras`, `search-profile`), más `capture.spec.ts` (capturas).
 
 | Locator | Elemento móvil | Estado |
 | --- | --- | --- |
@@ -283,10 +283,11 @@ Recorrida fila a fila para Acceso y Programas. Specs en `e2e/tests/`: `access` =
 - **Bugs plantados:** `docs/planted-bugs.md` existe **solo en local** (está en `.gitignore` porque el repositorio es público); guárdalo en un lugar privado o haz `git add -f` si el repositorio pasa a ser privado. El código con `PLANTED_BUGS` sigue siendo legible en GitHub.
 - **Procesos locales:** la pila de trabajo es API `:3000` + web `:5173` (+ Expo web en `:8081` si se lanza `pnpm dev`). Sigue viva una API de basic auth en `:3100` (la deja Playwright para `api-docs.spec.ts`; la vuelve a arrancar sola). El Vite de `:5174` de una sesión anterior se detuvo.
 - **`pnpm dev` y Expo:** sin terminal interactiva (turbo, CI) `scripts/expo.mjs` pone `CI=1` y Metro no recarga solo; en una terminal normal sí. Si dejas el Vite de `:5173` arrancado durante un `pnpm install` responde `504 Outdated Optimize Dep`: reinícialo.
-- **App móvil:** probada en Expo web (React Native Web); **no se ha probado en un dispositivo ni emulador** (`EXPO_PUBLIC_API_URL` con la IP del PC o `10.0.2.2`). `pnpm-workspace.yaml` tiene 28 entradas nuevas en `minimumReleaseAgeExclude` (versiones recientes de Expo). `@sigpro/shared` debe estar compilado antes de `expo start` (`pnpm dev` y `pnpm build` ya lo hacen).
+- **App móvil:** probada en Expo web (React Native Web) y, en nativo, **solo en un emulador de Android (API 33) con el APK de la build funcional**: login con MFA, Programas, asistente con selector modal anidado y Verificación. **Sin verificar:** iOS en un Simulador (exige un Mac; el `.app` compila en GitHub pero nunca se abrió), los selectores de imagen y documento, la hoja de compartir, la descarga de archivos y el resto de módulos en nativo. `EXPO_PUBLIC_API_URL` se incrusta al compilar (iOS `http://localhost:3000/api`, Android `http://10.0.2.2:3000/api`; para Render, las entradas `ios_api_url` / `android_api_url` del workflow). Las builds nativas se hacen en el runner de GitHub: el Gradle local de Windows falla en CMake/ninja (`build.ninja still dirty`). `pnpm-workspace.yaml` tiene 28 entradas nuevas en `minimumReleaseAgeExclude` (versiones recientes de Expo). `@sigpro/shared` debe estar compilado antes de `expo start` (`pnpm dev` y `pnpm build` ya lo hacen).
 - **Workflow de alumnos (`students-e2e.yml`):** ejecutado en GitHub contra Render (ver arriba). Las pruebas visuales `@visual` no se ejecutan en él por defecto (`visual: skip`); los modos `compare` y `update` no se han probado en GitHub. Corre sobre `alumno25`: cada ejecución **reinicia ese tenant** en Render.
 - **Evolución del modelo:** la FK `NonConformity → TestRun` es `NO ACTION`; el seed v3 enlaza solo ejecuciones del propio programa. Si se permitiera enlazar ejecuciones de otro programa, el borrado de ese programa volvería a dar 500.
-- **Git:** el repositorio es público (`https://github.com/gsanchezm/sigpro`). El zip `SIGPRO Design System Entregables.zip` se eliminó de la rama, pero sigue en el primer commit del historial.
+- **Git:** el repositorio es público (`https://github.com/gsanchezm/sigpro`). El zip `SIGPRO Design System Entregables.zip` se eliminó de la rama, pero sigue en el primer commit del historial. Las 408 capturas que se versionaron antes del rediseño también siguen en el historial (decisión del usuario: no versionar capturas desde ahora); purgarlas exigiría `git filter-repo` y un push forzado, y no se ha hecho.
+- **Cabos sueltos (2026-11-12):** el run de CI 43097697564 (commit `e902850`, solo docs) sigue en cola sin jobs desde el 11-nov y lo superan runs verdes posteriores; cancelarlo (`gh run cancel 43097697564`) es decisión del usuario. La carpeta temporal `C:\s` (un intento de compilar Gradle desde una ruta corta) debe borrarla el usuario. El `Switch` del tema oscuro móvil se ve verde azulado (`activeThumbColor` de react-native-web): cosmético. Las carpetas `.tmp-*` sin seguimiento no se versionan. «Mover a…» solo reordena entre hermanos y las descripciones móviles son texto plano (ver `docs/MOBILE-PARITY.md`).
 
 ## Cómo levantar todo en local
 
