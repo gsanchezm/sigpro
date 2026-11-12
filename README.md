@@ -2,10 +2,10 @@
 
 Laboratorio de pruebas para el curso **Playwright + TypeScript**: un gestor ficticio de programas de ingeniería de sistemas (programas, requisitos, verificación, no conformidades, documentos) pensado para ser automatizado. La testabilidad es un requisito funcional: todo elemento interactivo tiene nombre accesible y `data-testid` (de `packages/shared/src/testids.ts`; `testID` en la app móvil), el seed es determinista y cada alumno trabaja en su propio *tenant*.
 
-- Plan y backlog: [`docs/SIGPRO-plan.md`](docs/SIGPRO-plan.md) · Diseño: [`docs/design-handoff/`](docs/design-handoff/README.md)
+- Plan y backlog: [`docs/SIGPRO-plan.md`](docs/SIGPRO-plan.md) · Diseño: [`docs/design-system.md`](docs/design-system.md) (design system «1a Ciruela»; el handoff anterior queda como histórico en [`docs/design-handoff/`](docs/design-handoff/README.md))
 - Estado de la construcción: [`docs/STATUS.md`](docs/STATUS.md) · Decisiones: [`docs/DECISIONS.md`](docs/DECISIONS.md) · Cambios: [`docs/CHANGELOG.md`](docs/CHANGELOG.md)
 - **Para alumnos:** [`docs/GUIA-ALUMNO.md`](docs/GUIA-ALUMNO.md) · proyecto Playwright de referencia en [`examples/`](examples/README.md)
-- Capturas (claro/oscuro; web a 1440 y 390 px, móvil a 390 px): [`docs/screens/`](docs/screens)
+- Capturas (claro/oscuro; web a 1440 y 390 px, móvil a 390 px): no se versionan; se generan en local con `pnpm e2e:screens` y `pnpm e2e:mobile:screens` en `docs/screens/`
 
 ## Estado del proyecto
 
@@ -27,10 +27,10 @@ Cifras de la última pasada: **tests unitarios** shared 119 · web 114 · api 13
 | Ruta | Qué es |
 | --- | --- |
 | `apps/api` | NestJS + Prisma + PostgreSQL. JWT + roles, MFA simulado, OpenAPI en `/api/docs`, Socket.IO, `/api/admin/reset` y `/api/admin/chaos` |
-| `apps/web` | React 18 + Vite + Tailwind 4, tokens del design system como CSS variables, claro/oscuro, ES/EN, PWA |
-| `apps/mobile` | Expo SDK 58 + Expo Router (React 19): mismas rutas, mismo cliente y mismos ids que la web |
+| `apps/web` | React 18 + Vite + Tailwind 4, design system «1a Ciruela» (morado, Geist) como CSS variables, claro/oscuro, ES/EN, PWA |
+| `apps/mobile` | Expo SDK 58 + Expo Router (React 19): mismas rutas, mismo cliente y mismos ids que la web (conserva la paleta anterior: el rediseño Ciruela solo cubre la web) |
 | `packages/shared` | Tipos, esquemas Zod, cliente HTTP, i18n ES/EN y `testids.ts` |
-| `e2e` | Playwright: specs de humo de la web y del móvil, capturas y comparación visual con el handoff |
+| `e2e` | Playwright: specs de humo de la web y del móvil y capturas de pantalla |
 | `examples` | Proyecto Playwright + TypeScript de referencia para los alumnos (independiente del monorepo: `npm`, su propio `package.json`) |
 
 ## Módulos
@@ -39,7 +39,7 @@ Cifras de la última pasada: **tests unitarios** shared 119 · web 114 · api 13
 | --- | --- | --- |
 | `/login`, `/register`, `/forgot` | Acceso | `storageState`, MFA, bloqueo, formularios con 422 |
 | `/programs`, `/programs/:code`, `/programs/:code/edit` | Programas | Tablas, filtros, paginación, asistente de 3 pasos, edición con «Guardar» / «Guardar y cerrar» |
-| `/programs/:code/requirements` | Requisitos | Árbol `role="tree"`, estados por rol con confirmación, edición en línea, etiquetas con chips, editor `contenteditable`, drag & drop para reordenar, clic derecho, atajos, portapapeles, matriz, CSV |
+| `/programs/:code/requirements` | Requisitos | Métricas, árbol-tabla `role="tree"` (Pruebas n/m y NC por fila), chip de filtro por estado, vista Documento, flujo de aprobación con estados por rol y confirmación, edición en línea, etiquetas con chips, editor `contenteditable`, drag & drop para reordenar, clic derecho, atajos, portapapeles, matriz con resultados, CSV |
 | `/verification`, `/verification/:code` | Verificación | Casos de prueba, ejecución con radio, subida simple / múltiple / zona de arrastre, `getByAltText`, informe PDF |
 | `/documents`, `/documents/:id`, `/documents/:id/view` | Documentos | Clasificación por rol (403), `<iframe>` con `frameLocator`, `target="_blank"`, comparación de versiones, descargas |
 | `/audit` | Auditoría | Feed con scroll infinito (`role="feed"`, cursor), filtros por fecha, entidad y texto |
@@ -88,9 +88,8 @@ Usuarios demo (existen en cada tenant; `?tenant=alumno01` o el selector de `/lab
 | `pnpm seed` | Reinicia el seed de todos los tenants desde la CLI |
 | `pnpm e2e` | Specs de humo de la web (arranca API y web; `CI=true` sirve el build con `vite preview`) |
 | `pnpm e2e:mobile` | Specs de humo de la app móvil a 390 px (exportación estática en :8081; `MOBILE_SERVER=expo` usa `expo start --web`) |
-| `pnpm e2e:screens` · `pnpm e2e:mobile:screens` | Regeneran las capturas de `docs/screens/` (web / móvil) |
-| `pnpm --filter @sigpro/e2e compare` | Compara las pantallas con los prototipos del handoff (`e2e/.compare/`) |
-| `pnpm handoff` | Sirve `docs/design-handoff/` por HTTP (`npx serve`) para ver los prototipos |
+| `pnpm e2e:screens` · `pnpm e2e:mobile:screens` | Generan las capturas en `docs/screens/` (web / móvil); la carpeta está en `.gitignore` |
+| `pnpm handoff` | Sirve `docs/design-handoff/` por HTTP (`npx serve`) para ver los prototipos anteriores (histórico, ya no son la referencia visual) |
 | `node scripts/reset-all.mjs` | Reinicia todos los tenants (lo usa el Cron Job de Render) |
 
 La primera vez: `pnpm --filter @sigpro/e2e install:browsers`.

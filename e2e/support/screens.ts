@@ -19,13 +19,17 @@ export const capture = async (page: Page, name: string, theme: ThemeName): Promi
   const file = join(SCREENS_DIR, `${name}-${theme}-${width}.png`);
   // Deja terminar animaciones de entrada (toast, popover) antes de capturar
   await page.waitForTimeout(350);
-  // Ajusta el viewport a la altura del contenido: así tabbar y botón flotante (fixed/sticky) quedan al final de la captura
+  // Ajusta el viewport a la altura del contenido: así tabbar y botón flotante (fixed/sticky) quedan al final de la captura.
+  // Excepción: un menú o una lista desplegable abiertos se cierran al redimensionar la ventana (ActionMenu), y desde el
+  // rediseño Ciruela las páginas (con tarjetas de métricas) superan los 900 px de alto: en ese caso se captura solo el viewport.
   const original = page.viewportSize();
   const contentHeight = await page.evaluate(() => document.documentElement.scrollHeight);
-  if (original && contentHeight > original.height) await page.setViewportSize({ width: original.width, height: contentHeight });
+  const popoverOpen = await page.evaluate(() => document.querySelector('[role="menu"], [role="listbox"]') !== null);
+  const resize = Boolean(original) && contentHeight > (original?.height ?? 0) && !popoverOpen;
+  if (original && resize) await page.setViewportSize({ width: original.width, height: contentHeight });
   await page.waitForTimeout(150);
   await page.screenshot({ path: file });
-  if (original) await page.setViewportSize(original);
+  if (original && resize) await page.setViewportSize(original);
   return file;
 };
 

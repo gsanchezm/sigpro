@@ -18,9 +18,11 @@ Thumbs.db
 .claude/settings.local.json
 .vite/
 .superpowers/
-e2e/.compare/
 
 # Defectos plantados: solo para el instructor. El repositorio es público, así que NO se versiona (git add -f si es privado)
 docs/planted-bugs.md
 e2e/playwright-report-mobile/
 e2e/test-results-*/
+
+# Capturas de pantalla (pnpm e2e:screens / e2e:mobile:screens): se generan en local y no se versionan
+docs/screens/

@@ -1,5 +1,7 @@
 # Handoff: SIGPRO — Acceso + Programas
 
+> **Histórico.** Esta es la dirección visual anterior (gris-azul, IBM Plex, denso). La referencia vigente es el rediseño «1a Ciruela»: [`docs/design-system.md`](../design-system.md). Los tokens y medidas de abajo ya no se corresponden con la aplicación.
+
 ## Overview
 SIGPRO es un sistema de gestión de programas de ingeniería (programas, requisitos, verificación, NC). Este paquete cubre tres pantallas prototipadas: el **sistema de diseño**, **Acceso** (login, registro, MFA, recuperación, verificación) y **Programas** (listado + asistente de alta). Objetivo: interfaz técnica, densa, sin decoración, totalmente operable por teclado y automatizable con Playwright mediante `data-testid`.
 

@@ -1,6 +1,6 @@
 # SIGPRO — Estado de la construcción
 
-Última actualización: 2026-11-11 (auditoría y rediseño «Ciruela» fases 1–3 subidos a `origin/main`) · **Las 4 fases están construidas y desplegadas en Render** · el workflow de alumnos se ejecutó contra Render en verde
+Última actualización: 2026-11-12 (auditoría y rediseño «Ciruela» fases 1–4 en `origin/main` con el CI en verde; fase 5 en curso) · **Las 4 fases están construidas y desplegadas en Render** · el workflow de alumnos se ejecutó contra Render en verde
 
 Leyenda: `[x]` hecho · `[~]` en curso · `[ ]` pendiente
 
@@ -12,7 +12,7 @@ Detalle y decisiones en `docs/DECISIONS.md` («Rediseño visual «1a Ciruela»»
 - [x] **Fase 2 — componentes base.** e2e web 299/299
 - [x] **Fase 3 — Acceso y Programas** (métricas, filtros como chips, panel lateral de 380 px). Verificado por piezas: `programs-panel.spec.ts` 12/12, `programs-metrics-api.spec.ts`, unit/lint/typecheck. La suite completa no pudo ejecutarse en local (el equipo se quedó sin memoria); el CI de GitHub dio 311/312: la tarjeta «Programas» repetía el texto «12 activo» y `programs.spec` localiza el resumen de la tabla por él (strict mode, 2 elementos). Corregido con «activos: 12» (sin tocar el selector del spec); `programs.spec` + `programs-panel.spec` 47/47 en local
 - [x] **Fase 4 — Requisitos** (métricas, árbol-tabla con Pruebas n/m y NC, chip de estado, vista Documento, panel con flujo de aprobación y trazabilidad, matriz con resultados). `requirements*.spec` + `requirements-redesign.spec` en verde en local; la suite completa la valida el CI
-- [ ] **Fase 5 — documentación y cierre** (regenerar `docs/screens/`, retirar `compare`, suite completa)
+- [~] **Fase 5 — documentación y cierre.** Hecho: capturas web regeneradas (374 más 4 nuevas de `requisitos-documento`) y **desversionadas** (`docs/screens/` pasa a `.gitignore`; el historial anterior conserva las viejas), `compare` eliminado, README/design-system/STATUS/DECISIONS/`CLAUDE.md` al día. Pendiente: la suite completa en el CI de GitHub tras el push (en local no cabe) y la decisión sobre `apps/mobile`. La fase 4 ya la validó el CI: 331 e2e web + 21 móvil
 - [ ] **Pendiente de decidir:** `apps/mobile` conserva la paleta anterior
 
 ## Auditoría de código (2026-11-11)
@@ -242,7 +242,7 @@ Cada tarea termina con `pnpm lint && pnpm typecheck && pnpm test` en verde y un 
 ## Resumen de la fase 1
 
 - **API** (NestJS + Prisma): 13 modelos con claves compuestas `(tenant_id, …)`; seed determinista (`demo` + `alumno01…25`: 24 programas, 40 requisitos, 25 casos de prueba, 12 NC y 6 proveedores por tenant); JWT + refresh, MFA en dos pasos, bloqueo a 5 intentos, registro/recuperar/SSO 501, permisos por rol; programas con filtros, orden, paginación de 10, alta con 422, duplicar, archivar, borrar y CSV; `/api/admin/reset` y `/api/admin/chaos`; AuditLog en cada mutación; OpenAPI en `/api/docs`.
-- **Web** (React 18 + Vite + Tailwind 4): Acceso y Programas reproducen el handoff (≤ 2,2 % de píxeles distintos en 50 escenarios claro/oscuro a 1440 y 390 px), `/lab`, ES/EN, PWA, estados de carga/vacío/error.
+- **Web** (React 18 + Vite + Tailwind 4): Acceso y Programas reproducían el handoff (≤ 2,2 % de píxeles distintos en 50 escenarios; medición histórica: el handoff y su comparación se retiraron con el rediseño «1a Ciruela»), `/lab`, ES/EN, PWA, estados de carga/vacío/error.
 - **Calidad:** `pnpm lint && pnpm typecheck && pnpm test` en verde (118 tests unitarios: 47 shared, 39 api, 32 web) y 70 specs e2e de humo (19 Acceso, 35 + 7 Programas, 9 /lab), también con `CI=true pnpm e2e` contra el build de producción. 88 capturas en `docs/screens/`.
 - **Despliegue:** `render.yaml`, cron `scripts/reset-all.mjs` y workflow de GitHub Actions, escritos y validados en local.
 
@@ -306,10 +306,9 @@ pnpm dev                              # API :3000 (siembra los tenants al arranc
 | Varias ejecuciones de Playwright a la vez | `E2E_SKIP_GLOBAL_RESET=1 pnpm --filter @sigpro/e2e exec playwright test --project=chromium tests/<spec> --output=<dir propio>` (con tenants distintos) |
 | Capturas (`docs/screens/`) | `pnpm e2e:screens` (todas) · `pnpm --filter @sigpro/e2e exec playwright test --project=screens tests/screens-nc.spec.ts` (un módulo) |
 | Defectos plantados / simulador | `PLANTED_BUGS=false` deja la app limpia · `SIMULATOR_MS=0` apaga el simulador de misión (variables de la API) |
-| Comparar con el handoff | `pnpm --filter @sigpro/e2e compare` (`COMPARE_ONLY=programas` filtra) |
 | Reiniciar todos los tenants | `pnpm seed` (CLI) · `node scripts/reset-all.mjs` (API, con `ADMIN_KEY`) |
 | App móvil | `pnpm --filter mobile web` (Expo web :8081) · `pnpm e2e:mobile` (specs; `MOBILE_SERVER=expo` usa `expo start --web`) · `pnpm e2e:mobile:screens` (capturas a 390 px) |
 | Proyecto de los alumnos | `cd examples && npm install && npm run reset && npm test` (ver `examples/README.md`) |
-| Ver los prototipos | `pnpm handoff` |
+| Ver los prototipos anteriores (histórico) | `pnpm handoff` |
 
 URLs: web <http://localhost:5173> · `/lab` <http://localhost:5173/lab> · API <http://localhost:3000/api> · Swagger <http://localhost:3000/api/docs> · app móvil (Expo web) <http://localhost:8081>.

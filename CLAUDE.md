@@ -5,10 +5,10 @@ Aplicación ficticia de gestión de programas de ingeniería de sistemas (progra
 ## Fuentes de verdad (léelas antes de tocar código)
 
 1. `docs/SIGPRO-plan.md` — concepto, arquitectura, modelo de datos, backlog por módulos, catálogo de componentes UI, cobertura de locators, testabilidad, Render, plan por fases.
-2. `docs/design-handoff/README.md` — design system (tokens, tipografía, componentes) y especificación pixel-perfect de Acceso y Programas. Los `.dc.html` son prototipos de referencia: se sirven por HTTP (`npx serve docs/design-handoff`), no se copian.
+2. `docs/design-system.md` — design system vigente «1a Ciruela» (tokens, tipografía, forma, componentes y pantallas rediseñadas). `docs/design-handoff/` (gris-azul, IBM Plex) queda como histórico: los `.dc.html` se sirven por HTTP (`npx serve docs/design-handoff`), ya no son la referencia visual.
 3. `packages/shared/src/testids.ts` — ids de prueba ya acordados. Se amplía, nunca se renombra.
 
-Si el plan y el handoff se contradicen, gana el handoff en lo visual y el plan en lo funcional. Anota la decisión en `docs/DECISIONS.md`.
+Si el plan y el design system se contradicen, gana `docs/design-system.md` en lo visual y el plan en lo funcional. Anota la decisión en `docs/DECISIONS.md`.
 
 ## Stack
 
@@ -41,7 +41,7 @@ Si el plan y el handoff se contradicen, gana el handoff en lo visual y el plan e
 
 1. `pnpm lint && pnpm typecheck && pnpm test` en verde.
 2. Un spec de humo en `e2e/` (Playwright) que recorre el módulo usando `getByRole`/`getByLabel` primero y `getByTestId` como respaldo.
-3. Captura de pantalla en claro y oscuro a 1440 y 390 px guardada en `docs/screens/`.
+3. Si el módulo tiene pantalla, su spec de capturas (`pnpm e2e:screens`: claro y oscuro a 1440 y 390 px) pasa. Las imágenes caen en `docs/screens/`, que **no se versiona** (ignorada por git: pesan decenas de MB y cambian a nivel de píxel en cada regeneración).
 4. `docs/CHANGELOG.md` actualizado con una línea.
 5. Commit.
 

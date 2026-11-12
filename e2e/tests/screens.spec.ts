@@ -173,9 +173,16 @@ for (const theme of THEMES) {
         await capture(page, 'requisitos-filtro', theme);
         await page.getByRole('searchbox', { name: 'Buscar requisitos' }).fill('');
 
+        // El aviso «Estado actualizado» se cierra a los 3 s: se espera para que no tape la matriz ni el documento
+        await page.getByTestId('toast-ok').waitFor({ state: 'hidden' });
         await page.getByRole('tab', { name: 'Matriz de trazabilidad' }).click();
         await page.getByRole('table', { name: 'Matriz de trazabilidad' }).waitFor();
         await capture(page, 'requisitos-matriz', theme);
+
+        // Vista «Documento» (rediseño Ciruela, fase 4): secciones numeradas con margen de código
+        await page.getByRole('tab', { name: 'Documento' }).click();
+        await page.getByTestId('requirements-document').waitFor();
+        await capture(page, 'requisitos-documento', theme);
 
         await page.goto('/programs/PRG-004/requirements');
         await page.getByTestId('requirements-empty').waitFor();

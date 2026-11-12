@@ -6,7 +6,6 @@
   "scripts": {
     "e2e": "playwright test --project=chromium",
     "screens": "playwright test --project=screens",
-    "compare": "playwright test --project=compare",
     "mobile": "playwright test -c playwright.mobile.config.ts --project=mobile",
     "mobile:screens": "playwright test -c playwright.mobile.config.ts --project=mobile-screens",
     "install:browsers": "playwright install chromium",
@@ -16,9 +15,6 @@
   "devDependencies": {
     "@playwright/test": "1.65.0",
     "@types/node": "20.19.43",
-    "typescript": "5.9.3",
-    "@types/pngjs": "6.0.5",
-    "pixelmatch": "8.0.0",
-    "pngjs": "7.0.0"
+    "typescript": "5.9.3"
   }
 }
