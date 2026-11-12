@@ -44,6 +44,12 @@ export const TraceabilityMatrix = ({ programCode, role, onChanged }: { programCo
     );
   }
 
+  const lastResult = new Map(data.testCases.map((testCase) => [testCase.code, testCase.lastResult]));
+  /** Texto del resultado de la última ejecución del caso (el mismo vocabulario que Verificación). */
+  const resultLabel = (testCaseCode: string): string => {
+    const result = lastResult.get(testCaseCode);
+    return result ? t('verificacion', `r_${result}`) : t('verificacion', 'neverRun');
+  };
   const linked = new Set(data.links.map((link) => `${link.requirementCode}|${link.testCaseCode}`));
   const coverage = new Map(data.requirements.map((requirement) => [requirement.code, data.links.filter((link) => link.requirementCode === requirement.code).length]));
   const covered = [...coverage.values()].filter((count) => count > 0).length;
@@ -67,6 +73,28 @@ export const TraceabilityMatrix = ({ programCode, role, onChanged }: { programCo
     <div className="flex flex-col gap-2">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <p className="m-0 text-[12.5px] text-fg-2">{t('requisitos', 'matrixHelp')}</p>
+        <ul aria-label={t('requisitos', 'matrixKey')} className="m-0 flex list-none flex-wrap gap-x-3 gap-y-1 p-0 text-[12px] text-fg-2">
+          {(
+            [
+              ['pass', '✓', 'r_pass'],
+              ['fail', '✕', 'r_fail'],
+              ['blocked', '!', 'r_blocked'],
+            ] as const
+          ).map(([result, glyph, key]) => (
+            <li key={result} data-result={result} className="flex items-center gap-1">
+              <span aria-hidden="true" className={`grid h-5 w-6 place-items-center rounded-ctl-sm text-[12px] font-semibold ${result === 'pass' ? 'bg-ok-soft text-ok' : result === 'fail' ? 'bg-danger-soft text-danger' : 'bg-warn-soft text-warn'}`}>
+                {glyph}
+              </span>
+              {t('verificacion', key)}
+            </li>
+          ))}
+          <li data-result="none" className="flex items-center gap-1">
+            <span aria-hidden="true" className="grid h-5 w-6 place-items-center rounded-ctl-sm border border-dashed border-border-strong text-[12px] font-semibold text-fg-3">
+              ·
+            </span>
+            {t('verificacion', 'neverRun')}
+          </li>
+        </ul>
         <p data-testid={REQUISITOS_TESTIDS.MATRIX_LEGEND} className="m-0 font-mono text-[12px] text-fg-2" aria-live="polite">
           {t('requisitos', 'matrixCoverage', { covered, total: data.requirements.length })}
         </p>
@@ -105,17 +133,21 @@ export const TraceabilityMatrix = ({ programCode, role, onChanged }: { programCo
                   </th>
                   {data.testCases.map((testCase) => {
                     const checked = linked.has(`${requirement.code}|${testCase.code}`);
+                    // Con enlace, el resultado del caso; sin enlace, la celda queda en --surface-2 (sin relación)
+                    const result = checked ? (lastResult.get(testCase.code) ?? 'none') : 'unlinked';
+                    const description = t('requisitos', 'matrixCellResult', { requirement: requirement.code, testCase: testCase.code, result: checked ? resultLabel(testCase.code) : t('requisitos', 'matrixNoLink') });
                     return (
                       <td key={testCase.code} className="border-l border-border px-2 py-1.5 text-center">
                         <input
                           type="checkbox"
                           data-testid={REQUISITOS_DYNAMIC_TESTIDS.MATRIX_CELL(requirement.code, testCase.code)}
-                          aria-label={t('requisitos', 'matrixCell', { requirement: requirement.code, testCase: testCase.code })}
+                          aria-label={description}
+                          data-result={result}
                           checked={checked}
                           disabled={!canEdit}
-                          title={canEdit ? undefined : t('requisitos', 'roleNoEdit')}
+                          title={canEdit ? description : t('requisitos', 'roleNoEdit')}
                           onChange={(event) => void toggle(requirement.code, testCase.code, event.target.checked)}
-                          className="size-4 cursor-pointer accent-accent disabled:cursor-not-allowed"
+                          className="matrix-box"
                         />
                       </td>
                     );

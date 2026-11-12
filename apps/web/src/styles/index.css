@@ -769,6 +769,197 @@ a:hover {
   outline-offset: -2px;
 }
 
+/* ---- Requisitos (fase 4) ----
+   Árbol-tabla: cada fila es una rejilla (Requisito · Estado · Pruebas · NC · menú). El contenedor consulta su PROPIA anchura:
+   con el panel de detalle abierto la tabla se estrecha y «Pruebas» y «NC» pasan al panel de trazabilidad. */
+.req-tree {
+  container-type: inline-size;
+}
+.req-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 124px 72px 104px 32px;
+  align-items: center;
+  column-gap: 12px;
+}
+.req-row {
+  min-height: var(--row-h);
+}
+.req-head {
+  padding: 10px 12px 10px 8px;
+  border-bottom: 1px solid var(--border);
+  color: var(--text-3);
+  font-size: 12px;
+  font-weight: 500;
+}
+.req-grid > .badge {
+  justify-self: start;
+}
+@container (max-width: 820px) {
+  .req-tags {
+    display: none;
+  }
+}
+@container (max-width: 640px) {
+  .req-grid {
+    grid-template-columns: minmax(0, 1fr) 124px 32px;
+  }
+  .req-col-extra {
+    display: none;
+  }
+}
+
+/* Flujo de aprobación del panel: pasos con punto, línea y estado (hecho / actual / futuro) */
+.flow {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.flow-step {
+  position: relative;
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr);
+  column-gap: 12px;
+  padding-bottom: 16px;
+}
+.flow-step:last-child {
+  padding-bottom: 0;
+}
+.flow-step:not(:last-child)::before {
+  content: '';
+  position: absolute;
+  top: 24px;
+  bottom: 4px;
+  left: 9px;
+  width: 2px;
+  background: var(--border);
+}
+.flow-step[data-status='done']:not(:last-child)::before {
+  background: var(--accent);
+}
+.flow-dot {
+  display: grid;
+  width: 20px;
+  height: 20px;
+  place-items: center;
+  border: 2px solid var(--border-strong);
+  border-radius: 50%;
+  background: var(--surface);
+  color: var(--text-3);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1;
+}
+.flow-step[data-status='done'] .flow-dot {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--on-accent);
+}
+.flow-step[data-status='current'] .flow-dot {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 4px var(--accent-soft);
+  color: var(--accent);
+}
+.flow-name {
+  color: var(--text-3);
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 20px;
+}
+.flow-step[data-status='done'] .flow-name {
+  color: var(--text-2);
+}
+.flow-step[data-status='current'] .flow-name {
+  color: var(--text);
+  font-weight: 600;
+}
+
+/* Matriz de trazabilidad: la casilla nativa sigue siendo el control; se pinta con el resultado de la última ejecución.
+   ✓ superado (ok) · ✕ fallido (danger) · ! bloqueado (warn) · · sin ejecutar (discontinua) · sin relación (--surface-2) */
+.matrix-box {
+  display: inline-grid;
+  width: 30px;
+  height: 24px;
+  margin: 0;
+  place-items: center;
+  appearance: none;
+  border: 1px solid transparent;
+  border-radius: var(--radius-ctl-sm);
+  background: var(--surface-2);
+  color: var(--text-3);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1;
+  cursor: pointer;
+}
+.matrix-box:hover:not(:disabled) {
+  border-color: var(--border-strong);
+}
+.matrix-box:disabled {
+  cursor: not-allowed;
+}
+.matrix-box:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.matrix-box:checked::after {
+  content: '·';
+}
+.matrix-box:checked[data-result='none'] {
+  border: 1px dashed var(--border-strong);
+  background: transparent;
+}
+.matrix-box:checked[data-result='pass'] {
+  background: var(--ok-soft);
+  color: var(--ok);
+}
+.matrix-box:checked[data-result='pass']::after {
+  content: '✓';
+}
+.matrix-box:checked[data-result='fail'] {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+.matrix-box:checked[data-result='fail']::after {
+  content: '✕';
+}
+.matrix-box:checked[data-result='blocked'] {
+  background: var(--warn-soft);
+  color: var(--warn);
+}
+.matrix-box:checked[data-result='blocked']::after {
+  content: '!';
+}
+
+/* Vista Documento: secciones numeradas, el código en el margen izquierdo y el estado a la derecha */
+.doc-section {
+  display: grid;
+  grid-template-columns: 88px minmax(0, 1fr) auto;
+  column-gap: 16px;
+  padding: 16px 0;
+  border-bottom: 1px solid var(--border);
+}
+.doc-section:last-child {
+  border-bottom: 0;
+}
+.doc-margin {
+  padding-top: 3px;
+  color: var(--text-3);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.4;
+}
+@media (max-width: 639px) {
+  .doc-section {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+  .doc-margin {
+    grid-column: 1 / -1;
+    padding-top: 0;
+  }
+}
+
 .dropzone[data-over='true'] {
   border-color: var(--accent);
   background: var(--accent-soft);

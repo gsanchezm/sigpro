@@ -1,4 +1,7 @@
+import type { RequirementNcRef, RequirementTestRef } from './api-types';
 import type { RequirementState, Role } from './domain';
+import { percentOf } from './mission';
+import { isNcOpen } from './nc';
 import { can, type Permission } from './permissions';
 
 // Lógica pura del módulo Requisitos: transiciones de estado, árbol y reordenación entre hermanos.
@@ -134,4 +137,70 @@ export const withAncestors = <T extends TreeItem>(items: readonly T[], matches: 
   };
   const keep = new Set(items.filter(matches).flatMap(path));
   return items.filter((item) => keep.has(item.code));
+};
+
+// --- Vista: flujo de aprobación, pruebas, NC, métricas y documento ---------
+
+/** Pasos del flujo de aprobación, en orden. */
+export const FLOW_STATES: readonly RequirementState[] = ['draft', 'approved', 'verified', 'validated'];
+
+export type FlowStepStatus = 'done' | 'current' | 'future';
+
+/** Estado de un paso del flujo respecto al estado actual del requisito: los anteriores están hechos, el actual en curso. */
+export const flowStepStatus = (current: RequirementState, step: RequirementState): FlowStepStatus => {
+  const here = FLOW_STATES.indexOf(current);
+  const there = FLOW_STATES.indexOf(step);
+  return there < here ? 'done' : there === here ? 'current' : 'future';
+};
+
+/** Pruebas enlazadas a un requisito y cuántas pasan en su última ejecución («Pruebas n/m»). */
+export const testsSummary = (requirement: { readonly tests: readonly RequirementTestRef[] }): { readonly total: number; readonly passed: number } => ({
+  total: requirement.tests.length,
+  passed: requirement.tests.filter((test) => test.lastResult === 'pass').length,
+});
+
+/** NC abiertas (ni cerradas ni rechazadas) de un requisito, por código. */
+export const openNcsOf = (requirement: { readonly ncs: readonly RequirementNcRef[] }): readonly RequirementNcRef[] =>
+  requirement.ncs.filter((nc) => isNcOpen(nc.state)).sort((a, b) => a.code.localeCompare(b.code));
+
+export interface RequirementMetrics {
+  readonly total: number;
+  /** Requisitos con al menos un caso de prueba enlazado (la misma cobertura que la leyenda de la matriz). */
+  readonly covered: number;
+  readonly coveragePercent: number;
+  /** Requisitos en borrador: pendientes de aprobación. */
+  readonly pending: number;
+  /** NC abiertas distintas (una misma NC puede colgar de varios requisitos). */
+  readonly ncOpen: number;
+  /** Requisitos con alguna NC abierta. */
+  readonly ncRequirements: number;
+}
+
+/** Las cuatro cifras de la cabecera de Requisitos; salen de la lista ya cargada (sin peticiones). */
+export const requirementMetrics = (
+  items: readonly { readonly state: RequirementState; readonly tests: readonly RequirementTestRef[]; readonly ncs: readonly RequirementNcRef[] }[],
+): RequirementMetrics => {
+  const covered = items.filter((item) => item.tests.length > 0).length;
+  const open = items.map(openNcsOf);
+  return {
+    total: items.length,
+    covered,
+    coveragePercent: percentOf(covered, items.length),
+    pending: items.filter((item) => item.state === 'draft').length,
+    ncOpen: new Set(open.flatMap((list) => list.map((nc) => nc.code))).size,
+    ncRequirements: open.filter((list) => list.length > 0).length,
+  };
+};
+
+/** Numeración jerárquica en orden de lectura (1, 1.1, 1.2, 2…) para la vista Documento. */
+export const sectionNumbers = <T extends TreeItem>(tree: readonly TreeNode<T>[]): ReadonlyMap<string, string> => {
+  const entries: [string, string][] = [];
+  const walk = (nodes: readonly TreeNode<T>[], prefix: string): void =>
+    nodes.forEach((node, index) => {
+      const number = prefix === '' ? String(index + 1) : `${prefix}.${index + 1}`;
+      entries.push([node.item.code, number]);
+      walk(node.children, number);
+    });
+  walk(tree, '');
+  return new Map(entries);
 };

@@ -1,6 +1,7 @@
 import {
   ApiError,
   DETALLE_TESTIDS,
+  FLOW_STATES,
   PROGRAMAS_TESTIDS,
   REQUIREMENTS_CSV_FILENAME,
   REQUISITOS_TESTIDS,
@@ -33,15 +34,29 @@ import { useI18n } from '../../state/i18n';
 import { useToast } from '../../state/toast';
 import { ActionMenu, type MenuItemSpec, type MenuPoint } from '../../ui/ActionMenu';
 import { ConfirmDialog } from '../../ui/ConfirmDialog';
+import { FilterChip } from '../../ui/FilterChip';
 import { DownloadIcon, SearchIcon } from '../../ui/icons';
 import { NewRequirementDialog } from './NewRequirementDialog';
 import { RequirementDetail } from './RequirementDetail';
+import { RequirementsDocument } from './RequirementsDocument';
+import { RequirementsMetrics } from './RequirementsMetrics';
 import { RequirementsTree } from './RequirementsTree';
 import { TraceabilityMatrix } from './TraceabilityMatrix';
 import { useProgramOptions, useRequirementsData } from './useRequirementsData';
 
-type Tab = 'tree' | 'matrix';
-const TABS: readonly Tab[] = ['tree', 'matrix'];
+type Tab = 'tree' | 'document' | 'matrix';
+const TABS: readonly Tab[] = ['tree', 'document', 'matrix'];
+const TAB_TESTIDS: Readonly<Record<Tab, string>> = {
+  tree: REQUISITOS_TESTIDS.REQUIREMENTS_TAB_TREE,
+  document: REQUISITOS_TESTIDS.REQUIREMENTS_TAB_DOCUMENT,
+  matrix: REQUISITOS_TESTIDS.REQUIREMENTS_TAB_MATRIX,
+};
+const PANEL_TESTIDS: Readonly<Record<Tab, string>> = {
+  tree: REQUISITOS_TESTIDS.REQUIREMENTS_PANEL_TREE,
+  document: REQUISITOS_TESTIDS.REQUIREMENTS_PANEL_DOCUMENT,
+  matrix: REQUISITOS_TESTIDS.REQUIREMENTS_PANEL_MATRIX,
+};
+const TAB_LABELS: Readonly<Record<Tab, 'tabTree' | 'tabDocument' | 'tabMatrix'>> = { tree: 'tabTree', document: 'tabDocument', matrix: 'tabMatrix' };
 const NO_CODES: ReadonlySet<string> = new Set();
 const SKELETON_DELAY_MS = 250;
 
@@ -71,6 +86,7 @@ export const RequirementsPage = () => {
   const programs = useProgramOptions();
   const [tab, setTab] = useState<Tab>('tree');
   const [query, setQuery] = useState('');
+  const [stateFilter, setStateFilter] = useState<RequirementState | ''>('');
   const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(NO_CODES);
   const [selected, setSelected] = useState<string | null>(null);
   const [renaming, setRenaming] = useState<string | null>(null);
@@ -94,6 +110,7 @@ export const RequirementsPage = () => {
     setSelected(null);
     setRenaming(null);
     setQuery('');
+    setStateFilter('');
     setCollapsed(NO_CODES);
     setMenu(null);
     setTab('tree');
@@ -108,12 +125,16 @@ export const RequirementsPage = () => {
   }, [items, searchParams, setSearchParams]);
 
   const needle = query.trim().toLowerCase();
+  const filtering = needle !== '' || stateFilter !== '';
   const filtered = useMemo(
-    () => (needle ? withAncestors(items, (item) => item.code.toLowerCase().includes(needle) || item.title.toLowerCase().includes(needle)) : items),
-    [items, needle],
+    () =>
+      filtering
+        ? withAncestors(items, (item) => (stateFilter === '' || item.state === stateFilter) && (needle === '' || item.code.toLowerCase().includes(needle) || item.title.toLowerCase().includes(needle)))
+        : items,
+    [items, needle, stateFilter, filtering],
   );
   // Con un filtro activo se despliega todo para ver las coincidencias
-  const rows = useMemo(() => visibleRows(buildTree(filtered), needle ? NO_CODES : collapsed), [filtered, needle, collapsed]);
+  const rows = useMemo(() => visibleRows(buildTree(filtered), filtering ? NO_CODES : collapsed), [filtered, filtering, collapsed]);
 
   const fail = useCallback((failure: unknown) => toast.push('danger', t('common', 'genericError'), formatTrace(failure) || t('common', 'networkError')), [toast, t]);
   const applyUpdated = (updated: RequirementDto) => replaceItems(items.map((item) => (item.code === updated.code ? updated : item)));
@@ -174,6 +195,7 @@ export const RequirementsPage = () => {
     setNewFor(null);
     setTab('tree');
     setQuery('');
+    setStateFilter('');
     // El nuevo requisito debe verse: se despliegan sus ancestros y se abre su detalle
     const ancestors = new Set<string>();
     for (let parent = created.parentCode; parent; parent = items.find((item) => item.code === parent)?.parentCode ?? null) ancestors.add(parent);
@@ -398,8 +420,10 @@ export const RequirementsPage = () => {
         </div>
       </div>
 
-      <div className="flex flex-col">
-        <div role="tablist" aria-label={t('requisitos', 'tabsLabel')} data-testid={REQUISITOS_TESTIDS.REQUIREMENTS_TABS} className="flex gap-1 border-b border-border">
+      <RequirementsMetrics items={items} loading={data === null} />
+
+      <div className="flex flex-col gap-3">
+        <div role="tablist" aria-label={t('requisitos', 'tabsLabel')} data-testid={REQUISITOS_TESTIDS.REQUIREMENTS_TABS} className="segmented self-start">
           {TABS.map((key) => (
             <button
               key={key}
@@ -409,22 +433,22 @@ export const RequirementsPage = () => {
               aria-selected={tab === key}
               aria-controls={`requirements-panel-${key}`}
               tabIndex={tab === key ? 0 : -1}
-              data-testid={key === 'tree' ? REQUISITOS_TESTIDS.REQUIREMENTS_TAB_TREE : REQUISITOS_TESTIDS.REQUIREMENTS_TAB_MATRIX}
+              data-testid={TAB_TESTIDS[key]}
               onClick={() => setTab(key)}
               onKeyDown={(event) => onTabKey(event, key)}
-              className={`-mb-px cursor-pointer border-0 border-b-2 bg-transparent px-3.5 py-2 text-[12.5px] ${tab === key ? 'border-accent font-medium text-fg' : 'border-transparent text-fg-2 hover:text-fg'}`}
+              className="segmented-opt"
             >
-              {key === 'tree' ? t('requisitos', 'tabTree') : t('requisitos', 'tabMatrix')}
+              {t('requisitos', TAB_LABELS[key])}
             </button>
           ))}
         </div>
 
         {tab === 'matrix' ? (
-          <div role="tabpanel" id="requirements-panel-matrix" aria-labelledby="requirements-tab-matrix" data-testid={REQUISITOS_TESTIDS.REQUIREMENTS_PANEL_MATRIX} className="mt-3">
+          <div role="tabpanel" id="requirements-panel-matrix" aria-labelledby="requirements-tab-matrix" data-testid={PANEL_TESTIDS.matrix}>
             <TraceabilityMatrix programCode={programCode} role={role} onChanged={reload} />
           </div>
         ) : (
-          <div role="tabpanel" id="requirements-panel-tree" aria-labelledby="requirements-tab-tree" data-testid={REQUISITOS_TESTIDS.REQUIREMENTS_PANEL_TREE} className="mt-3 flex flex-col gap-3">
+          <div role="tabpanel" id={`requirements-panel-${tab}`} aria-labelledby={`requirements-tab-${tab}`} data-testid={PANEL_TESTIDS[tab]} className="flex flex-col gap-3">
             <div className="flex flex-wrap items-center gap-2">
               <div className="relative min-w-[200px] flex-1 sm:max-w-[360px]">
                 <SearchIcon size={13} className="pointer-events-none absolute top-[10px] left-[9px] text-fg-3" />
@@ -438,24 +462,69 @@ export const RequirementsPage = () => {
                   className="input input-filter !h-8 pl-7"
                 />
               </div>
-              <button
-                type="button"
-                data-testid={REQUISITOS_TESTIDS.REQUIREMENTS_EXPAND_ALL}
-                disabled={parents.size === 0}
-                onClick={() => setCollapsed(NO_CODES)}
-                className="btn btn-secondary !h-8 !px-3"
-              >
-                {t('requisitos', 'expandAll')}
-              </button>
-              <button
-                type="button"
-                data-testid={REQUISITOS_TESTIDS.REQUIREMENTS_COLLAPSE_ALL}
-                disabled={parents.size === 0}
-                onClick={() => setCollapsed(new Set(parents))}
-                className="btn btn-secondary !h-8 !px-3"
-              >
-                {t('requisitos', 'collapseAll')}
-              </button>
+              <div role="group" aria-label={t('requisitos', 'filtersLabel')} data-testid={REQUISITOS_TESTIDS.REQUIREMENTS_FILTERS} className="flex flex-wrap items-center gap-2">
+                <FilterChip
+                  active={stateFilter !== ''}
+                  caret
+                  clear={
+                    stateFilter === ''
+                      ? undefined
+                      : { label: t('requisitos', 'removeFilter', { value: t('requisitos', `st_${stateFilter}`) }), testId: REQUISITOS_TESTIDS.REQUIREMENTS_FILTER_STATE_CLEAR, onClear: () => setStateFilter('') }
+                  }
+                >
+                  <label htmlFor="requirements-filter-state" className="sr-only">
+                    {t('requisitos', 'filterState')}
+                  </label>
+                  <select
+                    id="requirements-filter-state"
+                    data-testid={REQUISITOS_TESTIDS.REQUIREMENTS_FILTER_STATE}
+                    value={stateFilter}
+                    onChange={(event) => setStateFilter(event.target.value as RequirementState | '')}
+                  >
+                    <option value="">+ {t('requisitos', 'filterState')}</option>
+                    {FLOW_STATES.map((state) => (
+                      <option key={state} value={state}>
+                        {t('requisitos', `st_${state}`)}
+                      </option>
+                    ))}
+                  </select>
+                </FilterChip>
+                {filtering ? (
+                  <button
+                    type="button"
+                    data-testid={REQUISITOS_TESTIDS.REQUIREMENTS_FILTERS_CLEAR}
+                    onClick={() => {
+                      setQuery('');
+                      setStateFilter('');
+                    }}
+                    className="btn btn-ghost btn-sm !text-accent hover:!bg-accent-soft"
+                  >
+                    {t('requisitos', 'clearFilters')}
+                  </button>
+                ) : null}
+              </div>
+              {tab === 'tree' ? (
+                <>
+                  <button
+                    type="button"
+                    data-testid={REQUISITOS_TESTIDS.REQUIREMENTS_EXPAND_ALL}
+                    disabled={parents.size === 0}
+                    onClick={() => setCollapsed(NO_CODES)}
+                    className="btn btn-secondary !h-8 !px-3"
+                  >
+                    {t('requisitos', 'expandAll')}
+                  </button>
+                  <button
+                    type="button"
+                    data-testid={REQUISITOS_TESTIDS.REQUIREMENTS_COLLAPSE_ALL}
+                    disabled={parents.size === 0}
+                    onClick={() => setCollapsed(new Set(parents))}
+                    className="btn btn-secondary !h-8 !px-3"
+                  >
+                    {t('requisitos', 'collapseAll')}
+                  </button>
+                </>
+              ) : null}
               <span data-testid={REQUISITOS_TESTIDS.REQUIREMENTS_COUNT} aria-live="polite" className="ml-auto font-mono text-[12px] text-fg-2">
                 {data ? t('requisitos', 'count', { shown: filtered.length, total: items.length }) : '…'}
               </span>
@@ -500,6 +569,8 @@ export const RequirementsPage = () => {
                     <div className="font-medium">{t('requisitos', 'noMatchTitle')}</div>
                     <div className="text-[12.5px] text-fg-2">{t('requisitos', 'noMatchBody')}</div>
                   </div>
+                ) : tab === 'document' ? (
+                  <RequirementsDocument items={filtered} selected={selected} onOpen={setSelected} />
                 ) : (
                   <RequirementsTree
                     rows={rows}

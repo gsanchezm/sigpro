@@ -383,6 +383,23 @@ export const REQUISITOS_TESTIDS = {
   MATRIX_TABLE: 'matrix-table',
   MATRIX_EMPTY: 'matrix-empty',
   MATRIX_LEGEND: 'matrix-legend',
+  // Rediseño «Ciruela», fase 4
+  REQUIREMENTS_TAB_DOCUMENT: 'requirements-tab-document',
+  REQUIREMENTS_PANEL_DOCUMENT: 'requirements-panel-document',
+  REQUIREMENTS_METRICS: 'requirements-metrics',
+  REQUIREMENTS_METRIC_TOTAL: 'requirements-metric-total',
+  REQUIREMENTS_METRIC_COVERAGE: 'requirements-metric-coverage',
+  REQUIREMENTS_METRIC_PENDING: 'requirements-metric-pending',
+  REQUIREMENTS_METRIC_NC: 'requirements-metric-nc',
+  REQUIREMENTS_FILTERS: 'requirements-filters',
+  REQUIREMENTS_FILTER_STATE: 'requirements-filter-state',
+  REQUIREMENTS_FILTER_STATE_CLEAR: 'requirements-filter-state-clear',
+  REQUIREMENTS_FILTERS_CLEAR: 'requirements-filters-clear',
+  REQUIREMENTS_TREE_HEADER: 'requirements-tree-header',
+  REQUIREMENT_FLOW: 'requirement-flow',
+  REQUIREMENT_TRACE: 'requirement-trace',
+  REQUIREMENT_TRACE_NCS: 'requirement-trace-ncs',
+  REQUIREMENTS_DOCUMENT: 'requirements-document',
 } as const;
 
 export const REQUISITOS_DYNAMIC_TESTIDS = {
@@ -401,6 +418,16 @@ export const REQUISITOS_DYNAMIC_TESTIDS = {
   MATRIX_ROW: (requirement: string) => `matrix-row-${requirement}`,
   /** matrix-cell-REQ-017-TC-017 */
   MATRIX_CELL: (requirement: string, testCase: string) => `matrix-cell-${requirement}-${testCase}`,
+  /** Celdas de «Pruebas» y «NC» de cada fila del árbol, el paso del flujo, y la trazabilidad del panel */
+  REQUIREMENT_ROW_TESTS: (code: string) => `requirement-row-tests-${code}`,
+  REQUIREMENT_ROW_NC: (code: string) => `requirement-row-nc-${code}`,
+  REQUIREMENT_FLOW_STEP: (state: string) => `requirement-flow-step-${state}`,
+  REQUIREMENT_TRACE_TEST: (code: string) => `requirement-trace-test-${code}`,
+  REQUIREMENT_TRACE_NC: (code: string) => `requirement-trace-nc-${code}`,
+  REQUIREMENT_TRACE_NC_BADGE: (code: string) => `requirement-trace-nc-badge-${code}`,
+  /** Vista Documento: la sección de un requisito y su botón de apertura */
+  DOC_SECTION: (code: string) => `requirement-doc-${code}`,
+  DOC_OPEN: (code: string) => `requirement-doc-open-${code}`,
 } as const;
 
 export const VERIFICACION_TESTIDS = {

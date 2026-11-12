@@ -13,7 +13,7 @@ const req = (code: string, parentCode: string | null, position: number, title: s
   state,
   tags: [],
   position,
-  testCaseCodes: [],
+  testCaseCodes: [], tests: [], ncs: [],
 });
 
 const items: readonly RequirementDto[] = [

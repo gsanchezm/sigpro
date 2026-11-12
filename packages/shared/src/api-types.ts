@@ -135,6 +135,19 @@ export interface TestUserDto {
 
 // --- Requisitos ------------------------------------------------------------
 
+/** Caso de prueba enlazado a un requisito, con el resultado de su última ejecución (`null` = sin ejecutar). */
+export interface RequirementTestRef {
+  readonly code: string;
+  readonly lastResult: TestResult | null;
+}
+
+/** No conformidad que cuelga de una ejecución de un caso enlazado al requisito. */
+export interface RequirementNcRef {
+  readonly code: string;
+  readonly severity: NcSeverity;
+  readonly state: NcState;
+}
+
 export interface RequirementDto {
   readonly code: string;
   readonly programCode: string;
@@ -148,6 +161,10 @@ export interface RequirementDto {
   readonly position: number;
   /** Casos de prueba enlazados (matriz de trazabilidad). */
   readonly testCaseCodes: readonly string[];
+  /** Los mismos casos con el resultado de su última ejecución (columna «Pruebas» y panel de trazabilidad). */
+  readonly tests: readonly RequirementTestRef[];
+  /** NC de las ejecuciones de esos casos (columna «NC» y panel de trazabilidad). */
+  readonly ncs: readonly RequirementNcRef[];
 }
 
 export interface RequirementListResponse {
@@ -158,7 +175,7 @@ export interface RequirementListResponse {
 
 export interface TraceabilityDto {
   readonly requirements: readonly { readonly code: string; readonly title: string; readonly state: RequirementState }[];
-  readonly testCases: readonly { readonly code: string; readonly title: string }[];
+  readonly testCases: readonly { readonly code: string; readonly title: string; readonly lastResult: TestResult | null }[];
   readonly links: readonly { readonly requirementCode: string; readonly testCaseCode: string }[];
 }
 

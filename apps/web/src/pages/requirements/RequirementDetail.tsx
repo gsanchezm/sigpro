@@ -3,10 +3,15 @@ import {
   PRIORITIES,
   REQUISITOS_DYNAMIC_TESTIDS,
   REQUISITOS_TESTIDS,
+  FLOW_STATES,
+  NC_SEVERITY_TONE,
   REQUIREMENT_STATE_TONE,
   REQUIREMENT_TAGS,
+  TEST_RESULT_TONE,
   can,
   flattenIssues,
+  flowStepStatus,
+  isNcOpen,
   sanitizeRichText,
   transitionsFor,
   updateRequirementSchema,
@@ -148,7 +153,7 @@ export const RequirementDetail = ({ requirement, role, onClose, onSave, onTransi
 
       <form noValidate onSubmit={onSubmit} aria-busy={saving !== null} className="flex flex-col gap-3">
         <div className="flex flex-col gap-1">
-          <label htmlFor="requirement-title" className="label">
+          <label htmlFor="requirement-title" className="sr-only">
             {t('requisitos', 'titleLabel')}
           </label>
           <input
@@ -164,7 +169,7 @@ export const RequirementDetail = ({ requirement, role, onClose, onSave, onTransi
               setTitle(event.target.value);
               setErrors((current) => ({ ...current, title: '' }));
             }}
-            className={`input !h-8 !bg-surface ${errors.title ? '!border-danger' : ''}`}
+            className={`input !h-auto !px-2 !py-1.5 !text-[18px] !font-semibold !leading-snug ${errors.title ? '!border-danger' : '!border-transparent hover:!border-border'}`}
           />
           {errors.title ? (
             <span id="requirement-title-error" role="alert" data-testid={REQUISITOS_TESTIDS.REQUIREMENT_TITLE_ERROR} className="text-[12px] text-danger">
@@ -288,44 +293,93 @@ export const RequirementDetail = ({ requirement, role, onClose, onSave, onTransi
         </div>
       </form>
 
-      <section aria-labelledby="requirement-transitions-title" className="flex flex-col gap-2 border-t border-border pt-3">
-        <h3 id="requirement-transitions-title" className="m-0 text-[12.5px] font-semibold">
-          {t('requisitos', 'transitionsTitle')}
+      <section aria-labelledby="requirement-transitions-title" data-testid={REQUISITOS_TESTIDS.REQUIREMENT_FLOW} className="flex flex-col gap-3 border-t border-border pt-4">
+        <h3 id="requirement-transitions-title" className="section-title !text-[14px]">
+          {t('requisitos', 'flowTitle')}
         </h3>
-        <div data-testid={REQUISITOS_TESTIDS.REQUIREMENT_TRANSITIONS} className="flex flex-wrap gap-2">
-          {transitionsFor(role, requirement.state).map((rule) => (
-            <button
-              key={rule.to}
-              type="button"
-              data-testid={REQUISITOS_DYNAMIC_TESTIDS.REQUIREMENT_TRANSITION(rule.to)}
-              disabled={!rule.allowed}
-              title={rule.allowed ? undefined : t('requisitos', `trDenied_${rule.to}`)}
-              onClick={() => onTransition(rule.to)}
-              className={`btn ${rule.to === 'draft' ? 'btn-secondary' : 'btn-primary'} !h-8`}
-            >
-              {t('requisitos', `tr_${rule.to}`)}
-            </button>
-          ))}
-        </div>
+        <ol className="flow">
+          {FLOW_STATES.map((step, index) => {
+            const status = flowStepStatus(requirement.state, step);
+            return (
+              <li key={step} data-status={status} data-testid={REQUISITOS_DYNAMIC_TESTIDS.REQUIREMENT_FLOW_STEP(step)} aria-current={status === 'current' ? 'step' : undefined} className="flow-step">
+                <span aria-hidden="true" className="flow-dot">
+                  {status === 'done' ? '✓' : index + 1}
+                </span>
+                <div className="flex min-w-0 flex-col gap-2">
+                  <span className="flow-name">
+                    {t('requisitos', `flow_${step}`)}
+                    <span className="sr-only"> ({t('requisitos', status === 'done' ? 'flowDone' : status === 'current' ? 'flowCurrent' : 'flowFuture')})</span>
+                  </span>
+                  {status === 'current' ? (
+                    <div data-testid={REQUISITOS_TESTIDS.REQUIREMENT_TRANSITIONS} className="flex flex-wrap gap-2">
+                      {transitionsFor(role, requirement.state).map((rule) => (
+                        <button
+                          key={rule.to}
+                          type="button"
+                          data-testid={REQUISITOS_DYNAMIC_TESTIDS.REQUIREMENT_TRANSITION(rule.to)}
+                          disabled={!rule.allowed}
+                          title={rule.allowed ? undefined : t('requisitos', `trDenied_${rule.to}`)}
+                          onClick={() => onTransition(rule.to)}
+                          className={`btn ${rule.to === 'draft' ? 'btn-secondary' : 'btn-primary'} !h-8`}
+                        >
+                          {t('requisitos', `tr_${rule.to}`)}
+                        </button>
+                      ))}
+                    </div>
+                  ) : null}
+                </div>
+              </li>
+            );
+          })}
+        </ol>
       </section>
 
-      <section aria-labelledby="requirement-tests-title" className="flex flex-col gap-1.5 border-t border-border pt-3">
-        <h3 id="requirement-tests-title" className="m-0 text-[12.5px] font-semibold">
-          {t('requisitos', 'linkedTests')}
+      <section aria-labelledby="requirement-tests-title" data-testid={REQUISITOS_TESTIDS.REQUIREMENT_TRACE} className="flex flex-col gap-3 border-t border-border pt-4">
+        <h3 id="requirement-tests-title" className="section-title !text-[14px]">
+          {t('requisitos', 'traceTitle')}
         </h3>
-        {requirement.testCaseCodes.length === 0 ? (
-          <p className="m-0 text-[12.5px] text-fg-3">{t('requisitos', 'noTests')}</p>
-        ) : (
-          <ul data-testid={REQUISITOS_TESTIDS.REQUIREMENT_TESTS} className="m-0 flex list-none flex-wrap gap-1.5 p-0">
-            {requirement.testCaseCodes.map((code) => (
-              <li key={code}>
-                <Link to={`/verification/${code}`} data-testid={REQUISITOS_DYNAMIC_TESTIDS.REQUIREMENT_TEST_LINK(code)} className="font-mono text-[12px]">
-                  {code}
-                </Link>
-              </li>
-            ))}
-          </ul>
-        )}
+        <div className="flex flex-col gap-1.5">
+          <h4 className="m-0 text-[12px] font-medium text-fg-3">{t('requisitos', 'linkedTests')}</h4>
+          {requirement.tests.length === 0 ? (
+            <p className="m-0 text-[12.5px] text-fg-3">{t('requisitos', 'noTests')}</p>
+          ) : (
+            <ul data-testid={REQUISITOS_TESTIDS.REQUIREMENT_TESTS} className="m-0 flex list-none flex-col gap-1.5 p-0">
+              {requirement.tests.map((test) => (
+                <li key={test.code} className="flex items-center justify-between gap-2">
+                  <Link to={`/verification/${test.code}`} data-testid={REQUISITOS_DYNAMIC_TESTIDS.REQUIREMENT_TEST_LINK(test.code)} className="mono text-[12.5px] font-medium no-underline hover:underline">
+                    {test.code}
+                  </Link>
+                  <ToneBadge
+                    state={test.lastResult ?? 'none'}
+                    tone={test.lastResult ? TEST_RESULT_TONE[test.lastResult] : 'neutral'}
+                    label={test.lastResult ? t('verificacion', `r_${test.lastResult}`) : t('verificacion', 'neverRun')}
+                    testId={REQUISITOS_DYNAMIC_TESTIDS.REQUIREMENT_TRACE_TEST(test.code)}
+                  />
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <h4 className="m-0 text-[12px] font-medium text-fg-3">{t('requisitos', 'traceNcs')}</h4>
+          {requirement.ncs.length === 0 ? (
+            <p className="m-0 text-[12.5px] text-fg-3">{t('requisitos', 'noNcs')}</p>
+          ) : (
+            <ul data-testid={REQUISITOS_TESTIDS.REQUIREMENT_TRACE_NCS} className="m-0 flex list-none flex-col gap-1.5 p-0">
+              {requirement.ncs.map((nc) => (
+                <li key={nc.code} className="flex items-center justify-between gap-2">
+                  <Link to={`/nc/${nc.code}`} data-testid={REQUISITOS_DYNAMIC_TESTIDS.REQUIREMENT_TRACE_NC(nc.code)} className={`mono text-[12.5px] font-medium no-underline hover:underline ${isNcOpen(nc.state) ? '!text-danger' : '!text-fg-3'}`}>
+                    {nc.code}
+                  </Link>
+                  <span className="flex items-center gap-2">
+                    {isNcOpen(nc.state) ? null : <span className="text-[12px] text-fg-3">{t('requisitos', 'ncResolved')}</span>}
+                    <ToneBadge state={nc.state} tone={NC_SEVERITY_TONE[nc.severity]} severity={nc.severity} label={t('nc', `sev_${nc.severity}`)} testId={REQUISITOS_DYNAMIC_TESTIDS.REQUIREMENT_TRACE_NC_BADGE(nc.code)} />
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
       </section>
     </aside>
   );

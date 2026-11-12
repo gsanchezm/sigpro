@@ -88,3 +88,17 @@ Orden de la página: cabecera (título 26/600, subtítulo, acciones) → **fila 
 - **Chips:** son los controles nativos (siempre en el DOM): `getByLabel('Estado')`, `selectOption`, `fill` y el combobox ARIA del responsable funcionan igual que antes. Los «×» se llaman «Quitar «<valor>»».
 - **Padding de página** `--page-pad` (28 px) y separación entre bloques `--block-gap` (24 px) se aplican en el `<main>` del shell.
 - **Acceso:** mismas clases base; el panel de marca es `data-theme="dark"`.
+
+## Requisitos (fase 4)
+
+Orden de la página: cabecera (título, selector de programa, exportar, «Nuevo requisito») → **4 tarjetas de métricas** (`Metric`: Requisitos, Cobertura de verificación con barra, Pendientes de aprobación, NC abiertas; salen de la lista ya cargada) → **conmutador `.segmented`** (Árbol · Documento · Matriz de trazabilidad) → buscador + chip «+ Estado» → tabla o documento y, a la derecha, el panel de 380 px.
+
+| Pieza | Clase | Detalle |
+| --- | --- | --- |
+| Árbol-tabla | `.req-tree` > `.req-grid` | Cada fila `li role=treeitem` es una rejilla: Requisito (asa, caret ▾, código mono y título; sangría **22 px** por nivel, raíces en 600) · Estado (badge) · **Pruebas** `n/m` en mono (verde si todo pasa) · **NC** (código de la NC abierta en `--danger`, «+n» si hay más) · menú ⋯. Cabecera `.req-head` (12/500 `--text-3`) fuera del `ul`, `aria-hidden`. Container query: con menos de 640 px de tabla se ocultan Pruebas y NC (`.req-col-extra`) |
+| Flujo de aprobación | `.flow` > `.flow-step[data-status]` | Cuatro pasos con punto y línea: hecho (`--accent` lleno, ✓), actual (borde `--accent` y halo `--accent-soft`, nombre 600) y futuro (borde `--border-strong`). El paso actual contiene los botones de transición |
+| Trazabilidad | — | Casos enlazados con `ToneBadge` del resultado (Superado / Fallido / Bloqueado / Sin ejecutar) y NC con la severidad (`data-severity`); las cerradas o rechazadas, en `--text-3` con «resuelta» |
+| Celda de la matriz | `.matrix-box[data-result]` | La casilla nativa con `appearance: none`, 30 × 24: ✓ `--ok-soft`/`--ok`, ✕ `--danger-soft`/`--danger`, ! `--warn-soft`/`--warn`, · discontinua (sin ejecutar) y `--surface-2` sin glifo (sin relación) |
+| Documento | `.doc-section` | Rejilla `88px 1fr auto`: número y código en el margen (mono 12 `--text-3`), título (16/600 en raíces, 14/600 en hijos) con la descripción saneada debajo y el badge de estado a la derecha |
+
+**Dónde están los datos:** `RequirementDto.tests` y `.ncs` (la API las calcula con las ejecuciones de los casos enlazados) y `TraceabilityDto.testCases[].lastResult`. Funciones puras en `packages/shared/src/requirements.ts`: `testsSummary`, `openNcsOf`, `requirementMetrics`, `sectionNumbers`, `FLOW_STATES` y `flowStepStatus`.

@@ -11,7 +11,6 @@ import {
   type RequirementDto,
   type RequirementListResponse,
   type RequirementState,
-  type RequirementTag,
   type TraceabilityDto,
   type UpdateRequirementInput,
 } from '@sigpro/shared';
@@ -20,22 +19,8 @@ import type { AuthUser } from '../common/auth.types';
 import { fail } from '../common/errors';
 import { lockTenantCodes } from '../common/tenant-lock';
 import { PrismaService } from '../prisma/prisma.service';
-
-const WITH_TESTS = { tests: { select: { testCaseCode: true } } } as const;
-type RequirementRow = Prisma.RequirementGetPayload<{ include: typeof WITH_TESTS }>;
-
-export const toRequirementDto = (row: RequirementRow): RequirementDto => ({
-  code: row.code,
-  programCode: row.programCode,
-  parentCode: row.parentCode,
-  title: row.title,
-  description: row.description,
-  priority: row.priority,
-  state: row.state,
-  tags: row.tags as RequirementTag[],
-  position: row.position,
-  testCaseCodes: row.tests.map((link) => link.testCaseCode).sort(),
-});
+import { summarizeRuns } from '../verification/test-case-query';
+import { WITH_TESTS, toRequirementDto, type RequirementRow } from './requirement-dto';
 
 const invalid = (field: string, key: string) => fail.unprocessable('validation_failed', 'validation_failed', { [field]: key });
 
@@ -72,10 +57,11 @@ export class RequirementsService {
     await this.program(tenantId, programCode);
     const [requirements, testCases, links] = await Promise.all([
       this.prisma.requirement.findMany({ where: { tenantId, programCode }, orderBy: { code: 'asc' }, select: { code: true, title: true, state: true } }),
-      this.prisma.testCase.findMany({ where: { tenantId, programCode }, orderBy: { code: 'asc' }, select: { code: true, title: true } }),
+      this.prisma.testCase.findMany({ where: { tenantId, programCode }, orderBy: { code: 'asc' }, select: { code: true, title: true, runs: { select: { id: true, executedAt: true, result: true } } } }),
       this.prisma.requirementTestCase.findMany({ where: { tenantId, requirement: { programCode } }, select: { requirementCode: true, testCaseCode: true }, orderBy: [{ requirementCode: 'asc' }, { testCaseCode: 'asc' }] }),
     ]);
-    return { requirements, testCases, links };
+    // Cada columna de la matriz lleva el resultado de la última ejecución de su caso (✓ / ✕ / · en la web)
+    return { requirements, testCases: testCases.map(({ runs, ...testCase }) => ({ ...testCase, lastResult: summarizeRuns(runs).lastResult })), links };
   }
 
   /** Alta en borrador, al final de sus hermanos. El padre debe ser del mismo programa. */

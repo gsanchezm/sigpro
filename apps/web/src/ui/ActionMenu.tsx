@@ -38,6 +38,8 @@ interface ActionMenuProps {
 }
 
 const MENU_WIDTH = 200;
+/** Margen tras abrirse el menú en el que un «scroll» no lo cierra (ver el efecto de abajo). */
+const SCROLL_GRACE_MS = 250;
 const ITEM = '[role="menuitem"]:not([disabled]):not([aria-disabled="true"])';
 
 /** Menú `role="menu"` con `position: fixed`: lo abren el botón ⋯ de una fila o el clic derecho. Flechas, Inicio/Fin, Esc y Tab. */
@@ -57,11 +59,17 @@ export const ActionMenu = ({ label, testId, items, point, onClose, returnFocus }
   }, [point]);
 
   useLayoutEffect(() => {
+    const openedAt = performance.now();
+    // Un clic derecho en una fila a medio ver la desplaza hasta mostrarla y el navegador entrega ese «scroll» un fotograma
+    // DESPUÉS de abrirse el menú: no es el usuario desplazando, así que se ignora durante un instante.
+    const dismissOnScroll = () => {
+      if (performance.now() - openedAt > SCROLL_GRACE_MS) onClose();
+    };
     const dismiss = () => onClose();
-    window.addEventListener('scroll', dismiss, true);
+    window.addEventListener('scroll', dismissOnScroll, true);
     window.addEventListener('resize', dismiss);
     return () => {
-      window.removeEventListener('scroll', dismiss, true);
+      window.removeEventListener('scroll', dismissOnScroll, true);
       window.removeEventListener('resize', dismiss);
     };
   }, [onClose]);

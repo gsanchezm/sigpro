@@ -11,7 +11,7 @@ Detalle y decisiones en `docs/DECISIONS.md` («Rediseño visual «1a Ciruela»»
 - [x] **Fase 1 — tokens, fuentes y forma.** e2e nc, access y programs: 71/71
 - [x] **Fase 2 — componentes base.** e2e web 299/299
 - [x] **Fase 3 — Acceso y Programas** (métricas, filtros como chips, panel lateral de 380 px). Verificado por piezas: `programs-panel.spec.ts` 12/12, `programs-metrics-api.spec.ts`, unit/lint/typecheck. La suite completa no pudo ejecutarse en local (el equipo se quedó sin memoria); el CI de GitHub dio 311/312: la tarjeta «Programas» repetía el texto «12 activo» y `programs.spec` localiza el resumen de la tabla por él (strict mode, 2 elementos). Corregido con «activos: 12» (sin tocar el selector del spec); `programs.spec` + `programs-panel.spec` 47/47 en local
-- [ ] **Fase 4 — Requisitos** (tabla en árbol, panel con flujo de aprobación reutilizando `TRANSITIONS`/`canTransition`, vistas Documento y Matriz)
+- [x] **Fase 4 — Requisitos** (métricas, árbol-tabla con Pruebas n/m y NC, chip de estado, vista Documento, panel con flujo de aprobación y trazabilidad, matriz con resultados). `requirements*.spec` + `requirements-redesign.spec` en verde en local; la suite completa la valida el CI
 - [ ] **Fase 5 — documentación y cierre** (regenerar `docs/screens/`, retirar `compare`, suite completa)
 - [ ] **Pendiente de decidir:** `apps/mobile` conserva la paleta anterior
 

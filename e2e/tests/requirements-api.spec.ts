@@ -27,6 +27,8 @@ interface Requirement {
   tags: string[];
   position: number;
   testCaseCodes: string[];
+  tests: { code: string; lastResult: string | null }[];
+  ncs: { code: string; severity: string; state: string }[];
 }
 
 const tokens = new Map<string, string>();
@@ -56,6 +58,39 @@ test('GET /programs/:code/requirements devuelve la lista plana con árbol, etiqu
   expect((await call(request, 'admin', 'get', '/programs/PRG-999/requirements')).status()).toBe(404);
   expect((await call(request, 'admin', 'get', '/requirements/REQ-999')).status()).toBe(404);
   expect((await list(request, 'PRG-004'))).toEqual([]);
+});
+
+test('cada requisito trae sus pruebas con el último resultado y las NC de esas ejecuciones', async ({ request }) => {
+  const items = await list(request);
+  const byCode = new Map(items.map((r) => [r.code, r]));
+  // Una prueba que falla y una NC en análisis colgando de su ejecución
+  expect(byCode.get('REQ-018')).toMatchObject({ testCaseCodes: ['TC-013'], tests: [{ code: 'TC-013', lastResult: 'fail' }], ncs: [{ code: 'NC-008', severity: 'major', state: 'in_analysis' }] });
+  // Dos pruebas (una pasa y otra no) y una NC crítica abierta que también cuelga de REQ-015 vía TC-010
+  expect(byCode.get('REQ-022')?.tests).toEqual([
+    { code: 'TC-010', lastResult: 'pass' },
+    { code: 'TC-017', lastResult: 'fail' },
+  ]);
+  expect(byCode.get('REQ-022')?.ncs).toEqual([{ code: 'NC-006', severity: 'critical', state: 'open' }]);
+  expect(byCode.get('REQ-015')?.ncs.map((nc) => nc.code)).toEqual(['NC-006']);
+  // Sin casos enlazados: ni pruebas ni NC
+  expect(byCode.get('REQ-028')).toMatchObject({ testCaseCodes: [], tests: [], ncs: [] });
+  // Un caso bloqueado es un resultado más, no «sin ejecutar»
+  expect(byCode.get('REQ-021')?.tests).toEqual([{ code: 'TC-016', lastResult: 'blocked' }]);
+});
+
+test('la matriz de trazabilidad lleva el último resultado de cada caso', async ({ request }) => {
+  const matrix = (await (await call(request, 'auditor', 'get', '/programs/PRG-002/traceability')).json()) as { testCases: { code: string; lastResult: string | null }[] };
+  expect(Object.fromEntries(matrix.testCases.map((t) => [t.code, t.lastResult]))).toMatchObject({ 'TC-010': 'pass', 'TC-013': 'fail', 'TC-016': 'blocked', 'TC-017': 'fail' });
+});
+
+test('editar o cambiar de estado devuelve la fila completa, con sus pruebas y NC (la web sustituye la fila con la respuesta)', async ({ request }) => {
+  const edited = await call(request, 'consultant', 'patch', '/requirements/REQ-018', { priority: 'high' });
+  expect(edited.status()).toBe(200);
+  expect(await edited.json()).toMatchObject({ code: 'REQ-018', priority: 'high', state: 'verified', tests: [{ code: 'TC-013', lastResult: 'fail' }], ncs: [{ code: 'NC-008' }] });
+
+  const validated = await call(request, 'auditor', 'post', '/requirements/REQ-018/transition', { to: 'validated' });
+  expect(validated.status()).toBe(200);
+  expect(await validated.json()).toMatchObject({ code: 'REQ-018', state: 'validated', tests: [{ code: 'TC-013', lastResult: 'fail' }], ncs: [{ code: 'NC-008', severity: 'major' }] });
 });
 
 test('POST /requirements: alta en borrador al final de sus hermanos, con validación 422 y permisos', async ({ request }) => {

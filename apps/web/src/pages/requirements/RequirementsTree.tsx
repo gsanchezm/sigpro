@@ -3,8 +3,10 @@ import {
   REQUISITOS_TESTIDS,
   REQUIREMENT_STATE_TONE,
   can,
+  openNcsOf,
   siblingsOf,
   stepTarget,
+  testsSummary,
   type MessageKey,
   type Placement,
   type RequirementDto,
@@ -37,6 +39,9 @@ interface RequirementsTreeProps {
   readonly onMove: (code: string, target: string, placement: Placement) => void;
   readonly onMenu: (code: string, point: MenuPoint) => void;
 }
+
+/** Sangría por nivel del árbol (px). */
+const INDENT = 22;
 
 interface DropHint {
   readonly code: string;
@@ -199,129 +204,164 @@ export const RequirementsTree = ({
   };
 
   return (
-    <ul role="tree" aria-label={label} data-testid={REQUISITOS_TESTIDS.REQUIREMENTS_TREE} className="m-0 flex list-none flex-col p-0">
-      {rows.map((row, index) => {
-        const { item } = row;
-        const isRenaming = renaming === item.code;
-        const tagLabels = item.tags.map((tag) => t('requisitos', `tag_${tag}`));
-        return (
-          <li
-            key={item.code}
-            ref={(element) => {
-              if (element) rowRefs.current.set(item.code, element);
-              else rowRefs.current.delete(item.code);
-            }}
-            role="treeitem"
-            aria-label={`${item.code} ${item.title}`}
-            aria-level={row.depth + 1}
-            aria-posinset={row.posInSet}
-            aria-setsize={row.setSize}
-            aria-expanded={row.hasChildren ? row.expanded : undefined}
-            aria-selected={selected === item.code}
-            tabIndex={rovingCode === item.code ? 0 : -1}
-            draggable={canEdit && !isRenaming}
-            data-testid={REQUISITOS_DYNAMIC_TESTIDS.REQUIREMENT_ROW(item.code)}
-            data-state={item.state}
-            data-priority={item.priority}
-            data-dragging={dragging === item.code}
-            data-drop={drop?.code === item.code ? drop.placement : undefined}
-            className="tree-row border-b border-border outline-none last:border-b-0 hover:bg-surface-2"
-            onFocus={(event) => event.target === event.currentTarget && setFocusCode(item.code)}
-            onKeyDown={(event) => onRowKeyDown(event, row, index)}
-            onClick={(event) => {
-              if (!(event.target as HTMLElement).closest('button, input, a')) onOpen(item.code);
-            }}
-            onContextMenu={(event) => openContextMenu(event, item.code)}
-            onDragStart={(event) => {
-              event.dataTransfer.effectAllowed = 'move';
-              event.dataTransfer.setData('text/plain', item.code);
-              setDragging(item.code);
-            }}
-            onDragOver={(event) => onDragOver(event, item)}
-            onDrop={(event) => onDrop(event, item)}
-            onDragEnd={endDrag}
-          >
-            <div className={`flex items-center gap-2 py-1.5 pr-2 ${mobile ? 'flex-wrap' : ''}`} style={{ paddingLeft: 8 + row.depth * 20 }}>
-              <span
-                role="img"
-                aria-label={t('requisitos', 'dragHandle', { code: item.code })}
-                data-testid={REQUISITOS_DYNAMIC_TESTIDS.REQUIREMENT_HANDLE(item.code)}
-                title={canEdit ? t('requisitos', 'dragHandle', { code: item.code }) : t('requisitos', 'roleNoEdit')}
-                className={`flex-none select-none text-[12px] leading-none ${canEdit ? 'cursor-grab text-fg-3' : 'cursor-not-allowed text-border-strong'}`}
-              >
-                ⋮⋮
-              </span>
-              {row.hasChildren ? (
-                <button
-                  type="button"
-                  data-testid={REQUISITOS_DYNAMIC_TESTIDS.REQUIREMENT_TOGGLE(item.code)}
-                  aria-label={t('requisitos', row.expanded ? 'collapse' : 'expand', { code: item.code })}
-                  onClick={() => onToggle(item.code)}
-                  className="grid size-6 flex-none cursor-pointer place-items-center rounded-ctl-sm border-0 bg-transparent text-fg-2 hover:bg-border"
+    <div className="req-tree">
+      {mobile ? null : (
+        // Cabecera visual de las columnas; las celdas de cada fila ya llevan su `title` y el `treeitem` su nombre completo
+        <div aria-hidden="true" data-testid={REQUISITOS_TESTIDS.REQUIREMENTS_TREE_HEADER} className="req-grid req-head">
+          <span>{t('requisitos', 'colRequirement')}</span>
+          <span>{t('requisitos', 'colState')}</span>
+          <span className="req-col-extra">{t('requisitos', 'colTests')}</span>
+          <span className="req-col-extra">{t('requisitos', 'colNc')}</span>
+          <span />
+        </div>
+      )}
+      <ul role="tree" aria-label={label} data-testid={REQUISITOS_TESTIDS.REQUIREMENTS_TREE} className="m-0 flex list-none flex-col p-0">
+        {rows.map((row, index) => {
+          const { item } = row;
+          const isRenaming = renaming === item.code;
+          const tagLabels = item.tags.map((tag) => t('requisitos', `tag_${tag}`));
+          const tests = testsSummary(item);
+          const openNcs = openNcsOf(item);
+          return (
+            <li
+              key={item.code}
+              ref={(element) => {
+                if (element) rowRefs.current.set(item.code, element);
+                else rowRefs.current.delete(item.code);
+              }}
+              role="treeitem"
+              aria-label={`${item.code} ${item.title}`}
+              aria-level={row.depth + 1}
+              aria-posinset={row.posInSet}
+              aria-setsize={row.setSize}
+              aria-expanded={row.hasChildren ? row.expanded : undefined}
+              aria-selected={selected === item.code}
+              tabIndex={rovingCode === item.code ? 0 : -1}
+              draggable={canEdit && !isRenaming}
+              data-testid={REQUISITOS_DYNAMIC_TESTIDS.REQUIREMENT_ROW(item.code)}
+              data-state={item.state}
+              data-priority={item.priority}
+              data-dragging={dragging === item.code}
+              data-drop={drop?.code === item.code ? drop.placement : undefined}
+              className="tree-row border-b border-border outline-none last:border-b-0 hover:bg-surface-2"
+              onFocus={(event) => event.target === event.currentTarget && setFocusCode(item.code)}
+              onKeyDown={(event) => onRowKeyDown(event, row, index)}
+              onClick={(event) => {
+                if (!(event.target as HTMLElement).closest('button, input, a')) onOpen(item.code);
+              }}
+              onContextMenu={(event) => openContextMenu(event, item.code)}
+              onDragStart={(event) => {
+                event.dataTransfer.effectAllowed = 'move';
+                event.dataTransfer.setData('text/plain', item.code);
+                setDragging(item.code);
+              }}
+              onDragOver={(event) => onDragOver(event, item)}
+              onDrop={(event) => onDrop(event, item)}
+              onDragEnd={endDrag}
+            >
+              <div className={mobile ? 'flex flex-wrap items-center gap-2 py-2 pr-2' : 'req-grid req-row pr-2'} style={mobile ? { paddingLeft: 8 + row.depth * INDENT } : undefined}>
+                <div className={mobile ? 'contents' : 'flex min-w-0 items-center gap-2'} style={mobile ? undefined : { paddingLeft: 8 + row.depth * INDENT }}>
+                <span
+                  role="img"
+                  aria-label={t('requisitos', 'dragHandle', { code: item.code })}
+                  data-testid={REQUISITOS_DYNAMIC_TESTIDS.REQUIREMENT_HANDLE(item.code)}
+                  title={canEdit ? t('requisitos', 'dragHandle', { code: item.code }) : t('requisitos', 'roleNoEdit')}
+                  className={`flex-none select-none text-[12px] leading-none ${canEdit ? 'cursor-grab text-fg-3' : 'cursor-not-allowed text-border-strong'}`}
                 >
-                  <ChevronIcon size={12} style={{ transform: row.expanded ? 'none' : 'rotate(-90deg)' }} />
-                </button>
-              ) : (
-                <span aria-hidden="true" className="size-6 flex-none" />
-              )}
-              <span className="flex flex-none items-center gap-1 font-mono text-[12px] font-medium text-fg-2">
-                {item.code}
-                <button
-                  type="button"
-                  data-testid={REQUISITOS_DYNAMIC_TESTIDS.REQUIREMENT_ROW_COPY(item.code)}
-                  aria-label={t('requisitos', 'copyCode', { code: item.code })}
-                  title={t('requisitos', 'copyCode', { code: item.code })}
-                  onClick={() => onCopy(item.code)}
-                  className="grid size-5 cursor-pointer place-items-center rounded-ctl-sm border-0 bg-transparent text-[11px] text-fg-3 hover:bg-border"
-                >
-                  ⧉
-                </button>
-              </span>
-              <div className={`flex min-w-0 items-center ${mobile ? 'order-last basis-full pl-8' : 'flex-1'}`}>
-                {isRenaming ? (
-                  <InlineTitle requirement={item} onCommit={onRenameCommit} onCancel={onRenameCancel} />
-                ) : (
+                  ⋮⋮
+                </span>
+                {row.hasChildren ? (
                   <button
                     type="button"
-                    data-testid={REQUISITOS_DYNAMIC_TESTIDS.REQUIREMENT_OPEN(item.code)}
-                    title={canEdit ? `${item.title} · ${t('requisitos', 'inlineHint')}` : item.title}
-                    onClick={() => onOpen(item.code)}
-                    onDoubleClick={() => canEdit && onRenameStart(item.code)}
-                    className="min-w-0 flex-1 cursor-pointer truncate border-0 bg-transparent p-0 text-left text-[13px] text-fg"
+                    data-testid={REQUISITOS_DYNAMIC_TESTIDS.REQUIREMENT_TOGGLE(item.code)}
+                    aria-label={t('requisitos', row.expanded ? 'collapse' : 'expand', { code: item.code })}
+                    onClick={() => onToggle(item.code)}
+                    className="grid size-6 flex-none cursor-pointer place-items-center rounded-ctl-sm border-0 bg-transparent text-fg-2 hover:bg-border"
                   >
-                    {item.title}
+                    <ChevronIcon size={12} style={{ transform: row.expanded ? 'none' : 'rotate(-90deg)' }} />
                   </button>
+                ) : (
+                  <span aria-hidden="true" className="size-6 flex-none" />
                 )}
-              </div>
-              {!mobile && tagLabels.length > 0 ? (
-                <span className="flex flex-none gap-1">
-                  {item.tags.slice(0, 2).map((tag, tagIndex) => (
-                    <span key={tag} data-tag={tag} className="rounded-full border border-border bg-surface-2 px-2 text-[11px] text-fg-2">
-                      {tagLabels[tagIndex]}
-                    </span>
-                  ))}
-                  {item.tags.length > 2 ? <span className="px-1 text-[11px] text-fg-3">+{item.tags.length - 2}</span> : null}
+                <span className="flex flex-none items-center gap-1 font-mono text-[12px] font-medium text-fg-2">
+                  {item.code}
+                  <button
+                    type="button"
+                    data-testid={REQUISITOS_DYNAMIC_TESTIDS.REQUIREMENT_ROW_COPY(item.code)}
+                    aria-label={t('requisitos', 'copyCode', { code: item.code })}
+                    title={t('requisitos', 'copyCode', { code: item.code })}
+                    onClick={() => onCopy(item.code)}
+                    className="grid size-5 cursor-pointer place-items-center rounded-ctl-sm border-0 bg-transparent text-[11px] text-fg-3 hover:bg-border"
+                  >
+                    ⧉
+                  </button>
                 </span>
-              ) : null}
-              <ToneBadge state={item.state} tone={REQUIREMENT_STATE_TONE[item.state]} label={stateLabels[item.state]} testId={REQUISITOS_TESTIDS.REQUIREMENT_STATE_BADGE} />
-              <button
-                type="button"
-                data-testid={REQUISITOS_DYNAMIC_TESTIDS.REQUIREMENT_ROW_MENU(item.code)}
-                aria-label={t('requisitos', 'rowActions', { code: item.code })}
-                aria-haspopup="menu"
-                aria-expanded={menuFor === item.code}
-                onClick={(event) => {
-                  const rect = event.currentTarget.getBoundingClientRect();
-                  onMenu(item.code, { x: rect.right, y: rect.bottom + 4, align: 'right' });
-                }}
-                className="grid size-[26px] flex-none cursor-pointer place-items-center rounded-ctl border border-transparent bg-transparent text-fg-2 hover:border-border hover:bg-surface"
-              >
-                <DotsIcon size={14} />
-              </button>
-            </div>
-          </li>
-        );
-      })}
-    </ul>
+                <div className={`flex min-w-0 items-center ${mobile ? 'order-last basis-full pl-8' : 'flex-1'}`}>
+                  {isRenaming ? (
+                    <InlineTitle requirement={item} onCommit={onRenameCommit} onCancel={onRenameCancel} />
+                  ) : (
+                    <button
+                      type="button"
+                      data-testid={REQUISITOS_DYNAMIC_TESTIDS.REQUIREMENT_OPEN(item.code)}
+                      title={canEdit ? `${item.title} · ${t('requisitos', 'inlineHint')}` : item.title}
+                      onClick={() => onOpen(item.code)}
+                      onDoubleClick={() => canEdit && onRenameStart(item.code)}
+                      // Mide lo que mide su texto (no toda la columna): al abrir el panel la tabla se estrecha y un doble clic sigue cayendo en el título
+                      className={`min-w-0 max-w-full cursor-pointer truncate border-0 bg-transparent p-0 text-left text-[14px] text-fg ${row.depth === 0 ? 'font-semibold' : ''}`}
+                    >
+                      {item.title}
+                    </button>
+                  )}
+                </div>
+                {!mobile && tagLabels.length > 0 ? (
+                  <span className="req-tags flex flex-none gap-1">
+                    {item.tags.slice(0, 2).map((tag, tagIndex) => (
+                      <span key={tag} data-tag={tag} className="rounded-full border border-border bg-surface-2 px-2 text-[11px] text-fg-2">
+                        {tagLabels[tagIndex]}
+                      </span>
+                    ))}
+                    {item.tags.length > 2 ? <span className="px-1 text-[11px] text-fg-3">+{item.tags.length - 2}</span> : null}
+                  </span>
+                ) : null}
+                </div>
+                <ToneBadge state={item.state} tone={REQUIREMENT_STATE_TONE[item.state]} label={stateLabels[item.state]} testId={REQUISITOS_TESTIDS.REQUIREMENT_STATE_BADGE} />
+                {mobile ? null : (
+                  <>
+                    <span
+                      data-testid={REQUISITOS_DYNAMIC_TESTIDS.REQUIREMENT_ROW_TESTS(item.code)}
+                      title={tests.total === 0 ? t('requisitos', 'noTests') : t('requisitos', 'rowTestsTitle', { passed: tests.passed, total: tests.total })}
+                      className={`req-col-extra mono text-[13px] ${tests.total === 0 ? 'text-fg-3' : tests.passed === tests.total ? 'text-ok' : 'text-fg-2'}`}
+                    >
+                      {tests.total === 0 ? '—' : `${tests.passed}/${tests.total}`}
+                    </span>
+                    <span
+                      data-testid={REQUISITOS_DYNAMIC_TESTIDS.REQUIREMENT_ROW_NC(item.code)}
+                      title={openNcs.length === 0 ? t('requisitos', 'rowNoNc') : t('requisitos', 'rowNcTitle', { codes: openNcs.map((nc) => nc.code).join(', ') })}
+                      className={`req-col-extra mono text-[13px] ${openNcs.length === 0 ? 'text-fg-3' : 'text-danger'}`}
+                    >
+                      {openNcs.length === 0 ? '—' : openNcs.length === 1 ? openNcs[0]?.code : `${openNcs[0]?.code} +${openNcs.length - 1}`}
+                    </span>
+                  </>
+                )}
+                <button
+                  type="button"
+                  data-testid={REQUISITOS_DYNAMIC_TESTIDS.REQUIREMENT_ROW_MENU(item.code)}
+                  aria-label={t('requisitos', 'rowActions', { code: item.code })}
+                  aria-haspopup="menu"
+                  aria-expanded={menuFor === item.code}
+                  onClick={(event) => {
+                    const rect = event.currentTarget.getBoundingClientRect();
+                    onMenu(item.code, { x: rect.right, y: rect.bottom + 4, align: 'right' });
+                  }}
+                  className="grid size-[26px] flex-none cursor-pointer place-items-center rounded-ctl border border-transparent bg-transparent text-fg-2 hover:border-border hover:bg-surface"
+                >
+                  <DotsIcon size={14} />
+                </button>
+              </div>
+            </li>
+          );
+        })}
+      </ul>
+    </div>
   );
 };

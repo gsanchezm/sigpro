@@ -97,6 +97,8 @@ describe('requirementsToCsv', () => {
     tags: ['security', 'safety'],
     position: 0,
     testCaseCodes: ['TC-017'],
+    tests: [{ code: 'TC-017', lastResult: 'pass' }],
+    ncs: [],
   };
 
   it('cabecera en inglés, título entrecomillado y listas separadas por |', () => {

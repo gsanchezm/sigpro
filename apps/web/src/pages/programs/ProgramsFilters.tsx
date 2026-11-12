@@ -1,6 +1,6 @@
 import { PROGRAM_STATUSES, PROGRAMAS_TESTIDS, type OwnerDto } from '@sigpro/shared';
-import type { ReactNode } from 'react';
 import { useI18n } from '../../state/i18n';
+import { FilterChip as Chip } from '../../ui/FilterChip';
 import { OwnerCombobox } from '../../ui/OwnerCombobox';
 import { hasActiveFilters, withFilter, type ListState } from './params';
 
@@ -13,31 +13,6 @@ interface FiltersProps {
   readonly onChange: (next: ListState) => void;
   readonly onClear: () => void;
 }
-
-interface ChipProps {
-  readonly active: boolean;
-  readonly children: ReactNode;
-  /** «×» para quitar el filtro (solo con el chip activo). */
-  readonly clear?: { readonly label: string; readonly testId: string; readonly onClear: () => void };
-  /** Chevrón de los chips con desplegable. */
-  readonly caret?: boolean;
-}
-
-/**
- * Chip de filtro: el CONTROL NATIVO (select, fecha, combobox) con forma de chip, siempre en el DOM y operable (así `selectOption`,
- * `fill` y `getByLabel` siguen funcionando). Vacío = píldora discontinua «+ Etiqueta»; activo = píldora suave con el valor y «×».
- */
-const Chip = ({ active, children, clear, caret = false }: ChipProps) => (
-  <div className="chip" data-active={active}>
-    {children}
-    {caret && !active ? <span aria-hidden="true" className="chip-caret" /> : null}
-    {active && clear ? (
-      <button type="button" data-testid={clear.testId} aria-label={clear.label} onClick={clear.onClear} className="chip-x">
-        ×
-      </button>
-    ) : null}
-  </div>
-);
 
 interface DateChipProps {
   readonly id: string;
