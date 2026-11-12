@@ -2,7 +2,7 @@ import { createContext, useCallback, useContext, useMemo, useRef, useState, type
 import { StyleSheet, View } from 'react-native';
 import { ACCESO_DYNAMIC_TESTIDS } from '@sigpro/shared';
 import { Text } from '../ui/Text';
-import { toneColors, type Tone } from '../theme/tokens';
+import { RADIUS, toneColors, type Tone } from '../theme/tokens';
 import { useTheme } from './theme';
 
 // Toasts con autocierre a 3 s. `data-testid="toast-{ok|danger|info|warn}"`, igual que la web (los apilados se localizan con `filter`).
@@ -73,5 +73,5 @@ export const useToast = (): ToastValue => {
 
 const styles = StyleSheet.create({
   host: { position: 'absolute', top: 12, left: 12, right: 12, gap: 8, zIndex: 100 },
-  toast: { borderWidth: 1, borderLeftWidth: 4, borderRadius: 6, paddingVertical: 10, paddingHorizontal: 12, gap: 2 },
+  toast: { borderWidth: 1, borderLeftWidth: 4, borderRadius: RADIUS.sm, paddingVertical: 10, paddingHorizontal: 12, gap: 2 },
 });

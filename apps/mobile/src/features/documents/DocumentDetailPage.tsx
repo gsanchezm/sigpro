@@ -7,6 +7,7 @@ import { useI18n } from '../../state/i18n';
 import { useTheme } from '../../state/theme';
 import { useToast } from '../../state/toast';
 import { FONT_FAMILY } from '../../theme/fonts';
+import { RADIUS } from '../../theme/tokens';
 import { Badge } from '../../ui/Badge';
 import { Button } from '../../ui/Button';
 import { Card } from '../../ui/Card';
@@ -232,5 +233,5 @@ const styles = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   actions: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  notice: { gap: 8, borderRadius: 10, borderWidth: 1, padding: 14, alignItems: 'flex-start' },
+  notice: { gap: 8, borderRadius: RADIUS.md, borderWidth: 1, padding: 14, alignItems: 'flex-start' },
 });

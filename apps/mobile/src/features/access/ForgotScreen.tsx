@@ -6,7 +6,7 @@ import { useAuth } from '../../state/auth';
 import { useI18n } from '../../state/i18n';
 import { useTheme } from '../../state/theme';
 import { useToast } from '../../state/toast';
-import { SPACING } from '../../theme/tokens';
+import { RADIUS, SPACING } from '../../theme/tokens';
 import { Button } from '../../ui/Button';
 import { Card } from '../../ui/Card';
 import { LoadingState } from '../../ui/States';
@@ -99,5 +99,5 @@ export const ForgotScreen = () => {
 
 const styles = StyleSheet.create({
   form: { gap: 12, padding: SPACING.lg },
-  sent: { borderWidth: 1, borderRadius: 6, padding: 10 },
+  sent: { borderWidth: 1, borderRadius: RADIUS.sm, padding: 10 },
 });

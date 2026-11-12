@@ -7,7 +7,7 @@ import { Card } from '../../ui/Card';
 import { EmptyState } from '../../ui/States';
 import { Text } from '../../ui/Text';
 import { ToggleButton } from '../../ui/ToggleButton';
-import { toneColors } from '../../theme/tokens';
+import { RADIUS, toneColors } from '../../theme/tokens';
 import { EVENT_GLYPH, SEVERITY_TONE, missionEventText } from './event-text';
 import type { MissionConnection } from './mission-socket';
 import { MOVIL_MISSION_TESTIDS } from './testids';
@@ -117,7 +117,7 @@ const EventRow = ({ event }: { readonly event: MissionEventDto }) => {
 const styles = StyleSheet.create({
   head: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
   headText: { flex: 1, minWidth: 0, gap: 2 },
-  scroll: { maxHeight: 360, borderWidth: 1, borderRadius: 6 },
+  scroll: { maxHeight: 360, borderWidth: 1, borderRadius: RADIUS.sm },
   row: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 10, paddingVertical: 8, borderBottomWidth: StyleSheet.hairlineWidth },
   icon: { width: 26, height: 26, borderRadius: 13, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
   body: { flex: 1, minWidth: 0, gap: 2 },

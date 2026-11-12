@@ -72,6 +72,6 @@ const styles = StyleSheet.create({
   root: { flex: 1 },
   fill: { flex: 1 },
   content: { padding: SPACING.page, gap: SPACING.block },
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
-  headerText: { flex: 1, gap: 2 },
+  header: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
+  headerText: { flexGrow: 1, flexShrink: 1, flexBasis: 200, gap: 2 },
 });

@@ -1,6 +1,7 @@
 import type { AuthErrorView } from '@sigpro/shared';
 import { StyleSheet, View } from 'react-native';
 import { useTheme } from '../../state/theme';
+import { RADIUS } from '../../theme/tokens';
 import { Text } from '../../ui/Text';
 
 interface Props {
@@ -27,5 +28,5 @@ export const ServerAlert = ({ error, testID }: Props) => {
 };
 
 const styles = StyleSheet.create({
-  box: { borderWidth: 1, borderRadius: 6, padding: 10, gap: 2 },
+  box: { borderWidth: 1, borderRadius: RADIUS.sm, padding: 10, gap: 2 },
 });

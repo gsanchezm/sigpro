@@ -6,7 +6,7 @@ import { useAuth } from '../../state/auth';
 import { useI18n } from '../../state/i18n';
 import { useTheme } from '../../state/theme';
 import { useToast } from '../../state/toast';
-import { SPACING } from '../../theme/tokens';
+import { RADIUS, SPACING } from '../../theme/tokens';
 import { Badge } from '../../ui/Badge';
 import { Button } from '../../ui/Button';
 import { Card } from '../../ui/Card';
@@ -272,7 +272,7 @@ const styles = StyleSheet.create({
   form: { gap: 12, padding: SPACING.lg },
   field: { gap: 4 },
   check: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
-  summary: { borderWidth: 1, borderRadius: 10, padding: 12, gap: 8 },
+  summary: { borderWidth: 1, borderRadius: RADIUS.md, padding: 12, gap: 8 },
   summaryRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
   meter: { gap: 6 },
   bars: { flexDirection: 'row', gap: 4 },

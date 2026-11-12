@@ -17,6 +17,12 @@ test.beforeAll(async ({ request }) => {
 
 for (const theme of THEMES) {
   test.describe(`capturas móvil ${theme} 390`, () => {
+    // Cada tema parte de los datos de origen: las capturas de registro o de administración del tema anterior los cambian
+    test.beforeAll(async ({ request }) => {
+      await chaosOff(request, TENANT);
+      await resetTenant(request, TENANT);
+    });
+
     test('acceso, MFA y usuarios de prueba', async ({ page }) => {
       await seedStorage(page.context(), { tenant: TENANT, theme });
       await page.goto('/login');
@@ -263,7 +269,7 @@ for (const theme of THEMES) {
       await expect(page.getByRole('dialog', { name: 'Último resultado', exact: true })).toBeVisible();
       await captureMobile(page, 'verificacion-filtro', theme);
       await page.getByRole('radio', { name: 'Fallido', exact: true }).click();
-      await expect(page.getByTestId('testcase-row-TC-001').or(page.getByTestId('verification-empty')).first()).toBeVisible();
+      await expect(page.getByTestId(/^testcase-row-TC-\d+$/).or(page.getByTestId('verification-empty')).first()).toBeVisible();
       await captureMobile(page, 'verificacion-fallidos', theme);
       await page.getByRole('button', { name: 'Limpiar filtros', exact: true }).click();
 
@@ -305,7 +311,7 @@ for (const theme of THEMES) {
 
     test('auditoría: feed, filtros con errores de fecha y aviso sin permiso (sin cambiar nada)', async ({ page }) => {
       await openAs(page, 'auditor', '/audit', { tenant: TENANT, theme });
-      await expect(page.getByTestId('audit-count')).toHaveText('Mostrando 20 de 130 eventos');
+      await expect(page.getByTestId('audit-count')).toHaveText(/^Mostrando 20 de \d+ eventos$/);
       await captureMobile(page, 'auditoria', theme);
 
       await page.getByLabel('Desde', { exact: true }).fill('2026-13-45');
@@ -335,7 +341,7 @@ for (const theme of THEMES) {
       await page.getByRole('dialog', { name: 'Rol de Andrés Molina', exact: true }).getByRole('button', { name: 'Cerrar', exact: true }).click();
 
       await page.getByRole('tab', { name: 'Auditoría', exact: true }).click();
-      await expect(page.getByTestId('audit-count')).toHaveText('Mostrando 20 de 130 eventos');
+      await expect(page.getByTestId('audit-count')).toHaveText(/^Mostrando 20 de \d+ eventos$/);
       await captureMobile(page, 'admin-auditoria', theme);
 
       await page.getByRole('tab', { name: 'Modo caos', exact: true }).click();

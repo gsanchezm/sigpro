@@ -271,7 +271,7 @@ Buena suerte, y recuerda el orden de preferencia de locators: `getByRole` → `g
 
 ## 6. App móvil (Expo)
 
-SIGPRO tiene una versión móvil con **las mismas rutas, la misma API y los mismos `data-testid`** (en React Native se llaman `testID`, y en la versión web de Expo se pintan como `data-testid`). Incluye: acceso con MFA, **Programas** (tarjetas con filtros), **No conformidades** (tablero kanban), **Panel de misión** (tiempo real) y, en solo lectura, **Requisitos** y **Documentos**. No tiene Administración.
+SIGPRO tiene una versión móvil con **las mismas rutas, la misma API y los mismos `data-testid`** (en React Native se llaman `testID`, y en la versión web de Expo se pintan como `data-testid`). Es un espejo funcional de la web: acceso (MFA, registro, recuperar contraseña), **Programas**, **Requisitos**, **Verificación**, **No conformidades** (tablero kanban), **Panel de misión** (tiempo real) y, desde la pestaña **Más**, **Documentos**, **Auditoría**, **Administración**, **Perfil**, la ayuda y la búsqueda global, cada uno con los permisos de su rol. No incluye `/lab`, el arrastrar y soltar (se usa «Mover a…») ni los atajos de teclado.
 
 ### Arrancarla
 
