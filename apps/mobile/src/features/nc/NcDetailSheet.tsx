@@ -2,12 +2,14 @@ import {
   NC_SEVERITY_TONE,
   NC_STATE_TONE,
   NC_TESTIDS,
+  can,
   formatTrace,
   richTextToPlain,
   type NcCommentDto,
   type NcDetailDto,
   type NcState,
   type Role,
+  type UpdateNcInput,
 } from '@sigpro/shared';
 import { useState, type ReactNode } from 'react';
 import { ScrollView, StyleSheet, View, useWindowDimensions } from 'react-native';
@@ -16,12 +18,14 @@ import { useI18n, useTexts } from '../../state/i18n';
 import { useToast } from '../../state/toast';
 import { SPACING } from '../../theme/tokens';
 import { Badge } from '../../ui/Badge';
+import { Button } from '../../ui/Button';
 import { ErrorState, LoadingState } from '../../ui/States';
 import { Sheet } from '../../ui/Sheet';
 import { Text } from '../../ui/Text';
 import { commentErrorKey, failureKind, type FailureKind } from './failures';
 import { useNcDetail } from './hooks';
 import { NcComments } from './NcComments';
+import { NcEditForm } from './NcEditForm';
 import { NcTransitions } from './NcTransitions';
 import { NC_SCREEN_TEXTS, SEVERITY_LABEL_KEY, STATE_LABEL_KEY, isNcMessageKey } from './texts';
 import { MOVIL_NC_TESTIDS } from './testids';
@@ -45,6 +49,8 @@ export const NcDetailSheet = ({ code, role, onClose, onChanged }: Props) => {
   const toast = useToast();
   const { height } = useWindowDimensions();
   const { detail, setDetail, loading, failure, retry } = useNcDetail(code);
+  const canEdit = can(role, 'nc.edit');
+  const [editing, setEditing] = useState(false);
   const [closing, setClosing] = useState(false);
   const [moving, setMoving] = useState<NcState | null>(null);
   const [serverError, setServerError] = useState<string | null>(null);
@@ -91,6 +97,14 @@ export const NcDetailSheet = ({ code, role, onClose, onChanged }: Props) => {
     }
   };
 
+  /** Guarda los cambios de la edición: el detalle y el tablero pasan a lo que dice el servidor. Si falla, lo muestra el formulario. */
+  const save = async (changes: UpdateNcInput) => {
+    const updated = await api.nc.update(code, changes);
+    setDetail(updated);
+    toast.push('ok', t('nc', 'saved', { code }));
+    onChanged();
+  };
+
   const addComment = (comment: NcCommentDto) => {
     setDetail((current) => (current ? { ...current, comments: [...current.comments, comment], commentCount: current.commentCount + 1 } : current));
     onChanged();
@@ -117,30 +131,58 @@ export const NcDetailSheet = ({ code, role, onClose, onChanged }: Props) => {
             </View>
 
             <Field label={t('nc', 'program')} testID={NC_TESTIDS.NC_DETAIL_PROGRAM}>{`${detail.programCode} · ${detail.programName}`}</Field>
-            <Field label={t('nc', 'description')} testID={NC_TESTIDS.NC_DESCRIPTION}>
-              {richTextToPlain(detail.description)}
-            </Field>
-            <Field label={t('nc', 'assignee')} testID={NC_TESTIDS.NC_ASSIGNEE}>
-              {detail.assigneeName ?? t('nc', 'unassigned')}
-            </Field>
 
-            <NcTransitions
-              state={detail.state}
-              role={role}
-              moving={moving}
-              closing={closing}
-              closureFieldError={closureError}
-              serverError={serverError}
-              onMove={(to) => void move(to)}
-              onOpenClosure={() => setClosing(true)}
-              onCancelClosure={() => {
-                setClosing(false);
-                setClosureError(null);
-              }}
-              onSubmitClosure={(comment) => void move('closed', comment)}
-            />
+            {editing ? (
+              <NcEditForm
+                detail={detail}
+                onSave={save}
+                onDone={(closeAfter) => {
+                  setEditing(false);
+                  if (closeAfter) onClose();
+                }}
+                onCancel={() => setEditing(false)}
+              />
+            ) : (
+              <>
+                <Field label={t('nc', 'description')} testID={NC_TESTIDS.NC_DESCRIPTION}>
+                  {richTextToPlain(detail.description)}
+                </Field>
+                <Field label={t('nc', 'assignee')} testID={NC_TESTIDS.NC_ASSIGNEE}>
+                  {detail.assigneeName ?? t('nc', 'unassigned')}
+                </Field>
 
-            <NcComments code={code} comments={detail.comments} onAdded={addComment} />
+                <Button
+                  label={texts.editAction}
+                  testID={MOVIL_NC_TESTIDS.EDIT}
+                  disabled={!canEdit}
+                  disabledReason={canEdit ? undefined : t('nc', 'editDenied')}
+                  onPress={() => setEditing(true)}
+                />
+                {canEdit ? null : (
+                  <Text variant="small" tone="muted" role="status" testID={NC_TESTIDS.NC_DETAIL_DENIED}>
+                    {t('nc', 'editDenied')}
+                  </Text>
+                )}
+
+                <NcTransitions
+                  state={detail.state}
+                  role={role}
+                  moving={moving}
+                  closing={closing}
+                  closureFieldError={closureError}
+                  serverError={serverError}
+                  onMove={(to) => void move(to)}
+                  onOpenClosure={() => setClosing(true)}
+                  onCancelClosure={() => {
+                    setClosing(false);
+                    setClosureError(null);
+                  }}
+                  onSubmitClosure={(comment) => void move('closed', comment)}
+                />
+
+                <NcComments code={code} comments={detail.comments} onAdded={addComment} />
+              </>
+            )}
           </>
         ) : null}
       </ScrollView>

@@ -884,6 +884,19 @@ export const MOVIL_NC_TESTIDS = {
   BOARD_LOADING: 'nc-board-loading',
   /** Contenido desplazable del detalle: el `Sheet` no tiene scroll propio. */
   DETAIL_SCROLL: 'nc-detail-scroll',
+  /** Botón «Editar» del detalle: cambia el cuerpo de la hoja al formulario de edición (la web edita en el propio modal). */
+  EDIT: 'nc-edit',
+  /** Formulario de edición dentro de la hoja. */
+  EDIT_FORM: 'nc-edit-form',
+  /** Botón «Cancelar» de la edición. */
+  EDIT_CANCEL: 'nc-edit-cancel',
+  /** Motivo visible por el que «Nueva no conformidad» está deshabilitada (la web lo lleva en `title`). */
+  NEW_REASON: 'nc-new-reason',
+  /** Error de la asignación (un 422 `badAssignee`) bajo el selector de persona. */
+  ASSIGNEE_ERROR: 'nc-assignee-error',
+  /** Programas del alta aún sin llegar o con error (reintento). */
+  NEW_PROGRAMS_STATUS: 'nc-new-programs-status',
+  NEW_PROGRAMS_RETRY: 'nc-new-programs-retry',
 } as const;
 
 export const MOVIL_NC_DYNAMIC_TESTIDS = {

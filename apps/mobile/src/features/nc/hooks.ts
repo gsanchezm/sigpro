@@ -60,3 +60,15 @@ export const useNcDetail = (code: string) => {
   const retry = useCallback(() => setAttempt((count) => count + 1), []);
   return { detail, setDetail, loading, failure, retry };
 };
+
+/** Programas para el alta: los 100 primeros por código, como la web (`pageSize: 100`). Con error, `error` trae la traza y `reload` reintenta. */
+export const useNcPrograms = () => {
+  const { api } = useAuth();
+  return useResource(async () => (await api.programs.list({ sort: 'code', dir: 'asc', pageSize: 100 })).items.map(({ code, name }) => ({ code, name })), [api]);
+};
+
+/** Personas del tenant para la asignación (`api.users.owners`). */
+export const useNcOwners = () => {
+  const { api } = useAuth();
+  return useResource(() => api.users.owners(), [api]);
+};

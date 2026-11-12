@@ -22,13 +22,15 @@ interface Props<T extends string> {
   /** Motivo si está deshabilitado (se muestra como texto, regla de testabilidad). */
   readonly disabledReason?: string;
   readonly error?: string;
+  /** `data-testid` del mensaje de error (el de la web, p. ej. `nc-new-program-error`). */
+  readonly errorTestID?: string;
 }
 
 /**
  * Selector de una opción (el `<select>` de la web): un campo que muestra el valor y abre una hoja con las opciones como
  * `radio` (`aria-checked`) dentro de un `radiogroup`. Tocar una opción la elige y cierra la hoja.
  */
-export const SelectField = <T extends string>({ label, value, options, onChange, testID, disabled = false, disabledReason, error }: Props<T>) => {
+export const SelectField = <T extends string>({ label, value, options, onChange, testID, disabled = false, disabledReason, error, errorTestID }: Props<T>) => {
   const { colors } = useTheme();
   const { height } = useWindowDimensions();
   const [open, setOpen] = useState(false);
@@ -64,7 +66,7 @@ export const SelectField = <T extends string>({ label, value, options, onChange,
         </Text>
       ) : null}
       {error ? (
-        <Text variant="small" tone="danger" role="alert">
+        <Text variant="small" tone="danger" role="alert" testID={errorTestID}>
           {error}
         </Text>
       ) : null}

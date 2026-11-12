@@ -1,9 +1,11 @@
-import { NC_TESTIDS, type Role } from '@sigpro/shared';
+import { NC_TESTIDS, can, type CreateNcInput, type Role } from '@sigpro/shared';
 import { useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { useAuth } from '../../state/auth';
 import { useI18n, useTexts } from '../../state/i18n';
+import { useToast } from '../../state/toast';
 import { SPACING } from '../../theme/tokens';
+import { Button } from '../../ui/Button';
 import { EmptyState, ErrorState } from '../../ui/States';
 import { Screen } from '../../ui/Screen';
 import { Text } from '../../ui/Text';
@@ -12,8 +14,10 @@ import { isFiltered, type NcFilters, type SeverityFilter } from './filters';
 import { SEARCH_DEBOUNCE_MS, useDebouncedValue, useNcBoard } from './hooks';
 import { NcBoard } from './NcBoard';
 import { NcDetailSheet } from './NcDetailSheet';
+import { NcNewDialog } from './NcNewDialog';
 import { NcFilterBar } from './NcFilterBar';
 import { NC_SCREEN_TEXTS } from './texts';
+import { MOVIL_NC_TESTIDS } from './testids';
 
 /**
  * No conformidades (`/nc`): tablero por estado con filtros del servidor, detalle en hoja y cambio de estado.
@@ -22,8 +26,10 @@ import { NC_SCREEN_TEXTS } from './texts';
 export const NcScreen = () => {
   const { t } = useI18n();
   const texts = useTexts(NC_SCREEN_TEXTS);
-  const { user } = useAuth();
+  const { api, user } = useAuth();
+  const toast = useToast();
   const role: Role = user?.role ?? 'auditor';
+  const canCreate = can(role, 'nc.create');
 
   const [search, setSearch] = useState('');
   const [severity, setSeverity] = useState<SeverityFilter>('all');
@@ -31,6 +37,7 @@ export const NcScreen = () => {
   const filters: NcFilters = { q, severity };
   const board = useNcBoard(filters);
   const [selected, setSelected] = useState<string | null>(null);
+  const [creating, setCreating] = useState(false);
 
   const items = board.data?.items ?? [];
   const filtered = isFiltered(filters);
@@ -41,13 +48,41 @@ export const NcScreen = () => {
         ? t('nc', 'countFiltered', { shown: items.length, total: board.data.totalAll })
         : t('nc', 'count', { total: board.data.total, open: countOpen(items) });
 
+  /** Alta: el diálogo muestra el error si la API rechaza; con éxito se cierra y el tablero y el recuento se recargan. */
+  const createNc = async (input: CreateNcInput) => {
+    const created = await api.nc.create(input);
+    setCreating(false);
+    toast.push('ok', t('nc', 'created', { code: created.code }));
+    board.reload();
+  };
+
   const clearFilters = () => {
     setSearch('');
     setSeverity('all');
   };
 
   return (
-    <Screen title={t('nc', 'title')} subtitle={texts.subtitle} testID={NC_TESTIDS.NC_PAGE} scroll={false}>
+    <Screen
+      title={t('nc', 'title')}
+      subtitle={texts.subtitle}
+      testID={NC_TESTIDS.NC_PAGE}
+      scroll={false}
+      right={
+        <Button
+          label={t('nc', 'newButton')}
+          testID={NC_TESTIDS.NC_NEW}
+          variant="primary"
+          disabled={!canCreate}
+          disabledReason={canCreate ? undefined : t('nc', 'newDenied')}
+          onPress={() => setCreating(true)}
+        />
+      }
+    >
+      {canCreate ? null : (
+        <Text variant="small" tone="faint" testID={MOVIL_NC_TESTIDS.NEW_REASON}>
+          {t('nc', 'newDenied')}
+        </Text>
+      )}
       <NcFilterBar search={search} onSearch={setSearch} severity={severity} onSeverity={setSeverity} />
 
       <Text variant="small" tone="muted" testID={NC_TESTIDS.NC_COUNT}>
@@ -70,6 +105,7 @@ export const NcScreen = () => {
         </View>
       )}
 
+      {creating ? <NcNewDialog onClose={() => setCreating(false)} onSubmit={createNc} /> : null}
       {selected !== null ? <NcDetailSheet key={selected} code={selected} role={role} onClose={() => setSelected(null)} onChanged={board.reload} /> : null}
     </Screen>
   );

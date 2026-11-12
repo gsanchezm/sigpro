@@ -31,7 +31,7 @@ Fuera de alcance, por ser propios del navegador o del curso: `/lab` (la pantalla
 | Requisitos: matriz de trazabilidad (ver y enlazar/desenlazar) | [x] | [x] |
 | Verificación: casos de prueba, detalle, ejecuciones con evidencias, informe | [x] | [x] |
 | No conformidades: tablero, transiciones, comentarios, cierre | [x] | [x] |
-| No conformidades: alta y edición | [x] | [ ] |
+| No conformidades: alta y edición | [x] | [x] |
 | Documentos: lista, ficha, visor | [x] | [x] |
 | Documentos: publicar versión, comparar versiones, descargar | [x] | [ ] |
 | Auditoría | [x] | [ ] |

@@ -159,6 +159,47 @@ for (const theme of THEMES) {
       await captureMobile(page, 'nc-cierre', theme);
     });
 
+    test('no conformidades: alta con errores, selector de programa, edición y asignación (sin guardar nada)', async ({ page }) => {
+      await openAs(page, 'admin', '/nc', { tenant: TENANT, theme });
+      await expect(page.getByTestId('nc-column-count-open')).toHaveText('4');
+      await captureMobile(page, 'nc-tablero-nueva', theme);
+
+      await page.getByRole('button', { name: 'Nueva no conformidad', exact: true }).click();
+      const form = page.getByRole('dialog', { name: 'Nueva no conformidad', exact: true });
+      await form.getByRole('button', { name: 'Abrir no conformidad', exact: true }).click();
+      await expect(form.getByTestId('nc-new-severity-error')).toBeVisible();
+      await captureMobile(page, 'nc-nueva-errores', theme);
+      await form.getByRole('combobox', { name: 'Programa', exact: true }).click();
+      await expect(page.getByRole('dialog', { name: 'Programa', exact: true })).toBeVisible();
+      await captureMobile(page, 'nc-nueva-programa', theme);
+      await page.getByRole('dialog', { name: 'Programa', exact: true }).getByRole('radio', { name: /^PRG-002 · / }).click();
+      await form.getByRole('radio', { name: 'Crítica' }).click();
+      await form.getByLabel('Descripción', { exact: true }).fill('Fallo intermitente del enlace de datos');
+      await captureMobile(page, 'nc-nueva-completa', theme);
+      await form.getByRole('button', { name: 'Cancelar', exact: true }).click();
+
+      await page.getByTestId('nc-card-open-NC-012').click();
+      const sheet = page.getByRole('dialog', { name: 'Detalle de NC-012', exact: true });
+      await expect(sheet.getByRole('button', { name: 'Editar', exact: true })).toBeVisible();
+      await captureMobile(page, 'nc-detalle-editar', theme);
+      await sheet.getByRole('button', { name: 'Editar', exact: true }).click();
+      await expect(sheet.getByTestId('nc-edit-form')).toBeVisible();
+      await sheet.getByRole('radio', { name: 'Mayor' }).click();
+      await captureMobile(page, 'nc-editar', theme);
+      await sheet.getByRole('combobox', { name: 'Asignada a', exact: true }).click();
+      await expect(page.getByRole('dialog', { name: 'Asignada a', exact: true })).toBeVisible();
+      await captureMobile(page, 'nc-editar-asignar', theme);
+      await page.getByRole('dialog', { name: 'Asignada a', exact: true }).getByRole('button', { name: 'Cerrar', exact: true }).click();
+      await sheet.getByRole('button', { name: 'Cancelar', exact: true }).click();
+      await sheet.getByRole('button', { name: 'Cerrar', exact: true }).click();
+
+      // El auditor lee y comenta, pero «Editar» queda deshabilitado con su motivo
+      await openAs(page, 'auditor', '/nc', { tenant: TENANT, theme });
+      await page.getByTestId('nc-card-open-NC-012').click();
+      await expect(page.getByTestId('nc-detail-denied')).toBeVisible();
+      await captureMobile(page, 'nc-editar-denegado', theme);
+    });
+
     test('panel de misión: KPIs, gráficas y feed en vivo', async ({ page }) => {
       await openAs(page, 'admin', '/mission', { tenant: TENANT, theme });
       await expect(page.getByTestId('mission-connection')).toHaveAttribute('data-state', 'connected', { timeout: 15_000 });
