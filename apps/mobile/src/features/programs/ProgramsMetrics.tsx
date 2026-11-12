@@ -9,10 +9,11 @@ import { Metric, MetricGrid } from '../../ui/Metric';
  * filtros de la lista: salen del resumen de Misión (una petición, los mismos ids que la web). Si el resumen falla, «—»:
  * la lista de debajo sigue funcionando.
  */
-export const ProgramsMetrics = () => {
+export const ProgramsMetrics = ({ refreshKey = 0 }: { readonly refreshKey?: number }) => {
   const { t } = useI18n();
   const { api } = useAuth();
-  const summary = useResource(() => api.mission.summary(), [api]);
+  // `refreshKey` cambia tras cada alta, copia, archivado o borrado: las tarjetas se vuelven a pedir (como la web)
+  const summary = useResource(() => api.mission.summary(), [api, refreshKey]);
 
   const kpis = summary.data?.kpis;
   const placeholder = summary.error !== null ? '—' : '…';

@@ -32,6 +32,10 @@ describe('toProgramsQuery', () => {
   it('añade solo los filtros que tienen valor', () => {
     expect(toProgramsQuery({ q: 'radar', status: 'closed' }, 1)).toEqual({ q: 'radar', status: 'closed', sort: 'code', dir: 'asc', page: 1, pageSize: PAGE_SIZE });
   });
+
+  it('tras un alta o una copia la lista va en orden descendente: el programa nuevo sale el primero', () => {
+    expect(toProgramsQuery(NO_FILTERS, 1, 'desc')).toEqual({ sort: 'code', dir: 'desc', page: 1, pageSize: PAGE_SIZE });
+  });
 });
 
 describe('selector de estado', () => {

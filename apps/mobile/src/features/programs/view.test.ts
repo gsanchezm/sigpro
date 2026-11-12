@@ -1,6 +1,6 @@
 import { ApiError, PROGRAM_STATUSES, type MilestoneDto, type ProgramDto } from '@sigpro/shared';
 import { describe, expect, it } from 'vitest';
-import { appendPrograms, countDone, isNotFound, milestoneStatusOf, programStatusTone, sortMilestones } from './view';
+import { appendPrograms, countDone, filterOwners, isAllSelected, isNotFound, milestoneStatusOf, programPermissionsOf, programStatusTone, sortMilestones, toggleAllSelection, toggleSelection } from './view';
 
 const program = (code: string, name = code): ProgramDto => ({
   code,
@@ -75,5 +75,56 @@ describe('isNotFound', () => {
   it('cualquier otro fallo no es «no encontrado»', () => {
     expect(isNotFound(new ApiError(503, { ...body, statusCode: 503 }, 'GET /api/programs/X → 503 Service Unavailable'))).toBe(false);
     expect(isNotFound(new Error('red'))).toBe(false);
+  });
+});
+
+describe('programPermissionsOf (la matriz de la web)', () => {
+  it('el admin puede todo sobre programas e hitos', () => {
+    expect(programPermissionsOf('admin')).toEqual({ create: true, edit: true, archive: true, delete: true, milestoneEdit: true, milestoneDelete: true });
+  });
+
+  it('el gestor crea, edita, archiva e hitos, pero no elimina programas', () => {
+    expect(programPermissionsOf('program_manager')).toEqual({ create: true, edit: true, archive: true, delete: false, milestoneEdit: true, milestoneDelete: true });
+  });
+
+  it('el consultor y el auditor solo leen', () => {
+    const readOnly = { create: false, edit: false, archive: false, delete: false, milestoneEdit: false, milestoneDelete: false };
+    expect(programPermissionsOf('consultant')).toEqual(readOnly);
+    expect(programPermissionsOf('auditor')).toEqual(readOnly);
+  });
+});
+
+describe('selección múltiple de la lista', () => {
+  it('marca y desmarca un programa sin tocar la selección anterior', () => {
+    const before = ['PRG-001'];
+    expect(toggleSelection(before, 'PRG-002')).toEqual(['PRG-001', 'PRG-002']);
+    expect(toggleSelection(['PRG-001', 'PRG-002'], 'PRG-001')).toEqual(['PRG-002']);
+    expect(before).toEqual(['PRG-001']);
+  });
+
+  it('«Seleccionar todos» añade la página entera o, si ya estaban todos, la quita', () => {
+    const page = ['PRG-001', 'PRG-002'];
+    expect(isAllSelected([], page)).toBe(false);
+    expect(toggleAllSelection(['PRG-009'], page)).toEqual(['PRG-009', 'PRG-001', 'PRG-002']);
+    expect(isAllSelected(['PRG-001', 'PRG-002'], page)).toBe(true);
+    expect(toggleAllSelection(['PRG-001', 'PRG-002', 'PRG-009'], page)).toEqual(['PRG-009']);
+    expect(isAllSelected([], [])).toBe(false);
+  });
+});
+
+describe('filterOwners (buscador del responsable)', () => {
+  const owners = [
+    { id: 'u1', name: 'Javier Ortega' },
+    { id: 'u4', name: 'Andrés Molina' },
+    { id: 'u5', name: 'Lucía Fernández' },
+  ];
+
+  it('sin texto enseña a todas las personas', () => {
+    expect(filterOwners(owners, '  ', '')).toHaveLength(3);
+  });
+
+  it('filtra por nombre sin distinguir mayúsculas y siempre deja el responsable elegido', () => {
+    expect(filterOwners(owners, 'LUC', '')).toEqual([{ id: 'u5', name: 'Lucía Fernández' }]);
+    expect(filterOwners(owners, 'zzz', 'u4')).toEqual([{ id: 'u4', name: 'Andrés Molina' }]);
   });
 });

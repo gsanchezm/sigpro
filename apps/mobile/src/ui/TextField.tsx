@@ -5,7 +5,7 @@ import { RADIUS } from '../theme/tokens';
 import { Text } from './Text';
 
 interface Props
-  extends Pick<TextInputProps, 'value' | 'onChangeText' | 'placeholder' | 'secureTextEntry' | 'keyboardType' | 'autoCapitalize' | 'autoCorrect' | 'maxLength' | 'multiline' | 'onSubmitEditing' | 'returnKeyType' | 'editable'> {
+  extends Pick<TextInputProps, 'value' | 'onChangeText' | 'placeholder' | 'secureTextEntry' | 'keyboardType' | 'autoCapitalize' | 'autoCorrect' | 'maxLength' | 'multiline' | 'onSubmitEditing' | 'returnKeyType' | 'editable' | 'onFocus' | 'onBlur'> {
   /** Etiqueta visible y nombre accesible del campo (`getByLabel`). Distinta del placeholder. */
   readonly label: string;
   readonly testID: string;

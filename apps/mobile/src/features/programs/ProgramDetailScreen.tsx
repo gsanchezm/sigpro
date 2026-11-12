@@ -1,51 +1,58 @@
-import { DETALLE_TESTIDS, HITOS_TESTIDS, MOVIL_TESTIDS, REQUISITOS_TESTIDS, formatDate, formatMoney, toProgressTitle, type MilestoneDto, type ProgramDto } from '@sigpro/shared';
+import { DETALLE_DYNAMIC_TESTIDS, DETALLE_TESTIDS, EDITAR_PROGRAMA_TESTIDS, MOVIL_TESTIDS, REQUISITOS_TESTIDS, formatDate, formatMoney, toProgressTitle, type ProgramDto } from '@sigpro/shared';
 import { useRouter } from 'expo-router';
-import type { ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import { StyleSheet, View } from 'react-native';
+import { useAuth } from '../../state/auth';
 import { useI18n, useTexts } from '../../state/i18n';
-import type { Resource } from '../../lib/resource';
+import { SPACING } from '../../theme/tokens';
 import { Avatar } from '../../ui/Avatar';
 import { Button } from '../../ui/Button';
+import type { Resource } from '../../lib/resource';
 import { ProgressBar } from '../../ui/ProgressBar';
 import { Screen } from '../../ui/Screen';
+import { Segmented } from '../../ui/Segmented';
 import { ErrorState, LoadingState } from '../../ui/States';
 import { Text } from '../../ui/Text';
-import { MilestonesList } from './MilestonesList';
+import { MilestonesPanel } from './MilestonesPanel';
 import { ProgramStatusBadge } from './ProgramStatusBadge';
+import { SuppliersPanel } from './SuppliersPanel';
 import { PROGRAMS_TEXTS } from './texts';
-import { MOVIL_PROGRAMS_TESTIDS } from './testids';
+import { MOVIL_PROGRAMS_DYNAMIC_TESTIDS, MOVIL_PROGRAMS_TESTIDS } from './testids';
 import { useProgramDetail, type ProgramLookup } from './useProgramDetail';
-import { countDone } from './view';
+import { programPermissionsOf, type ProgramPermissions } from './view';
 
 interface Props {
   readonly code: string;
 }
 
+type DetailTab = 'summary' | 'milestones' | 'suppliers';
+
 /**
- * Detalle de un programa (`/programs/:code`), solo lectura: cabecera con código, nombre y estado, progreso, responsable,
- * fechas, presupuesto, descripción e hitos. «Ver requisitos» enlaza con `/programs/:code/requirements`.
+ * Detalle de un programa (`/programs/:code`). Cabecera con código, estado y el botón «Editar programa» (deshabilitado con su
+ * motivo si el rol no puede); debajo, tres pestañas como el detalle de la web: «Resumen» (progreso, ficha, descripción y
+ * «Ver requisitos»), «Hitos» (alta, edición, avance y borrado) y «Proveedores» (contratados y buscador).
  */
 export const ProgramDetailScreen = ({ code }: Props) => {
   const { t } = useI18n();
   const router = useRouter();
-  const { program, milestones } = useProgramDetail(code);
+  const { user } = useAuth();
+  const permissions = programPermissionsOf(user?.role ?? 'auditor');
+  const { program } = useProgramDetail(code);
   const found = program.data?.kind === 'found' ? program.data.program : null;
 
   const back = () => (router.canGoBack() ? router.back() : router.replace('/programs'));
 
   return (
     <Screen title={found?.name ?? t('common', 'detailTitle')} subtitle={found ? undefined : code} testID={MOVIL_TESTIDS.PROGRAM_DETAIL_PAGE}>
-      <ProgramBody program={program} />
-      {found ? <MilestonesSection code={found.code} milestones={milestones} /> : null}
+      <ProgramBody program={program} permissions={permissions} />
       <Button label={t('common', 'backToPrograms')} testID={DETALLE_TESTIDS.PROGRAM_DETAIL_BACK} variant="ghost" onPress={back} />
     </Screen>
   );
 };
 
-/** Cuerpo del programa según su estado de carga: cargando, error, 404 o datos. */
-const ProgramBody = ({ program }: { readonly program: Resource<ProgramLookup> }) => {
+/** Cuerpo del programa según su estado de carga: cargando, error, 404 o datos con sus pestañas. */
+const ProgramBody = ({ program, permissions }: { readonly program: Resource<ProgramLookup>; readonly permissions: ProgramPermissions }) => {
   const texts = useTexts(PROGRAMS_TEXTS);
-  const router = useRouter();
   const lookup = program.data;
 
   if (lookup === null && program.error === null) return <LoadingState testID={MOVIL_PROGRAMS_TESTIDS.PROGRAM_DETAIL_LOADING} />;
@@ -75,32 +82,87 @@ const ProgramBody = ({ program }: { readonly program: Resource<ProgramLookup> })
     );
   }
 
-  const { program: found } = lookup;
+  return <ProgramDetailView program={lookup.program} permissions={permissions} onChanged={program.reload} />;
+};
+
+interface ViewProps {
+  readonly program: ProgramDto;
+  readonly permissions: ProgramPermissions;
+  /** Vuelve a pedir el programa (avance y hitos cumplidos) tras un cambio en sus hitos. */
+  readonly onChanged: () => void;
+}
+
+/** Cabecera, pestañas y el panel de la pestaña elegida. */
+const ProgramDetailView = ({ program, permissions, onChanged }: ViewProps) => {
+  const { t } = useI18n();
+  const router = useRouter();
+  const [tab, setTab] = useState<DetailTab>('summary');
+  const editReason = permissions.edit ? null : t('programas', 'editButtonDisabled');
+
   return (
-    <>
-      <ProgramDetail program={found} />
-      <Button
-        label={texts.openRequirements}
-        testID={REQUISITOS_TESTIDS.PROGRAM_DETAIL_OPEN_REQUIREMENTS}
-        variant="primary"
-        onPress={() => router.push(`/programs/${encodeURIComponent(found.code)}/requirements`)}
+    <View testID={DETALLE_TESTIDS.PROGRAM_DETAIL} style={styles.block}>
+      <View style={styles.header}>
+        <View style={styles.row}>
+          <Text variant="mono" tone="muted">
+            {program.code}
+          </Text>
+          <ProgramStatusBadge status={program.status} testID={DETALLE_TESTIDS.PROGRAM_DETAIL_STATE_BADGE} />
+        </View>
+        <Button
+          label={t('programas', 'editButton')}
+          testID={EDITAR_PROGRAMA_TESTIDS.PROGRAM_DETAIL_EDIT}
+          variant="secondary"
+          disabled={!permissions.edit}
+          disabledReason={editReason ?? undefined}
+          onPress={() => router.push(`/programs/${encodeURIComponent(program.code)}/edit`)}
+        />
+        {editReason ? (
+          <Text variant="small" tone="faint" testID={MOVIL_PROGRAMS_DYNAMIC_TESTIDS.ACTION_REASON('edit')}>
+            {editReason}
+          </Text>
+        ) : null}
+      </View>
+
+      <Segmented<DetailTab>
+        testID={DETALLE_TESTIDS.PROGRAM_DETAIL_TABS}
+        label={t('common', 'detailTitle')}
+        value={tab}
+        onChange={setTab}
+        options={[
+          { value: 'summary', label: t('common', 'tabSummary'), testID: DETALLE_DYNAMIC_TESTIDS.PROGRAM_DETAIL_TAB('summary') },
+          { value: 'milestones', label: t('common', 'tabMilestones'), testID: DETALLE_DYNAMIC_TESTIDS.PROGRAM_DETAIL_TAB('milestones') },
+          { value: 'suppliers', label: t('proveedores', 'title'), testID: MOVIL_PROGRAMS_TESTIDS.PROGRAM_DETAIL_TAB_SUPPLIERS },
+        ]}
       />
-    </>
+
+      {tab === 'summary' ? (
+        <View testID={DETALLE_DYNAMIC_TESTIDS.PROGRAM_DETAIL_PANEL('summary')} style={styles.block}>
+          <SummaryPanel program={program} />
+        </View>
+      ) : null}
+
+      {tab === 'milestones' ? (
+        <View testID={DETALLE_DYNAMIC_TESTIDS.PROGRAM_DETAIL_PANEL('milestones')} style={styles.block}>
+          <MilestonesPanel code={program.code} permissions={permissions} onChanged={onChanged} />
+        </View>
+      ) : null}
+
+      {tab === 'suppliers' ? (
+        <View testID={MOVIL_PROGRAMS_TESTIDS.PROGRAM_DETAIL_PANEL_SUPPLIERS} style={styles.block}>
+          <SuppliersPanel code={program.code} />
+        </View>
+      ) : null}
+    </View>
   );
 };
 
-/** Cabecera, progreso, ficha y descripción de un programa encontrado. */
-const ProgramDetail = ({ program }: { readonly program: ProgramDto }) => {
+/** Resumen: progreso, responsable, fechas, presupuesto y descripción; «Ver requisitos» enlaza con `/programs/:code/requirements`. */
+const SummaryPanel = ({ program }: { readonly program: ProgramDto }) => {
   const { t, lang } = useI18n();
+  const texts = useTexts(PROGRAMS_TEXTS);
+  const router = useRouter();
   return (
-    <View testID={DETALLE_TESTIDS.PROGRAM_DETAIL} style={styles.block}>
-      <View style={styles.row}>
-        <Text variant="mono" tone="muted">
-          {program.code}
-        </Text>
-        <ProgramStatusBadge status={program.status} testID={DETALLE_TESTIDS.PROGRAM_DETAIL_STATE_BADGE} />
-      </View>
-
+    <>
       <View style={styles.block}>
         <Text variant="small" tone="muted">
           {t('common', 'progressLabelShort')}
@@ -137,7 +199,14 @@ const ProgramDetail = ({ program }: { readonly program: ProgramDto }) => {
           {program.description}
         </Text>
       ) : null}
-    </View>
+
+      <Button
+        label={texts.openRequirements}
+        testID={REQUISITOS_TESTIDS.PROGRAM_DETAIL_OPEN_REQUIREMENTS}
+        variant="primary"
+        onPress={() => router.push(`/programs/${encodeURIComponent(program.code)}/requirements`)}
+      />
+    </>
   );
 };
 
@@ -151,42 +220,9 @@ const Fact = ({ label, children }: { readonly label: string; readonly children: 
   </View>
 );
 
-/** Sección de hitos: contador, lista de solo lectura, o estados de carga, vacío y error. */
-const MilestonesSection = ({ code, milestones }: { readonly code: string; readonly milestones: Resource<readonly MilestoneDto[]> }) => {
-  const { t } = useI18n();
-  const { data: items, error, reload, loading } = milestones;
-  const loadFailed = error !== null && items === null;
-
-  return (
-    <View testID={HITOS_TESTIDS.MILESTONES_PANEL} style={styles.block}>
-      <Text variant="heading" role="heading" aria-level={2}>
-        {t('hitos', 'title')}
-      </Text>
-      {items ? (
-        <Text variant="small" tone="muted" testID={HITOS_TESTIDS.MILESTONES_COUNT} aria-live="polite">
-          {t('hitos', 'count', { done: countDone(items), total: items.length })}
-        </Text>
-      ) : null}
-
-      {items === null && !loadFailed && loading ? <LoadingState testID={MOVIL_PROGRAMS_TESTIDS.MILESTONES_LOADING} /> : null}
-
-      {loadFailed ? (
-        <ErrorState testID={HITOS_TESTIDS.MILESTONES_ERROR} retryTestID={HITOS_TESTIDS.MILESTONES_ERROR_RETRY} title={t('hitos', 'errorTitle')} trace={error ?? undefined} onRetry={reload} />
-      ) : null}
-
-      {items && items.length === 0 ? (
-        <Text variant="small" tone="muted" testID={HITOS_TESTIDS.MILESTONES_EMPTY}>
-          {t('hitos', 'empty')}
-        </Text>
-      ) : null}
-
-      {items && items.length > 0 ? <MilestonesList code={code} milestones={items} /> : null}
-    </View>
-  );
-};
-
 const styles = StyleSheet.create({
-  block: { gap: 8 },
+  block: { gap: SPACING.sm },
+  header: { gap: SPACING.sm },
   row: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   grow: { flex: 1 },
   facts: { gap: 10 },

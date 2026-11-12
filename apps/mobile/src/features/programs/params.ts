@@ -32,12 +32,15 @@ export const filtersToParams = (filters: ProgramsFilters): { readonly status: st
   q: filters.q.trim() || undefined,
 });
 
+/** Orden por código. Tras un alta o una copia la lista pasa a `desc`, para que el programa nuevo salga el primero (como la web). */
+export type ListOrder = 'asc' | 'desc';
+
 /** Filtros → consulta de la API. La página la decide la lista («Cargar más» añade la siguiente). */
-export const toProgramsQuery = (filters: ProgramsFilters, page: number): ProgramListQuery => ({
+export const toProgramsQuery = (filters: ProgramsFilters, page: number, order: ListOrder = 'asc'): ProgramListQuery => ({
   ...(filters.q ? { q: filters.q } : {}),
   ...(filters.status ? { status: filters.status } : {}),
   sort: 'code',
-  dir: 'asc',
+  dir: order,
   page,
   pageSize: PAGE_SIZE,
 });

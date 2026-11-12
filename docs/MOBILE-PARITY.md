@@ -22,10 +22,10 @@ Fuera de alcance, por ser propios del navegador o del curso: `/lab` (la pantalla
 | Acceso: login, MFA | [x] | [x] |
 | Acceso: registro, recuperar contraseña, reenviar verificación | [x] | [ ] |
 | Páginas legales y ayuda | [x] | [ ] |
-| Programas: lista, filtros, métricas, detalle (lectura) | [x] | [x] |
-| Programas: alta (asistente), edición, archivar, duplicar, eliminar | [x] | [ ] |
-| Hitos: alta, edición, avance, borrado | [x] | [ ] |
-| Proveedores de un programa | [x] | [ ] |
+| Programas: lista, filtros, métricas, detalle | [x] | [x] |
+| Programas: alta (asistente), edición, archivar, duplicar, eliminar, selección múltiple y CSV | [x] | [x] |
+| Hitos: alta, edición, avance, borrado | [x] | [x] |
+| Proveedores de un programa | [x] | [x] |
 | Requisitos: lectura, métricas, árbol, documento, flujo | [x] | [x] |
 | Requisitos: transiciones de estado, alta, edición, borrado, mover | [x] | [x] |
 | Requisitos: matriz de trazabilidad (ver y enlazar/desenlazar) | [x] | [x] |

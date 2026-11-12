@@ -39,8 +39,40 @@ for (const theme of THEMES) {
       await captureMobile(page, 'programas-en-pausa', theme);
 
       await page.goto('/programs/PRG-002');
-      await expect(page.getByTestId(/^milestone-row-PRG-002-M\d+$/)).toHaveCount(6);
+      await expect(page.getByRole('button', { name: 'Editar programa', exact: true })).toBeVisible();
       await captureMobile(page, 'programa-detalle', theme);
+
+      await page.getByRole('radio', { name: 'Hitos', exact: true }).click();
+      await expect(page.getByTestId(/^milestone-row-PRG-002-M\d+$/)).toHaveCount(6);
+      await captureMobile(page, 'programa-hitos', theme);
+
+      await page.getByRole('radio', { name: 'Proveedores', exact: true }).click();
+      await expect(page.getByTestId('suppliers-panel')).toBeVisible();
+      await captureMobile(page, 'programa-proveedores', theme);
+    });
+
+    test('programas: asistente de alta, menú de fila, edición y selección', async ({ page }) => {
+      await openAs(page, 'admin', '/programs', { tenant: TENANT, theme });
+      await expect(page.getByTestId('programs-count')).toHaveText('1–10 de 24');
+      await page.getByRole('button', { name: 'Nuevo programa', exact: true }).click();
+      const wizard = page.getByRole('dialog', { name: 'Nuevo programa', exact: true });
+      await expect(wizard.getByTestId('programs-wizard-step-text')).toHaveText('Paso 1 de 3');
+      await captureMobile(page, 'programas-nuevo', theme);
+      await wizard.getByRole('button', { name: 'Cancelar', exact: true }).click();
+
+      await page.getByRole('button', { name: 'Acciones para PRG-001', exact: true }).click();
+      await expect(page.getByRole('dialog', { name: 'Acciones para PRG-001', exact: true })).toBeVisible();
+      await captureMobile(page, 'programas-menu', theme);
+      await page.getByRole('button', { name: 'Cerrar', exact: true }).click();
+
+      await page.getByRole('button', { name: 'Seleccionar', exact: true }).click();
+      await page.getByRole('checkbox', { name: 'Seleccionar PRG-001', exact: true }).click();
+      await expect(page.getByTestId('programs-bulk-bar')).toBeVisible();
+      await captureMobile(page, 'programas-seleccion', theme);
+
+      await page.goto('/programs/PRG-003/edit');
+      await expect(page.getByRole('heading', { level: 1, name: 'Editar programa', exact: true })).toBeVisible();
+      await captureMobile(page, 'programa-editar', theme);
     });
 
     test('requisitos en lectura: árbol y detalle', async ({ page }) => {

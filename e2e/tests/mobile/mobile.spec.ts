@@ -141,13 +141,20 @@ test.describe('Móvil · programas', () => {
     await expect(page.getByTestId('programs-count')).toContainText('de 12'); // 12 programas activos
   });
 
-  test('detalle del programa: hitos de solo lectura y enlace a sus requisitos', async ({ page }) => {
+  // Paridad funcional (docs/MOBILE-PARITY.md): el detalle ya no es de solo lectura. El admin edita desde la cabecera y ve
+  // los hitos en su pestaña; el resto de acciones (alta, edición, menú, proveedores) viven en `programs-edit.spec.ts`.
+  test('detalle del programa: editar desde la cabecera, pestañas Resumen · Hitos · Proveedores y enlace a sus requisitos', async ({ page }) => {
     await page.getByTestId('programs-row-PRG-002').click();
     await expect(page).toHaveURL(/\/programs\/PRG-002$/);
     await expect(page.getByTestId('program-detail-state-badge')).toHaveAttribute('data-state', 'active');
+    await expect(page.getByRole('button', { name: 'Editar programa', exact: true })).toBeEnabled();
+    await expect(page.getByRole('radio', { name: 'Resumen', exact: true })).toHaveAttribute('aria-checked', 'true');
+    await expect(page.getByTestId(/^milestone-row-PRG-002-M\d+$/)).toHaveCount(0); // los hitos están en su pestaña
+    await page.getByRole('radio', { name: 'Hitos', exact: true }).click();
     await expect(page.getByTestId(/^milestone-row-PRG-002-M\d+$/)).toHaveCount(6);
-    await expect(page.getByRole('button', { name: /Editar|Eliminar|Archivar/ })).toHaveCount(0); // solo lectura
+    await expect(page.getByRole('button', { name: 'Nuevo hito', exact: true })).toBeEnabled();
 
+    await page.getByRole('radio', { name: 'Resumen', exact: true }).click();
     await page.getByRole('button', { name: 'Ver requisitos' }).click();
     await expect(page).toHaveURL(/\/programs\/PRG-002\/requirements$/);
     await expect(page.getByTestId('requirements-count')).toContainText('14 de 14');

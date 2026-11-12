@@ -845,6 +845,35 @@ export const MOVIL_PROGRAMS_TESTIDS = {
   PROGRAM_DETAIL_BUDGET: 'program-detail-budget',
   /** Carga de los hitos del programa. */
   MILESTONES_LOADING: 'program-milestones-loading',
+  /** Motivo visible del botón «Nuevo programa» deshabilitado (la web lo lleva en `title`). */
+  NEW_REASON: 'programs-new-reason',
+  /** Conmutador «Seleccionar»: activa la selección múltiple en las tarjetas (la web usa casillas en la tabla). */
+  SELECT_MODE: 'programs-select-mode',
+  /** Pestaña «Proveedores» del detalle (la web los muestra dentro de «Resumen»; en móvil tienen pestaña propia). */
+  PROGRAM_DETAIL_TAB_SUPPLIERS: 'program-detail-tab-suppliers',
+  PROGRAM_DETAIL_PANEL_SUPPLIERS: 'program-detail-panel-suppliers',
+  /** Hoja «Editar hito» (nombre y fecha límite; la web lo hace en línea en cada celda). */
+  MILESTONE_EDIT_DIALOG: 'milestone-edit-dialog',
+  MILESTONE_EDIT_NAME: 'milestone-edit-name',
+  MILESTONE_EDIT_NAME_ERROR: 'milestone-edit-name-error',
+  MILESTONE_EDIT_DATE: 'milestone-edit-date',
+  MILESTONE_EDIT_DATE_ERROR: 'milestone-edit-date-error',
+  MILESTONE_EDIT_SUBMIT: 'milestone-edit-submit',
+  MILESTONE_EDIT_CANCEL: 'milestone-edit-cancel',
+  MILESTONE_EDIT_SERVER_ERROR: 'milestone-edit-server-error',
+  /** Motivo visible del botón «Nuevo hito» deshabilitado. */
+  MILESTONES_NEW_REASON: 'milestones-new-reason',
+  /** Texto «Paso 1 de 3» del asistente de alta (la web lo muestra sin id). */
+  WIZARD_STEP_TEXT: 'programs-wizard-step-text',
+  /** Carga de la lista de proveedores contratados (`aria-busy`). */
+  SUPPLIERS_LOADING: 'program-suppliers-loading',
+} as const;
+
+export const MOVIL_PROGRAMS_DYNAMIC_TESTIDS = {
+  /** Motivo visible de una acción deshabilitada: `programs-action-reason-archive` (menú de fila y barra masiva). */
+  ACTION_REASON: (action: string) => `programs-action-reason-${action}`,
+  /** Motivo visible del slider de avance de un hito sin permiso: `milestone-progress-reason-PRG-001-M01`. */
+  MILESTONE_PROGRESS_REASON: (id: string) => `milestone-progress-reason-${id}`,
 } as const;
 
 // nc

@@ -1,7 +1,7 @@
 import type { ProgramDto, ProgramListResponse } from '@sigpro/shared';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useAuth } from '../../state/auth';
-import { hasMorePages, toProgramsQuery, type ProgramsFilters } from './params';
+import { hasMorePages, toProgramsQuery, type ListOrder, type ProgramsFilters } from './params';
 import { appendPrograms } from './view';
 
 // Lista de programas por páginas. No usa `useResource` porque aquí los datos crecen («Cargar más» añade)
@@ -59,7 +59,7 @@ const metaOf = (response: ProgramListResponse): ProgramsMeta => ({
  * Carga la primera página al cambiar los filtros (la lista se reinicia) y añade las siguientes con `loadMore`.
  * `filters` debe ser estable (memoizado): cada cambio de identidad vuelve a pedir la primera página.
  */
-export const usePagedPrograms = (filters: ProgramsFilters): PagedPrograms => {
+export const usePagedPrograms = (filters: ProgramsFilters, order: ListOrder = 'asc'): PagedPrograms => {
   const { api } = useAuth();
   const [state, setState] = useState<PagedState>(INITIAL);
   const [version, setVersion] = useState(0);
@@ -73,7 +73,7 @@ export const usePagedPrograms = (filters: ProgramsFilters): PagedPrograms => {
     const mine = sequence.current;
     pendingMore.current = false;
     setState(INITIAL);
-    api.programs.list(toProgramsQuery(filters, 1)).then(
+    api.programs.list(toProgramsQuery(filters, 1, order)).then(
       (response) => {
         if (mine !== sequence.current) return;
         setState({ phase: 'ready', items: response.items, meta: metaOf(response), error: null, loadingMore: false, moreError: null });
@@ -83,7 +83,7 @@ export const usePagedPrograms = (filters: ProgramsFilters): PagedPrograms => {
         setState({ ...INITIAL, phase: 'error', error: failure });
       },
     );
-  }, [api, filters, version]);
+  }, [api, filters, order, version]);
 
   const loadMore = useCallback(() => {
     const current = latest.current;
@@ -92,7 +92,7 @@ export const usePagedPrograms = (filters: ProgramsFilters): PagedPrograms => {
     const nextPage = current.meta.page + 1;
     pendingMore.current = true;
     setState((previous) => ({ ...previous, loadingMore: true, moreError: null }));
-    api.programs.list(toProgramsQuery(filters, nextPage)).then(
+    api.programs.list(toProgramsQuery(filters, nextPage, order)).then(
       (response) => {
         if (mine !== sequence.current) return;
         pendingMore.current = false;
@@ -104,7 +104,7 @@ export const usePagedPrograms = (filters: ProgramsFilters): PagedPrograms => {
         setState((previous) => ({ ...previous, loadingMore: false, moreError: failure }));
       },
     );
-  }, [api, filters]);
+  }, [api, filters, order]);
 
   const reload = useCallback(() => setVersion((current) => current + 1), []);
 

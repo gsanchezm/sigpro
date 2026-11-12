@@ -1,4 +1,4 @@
-import { formatTrace, type MilestoneDto, type ProgramDto } from '@sigpro/shared';
+import { formatTrace, type ProgramDto } from '@sigpro/shared';
 import { useAuth } from '../../state/auth';
 import { useResource, type Resource } from '../../lib/resource';
 import { isNotFound } from './view';
@@ -8,10 +8,10 @@ export type ProgramLookup = { readonly kind: 'found'; readonly program: ProgramD
 
 export interface ProgramDetailData {
   readonly program: Resource<ProgramLookup>;
-  readonly milestones: Resource<readonly MilestoneDto[]>;
 }
 
-/** Programa y sus hitos. Un 404 no es un error de carga: la pantalla muestra «Programa no encontrado». */
+/** Programa del detalle. Un 404 no es un error de carga: la pantalla muestra «Programa no encontrado». Los hitos y los
+ * proveedores los pide cada panel por su cuenta. */
 export const useProgramDetail = (code: string): ProgramDetailData => {
   const { api } = useAuth();
 
@@ -24,7 +24,5 @@ export const useProgramDetail = (code: string): ProgramDetailData => {
     }
   }, [api, code]);
 
-  const milestones = useResource<readonly MilestoneDto[]>(() => api.milestones.list(code), [api, code]);
-
-  return { program, milestones };
+  return { program };
 };
