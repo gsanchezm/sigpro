@@ -33,7 +33,7 @@ Fuera de alcance, por ser propios del navegador o del curso: `/lab` (la pantalla
 | No conformidades: tablero, transiciones, comentarios, cierre | [x] | [x] |
 | No conformidades: alta y edición | [x] | [x] |
 | Documentos: lista, ficha, visor | [x] | [x] |
-| Documentos: publicar versión, comparar versiones, descargar | [x] | [ ] |
+| Documentos: publicar versión, comparar versiones, descargar | [x] | [x] |
 | Auditoría | [x] | [ ] |
 | Administración: usuarios, modo caos, reinicio | [x] | [ ] |
 | Panel de misión | [x] | [x] |

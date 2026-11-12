@@ -36,3 +36,26 @@ const shareFromCache = async (blob: Blob, filename: string, mimeType: string): P
  * iOS y Android: lo guarda en la caché y abre la hoja de compartir. Falla si la plataforma no puede.
  */
 export const deliverFile = (blob: Blob, filename: string, mimeType: string): Promise<void> => (Platform.OS === 'web' ? openInBrowser(blob) : shareFromCache(blob, filename, mimeType));
+
+/** Descarga de la web: un `<a download>` temporal, así el navegador guarda el archivo con su nombre (como la web de escritorio). */
+const downloadInBrowser = (blob: Blob, filename: string): void => {
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = filename;
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  setTimeout(() => URL.revokeObjectURL(url), REVOKE_AFTER_MS);
+};
+
+/**
+ * Guarda el archivo con su nombre. Web: descarga del navegador (`<a download>`; `page.waitForEvent('download')` en las pruebas).
+ * iOS y Android: igual que `deliverFile` (caché + hoja de compartir), porque no hay carpeta de descargas a la que escribir sin
+ * permisos. Es el único sitio de la app que toca `document`, protegido por `Platform.OS`.
+ */
+export const saveFile = async (blob: Blob, filename: string, mimeType: string): Promise<void> => {
+  if (Platform.OS === 'web') return downloadInBrowser(blob, filename);
+  return shareFromCache(blob, filename, mimeType);
+};
+

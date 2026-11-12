@@ -1002,6 +1002,27 @@ export const MOVIL_DOCUMENTS_TESTIDS = {
   VERSION_NOTE: 'document-version-note',
   /** Fecha de la última actualización del documento. */
   UPDATED: 'document-updated',
+  /** Motivo visible por el que «Publicar nueva versión» está deshabilitado (la web lo lleva en `title`). */
+  PUBLISH_REASON: 'document-publish-reason',
+  /** Contenido de la última versión aún sin llegar al diálogo de publicar. */
+  PUBLISH_LOADING: 'document-publish-loading',
+  /** Cálculo de la comparación en curso. */
+  COMPARE_LOADING: 'document-compare-loading',
+  /** «Elige dos versiones distintas para compararlas». */
+  COMPARE_SAME: 'document-compare-same',
+  /** Error al calcular la comparación. */
+  COMPARE_ERROR: 'document-compare-error',
+  /** Leyenda de las columnas de la comparación (Versión antigua · Versión nueva). */
+  DIFF_HEADER: 'document-diff-header',
+} as const;
+
+export const MOVIL_DOCUMENTS_DYNAMIC_TESTIDS = {
+  /** Línea de la versión antigua de la fila `n` de la comparación (la web usa `<del>`). */
+  DIFF_OLD: (n: number) => `document-diff-old-${n}`,
+  /** Línea de la versión nueva de la fila `n` (la web usa `<ins>`). */
+  DIFF_NEW: (n: number) => `document-diff-new-${n}`,
+  /** Línea igual en las dos versiones, fila `n`. */
+  DIFF_SAME: (n: number) => `document-diff-same-${n}`,
 } as const;
 
 // verification

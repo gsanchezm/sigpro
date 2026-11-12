@@ -3,7 +3,7 @@ import { chaosOff } from '../../support/admin';
 import { API_URL, loginByApi, openAs, resetTenant, seedStorage } from '../../support/auth';
 
 // Spec de humo de la app móvil (Expo web a 390 px): acceso con MFA, Programas (tarjetas y filtros), No conformidades (kanban),
-// Panel de misión (tiempo real) y, en solo lectura, Requisitos y Documentos. Mismas rutas e ids que la web.
+// Panel de misión (tiempo real), Requisitos y Documentos (lectura; sus acciones tienen su propio spec). Mismas rutas e ids que la web.
 // Locators por rol / etiqueta primero (`getByRole('tab')`, `getByRole('radio')`…); `getByTestId` (el `testID` de React Native
 // se pinta como `data-testid`) como respaldo. Trabaja en su propio tenant (alumno24), restaurado antes y después.
 
@@ -367,7 +367,7 @@ test.describe('Móvil · panel de misión (tiempo real)', () => {
   });
 });
 
-test.describe('Móvil · documentos (solo lectura)', () => {
+test.describe('Móvil · documentos (lectura y acciones según el rol)', () => {
   test('el admin ve los 12 documentos; el consultor, 8 y un aviso con el recuento de ocultos', async ({ page }) => {
     await openAs(page, 'admin', '/documents', { tenant: TENANT });
     await expect(page.getByTestId(/^document-row-DOC-\d+$/)).toHaveCount(12);
@@ -384,7 +384,10 @@ test.describe('Móvil · documentos (solo lectura)', () => {
     await expect(page.getByTestId('viewer-page-1')).toBeVisible();
     await page.getByRole('radio', { name: 'Versión 1' }).click();
     await expect(page.getByRole('radio', { name: 'Versión 1' })).toHaveAttribute('aria-checked', 'true');
-    await expect(page.getByRole('button', { name: /Descargar|Publicar|Comparar/ })).toHaveCount(0); // solo lectura
+    // Paridad funcional (docs/MOBILE-PARITY.md): la ficha ya no es de solo lectura. El admin descarga, publica y compara
+    await expect(page.getByRole('button', { name: 'Descargar PDF', exact: true })).toBeEnabled();
+    await expect(page.getByRole('button', { name: 'Publicar nueva versión', exact: true })).toBeEnabled();
+    await expect(page.getByTestId('document-compare')).toBeVisible();
 
     await openAs(page, 'consultant', '/documents/DOC-003', { tenant: TENANT });
     await expect(page.getByTestId('document-forbidden')).toContainText('No tienes permiso para ver este documento');

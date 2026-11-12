@@ -11,10 +11,15 @@ interface Props
   readonly testID: string;
   readonly error?: string;
   readonly errorTestID?: string;
+  /** Filas visibles de un campo `multiline` (alto mínimo de unas `rows` líneas); por defecto, el alto de un texto breve. */
+  readonly rows?: number;
 }
 
+/** Alto de una línea del campo (14 px de fuente con interlineado normal). */
+const ROW_HEIGHT = 20;
+
 /** Campo de texto con etiqueta visible, `aria-label` y mensaje de error en `role="alert"`. */
-export const TextField = ({ label, testID, error, errorTestID, multiline, ...input }: Props) => {
+export const TextField = ({ label, testID, error, errorTestID, multiline, rows, ...input }: Props) => {
   const { colors } = useTheme();
   return (
     <View style={styles.wrap}>
@@ -31,6 +36,7 @@ export const TextField = ({ label, testID, error, errorTestID, multiline, ...inp
         style={[
           styles.input,
           multiline ? styles.multiline : null,
+          multiline && rows ? { minHeight: rows * ROW_HEIGHT + 20 } : null,
           { backgroundColor: colors.surface, borderColor: error ? colors.danger : colors.borderStrong, color: colors.text },
         ]}
       />

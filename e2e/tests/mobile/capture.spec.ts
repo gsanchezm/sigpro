@@ -221,6 +221,39 @@ for (const theme of THEMES) {
       await captureMobile(page, 'documento-detalle', theme);
     });
 
+    test('documentos: acciones, comparar, publicar y menú de la lista (sin publicar ni descargar nada)', async ({ page }) => {
+      await openAs(page, 'admin', '/documents/DOC-001', { tenant: TENANT, theme });
+      await expect(page.getByTestId('viewer-page-1')).toBeVisible();
+      await captureMobile(page, 'documento-acciones', theme);
+      await expect(page.getByTestId('document-diff-stats')).toBeVisible();
+      await page.getByRole('heading', { name: 'Comparar versiones', exact: true }).evaluate((heading) => heading.scrollIntoView({ block: 'start' }));
+      await captureMobile(page, 'documento-comparar', theme);
+      await page.getByRole('combobox', { name: 'Desde', exact: true }).click();
+      await expect(page.getByRole('dialog', { name: 'Desde', exact: true })).toBeVisible();
+      await captureMobile(page, 'documento-comparar-desde', theme);
+      await page.getByRole('dialog', { name: 'Desde', exact: true }).getByRole('button', { name: 'Cerrar', exact: true }).click();
+
+      await openAs(page, 'admin', '/documents/DOC-002', { tenant: TENANT, theme });
+      await page.getByRole('button', { name: 'Publicar nueva versión', exact: true }).click();
+      const form = page.getByRole('dialog', { name: 'Nueva versión de DOC-002', exact: true });
+      await expect(form.getByLabel('Contenido (una línea por fila)', { exact: true })).toHaveValue(/^Especificación técnica/);
+      await captureMobile(page, 'documento-publicar', theme);
+      await form.getByLabel('Contenido (una línea por fila)', { exact: true }).fill('');
+      await form.getByRole('button', { name: 'Publicar versión', exact: true }).click();
+      await expect(form.getByTestId('document-publish-text-error')).toBeVisible();
+      await captureMobile(page, 'documento-publicar-errores', theme);
+      await form.getByRole('button', { name: 'Cancelar', exact: true }).click();
+
+      await openAs(page, 'consultant', '/documents/DOC-002', { tenant: TENANT, theme });
+      await expect(page.getByTestId('document-publish-reason')).toBeVisible();
+      await captureMobile(page, 'documento-publicar-denegado', theme);
+
+      await page.goto('/documents');
+      await page.getByRole('button', { name: 'Acciones para DOC-001', exact: true }).click();
+      await expect(page.getByRole('dialog', { name: 'Acciones para DOC-001', exact: true })).toBeVisible();
+      await captureMobile(page, 'documentos-menu', theme);
+    });
+
     test('verificación: lista, filtros, menú, detalle, evidencia ampliada y registro (sin enviar nada)', async ({ page }) => {
       await openAs(page, 'consultant', '/verification', { tenant: TENANT, theme });
       await expect(page.getByTestId('verification-count')).toHaveText('1–10 de 25');

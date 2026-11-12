@@ -1,18 +1,24 @@
-import { ApiError, CLASSIFICATION_TONE, DOCUMENTOS_DYNAMIC_TESTIDS, DOCUMENTOS_TESTIDS, MOVIL_TESTIDS, formatDate, formatTrace } from '@sigpro/shared';
+import { ApiError, CLASSIFICATION_TONE, DOCUMENTOS_DYNAMIC_TESTIDS, DOCUMENTOS_TESTIDS, MOVIL_TESTIDS, can, formatDate, formatTrace, type PublishVersionInput } from '@sigpro/shared';
 import { Link } from 'expo-router';
 import { useState, type ReactNode } from 'react';
 import { StyleSheet, View } from 'react-native';
+import { useAuth } from '../../state/auth';
 import { useI18n } from '../../state/i18n';
 import { useTheme } from '../../state/theme';
+import { useToast } from '../../state/toast';
 import { FONT_FAMILY } from '../../theme/fonts';
 import { Badge } from '../../ui/Badge';
+import { Button } from '../../ui/Button';
 import { Card } from '../../ui/Card';
 import { Chip } from '../../ui/Chip';
 import { Screen } from '../../ui/Screen';
 import { ErrorState, LoadingState } from '../../ui/States';
 import { Text } from '../../ui/Text';
+import { DocumentCompare } from './DocumentCompare';
 import { DocumentViewer } from './DocumentViewer';
+import { PublishVersionDialog } from './PublishVersionDialog';
 import { MOVIL_DOCUMENTS_TESTIDS } from './testids';
+import { useDocumentDownload } from './useDocumentDownload';
 import { useDocumentDetail } from './useDocumentsData';
 import { failureKind, sortVersions, versionInfo } from './view';
 
@@ -23,9 +29,14 @@ import { failureKind, sortVersions, versionInfo } from './view';
 export const DocumentDetailPage = ({ id }: { readonly id: string }) => {
   const { t, lang } = useI18n();
   const { colors } = useTheme();
+  const { api, user } = useAuth();
+  const toast = useToast();
   const detail = useDocumentDetail(id);
+  const downloads = useDocumentDownload();
   const [chosen, setChosen] = useState<number | null>(null);
+  const [publishing, setPublishing] = useState(false);
   const doc = detail.data;
+  const canPublish = user ? can(user.role, 'document.publish') : false;
 
   if (detail.status === 'error') return <DetailFailure failure={detail.failure} onRetry={detail.reload} />;
 
@@ -40,6 +51,15 @@ export const DocumentDetailPage = ({ id }: { readonly id: string }) => {
   const shown = chosen ?? doc.version;
   const info = versionInfo(doc.versions, shown);
   const linkStyle = { color: colors.accent, fontSize: 13, fontFamily: FONT_FAMILY.medium };
+
+  /** Publica la versión; si la API rechaza, el diálogo muestra el error y sigue abierto. Con éxito, la ficha pasa a la nueva. */
+  const publish = async (input: PublishVersionInput) => {
+    const updated = await api.documents.publish(doc.id, input);
+    setPublishing(false);
+    setChosen(null);
+    toast.push('ok', t('documentos', 'published'), t('documentos', 'publishedBody', { code: updated.id, n: updated.version }));
+    detail.reload();
+  };
 
   return (
     <Screen title={t('documentos', 'title')} testID={MOVIL_TESTIDS.DOCUMENT_DETAIL_PAGE}>
@@ -93,9 +113,35 @@ export const DocumentDetailPage = ({ id }: { readonly id: string }) => {
           {info ? <VersionFacts author={info.authorName} createdAt={info.createdAt} note={info.note} /> : null}
         </View>
 
+        <View style={styles.actions}>
+          <Button
+            label={t('documentos', 'download')}
+            testID={DOCUMENTOS_TESTIDS.DOCUMENT_DOWNLOAD}
+            busy={downloads.busy}
+            onPress={() => void downloads.download(doc.id, shown)}
+          />
+          <Button
+            label={t('documentos', 'publish')}
+            testID={DOCUMENTOS_TESTIDS.DOCUMENT_PUBLISH}
+            variant="primary"
+            disabled={!canPublish}
+            disabledReason={canPublish ? undefined : t('documentos', 'publishDenied')}
+            onPress={() => setPublishing(true)}
+          />
+        </View>
+        {canPublish ? null : (
+          <Text variant="small" tone="faint" testID={MOVIL_DOCUMENTS_TESTIDS.PUBLISH_REASON}>
+            {t('documentos', 'publishDenied')}
+          </Text>
+        )}
+
         {/* Un componente por versión (`key`): al cambiar de versión, el visor vuelve a su primera página */}
         <DocumentViewer key={`${doc.id}-${shown}`} id={doc.id} version={shown} />
+
+        <DocumentCompare doc={doc} />
       </View>
+
+      {publishing ? <PublishVersionDialog doc={doc} onClose={() => setPublishing(false)} onSubmit={publish} /> : null}
     </Screen>
   );
 };
@@ -185,5 +231,6 @@ const styles = StyleSheet.create({
   column: { gap: 8 },
   row: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  actions: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   notice: { gap: 8, borderRadius: 10, borderWidth: 1, padding: 14, alignItems: 'flex-start' },
 });
