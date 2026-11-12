@@ -65,13 +65,18 @@ for (const theme of THEMES) {
       await page.getByRole('button', { name: 'Nuevo requisito', exact: true }).click();
       await expect(page.getByRole('dialog', { name: 'Nuevo requisito' })).toBeVisible();
       await captureMobile(page, 'requisito-nuevo', theme);
+      // El selector de padre con todas las opciones: la lista hace scroll y «Cerrar» sigue a la vista
+      await page.getByRole('dialog', { name: 'Nuevo requisito' }).getByRole('combobox', { name: 'Requisito padre' }).click();
+      await expect(page.getByRole('dialog', { name: 'Requisito padre' })).toBeVisible();
+      await captureMobile(page, 'requisito-padre', theme);
+      await page.getByRole('dialog', { name: 'Requisito padre' }).getByRole('button', { name: 'Cerrar', exact: true }).click();
       await page.getByRole('dialog', { name: 'Nuevo requisito' }).getByRole('button', { name: 'Cancelar', exact: true }).click();
 
       // REQ-015 es el requisito con más contenido: casos, NC y botones de acción
       await page.getByRole('button', { name: 'Abrir detalle de REQ-015', exact: true }).click();
       const sheet = page.getByRole('dialog', { name: 'Detalle del requisito' });
       await expect(sheet.getByTestId('requirement-trace')).toBeVisible();
-      await captureMobile(page, 'requisito-detalle', theme);
+      await captureMobile(page, 'requisito-detalle-largo', theme);
       await sheet.getByTestId('requirement-trace').scrollIntoViewIfNeeded();
       await captureMobile(page, 'requisito-trazabilidad', theme);
 

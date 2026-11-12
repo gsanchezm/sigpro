@@ -212,7 +212,7 @@ test.describe('Móvil · requisitos (lectura y acciones según el rol)', () => {
     await expect(page.getByRole('dialog')).toContainText('REQ-017');
   });
 
-  test('el flujo muestra las transiciones del paso actual; el admin puede darlas y el resto ve el motivo', async ({ page }) => {
+  test('el flujo muestra las transiciones del paso actual y el admin puede darlas', async ({ page }) => {
     const sheet = page.getByRole('dialog', { name: 'Detalle del requisito' });
     await page.getByRole('button', { name: 'Abrir detalle de REQ-017', exact: true }).click(); // REQ-017: borrador
     await expect(page.getByTestId('requirement-flow')).toBeVisible();

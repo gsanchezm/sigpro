@@ -118,6 +118,13 @@ test.describe('Móvil · requisitos: transiciones de estado por rol', () => {
 });
 
 test.describe('Móvil · requisitos: alta', () => {
+  test('el auditor no puede dar de alta: «Nuevo requisito» deshabilitado con su motivo visible', async ({ page }) => {
+    await open(page, 'auditor');
+    await expect(page.getByTestId('requirements-count')).toContainText('14 de 14');
+    await expect(page.getByRole('button', { name: 'Nuevo requisito', exact: true })).toBeDisabled();
+    await expect(page.getByTestId('requirements-new-reason')).toHaveText('Tu rol no permite crear requisitos');
+  });
+
   test('la validación del título bloquea el envío; un alta válida aparece en el árbol y abre su detalle', async ({ page }) => {
     await open(page, 'admin');
     await expect(page.getByTestId('requirements-count')).toContainText('14 de 14');
@@ -137,7 +144,14 @@ test.describe('Móvil · requisitos: alta', () => {
     await dialog.getByRole('button', { name: 'Ciberseguridad', exact: true }).click();
     await expect(dialog.getByRole('button', { name: 'Ciberseguridad', exact: true })).toHaveAttribute('aria-pressed', 'true');
     await dialog.getByRole('combobox', { name: 'Requisito padre' }).click();
-    await page.getByRole('dialog', { name: 'Requisito padre' }).getByTestId('requirement-new-parent-option-REQ-025').click();
+    const parentSheet = page.getByRole('dialog', { name: 'Requisito padre' });
+    // Con 15 opciones la hoja no puede cortarlas: «Cerrar» sigue a la vista y el último requisito se alcanza desplazando
+    await expect(parentSheet.getByRole('button', { name: 'Cerrar', exact: true })).toBeInViewport();
+    const last = parentSheet.getByTestId('requirement-new-parent-option-REQ-028');
+    await last.scrollIntoViewIfNeeded();
+    await expect(last).toBeInViewport();
+    await parentSheet.getByTestId('requirement-new-parent-option-REQ-025').scrollIntoViewIfNeeded();
+    await parentSheet.getByTestId('requirement-new-parent-option-REQ-025').click();
 
     await dialog.getByRole('button', { name: 'Crear requisito', exact: true }).click();
     await expect(page.getByTestId('toast-ok').filter({ hasText: 'se añadió al árbol' })).toBeVisible();

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, View, useWindowDimensions } from 'react-native';
 import { useTheme } from '../state/theme';
 import { RADIUS } from '../theme/tokens';
 import { Sheet } from './Sheet';
@@ -30,8 +30,11 @@ interface Props<T extends string> {
  */
 export const SelectField = <T extends string>({ label, value, options, onChange, testID, disabled = false, disabledReason, error }: Props<T>) => {
   const { colors } = useTheme();
+  const { height } = useWindowDimensions();
   const [open, setOpen] = useState(false);
   const current = options.find((option) => option.value === value);
+  // La hoja tiene altura máxima: con muchas opciones (p. ej. todos los requisitos del programa) la lista hace scroll dentro
+  const listHeight = Math.max(200, height * 0.5);
 
   return (
     <View style={styles.wrap}>
@@ -66,29 +69,31 @@ export const SelectField = <T extends string>({ label, value, options, onChange,
         </Text>
       ) : null}
       <Sheet visible={open} title={label} onClose={() => setOpen(false)} testID={`${testID}-dialog`}>
-        <View role="radiogroup" aria-label={label} style={styles.options}>
-          {options.map((option) => {
-            const selected = option.value === value;
-            return (
-              <Pressable
-                key={option.value}
-                testID={`${testID}-option-${option.value}`}
-                role="radio"
-                aria-label={option.label}
-                aria-checked={selected}
-                onPress={() => {
-                  onChange(option.value);
-                  setOpen(false);
-                }}
-                style={[styles.option, { backgroundColor: selected ? colors.accentSoft : colors.surface2 }]}
-              >
-                <Text variant="label" tone={selected ? 'accent' : 'default'}>
-                  {option.label}
-                </Text>
-              </Pressable>
-            );
-          })}
-        </View>
+        <ScrollView style={{ maxHeight: listHeight }} keyboardShouldPersistTaps="handled">
+          <View role="radiogroup" aria-label={label} style={styles.options}>
+            {options.map((option) => {
+              const selected = option.value === value;
+              return (
+                <Pressable
+                  key={option.value}
+                  testID={`${testID}-option-${option.value}`}
+                  role="radio"
+                  aria-label={option.label}
+                  aria-checked={selected}
+                  onPress={() => {
+                    onChange(option.value);
+                    setOpen(false);
+                  }}
+                  style={[styles.option, { backgroundColor: selected ? colors.accentSoft : colors.surface2 }]}
+                >
+                  <Text variant="label" tone={selected ? 'accent' : 'default'}>
+                    {option.label}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        </ScrollView>
       </Sheet>
     </View>
   );

@@ -374,7 +374,7 @@ Migración del design system (gris-azul, IBM Plex, denso) a «1a Ciruela» (ciru
 
 Decisión del usuario: `apps/mobile` es un espejo **funcional** de la web (misma API, reglas, permisos, textos y `data-testid`), y sustituye al «espejo visual y de solo lectura» de arriba. Los asserts de los specs móviles que fijaban la solo lectura se reescriben.
 
-### Requisitos en el móvil (`feature(mobile): requirements`)
+### Requisitos en el móvil (`feat(mobile): requirements`)
 
 - **«Mover a…» reordena entre hermanos; no cambia de padre.** La API rechaza un destino de otro padre (`POST /requirements/:code/move` → 422 `badTarget`) y la web solo reordena entre hermanos. El encargo pedía «elegir el nuevo padre»: no es posible sin cambiar la API, que no se toca. El formulario elige el hermano de referencia (`SelectField` «Junto a») y la posición (antes o después). Sin hermanos, el botón queda deshabilitado con su motivo. Un fallo recarga el orden real y avisa con toast, como la web.
 - **Transiciones con confirmación y error en el diálogo.** Igual que la web: `transitionsFor(role, state)` pinta solo los botones del paso actual; los no permitidos van deshabilitados con su motivo (`trDenied_*`) como texto visible. Al confirmar, un 403 o un 409 se muestran dentro del diálogo, que queda abierto (sin toast); el requisito no cambia.
@@ -383,7 +383,7 @@ Decisión del usuario: `apps/mobile` es un espejo **funcional** de la web (misma
 - **La carga de la lista conserva los datos al recargar** (como la web). Sin ello, cualquier recarga cerraba la hoja abierta y descartaba el formulario.
 - **Alta:** el diálogo tiene además descripción y etiquetas (el esquema de la API las admite; la web solo pide título, padre y prioridad). Los 422 se muestran bajo cada campo.
 - **Matriz de trazabilidad:** tercera opción del conmutador; cuadrícula desplazable en horizontal (requisito a la izquierda, casos en columnas de 56 px, casilla de 44 px). Enlaza y desenlaza con vista optimista y vuelta atrás si la API falla, como la web. Sin `requirement.edit` las casillas quedan deshabilitadas con su motivo.
-- **No se lleva al móvil** «Copiar código» (necesita un paquete de portapapeles y no está en el encargo) ni «Añadir hijo» del menú de la web (abrir un diálogo sobre la hoja que se cierra exige dos modales a la vez). Las dos se listan como pendientes.
+- **No se lleva al móvil** «Copiar código» (necesita un paquete de portapapeles y no está en el encargo) ni «Añadir hijo» del menú de la web (abrir un diálogo sobre la hoja que se cierra exige dos modales a la vez). Quedan como pendientes del módulo, fuera de esta entrega: la tabla de `docs/MOBILE-PARITY.md` no las marca como hechas.
 
 ### Specs móviles reescritos
 
