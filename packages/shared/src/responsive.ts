@@ -64,14 +64,14 @@ export const RESPONSIVE_FAMILIES: readonly ResponsiveFamily[] = [
     route: '/programs',
     desktop: { testId: 'programs-row-PRG-001', role: 'row' },
     responsive: { testId: RESPONSIVE_DYNAMIC_TESTIDS.PROGRAMS_ROW('PRG-001'), role: 'listitem' },
-    name: { es: 'PRG-001 (código y nombre del programa)', en: 'PRG-001 (program code and name)' },
+    name: { es: 'El enlace «PRG-001» (el código del programa)', en: 'The «PRG-001» link (the program code)' },
   },
   {
     key: 'programsCreate',
     route: '/programs',
     desktop: { testId: 'programs-new', role: 'button' },
     responsive: { testId: RESPONSIVE_TESTIDS.PROGRAMS_NEW, role: 'button' },
-    name: { es: 'Nuevo programa', en: 'New program' },
+    name: { es: '+ Nuevo programa', en: '+ New program' },
   },
   {
     key: 'programsFilters',
@@ -107,6 +107,6 @@ export const RESPONSIVE_FAMILIES: readonly ResponsiveFamily[] = [
     route: '/nc',
     desktop: { testId: 'nc-board', role: 'group' },
     responsive: { testId: RESPONSIVE_TESTIDS.NC_BOARD, role: 'group' },
-    name: { es: 'Tablero de no conformidades', en: 'Non-conformities board' },
+    name: { es: 'Tablero de no conformidades', en: 'Nonconformity board' },
   },
 ];

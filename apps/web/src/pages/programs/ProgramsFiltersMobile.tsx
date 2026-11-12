@@ -115,7 +115,7 @@ export const ProgramsFiltersMobile = ({ state, owners, search, onSearch, onChang
                 owners={owners}
                 value={state.owner || null}
                 onChange={(ownerId) => onChange(withFilter(state, { owner: ownerId ?? '' }))}
-                placeholder={t('programas', 'owner')}
+                placeholder={t('programas', 'searchPerson')}
                 listLabel={t('programas', 'owner')}
                 clearLabel={t('programas', 'clearOwner')}
                 noMatch={t('programas', 'noOwnerMatch')}

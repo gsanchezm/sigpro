@@ -121,7 +121,7 @@ const NcCardMobile = ({ nc, canMove, plantedBugs, onOpen, onQuick, onMoveSheet }
           aria-label={t('nc', 'moveToCard', { code: nc.code })}
           aria-haspopup="dialog"
           disabled={moveDisabled}
-          title={moveDisabled ? t('nc', canMove ? 'dragDenied' : 'menuMoveDenied') : undefined}
+          title={moveDisabled ? t('nc', canMove ? 'moveNone' : 'menuMoveDenied') : undefined}
           onClick={() => onMoveSheet(nc.code)}
           className="btn btn-primary flex-1 justify-center !h-10"
         >
