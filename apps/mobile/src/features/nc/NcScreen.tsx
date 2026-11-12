@@ -1,5 +1,6 @@
 import { NC_TESTIDS, can, type CreateNcInput, type Role } from '@sigpro/shared';
-import { useState } from 'react';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useEffect, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { useAuth } from '../../state/auth';
 import { useI18n, useTexts } from '../../state/i18n';
@@ -38,6 +39,16 @@ export const NcScreen = () => {
   const board = useNcBoard(filters);
   const [selected, setSelected] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
+  const router = useRouter();
+  const { select } = useLocalSearchParams<{ select?: string }>();
+
+  // `?select=NC-003` (un resultado de la búsqueda global) abre el detalle de esa NC y quita el parámetro: la pestaña sigue
+  // montada y, sin quitarlo, el mismo resultado no volvería a abrirla
+  useEffect(() => {
+    if (typeof select !== 'string' || select === '') return;
+    setSelected(select);
+    router.setParams({ select: undefined });
+  }, [select, router]);
 
   const items = board.data?.items ?? [];
   const filtered = isFiltered(filters);

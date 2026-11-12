@@ -403,6 +403,23 @@ for (const theme of THEMES) {
       await captureMobile(page, 'ayuda', theme);
     });
 
+    test('«Más» y la búsqueda global', async ({ page }) => {
+      await openAs(page, 'admin', '/more', { tenant: TENANT, theme });
+      await expect(page.getByTestId('more-item-search')).toBeVisible();
+      await captureMobile(page, 'mas', theme);
+
+      await page.getByTestId('more-item-search').click();
+      const box = page.getByRole('textbox', { name: 'Búsqueda global', exact: true });
+      await expect(box).toBeVisible();
+      await captureMobile(page, 'busqueda', theme);
+      await box.fill('sistema');
+      await expect(page.getByTestId('global-search-group-total-program')).toHaveText('5 / 24');
+      await captureMobile(page, 'busqueda-resultados', theme);
+      await box.fill('zzzzz');
+      await expect(page.getByTestId('global-search-empty')).toBeVisible();
+      await captureMobile(page, 'busqueda-vacia', theme);
+    });
+
     test('perfil', async ({ page }) => {
       await openAs(page, 'admin', '/profile', { tenant: TENANT, theme });
       await expect(page.getByTestId('profile-name')).toBeVisible();

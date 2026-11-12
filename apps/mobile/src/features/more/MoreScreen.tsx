@@ -18,8 +18,9 @@ interface MoreItem {
 
 // Lo que la barra inferior no puede alojar. La web lo muestra en la barra lateral; Auditoría solo a quien tiene `audit.view`
 // y Administración a quien tiene `users.manage`, con los mismos permisos que la web. Ayuda, Condiciones y Privacidad son las
-// páginas públicas del pie de Acceso (se leen también con sesión).
+// páginas públicas del pie de Acceso (se leen también con sesión). La búsqueda global va la primera: es el campo de la cabecera de la web.
 const ITEMS: readonly MoreItem[] = [
+  { key: 'search', href: '/search', label: (t) => t('programas', 'globalSearch'), visible: () => true },
   { key: 'documents', href: '/documents', label: (t) => t('programas', 'nav_documents'), visible: () => true },
   { key: 'audit', href: '/audit', label: (t) => t('programas', 'nav_audit'), visible: (role) => can(role, 'audit.view') },
   { key: 'admin', href: '/admin', label: (t) => t('programas', 'nav_admin'), visible: (role) => can(role, 'users.manage') },
@@ -29,7 +30,7 @@ const ITEMS: readonly MoreItem[] = [
   { key: 'privacy', href: '/legal/privacy', label: (t) => t('acceso', 'privacy'), visible: () => true },
 ];
 
-/** Pestaña «Más»: Documentos, Auditoría, Administración, Perfil, Ayuda y las páginas legales, filtrados por el rol de la sesión. */
+/** Pestaña «Más»: Búsqueda global, Documentos, Auditoría, Administración, Perfil, Ayuda y las páginas legales, filtrados por el rol de la sesión. */
 export const MoreScreen = () => {
   const { t } = useI18n();
   const { user } = useAuth();

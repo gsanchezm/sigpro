@@ -7,15 +7,8 @@ import { toListQuery, type NcFilters } from './filters';
 /** Espera a que se deje de escribir antes de pedir la lista al servidor. */
 export const SEARCH_DEBOUNCE_MS = 250;
 
-/** Valor que solo cambia cuando deja de moverse durante `delay` ms. */
-export const useDebouncedValue = <T>(value: T, delay: number): T => {
-  const [debounced, setDebounced] = useState(value);
-  useEffect(() => {
-    const timer = setTimeout(() => setDebounced(value), delay);
-    return () => clearTimeout(timer);
-  }, [value, delay]);
-  return debounced;
-};
+// El hook vive en `lib/debounce` (lo usa también la búsqueda global); se reexporta para no cambiar los imports de esta feature
+export { useDebouncedValue } from '../../lib/debounce';
 
 /** Tablero: la lista filtrada por el servidor. Solo cuenta la última petición (`useResource`). */
 export const useNcBoard = (filters: NcFilters) => {

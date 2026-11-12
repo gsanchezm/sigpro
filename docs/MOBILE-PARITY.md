@@ -1,5 +1,7 @@
 # Paridad funcional del móvil con la web
 
+**Estado (2026-11-12): la paridad funcional está completa**, salvo las lagunas documentadas en `docs/DECISIONS.md`: en Requisitos, «Mover a…» reordena entre hermanos pero no cambia de padre (la API lo rechaza y no se toca); las descripciones se editan como texto plano, sin el editor enriquecido de la web (negrita, cursiva, listas); el arrastrar y soltar se sustituye por «Mover a…»; y `/lab` (la pantalla del instructor) no existe en el móvil, por lo que la ayuda no enlaza a ella. También quedan pendientes, y están anotados, los extras del login de la web (mostrar contraseña, «mantener la sesión», SSO y el aviso de sesión cerrada), el «Guardar» alterno del modo caos fuera del panel de Administración y la comprobación en iOS y Android: todo se ha probado en Expo web (Chromium, 390 px).
+
 **Objetivo (decisión del usuario, 2026-11-12):** `apps/mobile` es un espejo **funcional** de la web, en Android y en iOS: lo que se puede hacer en la web se puede hacer en el móvil, con la misma API, las mismas reglas, los mismos permisos, los mismos textos y los mismos `data-testid`. Sustituye a la decisión anterior de «espejo visual y de solo lectura» (`docs/DECISIONS.md`, «Móvil espejo»): los asserts de los specs móviles que fijaban la solo lectura se reescriben, no se esquivan.
 
 Fuera de alcance, por ser propios del navegador o del curso: `/lab` (la pantalla del instructor), el arrastrar y soltar (se sustituye por «Mover a…»), el atajo de teclado `N`/`/`/`Esc`, el `confirm()`/`prompt()` nativos (se sustituyen por diálogos de la app) y las descargas de archivos del navegador (se sustituyen por la hoja de compartir del sistema).
@@ -39,4 +41,4 @@ Fuera de alcance, por ser propios del navegador o del curso: `/lab` (la pantalla
 | Panel de misión | [x] | [x] |
 | Perfil: idioma, tema, sesión | [x] | [x] |
 | Perfil: preferencias de avisos | [x] | [x] |
-| Búsqueda global | [x] | [ ] |
+| Búsqueda global | [x] | [x] |

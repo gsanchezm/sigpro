@@ -1,8 +1,6 @@
-import { MOVIL_TESTIDS } from '@sigpro/shared';
-import { useI18n } from '../../../src/state/i18n';
-import { PendingModule } from '../../../src/ui/PendingModule';
+import { SearchScreen } from '../../../src/features/search/SearchScreen';
 
+/** `/search`: la búsqueda global de la web como pantalla (se llega desde «Más»). */
 export default function SearchRoute() {
-  const { t } = useI18n();
-  return <PendingModule title={t('busqueda', 'listLabel')} testID={MOVIL_TESTIDS.SEARCH_PAGE} />;
+  return <SearchScreen />;
 }
