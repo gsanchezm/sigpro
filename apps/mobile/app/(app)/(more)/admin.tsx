@@ -1,8 +1,5 @@
-import { ADMIN_TESTIDS } from '@sigpro/shared';
-import { useI18n } from '../../../src/state/i18n';
-import { PendingModule } from '../../../src/ui/PendingModule';
+import { AdminScreen } from '../../../src/features/admin/AdminScreen';
 
 export default function AdminRoute() {
-  const { t } = useI18n();
-  return <PendingModule title={t('programas', 'nav_admin')} testID={ADMIN_TESTIDS.ADMIN_PAGE} />;
+  return <AdminScreen />;
 }

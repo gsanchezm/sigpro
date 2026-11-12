@@ -12,7 +12,7 @@ Fuera de alcance, por ser propios del navegador o del curso: `/lab` (la pantalla
 4. **Estilo «Ciruela».** Colores de `useTheme().colors` (nunca un hex), tipografía con `Text` (`variant`, `weight`; jamás `fontWeight`), radios de `RADIUS`, separaciones de `SPACING`, objetivos táctiles de 44 px, sombras de `colors.shadow`.
 5. **Código.** Inglés en el código y español en los comentarios; sin `switch/case`; inmutable; la lógica pura va en un `view.ts` con su `view.test.ts` (Vitest, sin importar `react-native`); efectos en hooks y pantallas.
 6. **Pruebas.** Un spec de Playwright por módulo en `e2e/tests/mobile/<módulo>.spec.ts` (`openAs`, tenant `alumno24`, `serial`, `resetTenant` antes y después, locators por rol/etiqueta primero). Se lanza con `pnpm --filter @sigpro/e2e exec playwright test -c playwright.mobile.config.ts --project=mobile <archivo>`. Los asserts existentes que contradigan la paridad (p. ej. «ningún botón Aprobar») se reescriben y se anota en `docs/DECISIONS.md`.
-7. **Cierre de cada módulo.** `pnpm --filter mobile lint && pnpm --filter mobile typecheck && pnpm --filter mobile test` en verde, el spec nuevo y los 25 anteriores en verde, una línea en `docs/CHANGELOG.md`, la fila de la tabla de abajo, y un commit (`feat(mobile): …`). No se hace `git push`.
+7. **Cierre de cada módulo.** `pnpm --filter mobile lint && pnpm --filter mobile typecheck && pnpm --filter mobile test` en verde, el spec nuevo y toda la suite móvil en verde, una línea en `docs/CHANGELOG.md`, la fila de la tabla de abajo, y un commit (`feat(mobile): …`). No se hace `git push`.
 
 ## Estado por módulo
 
@@ -34,8 +34,8 @@ Fuera de alcance, por ser propios del navegador o del curso: `/lab` (la pantalla
 | No conformidades: alta y edición | [x] | [x] |
 | Documentos: lista, ficha, visor | [x] | [x] |
 | Documentos: publicar versión, comparar versiones, descargar | [x] | [x] |
-| Auditoría | [x] | [ ] |
-| Administración: usuarios, modo caos, reinicio | [x] | [ ] |
+| Auditoría: feed con filtros, rango de fechas y carga continua; aviso por rol | [x] | [x] |
+| Administración: usuarios (rol y activo), auditoría, modo caos y reinicio del tenant | [x] | [x] |
 | Panel de misión | [x] | [x] |
 | Perfil: idioma, tema, sesión | [x] | [x] |
 | Perfil: preferencias de avisos | [x] | [ ] |

@@ -1061,6 +1061,46 @@ export const MOVIL_VERIFICATION_DYNAMIC_TESTIDS = {
   RUN_FILE_PREVIEW: (index: number) => `run-file-preview-${index}`,
 } as const;
 
+// audit
+export const MOVIL_AUDIT_TESTIDS = {
+  /** Raíz de la pantalla sin permiso `audit.view` (la web no pinta `audit-page` en ese caso). */
+  FORBIDDEN_PAGE: 'audit-forbidden-page',
+  /** Carga de la primera página del feed (`role="status"` con `aria-busy`; la web usa filas esqueleto). */
+  LOADING: 'audit-loading',
+  /** Errores de los campos de fecha (la web los evita con `min`/`max` del selector de fechas). */
+  FILTER_FROM_ERROR: 'audit-filter-from-error',
+  FILTER_TO_ERROR: 'audit-filter-to-error',
+  /** Aviso del feed cuando falla la página siguiente (el botón de reintento es `audit-load-more`). */
+  MORE_ERROR: 'audit-more-error',
+  /** Indicador de «Cargando más eventos…». */
+  LOADING_MORE: 'audit-loading-more',
+} as const;
+
+// admin
+export const MOVIL_ADMIN_TESTIDS = {
+  /** Raíz de la pantalla sin permiso `users.manage` (la web no pinta `admin-page` en ese caso). */
+  FORBIDDEN_PAGE: 'admin-forbidden-page',
+  USERS_LOADING: 'admin-users-loading',
+  CHAOS_LOADING: 'admin-chaos-loading',
+  /** Error al leer el modo caos y su reintento (en la web no llevan id). */
+  CHAOS_ERROR: 'admin-chaos-error',
+  CHAOS_ERROR_RETRY: 'admin-chaos-error-retry',
+  /** Cambios del modo caos sin aplicar y motivos visibles de «Aplicar» / «Apagar caos» deshabilitados (la web usa `title`). */
+  CHAOS_UNSAVED: 'admin-chaos-unsaved',
+  CHAOS_APPLY_REASON: 'admin-chaos-apply-reason',
+  CHAOS_OFF_REASON: 'admin-chaos-off-reason',
+  /** Diálogos de «Restaurar datos del tenant» (la web usa `confirm()`) y de «Información del tenant» (`alert()`). */
+  RESET_DIALOG: 'admin-reset-dialog',
+  TENANT_INFO_DIALOG: 'admin-tenant-info-dialog',
+  /** Texto con el tenant en el panel «Datos». */
+  DATA_TENANT: 'admin-data-tenant',
+} as const;
+
+export const MOVIL_ADMIN_DYNAMIC_TESTIDS = {
+  /** Motivo visible por el que los controles de la propia cuenta están deshabilitados (la web usa `title`). */
+  USER_REASON: (id: string) => `admin-user-reason-${id}`,
+} as const;
+
 // --- Catálogo de componentes: proveedores y búsqueda global agrupada ---------
 
 export const PROVEEDORES_TESTIDS = {

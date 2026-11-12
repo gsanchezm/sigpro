@@ -1,6 +1,7 @@
 import type { ReactNode, Ref } from 'react';
-import { ScrollView, StyleSheet, View, type ScrollViewInstance } from 'react-native';
+import { ScrollView, StyleSheet, View, type NativeScrollEvent, type NativeSyntheticEvent, type ScrollViewInstance } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { isNearEnd, SCROLL_EVENT_THROTTLE_MS } from '../lib/scroll';
 import { useTheme } from '../state/theme';
 import { SPACING } from '../theme/tokens';
 import { Text } from './Text';
@@ -15,12 +16,20 @@ interface Props {
   readonly scroll?: boolean;
   /** Referencia al `ScrollView` de la pantalla (para llevar el scroll a una sección, p. ej. «Registrar ejecución»). */
   readonly scrollRef?: Ref<ScrollViewInstance>;
+  /** Se llama cada vez que el scroll llega cerca del final (carga continua de listas largas). Solo con `scroll`. */
+  readonly onNearEnd?: () => void;
   readonly children: ReactNode;
 }
 
 /** Pantalla: zona segura, título (`role="heading"`, nivel 1) y contenido con scroll opcional. */
-export const Screen = ({ title, subtitle, testID, right, scroll = true, scrollRef, children }: Props) => {
+export const Screen = ({ title, subtitle, testID, right, scroll = true, scrollRef, onNearEnd, children }: Props) => {
   const { colors } = useTheme();
+  const handleScroll = onNearEnd
+    ? (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+        const { contentOffset, layoutMeasurement, contentSize } = event.nativeEvent;
+        if (isNearEnd({ offset: contentOffset.y, viewport: layoutMeasurement.height, content: contentSize.height })) onNearEnd();
+      }
+    : undefined;
   const header = (
     <View style={styles.header}>
       <View style={styles.headerText}>
@@ -39,7 +48,13 @@ export const Screen = ({ title, subtitle, testID, right, scroll = true, scrollRe
   return (
     <SafeAreaView testID={testID} edges={['top']} style={[styles.root, { backgroundColor: colors.bg }]}>
       {scroll ? (
-        <ScrollView ref={scrollRef} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+        <ScrollView
+          ref={scrollRef}
+          contentContainerStyle={styles.content}
+          keyboardShouldPersistTaps="handled"
+          onScroll={handleScroll}
+          scrollEventThrottle={handleScroll ? SCROLL_EVENT_THROTTLE_MS : undefined}
+        >
           {header}
           {children}
         </ScrollView>

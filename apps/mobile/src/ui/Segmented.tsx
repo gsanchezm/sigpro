@@ -17,25 +17,30 @@ interface Props<T extends string> {
   readonly value: T;
   readonly onChange: (value: T) => void;
   readonly testID?: string;
+  /** `tabs`: pestañas (`role="tablist"` con `tab` y `aria-selected`, como las de la web); por defecto un grupo de opciones. */
+  readonly semantics?: 'options' | 'tabs';
 }
 
 /**
  * Conmutador segmentado (`.segmented` de la web): `--surface-2`, radio 10, y la opción activa es una pastilla `--surface` con sombra.
- * Cada opción es `role="radio"` con `aria-checked` dentro de un `role="radiogroup"` (como los chips de filtro).
+ * Cada opción es `role="radio"` con `aria-checked` dentro de un `role="radiogroup"` (como los chips de filtro); con
+ * `semantics="tabs"`, `role="tab"` con `aria-selected` dentro de un `role="tablist"`.
  */
-export const Segmented = <T extends string>({ label, options, value, onChange, testID }: Props<T>) => {
+export const Segmented = <T extends string>({ label, options, value, onChange, testID, semantics = 'options' }: Props<T>) => {
   const { colors } = useTheme();
+  const tabs = semantics === 'tabs';
   return (
-    <View testID={testID} role="radiogroup" aria-label={label} style={[styles.track, { backgroundColor: colors.surface2 }]}>
+    <View testID={testID} role={tabs ? 'tablist' : 'radiogroup'} aria-label={label} style={[styles.track, { backgroundColor: colors.surface2 }]}>
       {options.map((option) => {
         const selected = option.value === value;
         return (
           <Pressable
             key={option.value}
             testID={option.testID}
-            role="radio"
+            role={tabs ? 'tab' : 'radio'}
             aria-label={option.label}
-            aria-checked={selected}
+            aria-checked={tabs ? undefined : selected}
+            aria-selected={tabs ? selected : undefined}
             onPress={() => onChange(option.value)}
             style={[styles.option, selected ? { backgroundColor: colors.surface, boxShadow: colors.shadow } : null]}
           >

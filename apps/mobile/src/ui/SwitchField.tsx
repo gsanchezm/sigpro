@@ -31,6 +31,7 @@ export const SwitchField = ({ label, value, onChange, testID, disabled = false, 
         role="switch"
         aria-label={label}
         aria-checked={value}
+        aria-disabled={disabled}
         value={value}
         disabled={disabled}
         onValueChange={onChange}

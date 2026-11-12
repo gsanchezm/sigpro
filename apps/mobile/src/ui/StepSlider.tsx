@@ -17,6 +17,8 @@ interface Props {
   readonly disabled?: boolean;
   /** Texto del valor (p. ej. «45 %»); por defecto el número. */
   readonly valueText?: string;
+  /** `data-testid` del texto del valor (la web lo pinta aparte: `admin-chaos-latency-value`). */
+  readonly valueTestID?: string;
 }
 
 const clamp = (value: number, min: number, max: number): number => Math.max(min, Math.min(max, value));
@@ -25,7 +27,7 @@ const clamp = (value: number, min: number, max: number): number => Math.max(min,
  * Deslizador por pasos (el `<input type=range>` de la web): React Native no trae uno, así que se maneja con «−» y «+»
  * (cada pulsación mueve `step`). El contenedor es `role="slider"` con `aria-valuenow/min/max`; la barra es solo de lectura.
  */
-export const StepSlider = ({ label, value, onChange, testID, min = 0, max = 100, step = 5, disabled = false, valueText }: Props) => {
+export const StepSlider = ({ label, value, onChange, testID, min = 0, max = 100, step = 5, disabled = false, valueText, valueTestID }: Props) => {
   const { colors } = useTheme();
   const shown = valueText ?? String(value);
   const button = (symbol: string, name: string, next: number, suffix: string, off: boolean) => (
@@ -51,7 +53,9 @@ export const StepSlider = ({ label, value, onChange, testID, min = 0, max = 100,
         <Text variant="label" tone="muted">
           {label}
         </Text>
-        <Text variant="label">{shown}</Text>
+        <Text variant="label" testID={valueTestID}>
+          {shown}
+        </Text>
       </View>
       <View style={styles.row}>
         {button('−', `${label} −${step}`, value - step, 'dec', disabled || value <= min)}

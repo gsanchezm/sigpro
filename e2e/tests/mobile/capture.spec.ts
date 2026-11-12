@@ -303,6 +303,65 @@ for (const theme of THEMES) {
       await captureMobile(page, 'verificacion-registrar-denegado', theme);
     });
 
+    test('auditoría: feed, filtros con errores de fecha y aviso sin permiso (sin cambiar nada)', async ({ page }) => {
+      await openAs(page, 'auditor', '/audit', { tenant: TENANT, theme });
+      await expect(page.getByTestId('audit-count')).toHaveText('Mostrando 20 de 130 eventos');
+      await captureMobile(page, 'auditoria', theme);
+
+      await page.getByLabel('Desde', { exact: true }).fill('2026-13-45');
+      await page.getByLabel('Hasta', { exact: true }).fill('2026-01-06');
+      await expect(page.getByTestId('audit-filter-from-error')).toBeVisible();
+      await captureMobile(page, 'auditoria-fechas', theme);
+
+      await page.getByRole('button', { name: 'Limpiar filtros', exact: true }).click();
+      await page.getByRole('combobox', { name: 'Entidad', exact: true }).click();
+      await expect(page.getByRole('dialog', { name: 'Entidad', exact: true })).toBeVisible();
+      await captureMobile(page, 'auditoria-entidad', theme);
+      await page.getByRole('dialog', { name: 'Entidad', exact: true }).getByRole('button', { name: 'Cerrar', exact: true }).click();
+
+      await openAs(page, 'consultant', '/audit', { tenant: TENANT, theme });
+      await expect(page.getByTestId('audit-forbidden')).toBeVisible();
+      await captureMobile(page, 'auditoria-denegada', theme);
+    });
+
+    test('administración: usuarios, modo caos, datos y diálogos (sin aplicar ni restaurar nada)', async ({ page }) => {
+      await openAs(page, 'admin', '/admin', { tenant: TENANT, theme });
+      await expect(page.getByTestId('admin-users-count')).toHaveText('7 de 7 usuarios');
+      await captureMobile(page, 'admin-usuarios', theme);
+
+      await page.getByRole('combobox', { name: 'Rol de Andrés Molina', exact: true }).click();
+      await expect(page.getByRole('dialog', { name: 'Rol de Andrés Molina', exact: true })).toBeVisible();
+      await captureMobile(page, 'admin-usuarios-rol', theme);
+      await page.getByRole('dialog', { name: 'Rol de Andrés Molina', exact: true }).getByRole('button', { name: 'Cerrar', exact: true }).click();
+
+      await page.getByRole('tab', { name: 'Auditoría', exact: true }).click();
+      await expect(page.getByTestId('audit-count')).toHaveText('Mostrando 20 de 130 eventos');
+      await captureMobile(page, 'admin-auditoria', theme);
+
+      await page.getByRole('tab', { name: 'Modo caos', exact: true }).click();
+      await expect(page.getByTestId('admin-chaos-panel')).toBeVisible();
+      await captureMobile(page, 'admin-caos', theme);
+      for (let index = 0; index < 5; index += 1) await page.getByRole('button', { name: 'Latencia máxima +100', exact: true }).click();
+      await page.getByTestId('admin-chaos-flaky').click();
+      await expect(page.getByTestId('admin-chaos-unsaved')).toBeVisible();
+      await captureMobile(page, 'admin-caos-cambios', theme);
+
+      await page.getByRole('tab', { name: 'Datos', exact: true }).click();
+      await expect(page.getByTestId('admin-data-panel')).toBeVisible();
+      await captureMobile(page, 'admin-datos', theme);
+      await page.getByTestId('admin-reset').click();
+      await expect(page.getByRole('dialog', { name: 'Restaurar datos del tenant', exact: true })).toBeVisible();
+      await captureMobile(page, 'admin-datos-reinicio', theme);
+      await page.getByRole('dialog', { name: 'Restaurar datos del tenant', exact: true }).getByRole('button', { name: 'Cancelar', exact: true }).click();
+      await page.getByRole('button', { name: 'Información del tenant', exact: true }).click();
+      await expect(page.getByRole('dialog', { name: 'Información del tenant', exact: true })).toBeVisible();
+      await captureMobile(page, 'admin-datos-info', theme);
+
+      await openAs(page, 'auditor', '/admin', { tenant: TENANT, theme });
+      await expect(page.getByTestId('admin-forbidden')).toBeVisible();
+      await captureMobile(page, 'admin-denegada', theme);
+    });
+
     test('perfil', async ({ page }) => {
       await openAs(page, 'admin', '/profile', { tenant: TENANT, theme });
       await expect(page.getByTestId('profile-name')).toBeVisible();
