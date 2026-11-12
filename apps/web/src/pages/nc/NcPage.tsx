@@ -6,9 +6,11 @@ import { useDebouncedValue } from '../../lib/hooks';
 import { useAuth } from '../../state/auth';
 import { useConfig } from '../../state/config';
 import { useI18n } from '../../state/i18n';
+import { useIsMobileLayout } from '../../lib/layout';
 import { useToast } from '../../state/toast';
 import { CloseNcDialog } from './CloseNcDialog';
 import { NcBoard } from './NcBoard';
+import { NcTabsBoard } from './NcTabsBoard';
 import { NcDetailDialog } from './NcDetailDialog';
 import { NewNcDialog } from './NewNcDialog';
 import { moveItemTo } from './nc-view';
@@ -26,6 +28,8 @@ interface ProgramOption {
  */
 export const NcPage = () => {
   const { t } = useI18n();
+  const mobile = useIsMobileLayout();
+  const Board = mobile ? NcTabsBoard : NcBoard;
   const { api, user } = useAuth();
   const toast = useToast();
   const { plantedBugs } = useConfig();
@@ -131,7 +135,7 @@ export const NcPage = () => {
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="flex flex-col gap-0.5">
           <h1 className="page-title">{t('nc', 'title')}</h1>
-          <p className="m-0 text-[12.5px] text-fg-2">{t('nc', 'subtitle')}</p>
+          <p className="m-0 text-[12.5px] text-fg-2">{t('nc', mobile ? 'subtitleResponsive' : 'subtitle')}</p>
         </div>
         <button
           type="button"
@@ -232,7 +236,8 @@ export const NcPage = () => {
           ) : null}
         </div>
       ) : (
-        <NcBoard items={items} loading={loading} role={role} canMove={canMove} plantedBugs={plantedBugs} onOpen={openDetail} onQuick={(code) => void quickComment(code)} onMove={(code, to) => void moveCard(code, to)} />
+        // Escritorio: columnas con drag & drop. Responsive: pestañas por estado y «Mover a…» en cada tarjeta
+        <Board items={items} loading={loading} role={role} canMove={canMove} plantedBugs={plantedBugs} onOpen={openDetail} onQuick={(code) => void quickComment(code)} onMove={(code, to) => void moveCard(code, to)} />
       )}
 
       {openCode ? <NcDetailDialog key={openCode} code={openCode} onClose={closeDetail} onChanged={board.reload} /> : null}

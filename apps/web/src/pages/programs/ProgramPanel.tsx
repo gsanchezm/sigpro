@@ -16,8 +16,9 @@ const Field = ({ label, testId, children }: { readonly label: string; readonly t
 );
 
 /**
- * Panel lateral de detalle de un programa (380 px, dentro de la rejilla, no modal). Por debajo de 1024 px pasa a ser un drawer
- * a ancho completo. Se cierra con «×» o con Esc (lo gestiona la página); no hace peticiones: usa los datos de la fila.
+ * Panel lateral de detalle de un programa (380 px, dentro de la rejilla, no modal). Es de la variante de ESCRITORIO: por debajo
+ * de 1024 px se monta la lista de tarjetas, que abre el detalle completo. Se cierra con «×» o con Esc (lo gestiona la página); no
+ * hace peticiones: usa los datos de la fila.
  */
 export const ProgramPanel = ({ program, onClose }: { readonly program: ProgramDto; readonly onClose: () => void }) => {
   const { t, lang } = useI18n();
@@ -32,7 +33,7 @@ export const ProgramPanel = ({ program, onClose }: { readonly program: ProgramDt
       tabIndex={-1}
       aria-label={t('programas', 'panelTitle', { code: program.code })}
       data-testid={PROGRAMAS_TESTIDS.PROGRAMS_PANEL}
-      className="fixed inset-0 z-[35] flex flex-col gap-5 overflow-y-auto bg-surface p-5 outline-none lg:sticky lg:inset-auto lg:top-[calc(var(--topbar-h)+16px)] lg:z-auto lg:max-h-[calc(100vh-var(--topbar-h)-32px)] lg:w-[380px] lg:flex-none lg:self-start lg:rounded-card lg:border lg:border-border lg:p-[var(--card-pad)] lg:shadow-card"
+      className="sticky top-[calc(var(--topbar-h)+16px)] flex max-h-[calc(100vh-var(--topbar-h)-32px)] w-[380px] flex-none flex-col gap-5 self-start overflow-y-auto rounded-card border border-border bg-surface p-[var(--card-pad)] shadow-card outline-none"
     >
       <div className="flex items-center justify-between gap-3">
         <span data-testid={PROGRAMAS_TESTIDS.PROGRAMS_PANEL_CODE} className="mono text-[13px] font-medium text-fg-2">

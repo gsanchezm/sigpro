@@ -19,7 +19,7 @@ import {
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { formatTrace } from '../../lib/errors';
-import { useBreakpoint } from '../../lib/hooks';
+import { useIsMobileLayout } from '../../lib/layout';
 import { useAuth } from '../../state/auth';
 import { useSaveLabel } from '../../state/config';
 import { useI18n } from '../../state/i18n';
@@ -63,7 +63,7 @@ export const NcDetailDialog = ({ code, onClose, onChanged }: NcDetailDialogProps
   const labels = useNcLabels();
   const message = useNcMessage();
   const saveLabel = useSaveLabel();
-  const mobile = useBreakpoint() === 'mobile';
+  const mobile = useIsMobileLayout();
   const role = user?.role ?? 'auditor';
   const canEdit = can(role, 'nc.edit');
 

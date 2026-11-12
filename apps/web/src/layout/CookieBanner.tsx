@@ -1,13 +1,11 @@
 import { PROGRAMAS_TESTIDS } from '@sigpro/shared';
 import { useState } from 'react';
 import { STORAGE_KEYS, readStorage, writeStorage } from '../lib/storage';
-import { useBreakpoint } from '../lib/hooks';
 import { useI18n } from '../state/i18n';
 
 /** Banner de cookies en la primera visita: aceptar o rechazar lo recuerda (`sigpro.cookies`). */
 export const CookieBanner = () => {
   const { t } = useI18n();
-  const breakpoint = useBreakpoint();
   const [visible, setVisible] = useState(() => readStorage(STORAGE_KEYS.cookies) === null);
   if (!visible) return null;
 
@@ -21,8 +19,7 @@ export const CookieBanner = () => {
       role="region"
       aria-label={t('programas', 'cookiesTitle')}
       data-testid={PROGRAMAS_TESTIDS.COOKIE_BANNER}
-      className="fixed right-4 left-4 z-[55] mx-auto flex max-w-[720px] flex-wrap items-center gap-3 rounded-card bg-fg px-4 py-3 text-[12.5px] text-bg shadow-pop"
-      style={{ bottom: breakpoint === 'mobile' ? 64 : 16 }}
+      className="fixed right-4 bottom-4 left-4 z-[55] mx-auto flex max-w-[720px] flex-wrap items-center gap-3 rounded-card bg-fg px-4 py-3 text-[12.5px] text-bg shadow-pop"
     >
       <span className="min-w-[200px] flex-1">{t('programas', 'cookiesText')}</span>
       <div className="flex gap-2">

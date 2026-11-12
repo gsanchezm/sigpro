@@ -13,6 +13,8 @@
         var lang = localStorage.getItem('sigpro.lang');
         if (theme === 'dark' || theme === 'light') document.documentElement.setAttribute('data-theme', theme);
         if (lang === 'es' || lang === 'en') document.documentElement.lang = lang;
+        // Un solo corte: < 1024 px es responsive (móvil y tablet), ≥ 1024 px escritorio (lo mantiene src/lib/layout.ts)
+        document.documentElement.setAttribute('data-layout', window.matchMedia('(min-width: 1024px)').matches ? 'desktop' : 'mobile');
       } catch (e) {}
     </script>
   </head>

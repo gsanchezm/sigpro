@@ -11,7 +11,7 @@ import {
 } from '@sigpro/shared';
 import { useRef, useState, type FormEvent } from 'react';
 import { formatTrace } from '../../lib/errors';
-import { useBreakpoint } from '../../lib/hooks';
+import { useIsMobileLayout } from '../../lib/layout';
 import { useI18n } from '../../state/i18n';
 import { Modal } from '../../ui/Modal';
 import { Spinner } from '../../ui/Spinner';
@@ -28,7 +28,7 @@ interface NewRequirementDialogProps {
 /** Diálogo de alta: título, requisito padre (`<select>` nativo) y prioridad. Valida con el mismo esquema Zod que la API. */
 export const NewRequirementDialog = ({ programCode, items, parentCode, onClose, onSubmit }: NewRequirementDialogProps) => {
   const { t } = useI18n();
-  const mobile = useBreakpoint() === 'mobile';
+  const mobile = useIsMobileLayout();
   const [title, setTitle] = useState('');
   const [parent, setParent] = useState(parentCode ?? '');
   const [priority, setPriority] = useState<Priority>('medium');

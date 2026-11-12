@@ -15,7 +15,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { downloadBlob } from '../../lib/download';
 import { formatTrace } from '../../lib/errors';
-import { useBreakpoint, useDebouncedValue, useDelayedFlag } from '../../lib/hooks';
+import { useDebouncedValue, useDelayedFlag } from '../../lib/hooks';
+import { useIsMobileLayout } from '../../lib/layout';
 import { useAuth } from '../../state/auth';
 import { useI18n } from '../../state/i18n';
 import { useToast } from '../../state/toast';
@@ -55,7 +56,7 @@ export const VerificationPage = () => {
   const { t } = useI18n();
   const { user, api } = useAuth();
   const toast = useToast();
-  const mobile = useBreakpoint() === 'mobile';
+  const mobile = useIsMobileLayout();
   const [params, setParams] = useSearchParams();
   const state = useMemo(() => parseState(params), [params]);
   const role: Role = user?.role ?? 'auditor';

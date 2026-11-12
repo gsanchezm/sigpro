@@ -7,9 +7,6 @@ import { hasActiveFilters, withFilter, type ListState } from './params';
 interface FiltersProps {
   readonly state: ListState;
   readonly owners: readonly OwnerDto[];
-  readonly mobile: boolean;
-  readonly search: string;
-  readonly onSearch: (value: string) => void;
   readonly onChange: (next: ListState) => void;
   readonly onClear: () => void;
 }
@@ -43,28 +40,14 @@ const DateChip = ({ id, testId, clearTestId, label, value, removeLabel, onChange
   </Chip>
 );
 
-/** Filtros como chips: estado, rango de fechas y responsable (combobox) + «Limpiar filtros». En móvil añade el buscador a ancho completo. */
-export const ProgramsFilters = ({ state, owners, mobile, search, onSearch, onChange, onClear }: FiltersProps) => {
+/** Filtros de ESCRITORIO como chips en línea: estado, rango de fechas y responsable (combobox) + «Limpiar filtros». En responsive se monta `ProgramsFiltersMobile`. */
+export const ProgramsFilters = ({ state, owners, onChange, onClear }: FiltersProps) => {
   const { t } = useI18n();
   const statusLabels = { draft: t('programas', 'st_draft'), active: t('programas', 'st_active'), on_hold: t('programas', 'st_on_hold'), closed: t('programas', 'st_closed'), cancelled: t('programas', 'st_cancelled') } as const;
   const remove = (value: string) => t('programas', 'removeFilter', { value });
 
   return (
     <div role="search" aria-label={t('programas', 'filters')} data-testid={PROGRAMAS_TESTIDS.PROGRAMS_FILTERS} className="flex flex-wrap items-center gap-2">
-      {mobile ? (
-        <div className="relative flex-[1_1_100%]">
-          <input
-            type="search"
-            data-testid={PROGRAMAS_TESTIDS.PROGRAMS_SEARCH}
-            aria-label={t('programas', 'searchPrograms')}
-            placeholder={t('programas', 'searchPlaceholder')}
-            value={search}
-            onChange={(event) => onSearch(event.target.value)}
-            className="input"
-          />
-        </div>
-      ) : null}
-
       <Chip
         active={state.status !== ''}
         caret

@@ -1,7 +1,8 @@
-import { ApiError, DETALLE_DYNAMIC_TESTIDS, DETALLE_TESTIDS, EDITAR_PROGRAMA_TESTIDS, REQUISITOS_TESTIDS, can, formatDate, formatMoney, type ProgramDto } from '@sigpro/shared';
+import { ApiError, DETALLE_DYNAMIC_TESTIDS, DETALLE_TESTIDS, EDITAR_PROGRAMA_TESTIDS, REQUISITOS_TESTIDS, RESPONSIVE_DYNAMIC_TESTIDS, RESPONSIVE_TESTIDS, can, formatDate, formatMoney, type ProgramDto } from '@sigpro/shared';
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { formatTrace } from '../../lib/errors';
+import { useIsMobileLayout } from '../../lib/layout';
 import { useAuth } from '../../state/auth';
 import { useI18n } from '../../state/i18n';
 import { ProgressBar } from '../../ui/ProgressBar';
@@ -20,6 +21,7 @@ export const ProgramDetailPage = () => {
   const [program, setProgram] = useState<ProgramDto | null>(null);
   const [failure, setFailure] = useState<unknown>(null);
   const [tab, setTab] = useState<TabKey>('summary');
+  const mobile = useIsMobileLayout();
   const canEdit = user ? can(user.role, 'program.edit') : false;
 
   /** Vuelve a pedir el programa sin vaciarlo: tras editar un hito cambian el avance y los hitos cumplidos de la cabecera. */
@@ -77,6 +79,30 @@ export const ProgramDetailPage = () => {
     [t('common', 'milestonesLabel'), `${program.milestonesDone} / ${program.milestonesTotal}`],
   ];
 
+  const panelContent = (
+    <>
+      {tab === 'summary' ? (
+        <>
+          <dl className="m-0 grid grid-cols-[auto_1fr] gap-x-6 gap-y-2 text-[12.5px]">
+            {rows.map(([label, value]) => (
+              <div key={label} className="contents">
+                <dt className="text-fg-3">{label}</dt>
+                <dd className="m-0">{value}</dd>
+              </div>
+            ))}
+          </dl>
+          <SuppliersPanel programCode={program.code} />
+        </>
+      ) : tab === 'requirements' ? (
+        <Link to={`/programs/${program.code}/requirements`} data-testid={REQUISITOS_TESTIDS.PROGRAM_DETAIL_OPEN_REQUIREMENTS} className="font-medium">
+          {t('requisitos', 'openFromProgram')}
+        </Link>
+      ) : (
+        <MilestonesPanel programCode={program.code} onChanged={reloadProgram} />
+      )}
+    </>
+  );
+
   return (
     <article data-testid={DETALLE_TESTIDS.PROGRAM_DETAIL} className="flex max-w-[860px] flex-col gap-4">
       <header className="flex flex-col gap-1.5">
@@ -116,56 +142,59 @@ export const ProgramDetailPage = () => {
         </div>
       </div>
 
-      <div className="flex flex-col">
-        <div role="tablist" aria-label={t('common', 'detailTitle')} data-testid={DETALLE_TESTIDS.PROGRAM_DETAIL_TABS} className="flex gap-1 border-b border-border">
-          {TABS.map((key) => (
-            <button
-              key={key}
-              type="button"
-              role="tab"
-              id={`tab-${key}`}
-              aria-selected={tab === key}
-              aria-controls={`panel-${key}`}
-              tabIndex={tab === key ? 0 : -1}
-              data-testid={DETALLE_DYNAMIC_TESTIDS.PROGRAM_DETAIL_TAB(key)}
-              onClick={() => setTab(key)}
-              onKeyDown={(event) => {
-                const index = TABS.indexOf(key);
-                const next = event.key === 'ArrowRight' ? TABS[(index + 1) % TABS.length] : event.key === 'ArrowLeft' ? TABS[(index + TABS.length - 1) % TABS.length] : undefined;
-                if (next) {
-                  event.preventDefault();
-                  setTab(next);
-                  document.getElementById(`tab-${next}`)?.focus();
-                }
-              }}
-              className={`-mb-px cursor-pointer border-0 border-b-2 bg-transparent px-3.5 py-2 text-[12.5px] ${tab === key ? 'border-accent font-medium text-fg' : 'border-transparent text-fg-2 hover:text-fg'}`}
-            >
-              {tabLabels[key]}
-            </button>
-          ))}
+      {/* Escritorio: pestañas (tablist). Responsive: un <select> nativo con las mismas opciones. Un solo componente a la vez. */}
+      {mobile ? (
+        <div className="flex flex-col gap-3">
+          <div className="flex flex-col gap-1">
+            <label htmlFor="program-detail-tabs-select" className="label">
+              {t('common', 'detailTitle')}
+            </label>
+            <select id="program-detail-tabs-select" data-testid={RESPONSIVE_TESTIDS.PROGRAM_DETAIL_TABS} value={tab} onChange={(event) => setTab(event.target.value as TabKey)} className="input">
+              {TABS.map((key) => (
+                <option key={key} value={key} data-testid={RESPONSIVE_DYNAMIC_TESTIDS.PROGRAM_DETAIL_TAB(key)}>
+                  {tabLabels[key]}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div role="region" aria-label={tabLabels[tab]} data-testid={RESPONSIVE_DYNAMIC_TESTIDS.PROGRAM_DETAIL_PANEL(tab)} className="card p-4">
+            {panelContent}
+          </div>
         </div>
-        <div role="tabpanel" id={`panel-${tab}`} aria-labelledby={`tab-${tab}`} data-testid={DETALLE_DYNAMIC_TESTIDS.PROGRAM_DETAIL_PANEL(tab)} className="card mt-3 p-4">
-          {tab === 'summary' ? (
-            <>
-              <dl className="m-0 grid grid-cols-[auto_1fr] gap-x-6 gap-y-2 text-[12.5px]">
-                {rows.map(([label, value]) => (
-                  <div key={label} className="contents">
-                    <dt className="text-fg-3">{label}</dt>
-                    <dd className="m-0">{value}</dd>
-                  </div>
-                ))}
-              </dl>
-              <SuppliersPanel programCode={program.code} />
-            </>
-          ) : tab === 'requirements' ? (
-            <Link to={`/programs/${program.code}/requirements`} data-testid={REQUISITOS_TESTIDS.PROGRAM_DETAIL_OPEN_REQUIREMENTS} className="font-medium">
-              {t('requisitos', 'openFromProgram')}
-            </Link>
-          ) : (
-            <MilestonesPanel programCode={program.code} onChanged={reloadProgram} />
-          )}
+      ) : (
+        <div className="flex flex-col">
+          <div role="tablist" aria-label={t('common', 'detailTitle')} data-testid={DETALLE_TESTIDS.PROGRAM_DETAIL_TABS} className="flex gap-1 border-b border-border">
+            {TABS.map((key) => (
+              <button
+                key={key}
+                type="button"
+                role="tab"
+                id={`tab-${key}`}
+                aria-selected={tab === key}
+                aria-controls={`panel-${key}`}
+                tabIndex={tab === key ? 0 : -1}
+                data-testid={DETALLE_DYNAMIC_TESTIDS.PROGRAM_DETAIL_TAB(key)}
+                onClick={() => setTab(key)}
+                onKeyDown={(event) => {
+                  const index = TABS.indexOf(key);
+                  const next = event.key === 'ArrowRight' ? TABS[(index + 1) % TABS.length] : event.key === 'ArrowLeft' ? TABS[(index + TABS.length - 1) % TABS.length] : undefined;
+                  if (next) {
+                    event.preventDefault();
+                    setTab(next);
+                    document.getElementById(`tab-${next}`)?.focus();
+                  }
+                }}
+                className={`-mb-px cursor-pointer border-0 border-b-2 bg-transparent px-3.5 py-2 text-[12.5px] ${tab === key ? 'border-accent font-medium text-fg' : 'border-transparent text-fg-2 hover:text-fg'}`}
+              >
+                {tabLabels[key]}
+              </button>
+            ))}
+          </div>
+          <div role="tabpanel" id={`panel-${tab}`} aria-labelledby={`tab-${tab}`} data-testid={DETALLE_DYNAMIC_TESTIDS.PROGRAM_DETAIL_PANEL(tab)} className="card mt-3 p-4">
+              {panelContent}
+          </div>
         </div>
-      </div>
+      )}
 
       <Link to="/programs" data-testid={DETALLE_TESTIDS.PROGRAM_DETAIL_BACK} className="self-start text-[12.5px] font-medium">
         {t('common', 'backToPrograms')}

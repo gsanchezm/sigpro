@@ -16,7 +16,7 @@ import {
   type Priority,
 } from '@sigpro/shared';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
-import { useBreakpoint } from '../../lib/hooks';
+import { useIsMobileLayout } from '../../lib/layout';
 import { useI18n } from '../../state/i18n';
 import { Modal } from '../../ui/Modal';
 import { OwnerCombobox } from '../../ui/OwnerCombobox';
@@ -65,7 +65,7 @@ const labelClass = 'label';
 /** Asistente de 3 pasos para crear un programa: datos · planificación · resumen. Modal centrado (hoja inferior en móvil). */
 export const ProgramWizard = ({ owners, nextCode, onClose, onSubmit }: WizardProps) => {
   const { t, lang } = useI18n();
-  const mobile = useBreakpoint() === 'mobile';
+  const mobile = useIsMobileLayout();
   const [step, setStep] = useState<Step>(1);
   const [form, setForm] = useState<WizardForm>(BLANK);
   const [errors, setErrors] = useState<Errors>({});

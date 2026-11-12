@@ -1,6 +1,7 @@
 import {
   ApiError,
   PROGRAMAS_TESTIDS,
+  RESPONSIVE_TESTIDS,
   can,
   nextProgramCode,
   permissionDeniedReason,
@@ -13,7 +14,8 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { downloadCsv } from '../../lib/download';
 import { formatTrace } from '../../lib/errors';
-import { useBreakpoint, useDelayedFlag } from '../../lib/hooks';
+import { useDelayedFlag } from '../../lib/hooks';
+import { useIsMobileLayout } from '../../lib/layout';
 import { useAuth } from '../../state/auth';
 import { useI18n } from '../../state/i18n';
 import { useToast } from '../../state/toast';
@@ -25,6 +27,7 @@ import { ProgramCards } from './ProgramCards';
 import { ProgramPanel } from './ProgramPanel';
 import { ProgramWizard } from './ProgramWizard';
 import { ProgramsFilters } from './ProgramsFilters';
+import { ProgramsFiltersMobile } from './ProgramsFiltersMobile';
 import { ProgramsMetrics } from './ProgramsMetrics';
 import { ProgramsTable } from './ProgramsTable';
 import { DEFAULT_LIST_STATE, hasActiveFilters, nextSort, parseListParams, toListQuery, toSearchString, type ListState } from './params';
@@ -43,7 +46,7 @@ export const ProgramsPage = () => {
   const { t } = useI18n();
   const { user, api } = useAuth();
   const toast = useToast();
-  const mobile = useBreakpoint() === 'mobile';
+  const mobile = useIsMobileLayout();
   const navigate = useNavigate();
   const [params, setParams] = useSearchParams();
   const state = useMemo(() => parseListParams(params), [params]);
@@ -266,15 +269,11 @@ export const ProgramsPage = () => {
 
       <ProgramsMetrics refreshKey={metricsKey} />
 
-      <ProgramsFilters
-        state={state}
-        owners={owners}
-        mobile={mobile}
-        search={state.q}
-        onSearch={(value) => changeState({ ...state, q: value, page: 1 })}
-        onChange={changeState}
-        onClear={clearFilters}
-      />
+      {mobile ? (
+        <ProgramsFiltersMobile state={state} owners={owners} search={state.q} onSearch={(value) => changeState({ ...state, q: value, page: 1 })} onChange={changeState} onClear={clearFilters} />
+      ) : (
+        <ProgramsFilters state={state} owners={owners} onChange={changeState} onClear={clearFilters} />
+      )}
 
       {selected.length > 0 ? (
         <BulkBar count={selected.length} role={role} onExport={exportSelected} onArchive={() => void archive(selected)} onDelete={() => setDeleteCodes([...selected])} onClear={() => setSelected([])} />
@@ -332,21 +331,32 @@ export const ProgramsPage = () => {
         </div>
       ) : (
         <>
-          <ProgramCards rows={rows} loading={loading} showSkeleton={showSkeleton} />
+          <ProgramCards
+            rows={rows}
+            loading={loading}
+            showSkeleton={showSkeleton}
+            role={role}
+            onEdit={edit}
+            onDuplicate={(program) => void duplicate(program)}
+            onArchive={(program) => void archive([program.code])}
+            onDelete={(program) => setDeleteCodes([program.code])}
+          />
           {isEmpty ? emptyBlock : null}
           {rows.length > 0 ? (
             <div className="flex items-center justify-between gap-2 pt-1 pb-2 text-[12px] text-fg-2">
-              <span data-testid={PROGRAMAS_TESTIDS.PROGRAMS_COUNT}>{rangeLabel}</span>
+              <span id="programs-count" data-testid={PROGRAMAS_TESTIDS.PROGRAMS_COUNT} aria-live="polite">
+                {rangeLabel}
+              </span>
               <Pagination compact page={data?.page ?? 1} pages={pages} onPage={(page) => changeState({ ...state, page })} />
             </div>
           ) : null}
           {canCreate ? (
             <button
               type="button"
-              data-testid={PROGRAMAS_TESTIDS.PROGRAMS_NEW}
-              aria-label={t('programas', 'newProgram')}
+              data-testid={RESPONSIVE_TESTIDS.PROGRAMS_NEW}
+              aria-label={`+ ${t('programas', 'newProgram')}`}
               onClick={openWizard}
-              className="fixed right-4 bottom-[72px] z-[21] grid size-[52px] cursor-pointer place-items-center rounded-full border-0 bg-accent text-[26px] leading-none text-on-accent shadow-pop"
+              className="fixed right-4 bottom-4 z-[21] grid size-[52px] cursor-pointer place-items-center rounded-full border-0 bg-accent text-[26px] leading-none text-on-accent shadow-pop"
             >
               +
             </button>

@@ -1,7 +1,7 @@
 import { ApiError, DOCUMENTOS_TESTIDS, flattenIssues, publishVersionSchema, type DocumentDetailDto, type MessageKey, type PublishVersionInput } from '@sigpro/shared';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { formatTrace } from '../../lib/errors';
-import { useBreakpoint } from '../../lib/hooks';
+import { useIsMobileLayout } from '../../lib/layout';
 import { useAuth } from '../../state/auth';
 import { useI18n } from '../../state/i18n';
 import { Modal } from '../../ui/Modal';
@@ -17,7 +17,7 @@ interface PublishVersionDialogProps {
 export const PublishVersionDialog = ({ doc, onClose, onSubmit }: PublishVersionDialogProps) => {
   const { t } = useI18n();
   const { api } = useAuth();
-  const mobile = useBreakpoint() === 'mobile';
+  const mobile = useIsMobileLayout();
   const [text, setText] = useState('');
   const [note, setNote] = useState('');
   const [loaded, setLoaded] = useState(false);

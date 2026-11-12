@@ -3,6 +3,7 @@ import {
   PRIORITIES,
   REQUISITOS_DYNAMIC_TESTIDS,
   REQUISITOS_TESTIDS,
+  RESPONSIVE_TESTIDS,
   FLOW_STATES,
   NC_SEVERITY_TONE,
   REQUIREMENT_STATE_TONE,
@@ -48,7 +49,7 @@ type Errors = Readonly<Record<string, string>>;
 const sameTags = (a: readonly string[], b: readonly string[]): boolean => a.length === b.length && a.every((tag) => b.includes(tag));
 
 /** Panel de detalle: título, prioridad, etiquetas (chips), descripción enriquecida, transiciones de estado y casos enlazados. */
-export const RequirementDetail = ({ requirement, role, onClose, onSave, onTransition, onCopy }: RequirementDetailProps) => {
+const RequirementDetail = ({ requirement, role, onClose, onSave, onTransition, onCopy, frame }: RequirementDetailProps & { readonly frame: 'panel' | 'screen' }) => {
   const { t } = useI18n();
   const saveLabel = useSaveLabel();
   const canEdit = can(role, 'requirement.edit');
@@ -106,17 +107,9 @@ export const RequirementDetail = ({ requirement, role, onClose, onSave, onTransi
   const noChangesTitle = !canEdit ? t('requisitos', 'roleNoEdit') : dirty ? undefined : t('programas', 'noChanges');
   const readOnlyTitle = canEdit ? undefined : t('requisitos', 'roleNoEdit');
 
-  return (
-    <aside
-      ref={panelRef}
-      tabIndex={-1}
-      aria-label={t('requisitos', 'detailTitle')}
-      data-testid={REQUISITOS_TESTIDS.REQUIREMENT_DETAIL}
-      data-code={requirement.code}
-      className="card flex flex-col gap-3 p-4 outline-none"
-    >
-      <header className="flex items-start justify-between gap-2">
-        <div className="flex min-w-0 flex-col gap-1.5">
+  // El contenido es el mismo en las dos variantes; solo cambia el marco (panel junto al árbol / pantalla completa)
+  const identity = (
+    <div className="flex min-w-0 flex-col gap-1.5">
           <div className="flex flex-wrap items-center gap-2">
             <span data-testid={REQUISITOS_TESTIDS.REQUIREMENT_CODE} className="font-mono text-[13px] font-medium">
               {requirement.code}
@@ -134,17 +127,10 @@ export const RequirementDetail = ({ requirement, role, onClose, onSave, onTransi
             <ToneBadge state={requirement.state} tone={REQUIREMENT_STATE_TONE[requirement.state]} label={stateLabel} testId={REQUISITOS_TESTIDS.REQUIREMENT_STATE_BADGE} />
           </div>
         </div>
-        <button
-          type="button"
-          data-testid={REQUISITOS_TESTIDS.REQUIREMENT_DETAIL_CLOSE}
-          aria-label={t('requisitos', 'closeDetail', { code: requirement.code })}
-          onClick={onClose}
-          className="size-7 flex-none cursor-pointer rounded-ctl-sm border-0 bg-transparent text-[18px] leading-none text-fg-3 hover:bg-surface-2"
-        >
-          ×
-        </button>
-      </header>
+  );
 
+  const body = (
+    <>
       {serverError ? (
         <div role="alert" data-testid={REQUISITOS_TESTIDS.REQUIREMENT_SERVER_ERROR} className="alert alert-danger text-[12.5px]">
           {serverError}
@@ -381,6 +367,67 @@ export const RequirementDetail = ({ requirement, role, onClose, onSave, onTransi
           )}
         </div>
       </section>
+    </>
+  );
+
+  if (frame === 'screen') {
+    return (
+      <section
+        ref={panelRef}
+        tabIndex={-1}
+        role="dialog"
+        aria-modal="true"
+        aria-label={t('requisitos', 'detailTitle')}
+        data-testid={RESPONSIVE_TESTIDS.REQUIREMENT_DETAIL}
+        data-code={requirement.code}
+        className="fixed inset-0 z-[35] flex flex-col overflow-y-auto bg-bg outline-none"
+      >
+        <header className="sticky top-0 z-10 flex items-center gap-3 border-b border-border bg-surface px-3 py-2">
+          <button
+            type="button"
+            data-testid={RESPONSIVE_TESTIDS.REQUIREMENT_DETAIL_CLOSE}
+            aria-label={t('requisitos', 'backFromDetail')}
+            onClick={onClose}
+            className="btn btn-secondary !h-9 flex-none !gap-1.5 !px-3"
+          >
+            <span aria-hidden="true">←</span>
+            {t('requisitos', 'backFromDetail')}
+          </button>
+          {identity}
+        </header>
+        <div className="flex flex-col gap-3 p-4">{body}</div>
+      </section>
+    );
+  }
+
+  return (
+    <aside
+      ref={panelRef}
+      tabIndex={-1}
+      aria-label={t('requisitos', 'detailTitle')}
+      data-testid={REQUISITOS_TESTIDS.REQUIREMENT_DETAIL}
+      data-code={requirement.code}
+      className="card flex flex-col gap-3 p-4 outline-none"
+    >
+      <header className="flex items-start justify-between gap-2">
+        {identity}
+        <button
+          type="button"
+          data-testid={REQUISITOS_TESTIDS.REQUIREMENT_DETAIL_CLOSE}
+          aria-label={t('requisitos', 'closeDetail', { code: requirement.code })}
+          onClick={onClose}
+          className="size-7 flex-none cursor-pointer rounded-ctl-sm border-0 bg-transparent text-[18px] leading-none text-fg-3 hover:bg-surface-2"
+        >
+          ×
+        </button>
+      </header>
+      {body}
     </aside>
   );
 };
+
+/** Detalle de ESCRITORIO: panel junto al árbol (≥ 1024 px). */
+export const RequirementDetailPanel = (props: RequirementDetailProps) => <RequirementDetail {...props} frame="panel" />;
+
+/** Detalle del DISEÑO RESPONSIVE (< 1024 px): pantalla completa con «Volver». El contenido y sus ids de campo son los mismos. */
+export const RequirementDetailScreen = (props: RequirementDetailProps) => <RequirementDetail {...props} frame="screen" />;

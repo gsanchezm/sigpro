@@ -1,5 +1,13 @@
 @import 'tailwindcss';
 
+/* Un solo corte de diseño: < 1024 px es responsive (móvil y tablet), ≥ 1024 px es escritorio. Las utilidades `sm:` y `md:`
+   que quedan (solo estética dentro de un componente) cambian en el mismo ancho que `lg:`; la fuente del corte es
+   LAYOUT_BREAKPOINT_PX (@sigpro/shared) y el atributo <html data-layout> que mantiene src/lib/layout.ts. */
+@theme {
+  --breakpoint-sm: 64rem;
+  --breakpoint-md: 64rem;
+}
+
 /* Fuentes autoalojadas (el repositorio es público y no depende de Google Fonts en producción) */
 @import '@fontsource/geist-sans/latin-400.css';
 @import '@fontsource/geist-sans/latin-500.css';
@@ -201,10 +209,8 @@ body {
   font-family: var(--font-mono);
   font-variant-numeric: tabular-nums;
 }
-@media (max-width: 639px) {
-  .page-title {
-    font-size: 22px;
-  }
+[data-layout='mobile'] .page-title {
+  font-size: 22px;
 }
 
 a {
@@ -950,14 +956,12 @@ a:hover {
   font-size: 12px;
   line-height: 1.4;
 }
-@media (max-width: 639px) {
-  .doc-section {
-    grid-template-columns: minmax(0, 1fr) auto;
-  }
-  .doc-margin {
-    grid-column: 1 / -1;
-    padding-top: 0;
-  }
+[data-layout='mobile'] .doc-section {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+[data-layout='mobile'] .doc-margin {
+  grid-column: 1 / -1;
+  padding-top: 0;
 }
 
 .dropzone[data-over='true'] {

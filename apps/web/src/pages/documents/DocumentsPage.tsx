@@ -3,7 +3,8 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { downloadBlob } from '../../lib/download';
 import { formatTrace } from '../../lib/errors';
-import { useBreakpoint, useDebouncedValue, useDelayedFlag } from '../../lib/hooks';
+import { useDebouncedValue, useDelayedFlag } from '../../lib/hooks';
+import { useIsMobileLayout } from '../../lib/layout';
 import { useAuth } from '../../state/auth';
 import { useI18n } from '../../state/i18n';
 import { useToast } from '../../state/toast';
@@ -20,7 +21,7 @@ export const DocumentsPage = () => {
   const { t, lang } = useI18n();
   const { api } = useAuth();
   const toast = useToast();
-  const mobile = useBreakpoint() === 'mobile';
+  const mobile = useIsMobileLayout();
   const programs = useProgramOptions();
   const [search, setSearch] = useState('');
   const [program, setProgram] = useState('');

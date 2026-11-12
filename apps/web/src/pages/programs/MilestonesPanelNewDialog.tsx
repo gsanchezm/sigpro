@@ -1,7 +1,7 @@
 import { ApiError, HITOS_TESTIDS, createMilestoneSchema, flattenIssues, type MessageKey, type MilestoneDto } from '@sigpro/shared';
 import { useRef, useState, type FormEvent } from 'react';
 import { formatTrace } from '../../lib/errors';
-import { useBreakpoint } from '../../lib/hooks';
+import { useIsMobileLayout } from '../../lib/layout';
 import { useAuth } from '../../state/auth';
 import { useI18n } from '../../state/i18n';
 import { Modal } from '../../ui/Modal';
@@ -19,7 +19,7 @@ type Errors = Readonly<Record<string, string>>;
 export const NewMilestoneDialog = ({ programCode, onClose, onCreated }: NewMilestoneDialogProps) => {
   const { t } = useI18n();
   const { api } = useAuth();
-  const mobile = useBreakpoint() === 'mobile';
+  const mobile = useIsMobileLayout();
   const nameRef = useRef<HTMLInputElement>(null);
   const [name, setName] = useState('');
   const [dueDate, setDueDate] = useState('');

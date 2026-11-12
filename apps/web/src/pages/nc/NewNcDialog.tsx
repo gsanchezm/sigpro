@@ -1,7 +1,7 @@
 import { ApiError, NC_TESTIDS, createNcSchema, flattenIssues, type CreateNcInput, type NcSeverity } from '@sigpro/shared';
 import { useRef, useState, type FormEvent } from 'react';
 import { formatTrace } from '../../lib/errors';
-import { useBreakpoint } from '../../lib/hooks';
+import { useIsMobileLayout } from '../../lib/layout';
 import { useI18n } from '../../state/i18n';
 import { Modal } from '../../ui/Modal';
 import { RichTextEditor } from '../../ui/RichTextEditor';
@@ -20,7 +20,7 @@ export const NewNcDialog = ({ programs, onClose, onSubmit }: NewNcDialogProps) =
   const { t } = useI18n();
   const labels = useNcLabels();
   const message = useNcMessage();
-  const mobile = useBreakpoint() === 'mobile';
+  const mobile = useIsMobileLayout();
   const [programCode, setProgramCode] = useState('');
   const [severity, setSeverity] = useState<NcSeverity | null>(null);
   const [description, setDescription] = useState('');

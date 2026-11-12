@@ -2,15 +2,18 @@ import {
   ApiError,
   LAB_DYNAMIC_TESTIDS,
   LAB_TESTIDS,
+  RESPONSIVE_FAMILIES,
   can,
   type ChaosConfig,
   type TenantInfo,
+  type MessageKey,
   type TestUserDto,
 } from '@sigpro/shared';
 import { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { API_URL, getTenant, setTenant } from '../../lib/env';
 import { formatTrace } from '../../lib/errors';
+import { useLayout } from '../../lib/layout';
 import { useAuth } from '../../state/auth';
 import { useConfig, useSaveLabel } from '../../state/config';
 import { useI18n } from '../../state/i18n';
@@ -42,7 +45,8 @@ const studentEmail = (tenant: string): string => (/^alumno\d+$/.test(tenant) ? `
 
 /** Página /lab: credenciales de demo, tenants, reset, modo caos, contraejemplos y FAQ. Pública (sirve también antes de iniciar sesión). */
 export const LabPage = () => {
-  const { t } = useI18n();
+  const { t, lang } = useI18n();
+  const layout = useLayout();
   const { user, api, publicApi, signOut } = useAuth();
   const toast = useToast();
   const navigate = useNavigate();
@@ -416,6 +420,57 @@ export const LabPage = () => {
         <a href={EXAMPLES_ZIP} download="sigpro-examples.zip" data-testid={LAB_TESTIDS.LAB_DOWNLOAD_EXAMPLES} className="btn btn-secondary self-start no-underline">
           {t('lab', 'downloadExamples')}
         </a>
+      </section>
+
+      <section aria-labelledby="lab-responsive-title" data-testid={LAB_TESTIDS.LAB_RESPONSIVE} className="card flex flex-col gap-3 p-4">
+        <div>
+          <h2 id="lab-responsive-title" className={sectionTitle}>
+            {t('lab', 'responsive')}
+          </h2>
+          <p className={hint}>{t('lab', 'responsiveHint')}</p>
+        </div>
+        <p data-testid={LAB_TESTIDS.LAB_RESPONSIVE_CURRENT} data-layout={layout} className="m-0 font-mono text-[12px] text-fg-2">
+          {t('lab', 'responsiveCurrent', { layout })}
+        </p>
+        <ul data-testid={LAB_TESTIDS.LAB_RESPONSIVE_RULES} className="m-0 flex list-disc flex-col gap-1 pl-5 text-[12.5px] text-fg-2">
+          {(['responsiveRule1', 'responsiveRule2', 'responsiveRule3', 'responsiveRule4'] as const).map((key) => (
+            <li key={key}>{t('lab', key)}</li>
+          ))}
+        </ul>
+        <div className="overflow-x-auto">
+          <table data-testid={LAB_TESTIDS.LAB_RESPONSIVE_TABLE} aria-label={t('lab', 'responsive')} className="w-full min-w-[820px] border-collapse text-[12.5px]">
+            <thead>
+              <tr className="border-b border-border text-left text-[11.5px] tracking-[.04em] text-fg-2 uppercase">
+                {(['respColFamily', 'respColDesktop', 'respColResponsive', 'respColName'] as const).map((key) => (
+                  <th key={key} scope="col" className="h-8 px-2 font-medium">
+                    {t('lab', key)}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {RESPONSIVE_FAMILIES.map((family) => (
+                <tr key={family.key} data-testid={LAB_DYNAMIC_TESTIDS.LAB_RESPONSIVE_FAMILY(family.key)} className="border-b border-border align-top last:border-b-0">
+                  <th scope="row" className="px-2 py-2 text-left font-medium">
+                    {t('lab', `resp_${family.key}` as MessageKey<'lab'>)}
+                  </th>
+                  <td className="px-2 py-2">
+                    <code className="font-mono text-[12px]">{family.desktop.testId}</code>
+                    <div className="text-[11.5px] text-fg-3">{family.desktop.role}</div>
+                  </td>
+                  <td className="px-2 py-2">
+                    <code className="font-mono text-[12px]">{family.responsive.testId}</code>
+                    <div className="text-[11.5px] text-fg-3">{family.responsive.role}</div>
+                  </td>
+                  <td className="px-2 py-2 text-fg-2">
+                    {family.name[lang]}
+                    {family.nameDiffers ? <div className="text-[11.5px] text-fg-3">{family.nameDiffers[lang]}</div> : null}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </section>
 
       <section aria-labelledby="lab-faq-title" data-testid={LAB_TESTIDS.LAB_FAQ} className="card flex flex-col gap-2 p-4">

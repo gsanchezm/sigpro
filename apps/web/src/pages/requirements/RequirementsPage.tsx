@@ -28,7 +28,8 @@ import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { copyText } from '../../lib/clipboard';
 import { downloadCsv } from '../../lib/download';
 import { formatTrace } from '../../lib/errors';
-import { useBreakpoint, useDelayedFlag } from '../../lib/hooks';
+import { useDelayedFlag } from '../../lib/hooks';
+import { useIsMobileLayout } from '../../lib/layout';
 import { useAuth } from '../../state/auth';
 import { useI18n } from '../../state/i18n';
 import { useToast } from '../../state/toast';
@@ -37,7 +38,7 @@ import { ConfirmDialog } from '../../ui/ConfirmDialog';
 import { FilterChip } from '../../ui/FilterChip';
 import { DownloadIcon, SearchIcon } from '../../ui/icons';
 import { NewRequirementDialog } from './NewRequirementDialog';
-import { RequirementDetail } from './RequirementDetail';
+import { RequirementDetailPanel, RequirementDetailScreen } from './RequirementDetail';
 import { RequirementsDocument } from './RequirementsDocument';
 import { RequirementsMetrics } from './RequirementsMetrics';
 import { RequirementsTree } from './RequirementsTree';
@@ -74,9 +75,9 @@ export const RequirementsPage = () => {
   const toast = useToast();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
-  const breakpoint = useBreakpoint();
-  const mobile = breakpoint === 'mobile';
-  const sideBySide = breakpoint === 'desktop';
+  const mobile = useIsMobileLayout();
+  // Escritorio: el detalle va junto al árbol; responsive: pantalla completa con «Volver»
+  const sideBySide = !mobile;
   const role = user?.role ?? 'consultant';
   const canCreate = can(role, 'requirement.create');
   const canEdit = can(role, 'requirement.edit');
@@ -338,8 +339,10 @@ export const RequirementsPage = () => {
   const stateOf = (code: string) => items.find((item) => item.code === code)?.state;
   const transitionTarget = transition ? { from: stateOf(transition.code) ?? 'draft', to: transition.to } : null;
 
+  // Escritorio: panel junto al árbol; responsive: pantalla completa con «Volver» (dos componentes, nunca los dos a la vez)
+  const DetailFrame = mobile ? RequirementDetailScreen : RequirementDetailPanel;
   const detail = selectedItem ? (
-    <RequirementDetail
+    <DetailFrame
       // Remonta el editor (no controlado) al cambiar de requisito
       key={selectedItem.code}
       requirement={selectedItem}
@@ -598,12 +601,7 @@ export const RequirementsPage = () => {
         )}
       </div>
 
-      {!sideBySide && detail ? (
-        <>
-          <div role="presentation" onClick={() => setSelected(null)} className="fixed inset-0 z-[34] bg-[var(--scrim)]" />
-          <div className={`fixed inset-y-0 right-0 z-[35] overflow-auto bg-bg p-3 shadow-pop ${mobile ? 'left-0' : 'w-[min(440px,100%)] border-l border-border'}`}>{detail}</div>
-        </>
-      ) : null}
+      {!sideBySide ? detail : null}
 
       {menu ? <ActionMenu label={t('requisitos', 'rowActions', { code: menu.code })} testId={REQUISITOS_TESTIDS.REQUIREMENT_MENU} items={menuItems(menu.code)} point={menu.point} onClose={closeMenu} /> : null}
 

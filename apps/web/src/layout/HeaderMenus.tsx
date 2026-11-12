@@ -1,7 +1,7 @@
 import { MISION_DYNAMIC_TESTIDS, MISION_TESTIDS, PROGRAMAS_TESTIDS, type MissionEventDto } from '@sigpro/shared';
 import { useCallback, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useDismiss, type Breakpoint } from '../lib/hooks';
+import { useDismiss } from '../lib/hooks';
 import { missionEventText } from '../pages/mission/event-text';
 import { useAuth } from '../state/auth';
 import { useI18n } from '../state/i18n';
@@ -9,6 +9,7 @@ import { useLiveFeed } from '../state/live';
 import { useToast } from '../state/toast';
 import { Avatar } from '../ui/Avatar';
 import { BellIcon } from '../ui/icons';
+import { useLogout } from './shell-parts';
 
 const SEVERITY_COLOR: Readonly<Record<MissionEventDto['severity'], string>> = {
   info: 'var(--info)',
@@ -93,12 +94,13 @@ export const NotificationsMenu = () => {
   );
 };
 
-/** Menú de usuario: avatar + nombre + rol; Perfil, Atajos y Cerrar sesión. */
-export const UserMenu = ({ breakpoint }: { breakpoint: Breakpoint }) => {
+/** Menú de usuario de ESCRITORIO: avatar + nombre + rol; Perfil, Atajos y Cerrar sesión. En responsive: sección del drawer (`DrawerUserSection`). */
+export const UserMenu = () => {
   const { t } = useI18n();
-  const { user, signOut } = useAuth();
+  const { user } = useAuth();
   const toast = useToast();
   const navigate = useNavigate();
+  const doLogout = useLogout();
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
   const close = useCallback(() => setOpen(false), []);
@@ -108,10 +110,7 @@ export const UserMenu = ({ breakpoint }: { breakpoint: Breakpoint }) => {
 
   const logout = async () => {
     setOpen(false);
-    // signOut vacía la sesión de forma síncrona; navegar justo después evita que RequireAuth redirija sin el aviso
-    const done = signOut();
-    navigate('/login', { state: { signedOut: true } });
-    await done;
+    await doLogout();
   };
 
   return (
@@ -126,12 +125,10 @@ export const UserMenu = ({ breakpoint }: { breakpoint: Breakpoint }) => {
         className="flex h-8 cursor-pointer items-center gap-2 rounded-ctl border border-border bg-surface py-0 pr-1 pl-0.5 text-fg hover:bg-surface-2"
       >
         <Avatar name={user.name} size={26} fontPx={10.5} />
-        {breakpoint !== 'mobile' ? (
-          <span className="flex flex-col items-start pr-1.5 leading-[1.15]">
-            <span className="text-[12.5px] font-medium">{user.name}</span>
-            <span className="font-mono text-[10.5px] text-fg-3">{user.role}</span>
-          </span>
-        ) : null}
+        <span className="flex flex-col items-start pr-1.5 leading-[1.15]">
+          <span className="text-[12.5px] font-medium">{user.name}</span>
+          <span className="font-mono text-[10.5px] text-fg-3">{user.role}</span>
+        </span>
       </button>
       {open ? (
         <div

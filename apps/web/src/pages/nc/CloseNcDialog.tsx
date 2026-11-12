@@ -1,5 +1,5 @@
 import { NC_TESTIDS } from '@sigpro/shared';
-import { useBreakpoint } from '../../lib/hooks';
+import { useIsMobileLayout } from '../../lib/layout';
 import { useI18n } from '../../state/i18n';
 import { Modal } from '../../ui/Modal';
 import { CloseNcForm } from './CloseNcForm';
@@ -13,7 +13,7 @@ interface CloseNcDialogProps {
 /** Diálogo de cierre que abre el tablero al soltar una tarjeta en «Cerrada» (el detalle usa el formulario sin diálogo). */
 export const CloseNcDialog = ({ code, onClose, onSubmit }: CloseNcDialogProps) => {
   const { t } = useI18n();
-  const mobile = useBreakpoint() === 'mobile';
+  const mobile = useIsMobileLayout();
   return (
     <Modal
       role="dialog"
