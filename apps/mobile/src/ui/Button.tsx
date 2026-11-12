@@ -22,11 +22,12 @@ interface Props {
 /** Botón con `role="button"`, nombre accesible y 44 px de alto mínimo (objetivo táctil). */
 export const Button = ({ label, onPress, testID, variant = 'secondary', disabled = false, disabledReason, busy = false, accessibilityLabel }: Props) => {
   const { colors } = useTheme();
-  const palette: Readonly<Record<ButtonVariant, { bg: string; fg: string; border: string }>> = {
-    primary: { bg: colors.accent, fg: colors.onAccent, border: colors.accent },
-    secondary: { bg: colors.surface, fg: colors.text, border: colors.borderStrong },
-    danger: { bg: colors.danger, fg: colors.onAccent, border: colors.danger },
-    ghost: { bg: 'transparent', fg: colors.accent, border: 'transparent' },
+  // Primario y peligro sin borde; el secundario lleva borde suave y la sombra de las tarjetas (como `.btn` de la web)
+  const palette: Readonly<Record<ButtonVariant, { bg: string; bgPressed: string; fg: string; border: string; shadow?: string }>> = {
+    primary: { bg: colors.accent, bgPressed: colors.accentHover, fg: colors.onAccent, border: 'transparent' },
+    secondary: { bg: colors.surface, bgPressed: colors.surface2, fg: colors.text, border: colors.border, shadow: colors.shadow },
+    danger: { bg: colors.danger, bgPressed: colors.danger, fg: colors.onAccent, border: 'transparent' },
+    ghost: { bg: 'transparent', bgPressed: colors.accentSoft, fg: colors.accent, border: 'transparent' },
   };
   const style = palette[variant];
   const inactive = disabled || busy;
@@ -43,7 +44,7 @@ export const Button = ({ label, onPress, testID, variant = 'secondary', disabled
       onPress={onPress}
       style={({ pressed }) => [
         styles.base,
-        { backgroundColor: style.bg, borderColor: style.border, opacity: inactive ? 0.5 : pressed ? 0.85 : 1 },
+        { backgroundColor: pressed ? style.bgPressed : style.bg, borderColor: style.border, opacity: inactive ? 0.5 : 1, boxShadow: style.shadow },
       ]}
     >
       {busy ? <ActivityIndicator size="small" color={style.fg} /> : null}

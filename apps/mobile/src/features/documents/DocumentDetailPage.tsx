@@ -4,6 +4,7 @@ import { useState, type ReactNode } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { useI18n } from '../../state/i18n';
 import { useTheme } from '../../state/theme';
+import { FONT_FAMILY } from '../../theme/fonts';
 import { Badge } from '../../ui/Badge';
 import { Card } from '../../ui/Card';
 import { Chip } from '../../ui/Chip';
@@ -38,7 +39,7 @@ export const DocumentDetailPage = ({ id }: { readonly id: string }) => {
 
   const shown = chosen ?? doc.version;
   const info = versionInfo(doc.versions, shown);
-  const linkStyle = { color: colors.accent, fontSize: 13 };
+  const linkStyle = { color: colors.accent, fontSize: 13, fontFamily: FONT_FAMILY.medium };
 
   return (
     <Screen title={t('documentos', 'title')} testID={MOVIL_TESTIDS.DOCUMENT_DETAIL_PAGE}>
@@ -145,7 +146,7 @@ const DetailFailure = ({ failure, onRetry }: { readonly failure: unknown; readon
   const kind = failureKind(failure);
   const trace = failure instanceof ApiError ? formatTrace(failure) : t('common', 'networkError');
   const back = (
-    <Link href="/documents" testID={DOCUMENTOS_TESTIDS.DOCUMENT_BACK} style={{ color: colors.accent, fontSize: 13 }}>
+    <Link href="/documents" testID={DOCUMENTOS_TESTIDS.DOCUMENT_BACK} style={{ color: colors.accent, fontSize: 13, fontFamily: FONT_FAMILY.medium }}>
       {t('documentos', 'back')}
     </Link>
   );

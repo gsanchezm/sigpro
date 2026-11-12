@@ -57,7 +57,7 @@ const KpiCard = ({ card, pending, onHelp }: CardProps) => {
   return (
     <Card testID={MISION_DYNAMIC_TESTIDS.MISSION_KPI(card.key)} role="group" aria-label={card.label} style={styles.card}>
       <View style={styles.head}>
-        <Text variant="small" tone="muted" style={styles.label} numberOfLines={2}>
+        <Text variant="small" tone="muted" weight="500" style={styles.label} numberOfLines={2}>
           {card.label}
         </Text>
         <Pressable
@@ -68,12 +68,12 @@ const KpiCard = ({ card, pending, onHelp }: CardProps) => {
           hitSlop={12}
           style={[styles.info, { borderColor: colors.borderStrong }]}
         >
-          <Text variant="small" tone="muted" aria-hidden style={styles.infoGlyph}>
+          <Text variant="small" tone="muted" weight="600" aria-hidden style={styles.infoGlyph}>
             i
           </Text>
         </Pressable>
       </View>
-      <Text testID={MISION_DYNAMIC_TESTIDS.MISSION_KPI_VALUE(card.key)} aria-live="polite" style={styles.value}>
+      <Text testID={MISION_DYNAMIC_TESTIDS.MISSION_KPI_VALUE(card.key)} variant="metric" aria-live="polite">
         {pending ? '…' : card.value}
       </Text>
       <Text variant="small" tone="faint">
@@ -87,8 +87,7 @@ const styles = StyleSheet.create({
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
   card: { flexBasis: '47%', flexGrow: 1, minWidth: 0, gap: 4 },
   head: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 6 },
-  label: { flex: 1, minWidth: 0, fontWeight: '500' },
+  label: { flex: 1, minWidth: 0 },
   info: { width: 24, height: 24, borderRadius: 12, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
-  infoGlyph: { fontWeight: '600', lineHeight: 14 },
-  value: { fontSize: 26, fontWeight: '600', lineHeight: 30 },
+  infoGlyph: { lineHeight: 14 },
 });

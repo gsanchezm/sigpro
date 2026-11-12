@@ -1,4 +1,5 @@
-// Tokens del design system (los mismos valores que las variables CSS de la web, `[data-theme="light|dark"]`).
+// Tokens del design system «1a Ciruela» (docs/design-system.md): los mismos nombres y valores que las variables CSS de la web
+// (`[data-theme="light|dark"]` en `apps/web/src/styles/index.css`). Los componentes leen siempre de aquí; ningún hex fuera de este archivo.
 
 export type Scheme = 'light' | 'dark';
 
@@ -12,6 +13,7 @@ export interface Palette {
   readonly text2: string;
   readonly text3: string;
   readonly accent: string;
+  readonly accentHover: string;
   readonly accentSoft: string;
   readonly onAccent: string;
   readonly danger: string;
@@ -27,60 +29,72 @@ export interface Palette {
   readonly purple: string;
   readonly purpleSoft: string;
   readonly scrim: string;
+  /** `box-shadow` de tarjetas (`--shadow`). */
+  readonly shadow: string;
+  /** `box-shadow` de popovers y hojas (`--shadow-pop`). */
+  readonly shadowPop: string;
 }
 
 export const PALETTES: Readonly<Record<Scheme, Palette>> = {
   light: {
-    bg: '#f3f5f8',
+    bg: '#faf8fb',
     surface: '#ffffff',
-    surface2: '#eef1f5',
-    border: '#d5dbe3',
-    borderStrong: '#b7c0cc',
-    text: '#0f1620',
-    text2: '#4b5665',
-    text3: '#7a8594',
-    accent: '#2f6fed',
-    accentSoft: '#e3ecfd',
+    surface2: '#f4f0f6',
+    border: '#e6dfea',
+    borderStrong: '#cfc4d6',
+    text: '#1d1424',
+    text2: '#5b4f66',
+    text3: '#6f627a',
+    accent: '#7a2e6e',
+    accentHover: '#632259',
+    accentSoft: '#f3e3f0',
     onAccent: '#ffffff',
-    danger: '#c62f2f',
-    dangerSoft: '#fbe3e3',
+    danger: '#b93232',
+    dangerSoft: '#fbe4e4',
     warn: '#8a5200',
-    warnSoft: '#fdeccc',
-    ok: '#1a7f4b',
-    okSoft: '#d9f3e4',
-    info: '#2459c7',
-    infoSoft: '#e3ecfd',
-    neutral: '#4b5665',
-    neutralSoft: '#e6eaf0',
+    warnSoft: '#fbecd0',
+    ok: '#1f7a4d',
+    okSoft: '#dff3e7',
+    info: '#3556b8',
+    infoSoft: '#e4eafb',
+    neutral: '#5b4f66',
+    neutralSoft: '#f4f0f6',
     purple: '#6b3fc9',
     purpleSoft: '#ece4fb',
-    scrim: 'rgba(15, 22, 32, 0.45)',
+    scrim: 'rgba(29, 20, 36, 0.45)',
+    shadow: '0 1px 2px rgba(29, 20, 36, 0.05), 0 4px 14px rgba(29, 20, 36, 0.06)',
+    shadowPop: '0 12px 32px rgba(29, 20, 36, 0.16)',
   },
   dark: {
-    bg: '#0d1117',
-    surface: '#151b24',
-    surface2: '#1c242f',
-    border: '#2a3441',
-    borderStrong: '#3b4756',
-    text: '#e8edf3',
-    text2: '#a3afbe',
-    text3: '#6f7c8c',
-    accent: '#5b8def',
-    accentSoft: '#1b2a47',
-    onAccent: '#ffffff',
+    bg: '#141017',
+    surface: '#1c1721',
+    surface2: '#261f2c',
+    border: '#342b3b',
+    borderStrong: '#4a3e54',
+    text: '#f0eaf3',
+    text2: '#b3a7bd',
+    // Ajustado respecto al encargo (#85798f): no llegaba a AA sobre --surface (igual que en la web)
+    text3: '#968c9f',
+    accent: '#d68ac9',
+    accentHover: '#e3a5d8',
+    accentSoft: '#3a2137',
+    // En oscuro el texto sobre el acento es oscuro
+    onAccent: '#1d1424',
     danger: '#f0716b',
     dangerSoft: '#3a1f21',
     warn: '#e6a23c',
     warnSoft: '#3a2d14',
-    ok: '#49c27f',
-    okSoft: '#14311f',
-    info: '#7ea3f3',
-    infoSoft: '#1b2a47',
-    neutral: '#a3afbe',
-    neutralSoft: '#27303c',
+    ok: '#5fcf93',
+    okSoft: '#16301f',
+    info: '#8ea6f5',
+    infoSoft: '#1d2747',
+    neutral: '#b3a7bd',
+    neutralSoft: '#261f2c',
     purple: '#b394f5',
     purpleSoft: '#2a2140',
     scrim: 'rgba(0, 0, 0, 0.6)',
+    shadow: '0 1px 2px rgba(0, 0, 0, 0.4)',
+    shadowPop: '0 12px 32px rgba(0, 0, 0, 0.55)',
   },
 };
 
@@ -99,5 +113,8 @@ export const toneColors = (palette: Palette, tone: Tone): { readonly fg: string;
   return map[tone];
 };
 
-export const SPACING = { xs: 4, sm: 8, md: 12, lg: 16, xl: 24 } as const;
-export const RADIUS = { sm: 4, md: 6, lg: 10, pill: 999 } as const;
+/** Separaciones de la escala. `page` es el padding de pantalla y `block` la separación entre bloques (`--page-pad` / `--block-gap`, algo menores que en escritorio). */
+export const SPACING = { xs: 4, sm: 8, md: 12, lg: 16, xl: 24, page: 20, block: 16, card: 16 } as const;
+
+/** Radios: `sm` controles pequeños (`--radius-ctl-sm`), `md` botones e inputs (`--radius-ctl`), `lg` tarjetas (`--radius-card`). */
+export const RADIUS = { sm: 8, md: 10, lg: 12, pill: 999 } as const;

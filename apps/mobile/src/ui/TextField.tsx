@@ -1,5 +1,6 @@
 import { StyleSheet, TextInput, View, type TextInputProps } from 'react-native';
 import { useTheme } from '../state/theme';
+import { FONT_FAMILY } from '../theme/fonts';
 import { RADIUS } from '../theme/tokens';
 import { Text } from './Text';
 
@@ -44,6 +45,6 @@ export const TextField = ({ label, testID, error, errorTestID, multiline, ...inp
 
 const styles = StyleSheet.create({
   wrap: { gap: 4 },
-  input: { minHeight: 44, borderWidth: 1, borderRadius: RADIUS.md, paddingHorizontal: 12, fontSize: 14 },
+  input: { minHeight: 44, borderWidth: 1, borderRadius: RADIUS.md, paddingHorizontal: 12, fontSize: 14, fontFamily: FONT_FAMILY.regular },
   multiline: { minHeight: 88, paddingTop: 10, textAlignVertical: 'top' },
 });

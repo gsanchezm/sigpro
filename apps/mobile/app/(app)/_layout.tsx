@@ -5,6 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../../src/state/auth';
 import { useI18n, useTexts } from '../../src/state/i18n';
 import { useTheme } from '../../src/state/theme';
+import { FONT_FAMILY } from '../../src/theme/fonts';
 import { LoadingState } from '../../src/ui/States';
 import { Text } from '../../src/ui/Text';
 
@@ -57,7 +58,7 @@ export default function AppLayout() {
         // Altura explícita (icono de 28 px + etiqueta + relleno del ítem) más la zona segura inferior: con la de por defecto la etiqueta se encogía y se recortaba
         tabBarStyle: { backgroundColor: colors.surface, borderTopColor: colors.border, height: 72 + insets.bottom, paddingTop: 4, paddingBottom: 4 + insets.bottom },
         // `lineHeight` explícito: con el de por defecto la caja de la etiqueta mide menos que la fuente y la recorta
-        tabBarLabelStyle: { fontSize: 11, lineHeight: 14 },
+        tabBarLabelStyle: { fontSize: 11, lineHeight: 14, fontFamily: FONT_FAMILY.medium },
         sceneStyle: { backgroundColor: colors.bg },
         tabBarButtonTestID: MOVIL_TESTIDS.MOBILE_TABS,
       }}

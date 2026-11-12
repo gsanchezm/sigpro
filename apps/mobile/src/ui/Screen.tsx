@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTheme } from '../state/theme';
+import { SPACING } from '../theme/tokens';
 import { Text } from './Text';
 
 interface Props {
@@ -53,7 +54,7 @@ export const Screen = ({ title, subtitle, testID, right, scroll = true, children
 const styles = StyleSheet.create({
   root: { flex: 1 },
   fill: { flex: 1 },
-  content: { padding: 16, gap: 12 },
+  content: { padding: SPACING.page, gap: SPACING.block },
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
   headerText: { flex: 1, gap: 2 },
 });

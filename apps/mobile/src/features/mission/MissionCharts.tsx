@@ -210,7 +210,7 @@ const NcChart = ({ counts }: { readonly counts: NcBySeverity }) => {
               const tip = t('mision', 'barTipNc', { severity: t('nc', SEVERITY_LABEL[severity]), count: counts[severity] });
               return (
                 <View key={severity} role="listitem" style={styles.column}>
-                  <Text variant="small" aria-hidden style={styles.columnCount}>
+                  <Text variant="small" weight="600" aria-hidden>
                     {String(counts[severity])}
                   </Text>
                   <View style={styles.columnArea}>
@@ -264,7 +264,6 @@ const styles = StyleSheet.create({
   count: { width: 44, textAlign: 'right' },
   columns: { flexDirection: 'row', justifyContent: 'space-around', alignItems: 'flex-end', gap: 8, paddingTop: 4 },
   column: { alignItems: 'center', gap: 6, flex: 1 },
-  columnCount: { fontWeight: '600' },
   columnArea: { height: COLUMN_AREA_PX, justifyContent: 'flex-end', alignItems: 'center' },
   columnBar: { width: COLUMN_WIDTH_PX, borderTopLeftRadius: 4, borderTopRightRadius: 4 },
   columnLabel: { textAlign: 'center', borderTopWidth: 1, paddingTop: 6, alignSelf: 'stretch' },

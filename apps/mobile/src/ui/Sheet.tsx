@@ -26,7 +26,7 @@ export const Sheet = ({ visible, title, onClose, testID, closeTestID, children }
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <View style={[styles.scrim, { backgroundColor: colors.scrim }]}>
         <Pressable aria-hidden style={StyleSheet.absoluteFill} onPress={onClose} />
-        <View testID={testID} role="dialog" aria-modal aria-label={title} style={[styles.sheet, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+        <View testID={testID} role="dialog" aria-modal aria-label={title} style={[styles.sheet, { backgroundColor: colors.surface, borderColor: colors.border, boxShadow: colors.shadowPop }]}>
           <Text variant="heading">{title}</Text>
           <View style={styles.body}>{children}</View>
           <Button label={t('programas', 'close')} testID={closeTestID} onPress={onClose} />
@@ -38,6 +38,6 @@ export const Sheet = ({ visible, title, onClose, testID, closeTestID, children }
 
 const styles = StyleSheet.create({
   scrim: { flex: 1, justifyContent: 'flex-end' },
-  sheet: { borderTopLeftRadius: 14, borderTopRightRadius: 14, borderWidth: 1, padding: 16, gap: 12, maxHeight: '85%' },
+  sheet: { borderTopLeftRadius: 16, borderTopRightRadius: 16, borderWidth: 1, padding: 16, gap: 12, maxHeight: '85%' },
   body: { gap: 8 },
 });

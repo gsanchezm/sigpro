@@ -25,7 +25,7 @@ export const ToggleButton = ({ label, pressed, onPress, testID }: Props) => {
       onPress={onPress}
       style={({ pressed: isPressed }) => [
         styles.base,
-        { backgroundColor: pressed ? colors.accentSoft : colors.surface, borderColor: pressed ? colors.accent : colors.borderStrong, opacity: isPressed ? 0.85 : 1 },
+        { backgroundColor: pressed ? colors.accentSoft : colors.surface, borderColor: pressed ? colors.accent : colors.border, opacity: isPressed ? 0.85 : 1 },
       ]}
     >
       <Text variant="label" tone="accent">

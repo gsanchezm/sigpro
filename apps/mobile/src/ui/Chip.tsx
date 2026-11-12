@@ -23,7 +23,7 @@ export const Chip = ({ label, selected, onPress, testID }: Props) => {
       aria-label={label}
       aria-checked={selected}
       onPress={onPress}
-      style={[styles.chip, { backgroundColor: selected ? colors.accentSoft : colors.surface, borderColor: selected ? colors.accent : colors.borderStrong }]}
+      style={[styles.chip, { backgroundColor: selected ? colors.accentSoft : colors.surface, borderColor: selected ? colors.accentSoft : colors.border }]}
     >
       <Text variant="label" tone={selected ? 'accent' : 'muted'}>
         {label}

@@ -46,7 +46,7 @@ export const NcCard = ({ nc, onOpen }: Props) => {
         style={styles.body}
       >
         <View style={styles.open}>
-          <Text variant="label" style={styles.code}>
+          <Text variant="mono" weight="500">
             {nc.code}
           </Text>
           <Text variant="small" tone="muted" numberOfLines={3} testID={MOVIL_NC_DYNAMIC_TESTIDS.CARD_SUMMARY(nc.code)}>
@@ -86,7 +86,6 @@ export const NcCard = ({ nc, onOpen }: Props) => {
 const styles = StyleSheet.create({
   body: { gap: 8 },
   open: { gap: 4 },
-  code: { fontWeight: '600' },
   meta: { flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' },
   grow: { flexShrink: 1 },
   assignee: { flexDirection: 'row', alignItems: 'center', gap: 6 },

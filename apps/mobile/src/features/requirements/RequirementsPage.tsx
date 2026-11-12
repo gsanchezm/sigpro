@@ -4,6 +4,7 @@ import { useCallback, useMemo, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { useI18n } from '../../state/i18n';
 import { useTheme } from '../../state/theme';
+import { FONT_FAMILY } from '../../theme/fonts';
 import { Card } from '../../ui/Card';
 import { Screen } from '../../ui/Screen';
 import { EmptyState, ErrorState, LoadingState } from '../../ui/States';
@@ -75,7 +76,7 @@ export const RequirementsPage = ({ programCode }: { readonly programCode: string
             {programName}
           </Text>
         ) : null}
-        <Link href={`/programs/${programCode}`} testID={MOVIL_REQUIREMENTS_TESTIDS.BACK_TO_PROGRAM} style={{ color: colors.accent, fontSize: 13 }}>
+        <Link href={`/programs/${programCode}`} testID={MOVIL_REQUIREMENTS_TESTIDS.BACK_TO_PROGRAM} style={{ color: colors.accent, fontSize: 13, fontFamily: FONT_FAMILY.medium }}>
           {t('programas', 'backToDetail')}
         </Link>
       </Card>

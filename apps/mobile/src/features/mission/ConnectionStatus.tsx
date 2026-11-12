@@ -28,7 +28,7 @@ export const ConnectionStatus = ({ connection }: { readonly connection: MissionC
   return (
     <View testID={MISION_TESTIDS.MISSION_CONNECTION} role="status" aria-live="polite" dataSet={{ state: connection }} style={[styles.pill, { borderColor: colors.border, backgroundColor: colors.surface }]}>
       <View aria-hidden style={[styles.dot, { backgroundColor: dot }]} />
-      <Text variant="small" style={{ fontWeight: '500' }}>
+      <Text variant="small" weight="500">
         {t('mision', CONNECTION_LABEL[connection])}
       </Text>
     </View>
