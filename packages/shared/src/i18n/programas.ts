@@ -66,6 +66,10 @@ export const programasEs = {
   page: 'Página',
   mainNav: 'Navegación principal',
   close: 'Cerrar',
+  // Diseño responsive (< 1024 px)
+  searchScreen: 'Pantalla de búsqueda',
+  filtersDone: 'Listo',
+  rowActionsClose: 'Cerrar acciones',
   steps: 'Pasos',
   code: 'Código',
   name: 'Nombre',
@@ -208,6 +212,10 @@ export const programasEn: typeof programasEs = {
   page: 'Page',
   mainNav: 'Main navigation',
   close: 'Close',
+  // Responsive layout (< 1024 px)
+  searchScreen: 'Search screen',
+  filtersDone: 'Done',
+  rowActionsClose: 'Close actions',
   steps: 'Steps',
   code: 'Code',
   name: 'Name',

@@ -262,6 +262,11 @@ export const LAB_TESTIDS = {
   LAB_FLAKY_STATE: 'lab-flaky-state',
   LAB_COURSE_MATERIAL: 'lab-course-material',
   LAB_DOWNLOAD_EXAMPLES: 'lab-download-examples',
+  // --- Locators responsive: tabla de las 10 familias ---
+  LAB_RESPONSIVE: 'lab-responsive',
+  LAB_RESPONSIVE_CURRENT: 'lab-responsive-current',
+  LAB_RESPONSIVE_RULES: 'lab-responsive-rules',
+  LAB_RESPONSIVE_TABLE: 'lab-responsive-table',
 } as const;
 
 export const LAB_DYNAMIC_TESTIDS = {
@@ -271,6 +276,8 @@ export const LAB_DYNAMIC_TESTIDS = {
   LAB_FAQ_TOGGLE: (n: number) => `lab-faq-toggle-${n}`,
   /** lab-endpoint-programs-list, lab-endpoint-admin-reset */
   LAB_ENDPOINT: (id: string) => `lab-endpoint-${id}`,
+  /** lab-responsive-family-nav, lab-responsive-family-ncBoard… */
+  LAB_RESPONSIVE_FAMILY: (key: string) => `lab-responsive-family-${key}`,
 } as const;
 
 // --- Ampliaciones de la fase 2 ---------------------------------------------
@@ -1158,4 +1165,107 @@ export const MOVIL_SEARCH_TESTIDS = {
 export const MOVIL_SEARCH_DYNAMIC_TESTIDS = {
   /** `global-search-group-more-program`: «N más» bajo un grupo con más coincidencias que ítems enseñados. */
   GROUP_MORE: (kind: string) => `global-search-group-more-${kind}`,
+} as const;
+
+// --- Locators responsive (se añaden, nunca se renombran los de escritorio) ----------------------------------------
+// Un solo corte: < LAYOUT_BREAKPOINT_PX es la variante responsive (móvil y tablet); ≥ es escritorio. Cada familia tiene
+// DOS componentes distintos y React monta uno u otro, nunca los dos. Los ids de escritorio no cambian; la variante
+// responsive es siempre `<id de escritorio>-mobile`, también en los dinámicos (`programs-row-PRG-001-mobile`).
+// No cambian de id en ninguna variante: Acceso completo, campos de formulario, diálogos, toasts y los botones del asistente.
+
+/** Ancho (px) desde el que la app es «escritorio»; por debajo es responsive (móvil y tablet). */
+export const LAYOUT_BREAKPOINT_PX = 1024;
+export const RESPONSIVE_SUFFIX = '-mobile' as const;
+export type ResponsiveId<T extends string> = `${T}${typeof RESPONSIVE_SUFFIX}`;
+
+/** `programs-new` → `programs-new-mobile`. Es el único sitio donde se escribe el sufijo. */
+export const responsiveId = <T extends string>(id: T): ResponsiveId<T> => `${id}${RESPONSIVE_SUFFIX}`;
+
+/** El id que corresponde a cada variante: el de escritorio tal cual, o el responsive con el sufijo. */
+export const layoutTestId = (id: string, responsive: boolean): string => (responsive ? responsiveId(id) : id);
+
+const r = responsiveId;
+const P = PROGRAMAS_TESTIDS;
+const PD = PROGRAMAS_DYNAMIC_TESTIDS;
+
+export const RESPONSIVE_TESTIDS = {
+  // 1. Navegación principal: sidebar → drawer con hamburguesa
+  LAYOUT_SIDEBAR: r(P.LAYOUT_SIDEBAR),
+  LAYOUT_SIDEBAR_TOGGLE: r(P.LAYOUT_SIDEBAR_TOGGLE),
+  /** Botón «Contraer barra lateral» del drawer: lo cierra. */
+  LAYOUT_SIDEBAR_COLLAPSE: r(P.LAYOUT_SIDEBAR_COLLAPSE),
+  // 2. Búsqueda global: campo en cabecera → icono (`layout-search-toggle`, existente) + búsqueda a pantalla completa
+  LAYOUT_SEARCH: r(P.LAYOUT_SEARCH),
+  LAYOUT_SEARCH_SCREEN: r('layout-search-screen'),
+  LAYOUT_SEARCH_CLOSE: r('layout-search-close'),
+  GLOBAL_SEARCH_RESULTS: r(BUSQUEDA_TESTIDS.GLOBAL_SEARCH_RESULTS),
+  GLOBAL_SEARCH_LIST: r(BUSQUEDA_TESTIDS.GLOBAL_SEARCH_LIST),
+  GLOBAL_SEARCH_STATUS: r(BUSQUEDA_TESTIDS.GLOBAL_SEARCH_STATUS),
+  GLOBAL_SEARCH_EMPTY: r(BUSQUEDA_TESTIDS.GLOBAL_SEARCH_EMPTY),
+  GLOBAL_SEARCH_ERROR: r(BUSQUEDA_TESTIDS.GLOBAL_SEARCH_ERROR),
+  GLOBAL_SEARCH_LOADING: r(BUSQUEDA_TESTIDS.GLOBAL_SEARCH_LOADING),
+  // 3. Menú de usuario: popover → sección al pie del drawer
+  LAYOUT_USER_MENU: r(P.LAYOUT_USER_MENU),
+  LAYOUT_USER_PROFILE: r(P.LAYOUT_USER_PROFILE),
+  LAYOUT_USER_SHORTCUTS: r(P.LAYOUT_USER_SHORTCUTS),
+  LAYOUT_USER_LOGOUT: r(P.LAYOUT_USER_LOGOUT),
+  // 4. Lista de Programas: fila de tabla → tarjeta
+  PROGRAMS_TABLE: r(P.PROGRAMS_TABLE),
+  // 5. Crear programa: botón de cabecera → botón flotante
+  PROGRAMS_NEW: r(P.PROGRAMS_NEW),
+  // 6. Filtros de Programas: barra en línea → botón «Filtros» + panel inferior
+  PROGRAMS_FILTERS: r(P.PROGRAMS_FILTERS),
+  PROGRAMS_FILTERS_PANEL: r('programs-filters-panel'),
+  PROGRAMS_FILTERS_APPLY: r('programs-filters-apply'),
+  PROGRAMS_FILTERS_CLEAR: r(P.PROGRAMS_FILTERS_CLEAR),
+  // 7. Acciones por fila: menú ⋯ con menuitem → hoja inferior (dialog con botones)
+  PROGRAMS_ROW_MENU: r(P.PROGRAMS_ROW_MENU),
+  PROGRAMS_ROW_MENU_CLOSE: r('programs-row-menu-close'),
+  PROGRAMS_ROW_MENU_VIEW: r(P.PROGRAMS_ROW_MENU_VIEW),
+  PROGRAMS_ROW_MENU_EDIT: r(P.PROGRAMS_ROW_MENU_EDIT),
+  PROGRAMS_ROW_MENU_DUPLICATE: r(P.PROGRAMS_ROW_MENU_DUPLICATE),
+  PROGRAMS_ROW_MENU_ARCHIVE: r(P.PROGRAMS_ROW_MENU_ARCHIVE),
+  PROGRAMS_ROW_MENU_DELETE: r(P.PROGRAMS_ROW_MENU_DELETE),
+  // 8. Pestañas del detalle de programa: tablist → <select> nativo
+  PROGRAM_DETAIL_TABS: r(DETALLE_TESTIDS.PROGRAM_DETAIL_TABS),
+  // 9. Detalle de requisito: panel junto al árbol → pantalla completa con «Volver» (el cierre del panel)
+  REQUIREMENT_DETAIL: r(REQUISITOS_TESTIDS.REQUIREMENT_DETAIL),
+  REQUIREMENT_DETAIL_CLOSE: r(REQUISITOS_TESTIDS.REQUIREMENT_DETAIL_CLOSE),
+  // 10. Kanban de NC: columnas con drag & drop → pestañas por estado + «Mover a…» por tarjeta
+  NC_BOARD: r(NC_TESTIDS.NC_BOARD),
+  NC_BOARD_TABS: r('nc-board-tabs'),
+  NC_MENU: r(NC_TESTIDS.NC_MENU),
+  NC_MENU_CLOSE: r('nc-menu-close'),
+} as const;
+
+export const RESPONSIVE_DYNAMIC_TESTIDS = {
+  // 1. Enlaces del drawer (`nav-programs-mobile`) y su insignia de NC abiertas
+  NAV: (key: string) => r(PD.NAV(key)),
+  NAV_BADGE: (key: string) => r(MISION_DYNAMIC_TESTIDS.NAV_BADGE(key)),
+  // 2. Resultados de la búsqueda a pantalla completa
+  GLOBAL_SEARCH_GROUP: (kind: string) => r(BUSQUEDA_DYNAMIC_TESTIDS.GLOBAL_SEARCH_GROUP(kind)),
+  GLOBAL_SEARCH_GROUP_TOTAL: (kind: string) => r(BUSQUEDA_DYNAMIC_TESTIDS.GLOBAL_SEARCH_GROUP_TOTAL(kind)),
+  GLOBAL_SEARCH_ITEM: (kind: string, id: string) => r(BUSQUEDA_DYNAMIC_TESTIDS.GLOBAL_SEARCH_ITEM(kind, id)),
+  // 4. Tarjeta de programa: `programs-row-PRG-001-mobile`, `programs-link-PRG-001-mobile`
+  PROGRAMS_ROW: (code: string) => r(PD.PROGRAMS_ROW(code)),
+  PROGRAMS_LINK: (code: string) => r(PD.PROGRAMS_LINK(code)),
+  // 7. Botón ⋯ de la tarjeta, que abre la hoja de acciones
+  PROGRAMS_ROW_MENU: (code: string) => r(PD.PROGRAMS_ROW_MENU(code)),
+  // 8. Opción del <select> y panel de cada pestaña del detalle de programa
+  PROGRAM_DETAIL_TAB: (key: 'summary' | 'milestones' | 'requirements') => r(DETALLE_DYNAMIC_TESTIDS.PROGRAM_DETAIL_TAB(key)),
+  PROGRAM_DETAIL_PANEL: (key: 'summary' | 'milestones' | 'requirements') => r(DETALLE_DYNAMIC_TESTIDS.PROGRAM_DETAIL_PANEL(key)),
+  // 10. Pestaña, panel y tarjetas del kanban responsive
+  NC_TAB: (state: string) => r(`nc-tab-${state}`),
+  NC_COLUMN: (state: string) => r(NC_DYNAMIC_TESTIDS.NC_COLUMN(state)),
+  NC_COLUMN_COUNT: (state: string) => r(NC_DYNAMIC_TESTIDS.NC_COLUMN_COUNT(state)),
+  NC_COLUMN_EMPTY: (state: string) => r(NC_DYNAMIC_TESTIDS.NC_COLUMN_EMPTY(state)),
+  NC_CARD: (code: string) => r(NC_DYNAMIC_TESTIDS.NC_CARD(code)),
+  NC_CARD_OPEN: (code: string) => r(NC_DYNAMIC_TESTIDS.NC_CARD_OPEN(code)),
+  NC_CARD_SEVERITY: (code: string) => r(NC_DYNAMIC_TESTIDS.NC_CARD_SEVERITY(code)),
+  NC_CARD_ASSIGNEE: (code: string) => r(NC_DYNAMIC_TESTIDS.NC_CARD_ASSIGNEE(code)),
+  NC_CARD_COMMENTS: (code: string) => r(NC_DYNAMIC_TESTIDS.NC_CARD_COMMENTS(code)),
+  NC_CARD_QUICK: (code: string) => r(NC_DYNAMIC_TESTIDS.NC_CARD_QUICK(code)),
+  /** Botón «Mover a…» de la tarjeta (en escritorio es el menú ⋯: `nc-card-menu-NC-001`). */
+  NC_CARD_MOVE: (code: string) => r(`nc-card-move-${code}`),
+  NC_MENU_MOVE: (state: string) => r(NC_DYNAMIC_TESTIDS.NC_MENU_MOVE(state)),
 } as const;

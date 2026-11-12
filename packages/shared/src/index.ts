@@ -8,6 +8,7 @@ export * from './client';
 export * from './csv';
 export * from './i18n';
 export * from './testids';
+export * from './responsive';
 export * from './requirements';
 export * from './richtext';
 export * from './documents';
