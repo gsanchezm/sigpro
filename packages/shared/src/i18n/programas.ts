@@ -33,7 +33,8 @@ export const programasEs = {
   removeFilter: 'Quitar «{value}»',
   metricsLabel: 'Resumen de programas',
   metricTotal: 'Programas',
-  metricTotalAux: '{n} activos',
+  // «activos: N» y no «N activos»: el resumen de la tabla ya dice «N activo(s)» y programs.spec lo localiza por ese texto
+  metricTotalAux: 'activos: {n}',
   metricActive: 'Activos',
   metricActiveAux: '{pct} % del total',
   metricProgress: 'Avance medio',
@@ -175,7 +176,7 @@ export const programasEn: typeof programasEs = {
   removeFilter: 'Remove “{value}”',
   metricsLabel: 'Programs summary',
   metricTotal: 'Programs',
-  metricTotalAux: '{n} active',
+  metricTotalAux: 'active: {n}',
   metricActive: 'Active',
   metricActiveAux: '{pct}% of the total',
   metricProgress: 'Average progress',

@@ -25,7 +25,9 @@ test.describe('tarjetas de métricas', () => {
     const metrics = page.getByTestId('programs-metrics');
     await expect(metrics.getByRole('group')).toHaveCount(4);
     await expect(page.getByTestId('programs-metric-total')).toContainText(String(list.totalAll));
-    await expect(page.getByTestId('programs-metric-total')).toContainText('12 activos');
+    await expect(page.getByTestId('programs-metric-total')).toContainText('activos: 12');
+    // La tarjeta no debe repetir «12 activo»: el spec de cobertura de locators localiza el resumen de la tabla por ese texto
+    await expect(page.getByText('12 activo', { exact: false })).toHaveCount(1);
     await expect(page.getByTestId('programs-metric-active')).toContainText('50 % del total');
     await expect(page.getByTestId('programs-metric-progress')).toContainText(`${average} %`);
     await expect(page.getByTestId('programs-metric-nc')).toContainText(/\d+\s*de \d+ registradas/);
