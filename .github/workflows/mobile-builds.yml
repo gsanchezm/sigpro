@@ -90,6 +90,8 @@ jobs:
           test -f "$APP/main.jsbundle"
           /usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP/Info.plist"
           /usr/libexec/PlistBuddy -c 'Print :NSAppTransportSecurity' "$APP/Info.plist"
+          # La URL de la API se incrusta al compilar: si no está en el bundle, la app abriría pero no podría iniciar sesión
+          if grep -a -q -F "$EXPO_PUBLIC_API_URL" "$APP/main.jsbundle"; then echo "URL de la API en el bundle: $EXPO_PUBLIC_API_URL"; else echo "::warning::No se encontró $EXPO_PUBLIC_API_URL en main.jsbundle"; fi
 
       - name: Empaquetar
         run: |
@@ -150,6 +152,8 @@ jobs:
           mkdir -p dist-android
           cp "$APK" dist-android/sigpro-android-emulator.apk
           unzip -l dist-android/sigpro-android-emulator.apk | grep -E 'lib/(x86_64|arm64-v8a)/libhermes' || true
+          # La URL de la API se incrusta al compilar: sin ella (o con el `localhost` de reserva) el APK instalaría pero no iniciaría sesión
+          if unzip -p dist-android/sigpro-android-emulator.apk assets/index.android.bundle | grep -a -q -F "$EXPO_PUBLIC_API_URL"; then echo "URL de la API en el bundle: $EXPO_PUBLIC_API_URL"; else echo "::warning::No se encontró $EXPO_PUBLIC_API_URL en el bundle"; fi
           ls -lh dist-android
 
       - uses: actions/upload-artifact@v4

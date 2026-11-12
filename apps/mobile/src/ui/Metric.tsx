@@ -24,7 +24,7 @@ export const Metric = ({ testID, label, value, aux, percent }: Props) => {
         {label}
       </Text>
       <Text variant="metric">{value}</Text>
-      {percent === undefined ? null : <ProgressBar value={percent} label={`${percent} %`} />}
+      {percent === undefined ? null : <ProgressBar value={percent} label={label} valueText={`${percent} %`} />}
       <Text variant="small" tone="faint" numberOfLines={2}>
         {aux}
       </Text>

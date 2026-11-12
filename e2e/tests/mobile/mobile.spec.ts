@@ -95,6 +95,16 @@ test.describe('Móvil · programas', () => {
     expect(await noHorizontalOverflow(page)).toBe(true);
   });
 
+  test('métricas: las cuatro tarjetas del tenant, con la barra de avance', async ({ page }) => {
+    await expect(page.getByTestId('programs-metrics')).toBeVisible();
+    await expect(page.getByTestId('programs-metric-total')).toContainText('24');
+    await expect(page.getByTestId('programs-metric-active')).toContainText('12');
+    await expect(page.getByTestId('programs-metric-nc')).toContainText('8');
+    const progress = page.getByTestId('programs-metric-progress');
+    await expect(progress).toContainText('49 %');
+    await expect(progress.getByRole('progressbar')).toHaveAttribute('aria-valuenow', '49');
+  });
+
   test('filtros: chips de estado (radio), búsqueda y estado vacío; el filtro vive en la URL', async ({ page }) => {
     const cards = page.getByTestId(/^programs-row-PRG-\d+$/);
     await page.getByRole('radio', { name: 'En pausa' }).click();
@@ -170,6 +180,39 @@ test.describe('Móvil · requisitos (solo lectura)', () => {
     await expect(page.getByRole('button', { name: /Aprobar|Marcar como verificado|Validar|Guardar|Eliminar/ })).toHaveCount(0);
     await page.getByRole('button', { name: 'Cerrar' }).click();
     await expect(sheet).toBeHidden();
+  });
+
+  test('métricas y columnas «Pruebas» y «NC» de cada fila (los mismos ids que la web)', async ({ page }) => {
+    await expect(page.getByTestId('requirements-metrics')).toBeVisible();
+    await expect(page.getByTestId('requirements-metric-total')).toContainText('14');
+    await expect(page.getByTestId('requirements-metric-coverage')).toContainText('93 %');
+    await expect(page.getByTestId('requirement-row-tests-REQ-015')).toHaveText('1/1');
+    await expect(page.getByTestId('requirement-row-nc-REQ-015')).toHaveText('NC-006');
+  });
+
+  test('conmutador Árbol · Documento: secciones numeradas que abren el detalle', async ({ page }) => {
+    await expect(page.getByRole('radio', { name: 'Árbol' })).toHaveAttribute('aria-checked', 'true');
+    await page.getByRole('radio', { name: 'Documento' }).click();
+    await expect(page.getByRole('radio', { name: 'Documento' })).toHaveAttribute('aria-checked', 'true');
+    await expect(page.getByTestId('requirements-document')).toBeVisible();
+    await expect(page.getByTestId('requirements-tree')).toBeHidden();
+    await expect(page.getByTestId('requirement-doc-REQ-016')).toContainText('1.1');
+    await page.getByRole('button', { name: 'Abrir REQ-017' }).click();
+    await expect(page.getByRole('dialog')).toContainText('REQ-017');
+  });
+
+  test('el flujo de aprobación es de solo lectura: paso actual y sin botones de transición', async ({ page }) => {
+    await page.getByRole('button', { name: 'Abrir detalle de REQ-017' }).click(); // REQ-017: borrador
+    const flow = page.getByTestId('requirement-flow');
+    await expect(flow).toBeVisible();
+    await expect(page.getByTestId('requirement-flow-step-draft')).toHaveAttribute('data-status', 'current');
+    await expect(page.getByTestId('requirement-flow-step-approved')).toHaveAttribute('data-status', 'future');
+    await expect(page.getByTestId('requirement-transitions')).toHaveCount(0);
+    await page.getByRole('button', { name: 'Cerrar' }).click();
+
+    await page.getByRole('button', { name: 'Abrir detalle de REQ-015' }).click(); // REQ-015: validado
+    await expect(page.getByTestId('requirement-flow-step-draft')).toHaveAttribute('data-status', 'done');
+    await expect(page.getByTestId('requirement-flow-step-validated')).toHaveAttribute('data-status', 'current');
   });
 });
 
