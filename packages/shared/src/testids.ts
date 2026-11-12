@@ -814,9 +814,15 @@ export const MOVIL_TESTIDS = {
   PROGRAMS_CARDS: 'programs-cards',
   PROGRAMS_LOAD_MORE: 'programs-load-more',
   PROGRAMS_FILTER_STATUS_GROUP: 'programs-filter-status-group',
+  /** Pestaña «Más»: acceso a Documentos, Auditoría, Administración, Perfil y la búsqueda global. */
+  MORE_PAGE: 'more-page',
+  /** Búsqueda global en móvil (en la web es un desplegable de la cabecera). */
+  SEARCH_PAGE: 'search-page',
 } as const;
 
 export const MOVIL_DYNAMIC_TESTIDS = {
+  /** more-item-documents, more-item-audit… */
+  MORE_ITEM: (key: string) => `more-item-${key}`,
   /** programs-filter-status-on_hold, programs-filter-status-all */
   PROGRAMS_FILTER_STATUS: (value: string) => `programs-filter-status-${value}`,
 } as const;

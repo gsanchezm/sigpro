@@ -20,6 +20,11 @@ test.afterAll(async ({ request }) => {
 });
 
 const tab = (page: Page, name: string) => page.getByRole('tab', { name });
+// Documentos, Auditoría, Administración y Perfil no ocupan pestaña: se llega a ellos desde «Más»
+const openMore = async (page: Page, name: string) => {
+  await tab(page, 'Más').click();
+  await page.getByRole('link', { name, exact: true }).click();
+};
 const noHorizontalOverflow = (page: Page) => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth);
 
 test.describe('Móvil · acceso', () => {
@@ -47,7 +52,7 @@ test.describe('Móvil · acceso', () => {
     await expect(page).toHaveURL(/\/programs$/);
     // Pestañas inferiores = las rutas de la web; el nombre accesible es el completo aunque la etiqueta visible sea más corta
     await expect(page.getByRole('tab')).toHaveCount(5);
-    for (const name of ['Programas', 'No conformidades', 'Panel de misión', 'Documentos', 'Perfil']) await expect(tab(page, name)).toBeVisible();
+    for (const name of ['Programas', 'Verificación', 'No conformidades', 'Panel de misión', 'Más']) await expect(tab(page, name)).toBeVisible();
     await expect(page.getByRole('tab', { name: /Administración/ })).toHaveCount(0);
     expect(await page.evaluate(() => localStorage.getItem('sigpro.tenant'))).toBe(TENANT);
     expect(await page.evaluate(() => localStorage.getItem('sigpro.session'))).toContain('refreshToken');
@@ -367,7 +372,7 @@ test.describe('Móvil · documentos (solo lectura)', () => {
 test.describe('Móvil · perfil y alcance', () => {
   test('perfil: idioma, tema y cierre de sesión', async ({ page }) => {
     await openAs(page, 'admin', '/programs', { tenant: TENANT });
-    await tab(page, 'Perfil').click();
+    await openMore(page, 'Perfil');
     await expect(page).toHaveURL(/\/profile$/);
     await expect(page.getByTestId('profile-role')).toHaveText('admin');
     await expect(page.getByTestId('profile-tenant')).toHaveText(TENANT);
@@ -385,7 +390,22 @@ test.describe('Móvil · perfil y alcance', () => {
     expect(await page.evaluate(() => localStorage.getItem('sigpro.session'))).toBeNull();
   });
 
-  test('la sesión sobrevive a recargar y no existe administración en el móvil', async ({ page }) => {
+  test('«Más» ofrece Documentos y Perfil a todos; Auditoría y Administración, solo según el rol', async ({ page }) => {
+    await openAs(page, 'consultant', '/programs', { tenant: TENANT });
+    await tab(page, 'Más').click();
+    await expect(page.getByTestId('more-page')).toBeVisible();
+    await expect(page.getByTestId('more-item-documents')).toBeVisible();
+    await expect(page.getByTestId('more-item-profile')).toBeVisible();
+    await expect(page.getByTestId('more-item-audit')).toHaveCount(0);
+    await expect(page.getByTestId('more-item-admin')).toHaveCount(0);
+
+    await openAs(page, 'admin', '/programs', { tenant: TENANT });
+    await tab(page, 'Más').click();
+    await expect(page.getByTestId('more-item-audit')).toBeVisible();
+    await expect(page.getByTestId('more-item-admin')).toBeVisible();
+  });
+
+  test('la sesión sobrevive a recargar y Administración no ocupa pestaña', async ({ page }) => {
     await openAs(page, 'admin', '/nc', { tenant: TENANT });
     await expect(page.getByTestId('nc-board')).toBeVisible();
     await page.reload();
@@ -393,7 +413,5 @@ test.describe('Móvil · perfil y alcance', () => {
     await expect(page).toHaveURL(/\/nc$/);
 
     await expect(page.getByRole('tab', { name: /Administración/ })).toHaveCount(0);
-    await page.goto('/admin');
-    await expect(page.getByTestId('admin-page')).toHaveCount(0);
   });
 });

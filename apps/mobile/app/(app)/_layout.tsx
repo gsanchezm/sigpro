@@ -24,7 +24,7 @@ const SHORT_LABELS = {
 
 /**
  * Zona autenticada: sin sesión redirige a /login. Pestañas inferiores = las rutas de la web
- * (`/programs`, `/nc`, `/mission`, `/documents`, `/profile`). No existe /admin en móvil.
+ * (`/programs`, `/verification`, `/nc`, `/mission`) y «Más», que lleva al resto de módulos de la web según el rol.
  */
 export default function AppLayout() {
   const { status } = useAuth();
@@ -45,6 +45,8 @@ export default function AppLayout() {
         tabBarAccessibilityLabel: label,
         tabBarButtonTestID: PROGRAMAS_DYNAMIC_TESTIDS.MOBILE_TAB(key),
         tabBarIcon: ({ color }) => <Glyph glyph={glyph} color={color} />,
+        // Al salir de una pestaña con pila propia («Más»), vuelve a su primera pantalla: tocarla siempre muestra el menú
+        popToTopOnBlur: true,
       }}
     />
   );
@@ -64,10 +66,10 @@ export default function AppLayout() {
       }}
     >
       {tab('programs', 'programs', t('programas', 'nav_programs'), 'P')}
+      {tab('verification', 'verification', t('programas', 'nav_verification'), 'V')}
       {tab('nc', 'nc', t('programas', 'nav_nc'), '⚠', short.nc)}
       {tab('mission', 'mission', t('programas', 'nav_mission'), 'M', short.mission)}
-      {tab('documents', 'documents', t('programas', 'nav_documents'), 'D')}
-      {tab('profile', 'profile', t('programas', 'profile'), '☺')}
+      {tab('(more)', 'more', t('programas', 'nav_more'), '…')}
     </Tabs>
   );
 }

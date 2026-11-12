@@ -1,5 +1,5 @@
 import { useLocalSearchParams } from 'expo-router';
-import { DocumentDetailPage } from '../../../src/features/documents/DocumentDetailPage';
+import { DocumentDetailPage } from '../../../../src/features/documents/DocumentDetailPage';
 
 /** `/documents/:id`. La `key` reinicia la versión elegida al cambiar de documento. */
 export default function Page() {

@@ -1,15 +1,15 @@
 import { LANGS, PERFIL_TESTIDS, type Lang } from '@sigpro/shared';
 import { useRouter } from 'expo-router';
 import { StyleSheet, View } from 'react-native';
-import { useAuth } from '../../src/state/auth';
-import { useI18n } from '../../src/state/i18n';
-import { useTheme } from '../../src/state/theme';
-import { Avatar } from '../../src/ui/Avatar';
-import { Button } from '../../src/ui/Button';
-import { Card } from '../../src/ui/Card';
-import { Chip } from '../../src/ui/Chip';
-import { Screen } from '../../src/ui/Screen';
-import { Text } from '../../src/ui/Text';
+import { useAuth } from '../../../src/state/auth';
+import { useI18n } from '../../../src/state/i18n';
+import { useTheme } from '../../../src/state/theme';
+import { Avatar } from '../../../src/ui/Avatar';
+import { Button } from '../../../src/ui/Button';
+import { Card } from '../../../src/ui/Card';
+import { Chip } from '../../../src/ui/Chip';
+import { Screen } from '../../../src/ui/Screen';
+import { Text } from '../../../src/ui/Text';
 
 /** `/profile`: cuenta, idioma, tema y cierre de sesión (sin permisos ni notificaciones: eso es de la web). */
 export default function Profile() {
