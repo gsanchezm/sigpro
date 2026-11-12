@@ -2,7 +2,7 @@
 
 La app móvil (`apps/mobile`, Expo) se puede usar de tres formas: en el navegador (`pnpm --filter mobile web`, :8081), con Expo Go en un teléfono, o instalando una **build para emulador**. Esta guía es la tercera: un `.app` zipeado para el Simulador de iOS y un `.apk` para el emulador de Android, sin cuenta de Expo ni de Apple.
 
-> **Estado:** la build la genera el workflow `.github/workflows/mobile-builds.yml` en los runners de GitHub (macOS para iOS). Está escrita pero **solo se ha podido comprobar la configuración de Expo en Windows (`expo prebuild`)**; ni la compilación de Xcode ni la de Gradle se han ejecutado todavía ni se ha abierto la app en un simulador. Anota aquí el resultado de la primera ejecución real.
+> **Estado (2026-11-12):** el workflow se ejecutó en GitHub con la versión visual de la app (M1–M3) y produjo el `.app` de iOS (`x86_64 arm64`) y el APK de Android (`x86_64`, `arm64-v8a`), ambos con la URL de la API dentro del bundle. El APK se instaló y se usó en un emulador de Android (API 33): login con MFA, Programas, detalle, Requisitos y la hoja de detalle funcionan, con Geist y las sombras bien. **Sin verificar:** el `.app` en un Simulador de iOS (hace falta un Mac) y la build con los módulos nativos del espejo funcional (selector de imágenes y de documentos, sistema de archivos, compartir), que solo se compilará en el siguiente run del workflow.
 
 ## 1. Obtener la build
 
