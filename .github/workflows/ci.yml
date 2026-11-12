@@ -83,6 +83,11 @@ jobs:
       - name: E2E de humo
         run: pnpm e2e
 
+      # Diseño responsive de la web (tablet de 810 px y móvil de 390 px, emulados con Chromium): solo corren los specs de
+      # e2e/tests/responsive; en escritorio ya corrieron en el paso anterior (proyecto `desktop`)
+      - name: E2E responsive (tablet y móvil)
+        run: pnpm --filter @sigpro/e2e exec playwright test --project=tablet --project=mobile
+
       # La app móvil (Expo web, exportada por `pnpm build` en apps/mobile/dist) se sirve con un servidor estático en :8081
       - name: E2E de humo (app móvil)
         run: pnpm e2e:mobile

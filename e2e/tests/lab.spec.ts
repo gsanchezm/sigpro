@@ -73,6 +73,29 @@ test.describe('/lab sin sesión', () => {
     }
   });
 
+  test('locators responsive: la tabla de las 10 familias con el id de escritorio y el -mobile', async ({ page }) => {
+    const section = page.getByRole('region', { name: 'Locators responsive' });
+    const table = section.getByRole('table', { name: 'Locators responsive' });
+    await expect(table.getByRole('columnheader')).toHaveText(['Familia', 'Escritorio (≥ 1024 px)', 'Responsive (< 1024 px)', 'Nombre accesible']);
+    await expect(table.getByTestId(/^lab-responsive-family-/)).toHaveCount(10);
+
+    const list = table.getByTestId('lab-responsive-family-programsList');
+    await expect(list.getByRole('cell').nth(0)).toContainText('programs-row-PRG-001');
+    await expect(list.getByRole('cell').nth(1)).toContainText('programs-row-PRG-001-mobile');
+    await expect(table.getByTestId('lab-responsive-family-requirementDetail')).toContainText('«Volver»');
+
+    // Cada id responsive de la tabla es el de escritorio más «-mobile»
+    for (const row of await table.getByTestId(/^lab-responsive-family-/).all()) {
+      const [desktop, responsive] = await row.locator('code').allTextContents();
+      expect(responsive).toBe(`${desktop}-mobile`);
+    }
+    await expect(section.getByTestId('lab-responsive-rules').getByRole('listitem')).toHaveCount(4);
+    // El indicador del diseño activo sale del hook (a 1440 px, escritorio)
+    await expect(section.getByTestId('lab-responsive-current')).toHaveAttribute('data-layout', 'desktop');
+    await page.setViewportSize({ width: 390, height: 844 });
+    await expect(section.getByTestId('lab-responsive-current')).toHaveAttribute('data-layout', 'mobile');
+  });
+
   test('reset y caos están deshabilitados sin sesión de admin, con title explicativo', async ({ page }) => {
     await expect(page.getByRole('button', { name: 'Reiniciar datos' })).toBeDisabled();
     await expect(page.getByTitle('Inicia sesión como admin para reiniciar el tenant.')).toBeVisible();

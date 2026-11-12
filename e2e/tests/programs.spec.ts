@@ -408,30 +408,32 @@ test.describe('Programas · cookies', () => {
   });
 });
 
-test.describe('Programas · móvil (390 px)', () => {
+// Diseño responsive (< 1024 px). Cada familia con su variante `-mobile` se prueba a fondo en tests/responsive/*.spec.ts
+test.describe('Programas · responsive (390 px)', () => {
   test.use({ viewport: { width: 390, height: 844 } });
 
-  test('tarjetas en lugar de tabla, tabbar y botón flotante', async ({ page }) => {
+  test('tarjetas en lugar de tabla y botón flotante; sin tabbar (la navegación es el drawer)', async ({ page }) => {
     await openAs(page, 'admin');
-    await expect(page.getByTestId('programs-list')).toBeVisible();
+    await expect(page.getByTestId('programs-table-mobile')).toBeVisible();
     await expect(page.getByTestId('programs-table')).toHaveCount(0);
-    await expect(page.getByTestId('mobile-tabbar')).toBeVisible();
-    await expect(page.getByTestId('mobile-tab-programs')).toHaveAttribute('aria-current', 'page');
-    await expect(page.getByRole('button', { name: 'Nuevo programa' })).toBeVisible();
-    await expect(page.getByTestId('programs-row-PRG-001')).toBeVisible();
+    await expect(page.getByTestId('mobile-tabbar')).toHaveCount(0);
+    await expect(page.getByRole('button', { name: '+ Nuevo programa', exact: true })).toBeVisible();
+    await expect(page.getByTestId('programs-new-mobile')).toBeVisible();
+    await expect(page.getByTestId('programs-row-PRG-001-mobile')).toBeVisible();
 
     await page.getByTestId('programs-search').fill('sonar');
-    await expect(page.getByTestId('programs-row-PRG-013')).toBeVisible();
-    await expect(page.getByTestId('programs-row-PRG-001')).toHaveCount(0);
+    await expect(page.getByTestId('programs-row-PRG-013-mobile')).toBeVisible();
+    await expect(page.getByTestId('programs-row-PRG-001-mobile')).toHaveCount(0);
   });
 
   test('el menú lateral es un drawer con scrim', async ({ page }) => {
     await openAs(page, 'admin');
     await expect(page.getByTestId('layout-sidebar')).toHaveCount(0);
-    await page.getByTestId('layout-sidebar-toggle').click();
-    await expect(page.getByTestId('layout-sidebar')).toBeVisible();
+    await expect(page.getByTestId('layout-sidebar-mobile')).toHaveCount(0);
+    await page.getByTestId('layout-sidebar-toggle-mobile').click();
+    await expect(page.getByTestId('layout-sidebar-mobile')).toBeVisible();
     await page.getByTestId('layout-drawer-scrim').click({ position: { x: 350, y: 400 } });
-    await expect(page.getByTestId('layout-sidebar')).toHaveCount(0);
+    await expect(page.getByTestId('layout-sidebar-mobile')).toHaveCount(0);
   });
 });
 

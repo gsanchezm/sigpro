@@ -174,14 +174,13 @@ test.describe('panel lateral de detalle', () => {
     await expect(page.getByTestId('programs-panel-code')).toHaveText('PRG-006');
   });
 
-  test('por debajo de 1024 px el panel es un drawer a ancho completo', async ({ page }) => {
+  test('por debajo de 1024 px no hay panel lateral: la tarjeta abre el detalle del programa', async ({ page }) => {
+    // El panel es de la variante de escritorio; en responsive (móvil y tablet) se monta la lista de tarjetas, que navega
     await page.setViewportSize({ width: 900, height: 800 });
     await open(page);
-    await clickRow(page, 'PRG-004');
-    const box = await page.getByTestId('programs-panel').boundingBox();
-    expect(box?.x).toBe(0);
-    expect(box?.width).toBe(900);
-    await page.getByTestId('programs-panel-close').click();
+    await expect(page.getByTestId('programs-row-PRG-004-mobile')).toBeVisible();
+    await page.getByTestId('programs-link-PRG-004-mobile').click();
+    await expect(page).toHaveURL(/\/programs\/PRG-004$/);
     await expect(page.getByTestId('programs-panel')).toHaveCount(0);
   });
 });

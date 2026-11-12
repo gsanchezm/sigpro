@@ -495,19 +495,24 @@ test('estados de carga y de error: skeleton con aria-busy, 503 con traza y reint
   await expect(page.getByTestId(CARD).first()).toBeVisible();
 });
 
-test('móvil (390 px): el tablero hace scroll horizontal y el menú ⋯ permite mover sin arrastrar', async ({ page }) => {
+test('responsive (390 px): pestañas por estado y «Mover a…» en cada tarjeta, sin arrastrar', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
-  await openBoard(page, 'admin');
-  const board = page.getByTestId('nc-board');
-  expect(await board.evaluate((element) => element.scrollWidth > element.clientWidth)).toBe(true);
-  await expect(column(page, 'rejected')).not.toBeInViewport();
-  await column(page, 'rejected').scrollIntoViewIfNeeded();
-  await expect(column(page, 'rejected')).toBeInViewport({ ratio: 0.5 });
+  await openAs(page, 'admin', '/nc', { tenant: TENANT });
+  // Un solo componente a la vez: las columnas de escritorio no existen; en su lugar, las pestañas (familia 10, ver tests/responsive)
+  await expect(page.getByTestId('nc-board-mobile')).toHaveAttribute('aria-busy', 'false');
+  await expect(page.getByTestId('nc-board')).toHaveCount(0);
+  await expect(column(page, 'rejected')).toHaveCount(0);
 
-  await page.getByRole('button', { name: 'Acciones para NC-012' }).scrollIntoViewIfNeeded();
-  await page.getByRole('button', { name: 'Acciones para NC-012' }).click();
-  await page.getByRole('menuitem', { name: /Mover a «En análisis»/ }).click();
+  // «Abierta» es la pestaña inicial y NC-012 está en ella; solo se monta la lista del estado elegido
+  await expect(page.getByTestId('nc-card-NC-012-mobile')).toBeVisible();
+  await expect(page.getByTestId('nc-card-NC-005-mobile')).toHaveCount(0);
+  await page.getByTestId('nc-tab-rejected-mobile').click();
+  await expect(page.getByTestId('nc-card-NC-005-mobile')).toBeVisible();
+  await page.getByTestId('nc-tab-open-mobile').click();
+  await page.getByRole('button', { name: 'Mover a… (NC-012)' }).click();
+  await page.getByRole('button', { name: /Mover a «En análisis»/ }).click();
   await expect(toast(page, 'ok', 'NC-012 pasó a «En análisis»')).toBeVisible();
-  await expect.poll(() => codesIn(page, 'in_analysis')).toContain('NC-012');
+  await page.getByTestId('nc-tab-in_analysis-mobile').click();
+  await expect(page.getByTestId('nc-card-NC-012-mobile')).toBeVisible();
 });
 

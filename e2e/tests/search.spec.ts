@@ -237,21 +237,25 @@ test('/programs sigue como en la fase 1: la búsqueda filtra la tabla (?q=) y no
   await expect(page.getByRole('searchbox', { name: 'Búsqueda global' })).toHaveCount(0);
 });
 
-test('móvil (390 px): el icono abre la búsqueda a todo el ancho y el popover cabe en pantalla', async ({ page }) => {
+test('responsive (390 px): el icono abre la búsqueda a pantalla completa con los resultados dentro', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await openAs(page, 'admin', '/documents', { tenant: TENANT });
   await expect(page.getByRole('combobox', { name: 'Búsqueda global' })).toHaveCount(0); // cerrada: solo el icono
   await page.getByRole('button', { name: 'Búsqueda global' }).click();
   await expect(searchbox(page)).toBeFocused();
-  await expect(page.getByRole('button', { name: 'Cambiar tema' })).toHaveCount(0); // la cabecera cede el sitio al campo
+  // Pantalla completa (familia 2, ver tests/responsive/search.spec.ts): ocupa toda la ventana y el icono ya no está
+  const screen = page.getByTestId('layout-search-screen-mobile');
+  expect(await screen.boundingBox()).toMatchObject({ x: 0, y: 0, width: 390, height: 844 });
+  await expect(page.getByRole('button', { name: 'Búsqueda global' })).toHaveCount(0);
 
   const answered = searchResponse(page, 'ccm');
   await searchbox(page).fill('ccm');
   await answered;
-  const box = await results(page).boundingBox();
+  const list = page.getByTestId('global-search-results-mobile');
+  const box = await list.boundingBox();
   expect(box?.x).toBeGreaterThanOrEqual(0);
   expect((box?.x ?? 0) + (box?.width ?? 0)).toBeLessThanOrEqual(390);
-  await results(page).getByRole('option', { name: /PRG-005/ }).click();
+  await list.getByRole('option', { name: /PRG-005/ }).click();
   await expect(page).toHaveURL(/\/programs\/PRG-005$/);
   // Tras navegar la cabecera vuelve a la normalidad y en /programs la página trae su propio buscador (sin icono)
   await expect(page.getByRole('button', { name: 'Cambiar tema' })).toBeVisible();

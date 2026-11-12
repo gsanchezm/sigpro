@@ -1,6 +1,7 @@
 import { test, type APIRequestContext, type Page } from '@playwright/test';
 import { loginByApi, resetTenant } from '../support/auth';
 import { capture, prepareStorage, THEMES, VIEWPORTS } from '../support/screens';
+import { BREAKPOINT_PX, byTid } from '../support/responsive';
 
 // Capturas de los huecos cerrados del catálogo de componentes (búsqueda global agrupada y combobox de proveedor) en
 // claro/oscuro a 1440 y 390 px → docs/screens/ (tenant alumno19). Se ejecuta con:
@@ -36,12 +37,12 @@ for (const theme of THEMES) {
         await signIn(page, request);
         await page.goto('/documents');
         await page.getByTestId('documents-page').waitFor();
-        // En móvil el campo vive tras el icono de la cabecera
-        if (viewport.width < 640) await page.getByRole('button', { name: 'Búsqueda global' }).click();
+        // En responsive el campo vive en la pantalla completa que abre el icono de la cabecera
+        if (viewport.width < BREAKPOINT_PX) await page.getByRole('button', { name: 'Búsqueda global' }).click();
         const answered = page.waitForResponse((response) => response.url().includes('/api/search') && response.url().includes('q=disponibilidad'));
         await page.getByRole('combobox', { name: 'Búsqueda global' }).fill('disponibilidad');
         await answered;
-        await page.getByTestId('global-search-results').getByRole('option').first().waitFor();
+        await byTid(page, 'global-search-results', viewport.width < BREAKPOINT_PX).getByRole('option').first().waitFor();
         await capture(page, 'busqueda-agrupada', theme);
       });
 

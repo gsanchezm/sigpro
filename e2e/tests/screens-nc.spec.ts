@@ -1,6 +1,7 @@
 import { expect, test, type Page, type APIRequestContext } from '@playwright/test';
 import { loginByApi, resetTenant, type RoleName } from '../support/auth';
 import { capture, prepareStorage, THEMES, VIEWPORTS } from '../support/screens';
+import { BREAKPOINT_PX, byTid } from '../support/responsive';
 
 // Capturas de No conformidades en claro/oscuro a 1440 y 390 px → docs/screens/nc-*.png.
 // Se ejecutan con `pnpm --filter @sigpro/e2e exec playwright test --project=screens tests/screens-nc.spec.ts`.
@@ -22,8 +23,9 @@ const signIn = async (page: Page, request: APIRequestContext, role: RoleName = '
 
 const board = async (page: Page, path = '/nc') => {
   await page.goto(path);
-  await expect(page.getByTestId('nc-board')).toHaveAttribute('aria-busy', 'false');
-  await expect(page.getByTestId('nc-card-NC-001')).toBeVisible();
+  // Escritorio: columnas con tarjetas; responsive (< 1024 px): pestañas y la lista del estado «Abierta», donde está NC-001
+  await expect(byTid(page, 'nc-board')).toHaveAttribute('aria-busy', 'false');
+  await expect(byTid(page, 'nc-card-NC-001')).toBeVisible();
 };
 
 for (const theme of THEMES) {
@@ -65,11 +67,16 @@ for (const theme of THEMES) {
 
       test('cierre con el contador y el error de menos de 20 caracteres', async ({ page }) => {
         await board(page);
-        // En móvil la columna «Acción correctiva» queda fuera de pantalla: se trae a la vista y se espera al snap (un scroll cierra el menú)
-        await page.getByRole('button', { name: 'Acciones para NC-003' }).scrollIntoViewIfNeeded();
-        await page.waitForTimeout(500);
-        await page.getByRole('button', { name: 'Acciones para NC-003' }).click();
-        await page.getByRole('menuitem', { name: /Mover a «Cerrada»/ }).click();
+        if (viewport.width < BREAKPOINT_PX) {
+          // Responsive: NC-003 está en «Acción correctiva» y se mueve con «Mover a…» (una hoja con botones)
+          await page.getByTestId('nc-tab-corrective_action-mobile').click();
+          await page.getByRole('button', { name: 'Mover a… (NC-003)' }).click();
+          await capture(page, 'nc-mover', theme);
+          await page.getByRole('button', { name: /Mover a «Cerrada»/ }).click();
+        } else {
+          await page.getByRole('button', { name: 'Acciones para NC-003' }).click();
+          await page.getByRole('menuitem', { name: /Mover a «Cerrada»/ }).click();
+        }
         const close = page.getByRole('dialog', { name: 'Cerrar NC-003' });
         await close.getByLabel('Comentario de cierre').fill('corto');
         await close.getByRole('button', { name: 'Cerrar no conformidad' }).click();
@@ -88,7 +95,7 @@ for (const theme of THEMES) {
       });
 
       test('menú de la tarjeta (solo escritorio: se cierra al redimensionar)', async ({ page }) => {
-        test.skip(viewport.width < 640, 'el menú contextual solo se captura en escritorio');
+        test.skip(viewport.width < BREAKPOINT_PX, 'el menú ⋯ de la tarjeta solo existe en escritorio (en responsive es la hoja «Mover a…»)');
         await board(page);
         await page.getByRole('button', { name: 'Acciones para NC-002' }).click();
         await expect(page.getByRole('menu', { name: 'Acciones para NC-002' })).toBeVisible();

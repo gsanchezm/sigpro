@@ -2,6 +2,7 @@ import { test, type APIRequestContext, type Page } from '@playwright/test';
 import { chaosOff } from '../support/admin';
 import { loginByApi, resetTenant, type RoleName } from '../support/auth';
 import { capture, prepareStorage, THEMES, VIEWPORTS } from '../support/screens';
+import { openProgramTab } from '../support/responsive';
 
 // Capturas de Administración, Hitos y Perfil (fase 3) en claro/oscuro a 1440 y 390 px → docs/screens/.
 // Se ejecuta con: pnpm --filter @sigpro/e2e exec playwright test --project=screens tests/screens-admin.spec.ts
@@ -91,7 +92,7 @@ for (const theme of THEMES) {
       test('hitos: tabla, edición inline, avance, alta con errores, eliminación y solo lectura', async ({ page, request }) => {
         await signIn(page, request, 'program_manager');
         await page.goto('/programs/PRG-001');
-        await page.getByRole('tab', { name: 'Hitos' }).click();
+        await openProgramTab(page, 'Hitos');
         const table = page.locator('[data-testid="milestones-table"][aria-busy="false"]');
         await table.waitFor();
         await capture(page, 'hitos-tabla', theme);
@@ -132,7 +133,7 @@ for (const theme of THEMES) {
         // el consultor solo lee
         await signIn(page, request, 'consultant');
         await page.goto('/programs/PRG-001');
-        await page.getByRole('tab', { name: 'Hitos' }).click();
+        await openProgramTab(page, 'Hitos');
         await table.waitFor();
         await capture(page, 'hitos-solo-lectura', theme);
       });

@@ -2,6 +2,7 @@ import { test, type Page, type APIRequestContext } from '@playwright/test';
 import { loginByApi, resetTenant, type RoleName } from '../support/auth';
 import { png, pdf, text } from '../support/files';
 import { capture, prepareStorage, THEMES, VIEWPORTS } from '../support/screens';
+import { BREAKPOINT_PX, byTid } from '../support/responsive';
 
 // Capturas de cada pantalla en claro/oscuro a 1440 y 390 px → docs/screens/ (se ejecuta con `pnpm e2e:screens`).
 
@@ -128,7 +129,7 @@ for (const theme of THEMES) {
         const tenant = 'alumno14';
         await resetTenant(request, tenant);
         await signIn(page, request, tenant);
-        const mobile = viewport.width < 640;
+        const mobile = viewport.width < BREAKPOINT_PX;
         const row = (code: string) => page.getByRole('tree', { name: 'Árbol de requisitos' }).getByRole('treeitem', { name: new RegExp(`^${code} `) });
 
         await page.goto('/programs/PRG-002/requirements');
@@ -149,7 +150,8 @@ for (const theme of THEMES) {
           await page.getByRole('menuitem', { name: 'Abrir detalle' }).click();
         }
 
-        const panel = page.getByRole('complementary', { name: 'Detalle del requisito' });
+        // Escritorio: panel junto al árbol; responsive: pantalla completa (un diálogo con «Volver»)
+        const panel = page.getByRole(mobile ? 'dialog' : 'complementary', { name: 'Detalle del requisito' });
         await panel.waitFor();
         await panel.getByRole('combobox', { name: 'Etiquetas' }).fill('r');
         await page.getByRole('listbox').waitFor();
@@ -167,8 +169,8 @@ for (const theme of THEMES) {
         await page.getByTestId('toast-ok').waitFor();
         await capture(page, 'requisitos-estado-aprobado', theme);
 
-        // En móvil el detalle es una hoja a pantalla completa: hay que cerrarla para ver el resto
-        await page.getByRole('button', { name: 'Cerrar detalle de REQ-017' }).click();
+        // En responsive el detalle ocupa la pantalla: hay que volver para ver el resto
+        await page.getByRole('button', mobile ? { name: 'Volver', exact: true } : { name: 'Cerrar detalle de REQ-017' }).click();
         await page.getByRole('searchbox', { name: 'Buscar requisitos' }).fill('latencia');
         await capture(page, 'requisitos-filtro', theme);
         await page.getByRole('searchbox', { name: 'Buscar requisitos' }).fill('');
@@ -201,7 +203,7 @@ for (const theme of THEMES) {
         const tenant = 'alumno17';
         await resetTenant(request, tenant);
         await signIn(page, request, tenant, 'consultant');
-        const mobile = viewport.width < 640;
+        const mobile = viewport.width < BREAKPOINT_PX;
 
         await page.goto('/verification');
         await page.getByTestId('testcase-row-TC-001').waitFor();
@@ -263,7 +265,7 @@ for (const theme of THEMES) {
         const tenant = 'alumno21';
         await resetTenant(request, tenant);
         await signIn(page, request, tenant, 'admin');
-        const mobile = viewport.width < 640;
+        const mobile = viewport.width < BREAKPOINT_PX;
 
         await page.goto('/documents');
         await page.getByTestId('document-row-DOC-012').waitFor();
@@ -368,10 +370,10 @@ for (const theme of THEMES) {
           },
           { token: refreshToken, tenantId: tenant },
         );
-        const mobile = viewport.width < 640;
+        const mobile = viewport.width < BREAKPOINT_PX;
 
         await page.goto('/programs');
-        await page.getByTestId('programs-row-PRG-001').waitFor();
+        await byTid(page, 'programs-row-PRG-001', mobile).waitFor();
         await capture(page, 'programas-lista', theme);
 
         if (!mobile) {
@@ -391,7 +393,7 @@ for (const theme of THEMES) {
           await page.keyboard.press('Escape');
         }
 
-        await page.getByTestId('programs-new').click();
+        await byTid(page, 'programs-new', mobile).click();
         await page.getByTestId('programs-wizard-next').click();
         await capture(page, 'programas-asistente-errores', theme);
         await page.getByTestId('programs-wizard-name').fill('Radar de vigilancia costera RVC-3');
