@@ -20,7 +20,7 @@ export const Metric = ({ testID, label, value, aux, percent }: Props) => {
   const { colors } = useTheme();
   return (
     <View testID={testID} role="group" aria-label={label} style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border, boxShadow: colors.shadow }]}>
-      <Text variant="label" tone="muted" numberOfLines={1}>
+      <Text variant="label" tone="muted" numberOfLines={2}>
         {label}
       </Text>
       <Text variant="metric">{value}</Text>

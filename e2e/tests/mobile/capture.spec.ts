@@ -51,6 +51,11 @@ for (const theme of THEMES) {
       await page.getByRole('button', { name: 'Abrir detalle de REQ-017' }).click();
       await expect(page.getByRole('dialog')).toContainText('REQ-017');
       await captureMobile(page, 'requisito-detalle', theme);
+      await page.getByRole('button', { name: 'Cerrar' }).click();
+
+      await page.getByRole('radio', { name: 'Documento' }).click();
+      await expect(page.getByTestId('requirements-document')).toBeVisible();
+      await captureMobile(page, 'requisitos-documento', theme);
     });
 
     test('no conformidades: tablero, columna a la vista, detalle y cierre', async ({ page }) => {

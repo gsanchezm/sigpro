@@ -9,6 +9,7 @@ import { EmptyState, ErrorState, LoadingState } from '../../ui/States';
 import { Text } from '../../ui/Text';
 import { ProgramCard } from './ProgramCard';
 import { ProgramsFilterBar } from './ProgramsFilterBar';
+import { ProgramsMetrics } from './ProgramsMetrics';
 import { NO_FILTERS, SEARCH_DEBOUNCE_MS, choiceOf, choiceToStatus, filtersToParams, firstParam, hasActiveFilters, hasMorePages, parseProgramsFilters, rangeLabel, type StatusChoice } from './params';
 import { PROGRAMS_TEXTS } from './texts';
 import { MOVIL_PROGRAMS_TESTIDS } from './testids';
@@ -72,6 +73,8 @@ export const ProgramsScreen = () => {
 
   return (
     <Screen title={t('programas', 'programs')} subtitle={subtitle} testID={MOVIL_TESTIDS.PROGRAMS_PAGE}>
+      <ProgramsMetrics />
+
       <ProgramsFilterBar query={draft} onQueryChange={setDraft} choice={choice} onChoice={chooseStatus} filtered={filtered} onClear={clearFilters} />
 
       {phase === 'loading' ? <LoadingState testID={MOVIL_PROGRAMS_TESTIDS.PROGRAMS_LOADING} /> : null}

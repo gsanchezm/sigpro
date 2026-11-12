@@ -5,18 +5,24 @@ import { StyleSheet, View } from 'react-native';
 import { useI18n } from '../../state/i18n';
 import { useTheme } from '../../state/theme';
 import { FONT_FAMILY } from '../../theme/fonts';
+import { RADIUS } from '../../theme/tokens';
 import { Card } from '../../ui/Card';
 import { Screen } from '../../ui/Screen';
+import { Segmented } from '../../ui/Segmented';
 import { EmptyState, ErrorState, LoadingState } from '../../ui/States';
 import { Text } from '../../ui/Text';
 import { TextField } from '../../ui/TextField';
 import { RequirementRow } from './RequirementRow';
+import { RequirementsDocument } from './RequirementsDocument';
+import { RequirementsMetrics } from './RequirementsMetrics';
 import { RequirementSheet } from './RequirementSheet';
 import { MOVIL_REQUIREMENTS_TESTIDS } from './testids';
 import { useRequirementsData } from './useRequirementsData';
 import { NO_CODES, filterRequirements, normalizeQuery, requirementRows, toggleCollapsed } from './view';
 
 const NO_ITEMS: readonly RequirementDto[] = [];
+
+type ViewMode = 'tree' | 'document';
 
 /** Motivo de un error en una línea: la traza HTTP de la API o un texto de red. */
 const traceOf = (failure: unknown, networkText: string): string => (failure instanceof ApiError ? formatTrace(failure) : networkText);
@@ -32,11 +38,13 @@ export const RequirementsPage = ({ programCode }: { readonly programCode: string
   const [query, setQuery] = useState('');
   const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(NO_CODES);
   const [selected, setSelected] = useState<string | null>(null);
+  const [view, setView] = useState<ViewMode>('tree');
 
   const items = data?.items ?? NO_ITEMS;
   const needle = normalizeQuery(query);
   const rows = useMemo(() => requirementRows(items, needle, collapsed), [items, needle, collapsed]);
-  const shown = useMemo(() => filterRequirements(items, needle).length, [items, needle]);
+  const filtered = useMemo(() => filterRequirements(items, needle), [items, needle]);
+  const shown = filtered.length;
   const selectedItem = useMemo(() => items.find((item) => item.code === selected) ?? null, [items, selected]);
   const toggle = useCallback((code: string) => setCollapsed((current) => toggleCollapsed(current, code)), []);
   const open = useCallback((code: string) => setSelected(code), []);
@@ -81,6 +89,19 @@ export const RequirementsPage = ({ programCode }: { readonly programCode: string
         </Link>
       </Card>
 
+      {status === 'error' ? null : <RequirementsMetrics items={items} loading={loading} />}
+
+      <Segmented
+        testID={REQUISITOS_TESTIDS.REQUIREMENTS_TABS}
+        label={t('requisitos', 'tabsLabel')}
+        value={view}
+        onChange={setView}
+        options={[
+          { value: 'tree', label: t('requisitos', 'tabTree'), testID: REQUISITOS_TESTIDS.REQUIREMENTS_TAB_TREE },
+          { value: 'document', label: t('requisitos', 'tabDocument'), testID: REQUISITOS_TESTIDS.REQUIREMENTS_TAB_DOCUMENT },
+        ]}
+      />
+
       <TextField
         label={t('requisitos', 'searchLabel')}
         placeholder={t('requisitos', 'searchPlaceholder')}
@@ -118,8 +139,10 @@ export const RequirementsPage = ({ programCode }: { readonly programCode: string
         <EmptyState testID={REQUISITOS_TESTIDS.REQUIREMENTS_NO_MATCH} title={t('requisitos', 'noMatchTitle')} hint={t('requisitos', 'noMatchBody')} />
       ) : null}
 
-      {rows.length > 0 ? (
-        <View role="list" aria-label={t('requisitos', 'treeLabel')} aria-busy={loading} testID={REQUISITOS_TESTIDS.REQUIREMENTS_TREE} style={[styles.tree, { borderColor: colors.border, backgroundColor: colors.surface }]}>
+      {view === 'document' && shown > 0 ? <RequirementsDocument items={filtered} onOpen={open} /> : null}
+
+      {view === 'tree' && rows.length > 0 ? (
+        <View role="list" aria-label={t('requisitos', 'treeLabel')} aria-busy={loading} testID={REQUISITOS_TESTIDS.REQUIREMENTS_TREE} style={[styles.tree, { borderColor: colors.border, backgroundColor: colors.surface, boxShadow: colors.shadow }]}>
           {rows.map((row) => (
             <RequirementRow key={row.item.code} row={row} onToggle={toggle} onOpen={open} />
           ))}
@@ -133,7 +156,7 @@ export const RequirementsPage = ({ programCode }: { readonly programCode: string
 
 const styles = StyleSheet.create({
   header: { gap: 4 },
-  tree: { borderWidth: 1, borderRadius: 10, overflow: 'hidden' },
+  tree: { borderWidth: 1, borderRadius: RADIUS.lg, overflow: 'hidden' },
   notFound: { alignItems: 'center', gap: 8, paddingVertical: 32, paddingHorizontal: 16 },
   centered: { textAlign: 'center' },
 });

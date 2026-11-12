@@ -3,7 +3,7 @@ import { useTheme } from '../state/theme';
 import { familyFor, type FontWeight } from '../theme/fonts';
 
 export type TextVariant = 'title' | 'heading' | 'body' | 'label' | 'small' | 'mono' | 'metric';
-export type TextTone = 'default' | 'muted' | 'faint' | 'accent' | 'danger' | 'onAccent';
+export type TextTone = 'default' | 'muted' | 'faint' | 'accent' | 'danger' | 'ok' | 'onAccent';
 
 interface VariantStyle {
   readonly fontSize: number;
@@ -42,6 +42,7 @@ export const Text = ({ variant = 'body', tone = 'default', weight, style, ...res
     faint: colors.text3,
     accent: colors.accent,
     danger: colors.danger,
+    ok: colors.ok,
     onAccent: colors.onAccent,
   };
   const { weight: baseWeight, mono, ...metrics } = VARIANT_STYLE[variant];

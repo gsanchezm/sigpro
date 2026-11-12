@@ -1,4 +1,4 @@
-import { REQUISITOS_DYNAMIC_TESTIDS, type RequirementDto, type VisibleRow } from '@sigpro/shared';
+import { REQUISITOS_DYNAMIC_TESTIDS, openNcsOf, testsSummary, type RequirementDto, type VisibleRow } from '@sigpro/shared';
 import { Pressable, StyleSheet, View } from 'react-native';
 import { useI18n, useTexts } from '../../state/i18n';
 import { useTheme } from '../../state/theme';
@@ -24,6 +24,10 @@ export const RequirementRow = ({ row, onToggle, onOpen }: Props) => {
   const { colors } = useTheme();
   const { item, depth, hasChildren, expanded } = row;
   const { code } = item;
+  const tests = testsSummary(item);
+  const openNcs = openNcsOf(item);
+  const testsText = tests.total === 0 ? '—' : `${tests.passed}/${tests.total}`;
+  const ncText = openNcs.length === 0 ? '—' : openNcs.length === 1 ? (openNcs[0]?.code ?? '—') : `${openNcs[0]?.code} +${openNcs.length - 1}`;
   const tags = item.tags.map((tag) => t('requisitos', `tag_${tag}`)).join(' · ');
   // `aria-level` no está tipado en las props de RN, pero RN Web lo pasa al DOM tal cual (nivel 1 = raíz)
   const level: Record<string, number> = { 'aria-level': depth + 1 };
@@ -73,6 +77,20 @@ export const RequirementRow = ({ row, onToggle, onOpen }: Props) => {
           />
         </View>
         <Text variant="body">{item.title}</Text>
+        <View style={styles.meta}>
+          <Text variant="small" tone="faint">
+            {t('requisitos', 'colTests')}{' '}
+            <Text variant="mono" tone={tests.total === 0 ? 'faint' : tests.passed === tests.total ? 'ok' : 'muted'} testID={REQUISITOS_DYNAMIC_TESTIDS.REQUIREMENT_ROW_TESTS(code)}>
+              {testsText}
+            </Text>
+          </Text>
+          <Text variant="small" tone="faint">
+            {t('requisitos', 'colNc')}{' '}
+            <Text variant="mono" tone={openNcs.length === 0 ? 'faint' : 'danger'} testID={REQUISITOS_DYNAMIC_TESTIDS.REQUIREMENT_ROW_NC(code)}>
+              {ncText}
+            </Text>
+          </Text>
+        </View>
         <Text variant="small" tone="muted" testID={MOVIL_REQUIREMENTS_DYNAMIC_TESTIDS.ROW_PRIORITY(code)}>
           {`${t('requisitos', 'priorityLabel')}: ${t('programas', item.priority)}`}
         </Text>
@@ -90,9 +108,10 @@ export const RequirementRow = ({ row, onToggle, onOpen }: Props) => {
 const HIT_SLOP = { top: 10, bottom: 10, left: 6, right: 6 } as const;
 
 const styles = StyleSheet.create({
-  row: { flexDirection: 'row', alignItems: 'flex-start', gap: 4, paddingRight: 12, paddingVertical: 10, borderBottomWidth: StyleSheet.hairlineWidth },
+  row: { flexDirection: 'row', alignItems: 'flex-start', gap: 4, paddingRight: 12, paddingVertical: 12, borderBottomWidth: StyleSheet.hairlineWidth },
   // Alineado con la primera línea (el código): el chevron queda a la altura del texto, no a mitad de la fila
   toggle: { width: 32, height: 22, alignItems: 'center', justifyContent: 'center' },
   body: { flex: 1, gap: 4, minHeight: 44, justifyContent: 'center' },
+  meta: { flexDirection: 'row', flexWrap: 'wrap', gap: 14 },
   codeLine: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' },
 });

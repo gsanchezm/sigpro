@@ -53,7 +53,7 @@ export const ProgramCard = ({ program, onOpen }: Props) => {
 
 const styles = StyleSheet.create({
   item: { padding: 0, gap: 0, overflow: 'hidden' },
-  press: { padding: 12, gap: 8 },
+  press: { padding: 16, gap: 10 },
   pressed: { opacity: 0.85 },
   row: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   grow: { flex: 1 },
