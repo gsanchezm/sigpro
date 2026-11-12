@@ -1,8 +1,6 @@
-import { VERIFICACION_TESTIDS } from '@sigpro/shared';
-import { useI18n } from '../../../src/state/i18n';
-import { PendingModule } from '../../../src/ui/PendingModule';
+import { VerificationScreen } from '../../../src/features/verification/VerificationScreen';
 
+/** `/verification`: casos de prueba (tarjetas, filtros, orden, informe). El estado de los filtros vive en la URL. */
 export default function VerificationRoute() {
-  const { t } = useI18n();
-  return <PendingModule title={t('programas', 'nav_verification')} testID={VERIFICACION_TESTIDS.VERIFICATION_PAGE} />;
+  return <VerificationScreen />;
 }

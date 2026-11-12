@@ -1,5 +1,5 @@
-import type { ReactNode } from 'react';
-import { ScrollView, StyleSheet, View } from 'react-native';
+import type { ReactNode, Ref } from 'react';
+import { ScrollView, StyleSheet, View, type ScrollViewInstance } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTheme } from '../state/theme';
 import { SPACING } from '../theme/tokens';
@@ -13,11 +13,13 @@ interface Props {
   readonly right?: ReactNode;
   /** `false` si el contenido gestiona su propio scroll (una `FlatList`, un tablero horizontal). */
   readonly scroll?: boolean;
+  /** Referencia al `ScrollView` de la pantalla (para llevar el scroll a una sección, p. ej. «Registrar ejecución»). */
+  readonly scrollRef?: Ref<ScrollViewInstance>;
   readonly children: ReactNode;
 }
 
 /** Pantalla: zona segura, título (`role="heading"`, nivel 1) y contenido con scroll opcional. */
-export const Screen = ({ title, subtitle, testID, right, scroll = true, children }: Props) => {
+export const Screen = ({ title, subtitle, testID, right, scroll = true, scrollRef, children }: Props) => {
   const { colors } = useTheme();
   const header = (
     <View style={styles.header}>
@@ -37,7 +39,7 @@ export const Screen = ({ title, subtitle, testID, right, scroll = true, children
   return (
     <SafeAreaView testID={testID} edges={['top']} style={[styles.root, { backgroundColor: colors.bg }]}>
       {scroll ? (
-        <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+        <ScrollView ref={scrollRef} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
           {header}
           {children}
         </ScrollView>

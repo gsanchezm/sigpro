@@ -29,7 +29,7 @@ Fuera de alcance, por ser propios del navegador o del curso: `/lab` (la pantalla
 | Requisitos: lectura, métricas, árbol, documento, flujo | [x] | [x] |
 | Requisitos: transiciones de estado, alta, edición, borrado, mover | [x] | [x] |
 | Requisitos: matriz de trazabilidad (ver y enlazar/desenlazar) | [x] | [x] |
-| Verificación: casos de prueba, detalle, ejecuciones con evidencias, informe | [x] | [ ] |
+| Verificación: casos de prueba, detalle, ejecuciones con evidencias, informe | [x] | [x] |
 | No conformidades: tablero, transiciones, comentarios, cierre | [x] | [x] |
 | No conformidades: alta y edición | [x] | [ ] |
 | Documentos: lista, ficha, visor | [x] | [x] |

@@ -1,6 +1,7 @@
 import { expect, test } from '@playwright/test';
 import { chaosOff } from '../../support/admin';
 import { openAs, resetTenant, seedStorage } from '../../support/auth';
+import { png } from '../../support/files';
 import { THEMES, captureMobile } from '../../support/screens';
 
 // Capturas de la app móvil en claro y oscuro a 390 px → docs/screens/mobile-<pantalla>-<tema>-390.png
@@ -177,6 +178,55 @@ for (const theme of THEMES) {
       await openAs(page, 'admin', '/documents/DOC-004', { tenant: TENANT, theme });
       await expect(page.getByTestId('viewer-page-1')).toBeVisible();
       await captureMobile(page, 'documento-detalle', theme);
+    });
+
+    test('verificación: lista, filtros, menú, detalle, evidencia ampliada y registro (sin enviar nada)', async ({ page }) => {
+      await openAs(page, 'consultant', '/verification', { tenant: TENANT, theme });
+      await expect(page.getByTestId('verification-count')).toHaveText('1–10 de 25');
+      await captureMobile(page, 'verificacion', theme);
+
+      await page.getByRole('combobox', { name: 'Último resultado', exact: true }).click();
+      await expect(page.getByRole('dialog', { name: 'Último resultado', exact: true })).toBeVisible();
+      await captureMobile(page, 'verificacion-filtro', theme);
+      await page.getByRole('radio', { name: 'Fallido', exact: true }).click();
+      await expect(page.getByTestId('testcase-row-TC-001').or(page.getByTestId('verification-empty')).first()).toBeVisible();
+      await captureMobile(page, 'verificacion-fallidos', theme);
+      await page.getByRole('button', { name: 'Limpiar filtros', exact: true }).click();
+
+      await page.getByRole('button', { name: 'Seleccionar', exact: true }).click();
+      await page.getByRole('checkbox', { name: 'Seleccionar TC-002', exact: true }).click();
+      await expect(page.getByTestId('verification-bulk-bar')).toBeVisible();
+      await captureMobile(page, 'verificacion-seleccion', theme);
+
+      await page.getByRole('button', { name: 'Acciones para TC-003', exact: true }).click();
+      await expect(page.getByRole('dialog', { name: 'Acciones para TC-003', exact: true })).toBeVisible();
+      await captureMobile(page, 'verificacion-menu', theme);
+
+      await page.goto('/verification/TC-001');
+      await expect(page.getByRole('heading', { level: 1, name: 'Verificar disponibilidad (caso 001)' })).toBeVisible();
+      await captureMobile(page, 'verificacion-detalle', theme);
+      await expect(page.getByTestId('testcase-runs')).toBeVisible();
+      await page.getByTestId('testcase-runs').scrollIntoViewIfNeeded();
+      const thumb = page.getByRole('button', { name: /Ampliar · Evidencia TC-001/ });
+      await expect(thumb).toBeVisible();
+      await captureMobile(page, 'verificacion-historial', theme);
+      await thumb.click();
+      await expect(page.getByTestId('evidence-zoom')).toBeVisible();
+      await captureMobile(page, 'verificacion-evidencia', theme);
+      await page.getByRole('button', { name: 'Cerrar', exact: true }).click();
+
+      await page.goto('/verification/TC-005?run=1');
+      await expect(page.getByRole('heading', { level: 2, name: 'Registrar ejecución' })).toBeInViewport();
+      await page.getByRole('radio', { name: 'Fallido', exact: true }).click();
+      await page.getByLabel('Notas', { exact: true }).fill('El caso falla al reiniciar el servicio.');
+      const [chooser] = await Promise.all([page.waitForEvent('filechooser'), page.getByRole('button', { name: 'Adjuntar un archivo', exact: true }).click()]);
+      await chooser.setFiles(png('captura-fallo.png'));
+      await expect(page.getByTestId('run-files').getByRole('listitem')).toHaveCount(1);
+      await captureMobile(page, 'verificacion-registrar', theme);
+
+      await openAs(page, 'auditor', '/verification/TC-007?run=1', { tenant: TENANT, theme });
+      await expect(page.getByTestId('run-denied')).toBeVisible();
+      await captureMobile(page, 'verificacion-registrar-denegado', theme);
     });
 
     test('perfil', async ({ page }) => {

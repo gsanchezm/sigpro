@@ -991,6 +991,42 @@ export const MOVIL_DOCUMENTS_TESTIDS = {
   UPDATED: 'document-updated',
 } as const;
 
+// verification
+export const MOVIL_VERIFICATION_TESTIDS = {
+  /** Carga de la primera página de la lista (`role="status"` con `aria-busy`). */
+  LOADING: 'verification-loading',
+  /** Conmutador «Seleccionar»: activa la selección múltiple en las tarjetas (la web usa casillas en la tabla). */
+  SELECT_MODE: 'verification-select-mode',
+  /** Grupo de chips de orden (en la web son los botones de la cabecera de la tabla). */
+  SORT_GROUP: 'verification-sort',
+  /** «Cargar más»: la web pagina con números, el móvil añade la página siguiente. */
+  LOAD_MORE: 'verification-load-more',
+  /** Motivo visible del botón de informe deshabilitado (la web lo lleva en `title`). */
+  REPORT_REASON: 'verification-report-reason',
+  /** Motivo visible de «Registrar ejecución» deshabilitado en el menú de la fila. */
+  MENU_RUN_REASON: 'testcase-menu-run-reason',
+  /** Pantalla del detalle (siempre presente; `testcase-detail` solo existe con el caso cargado). */
+  DETAIL_PAGE: 'testcase-detail-page',
+  /** Carga y error (distinto del 404) del detalle del caso. */
+  DETAIL_LOADING: 'testcase-loading',
+  DETAIL_ERROR: 'testcase-error',
+  DETAIL_ERROR_RETRY: 'testcase-error-retry',
+  /** Sección «Registrar ejecución» del detalle (la web usa el ancla `#run`). */
+  RUN_SECTION: 'run-section',
+  /** Error de las notas bajo el campo (la web solo valida el resultado en el cliente). */
+  RUN_NOTES_ERROR: 'run-notes-error',
+  /** Botón «Adjuntar PDF» (el selector de imágenes no admite PDF; usa el selector de documentos). */
+  RUN_EVIDENCE_PDF: 'run-evidence-pdf',
+  /** Hoja con la evidencia ampliada y su imagen. */
+  EVIDENCE_ZOOM: 'evidence-zoom',
+  EVIDENCE_ZOOM_IMAGE: 'evidence-zoom-image',
+} as const;
+
+export const MOVIL_VERIFICATION_DYNAMIC_TESTIDS = {
+  /** Vista previa de un archivo elegido para la ejecución: `run-file-preview-0`. */
+  RUN_FILE_PREVIEW: (index: number) => `run-file-preview-${index}`,
+} as const;
+
 // --- Catálogo de componentes: proveedores y búsqueda global agrupada ---------
 
 export const PROVEEDORES_TESTIDS = {

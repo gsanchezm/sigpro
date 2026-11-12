@@ -1,6 +1,6 @@
 import { ApiError, REQUISITOS_TESTIDS, can, formatTrace, type CreateRequirementInput, type Placement, type RequirementDto, type RequirementState, type Role, type UpdateRequirementInput } from '@sigpro/shared';
-import { Link } from 'expo-router';
-import { useCallback, useMemo, useState } from 'react';
+import { Link, useRouter } from 'expo-router';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { useAuth } from '../../state/auth';
 import { useI18n } from '../../state/i18n';
@@ -34,8 +34,9 @@ type ViewMode = 'tree' | 'document' | 'matrix';
  * abre el detalle en una hoja, donde se cambia el estado, se edita, se reordena y se borra. «Nuevo requisito» da de alta.
  * Las acciones llaman a la API con los mismos permisos y avisos que la web (`toast`).
  */
-export const RequirementsPage = ({ programCode }: { readonly programCode: string }) => {
+export const RequirementsPage = ({ programCode, initialSelect }: { readonly programCode: string; readonly initialSelect?: string }) => {
   const { t } = useI18n();
+  const router = useRouter();
   const { colors } = useTheme();
   const { user, api } = useAuth();
   const toast = useToast();
@@ -58,6 +59,13 @@ export const RequirementsPage = ({ programCode }: { readonly programCode: string
   const toggle = useCallback((code: string) => setCollapsed((current) => toggleCollapsed(current, code)), []);
   const open = useCallback((code: string) => setSelected(code), []);
   const close = useCallback(() => setSelected(null), []);
+
+  // `?select=REQ-017` (enlace desde Verificación) abre el detalle de ese requisito una vez cargada la lista y quita el parámetro
+  useEffect(() => {
+    if (!initialSelect || !items.some((item) => item.code === initialSelect)) return;
+    setSelected(initialSelect);
+    router.setParams({ select: undefined });
+  }, [items, initialSelect, router]);
 
   const loading = status === 'loading';
   const notFound = status === 'error' && failure instanceof ApiError && failure.status === 404;
