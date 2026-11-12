@@ -2,6 +2,7 @@ import { test as base, expect, type BrowserContext, type Page } from '@playwrigh
 import { ProgramsPage } from '../pages/ProgramsPage';
 import { createApi, loginByApi, type Api } from '../support/api';
 import { authFile, type RoleName } from '../support/env';
+import { isResponsiveWidth } from '../support/responsive';
 
 // Fixtures del curso (sesión 3). Se importa `test` y `expect` de AQUÍ, no de '@playwright/test':
 //
@@ -15,6 +16,8 @@ import { authFile, type RoleName } from '../support/env';
 //    ese rol, para comparar permisos dentro de un mismo test (dos usuarios a la vez).
 // 3) `apiAs(role)`: cliente de la API con el token de ese rol, para preparar o comprobar datos sin pasar por la UI.
 // 4) `programsPage`: el Page Object de Programas, ya construido sobre `page`.
+// 5) `isResponsive` (sesión 13): `true` si el viewport del test es < 1024 px (diseño responsive). Se calcula al empezar el test;
+//    si cambias el tamaño dentro del test, usa `isResponsiveNow(page)` de support/responsive.ts.
 
 /** Un rol del seed o `anonymous` (sin sesión iniciada). */
 export type TestRole = RoleName | 'anonymous';
@@ -29,6 +32,8 @@ interface RoleFixtures {
   auditorPage: Page;
   apiAs: (role: RoleName) => Promise<Api>;
   programsPage: ProgramsPage;
+  /** El test corre en el diseño responsive (< 1024 px): decide qué id de prueba y qué flujo usar (`tid`). */
+  isResponsive: boolean;
 }
 
 export const test = base.extend<RoleFixtures>({
@@ -60,6 +65,9 @@ export const test = base.extend<RoleFixtures>({
   },
 
   programsPage: async ({ page }, use) => use(new ProgramsPage(page)),
+
+  // `viewport` es una opción de Playwright: sale del proyecto o de `test.use({ viewport })`
+  isResponsive: async ({ viewport }, use) => use(isResponsiveWidth(viewport?.width ?? 1280)),
 });
 
 export { expect };

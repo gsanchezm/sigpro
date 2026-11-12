@@ -4,7 +4,7 @@ Proyecto **Playwright + TypeScript** contra SIGPRO, el laboratorio del curso. Es
 
 - **Fixtures por rol** con `storageState`: cada test arranca ya autenticado como admin, gestor, consultor o auditor.
 - **Page Objects** de Programas y de la pantalla de acceso.
-- **Un spec por sesión del curso** (sesiones 2 a 11).
+- **Un spec por sesión del curso** (sesiones 2 a 11 y la 13: locators responsive).
 - **El workflow de GitHub Actions de la sesión 12** (`.github/workflows/students-e2e.yml`): corre la suite contra Render con tu tenant, en 2 shards, y publica el informe HTML.
 
 ## Puesta en marcha
@@ -50,9 +50,9 @@ SIGPRO_API_URL=https://sigpro-api.onrender.com/api
 | --- | --- |
 | `playwright.config.ts` | 3 proyectos: `setup` (inicia sesión una vez por rol), `chromium` (los specs, que dependen de `setup`) y `visual` (solo los tests `@visual`). 2 workers en local y 1 en CI |
 | `tests/auth.setup.ts` | Inicia sesión por la pantalla de acceso con cada rol y guarda `.auth/<tenant>-<rol>.json` |
-| `fixtures/index.ts` | `test` y `expect` que importan todos los specs: `role`, `pageAs`, `adminPage`…, `apiAs`, `programsPage` |
+| `fixtures/index.ts` | `test` y `expect` que importan todos los specs: `role`, `pageAs`, `adminPage`…, `apiAs`, `programsPage`, `isResponsive` |
 | `pages/` | Page Objects: `ProgramsPage`, `LoginPage` |
-| `support/` | `env.ts` (variables y usuarios), `api.ts` (login por API y cliente mínimo) |
+| `support/` | `env.ts` (variables y usuarios), `api.ts` (login por API y cliente mínimo), `responsive.ts` (`tid()` e `isResponsiveNow()`, sesión 13) |
 | `scripts/reset-tenant.ts` | `npm run reset`: restaura tu tenant por la API |
 
 ### Los fixtures en dos líneas
@@ -82,6 +82,7 @@ test('preparar datos por API', async ({ apiAs }) => { const api = await apiAs('a
 | 9 | `s09-network-mocking.spec.ts` | Documentos | `page.route`: 403, 500, respuestas lentas y modificadas |
 | 10 | `s10-waits-chaos.spec.ts` | Panel de misión | Esperas, `expect.poll`, WebSocket, modo caos, locators resilientes |
 | 11 | `s11-visual-mobile.spec.ts` | Panel de misión + No conformidades | Capturas con máscara, emulación de iPhone 14 |
+| 13 | `s13-locators-responsive.spec.ts` | Programas (filtros, lista, acciones, detalle) | Un solo corte a 1024 px: locators que cambian en modo responsive; el mismo flujo con `getByRole` y con `getByTestId` + `tid()`; fixture `isResponsive` |
 
 Lee primero la cabecera de cada spec: explica el ejercicio y qué se practica.
 
@@ -99,7 +100,7 @@ Qué datos toca cada spec (si añades specs, mantén esta regla):
 | Spec | Datos del tenant que toca |
 | --- | --- |
 | s02 | Solo crea una cuenta desechable (`bloqueo-<ts>@sigpro.lab`) para el bloqueo a 5 intentos |
-| s03, s05, s09, s11 | Solo lectura (s05 supone que nadie crea programas «En pausa» ni toca `PRG-004`, `PRG-012` y `PRG-020`) |
+| s03, s05, s09, s11, s13 | Solo lectura (s05 supone que nadie crea programas «En pausa» ni toca `PRG-004`, `PRG-012` y `PRG-020`) |
 | s04 | Programas que crea él mismo (nombre único) y borra al terminar |
 | s06 | `REQ-016`, `REQ-017` y `REQ-019` de `PRG-002`; los deja como estaban |
 | s07 | Añade ejecuciones y evidencias a un caso de prueba (`TC-008`): afirma «una más que antes», nunca totales |
