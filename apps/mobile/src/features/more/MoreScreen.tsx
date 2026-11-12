@@ -1,4 +1,4 @@
-import { MOVIL_DYNAMIC_TESTIDS, MOVIL_TESTIDS, can } from '@sigpro/shared';
+import { MOVIL_DYNAMIC_TESTIDS, MOVIL_TESTIDS, can, type Translator } from '@sigpro/shared';
 import { useRouter, type Href } from 'expo-router';
 import { Pressable, StyleSheet, View } from 'react-native';
 import { useAuth } from '../../state/auth';
@@ -11,21 +11,25 @@ import { Text } from '../../ui/Text';
 interface MoreItem {
   readonly key: string;
   readonly href: Href;
-  /** Clave de `programas` con el nombre (el mismo que el menú de la web). */
-  readonly label: 'nav_documents' | 'nav_audit' | 'nav_admin' | 'profile';
+  /** Nombre del elemento en el idioma activo (los mismos textos que la web). */
+  readonly label: (t: Translator) => string;
   readonly visible: (role: Parameters<typeof can>[0]) => boolean;
 }
 
 // Lo que la barra inferior no puede alojar. La web lo muestra en la barra lateral; Auditoría solo a quien tiene `audit.view`
-// y Administración a quien tiene `users.manage`, con los mismos permisos que la web.
+// y Administración a quien tiene `users.manage`, con los mismos permisos que la web. Ayuda, Condiciones y Privacidad son las
+// páginas públicas del pie de Acceso (se leen también con sesión).
 const ITEMS: readonly MoreItem[] = [
-  { key: 'documents', href: '/documents', label: 'nav_documents', visible: () => true },
-  { key: 'audit', href: '/audit', label: 'nav_audit', visible: (role) => can(role, 'audit.view') },
-  { key: 'admin', href: '/admin', label: 'nav_admin', visible: (role) => can(role, 'users.manage') },
-  { key: 'profile', href: '/profile', label: 'profile', visible: () => true },
+  { key: 'documents', href: '/documents', label: (t) => t('programas', 'nav_documents'), visible: () => true },
+  { key: 'audit', href: '/audit', label: (t) => t('programas', 'nav_audit'), visible: (role) => can(role, 'audit.view') },
+  { key: 'admin', href: '/admin', label: (t) => t('programas', 'nav_admin'), visible: (role) => can(role, 'users.manage') },
+  { key: 'profile', href: '/profile', label: (t) => t('programas', 'profile'), visible: () => true },
+  { key: 'help', href: '/help', label: (t) => t('acceso', 'help'), visible: () => true },
+  { key: 'terms', href: '/legal/terms', label: (t) => t('acceso', 'termsFooter'), visible: () => true },
+  { key: 'privacy', href: '/legal/privacy', label: (t) => t('acceso', 'privacy'), visible: () => true },
 ];
 
-/** Pestaña «Más»: Documentos, Auditoría, Administración y Perfil, filtrados por el rol de la sesión. */
+/** Pestaña «Más»: Documentos, Auditoría, Administración, Perfil, Ayuda y las páginas legales, filtrados por el rol de la sesión. */
 export const MoreScreen = () => {
   const { t } = useI18n();
   const { user } = useAuth();
@@ -41,11 +45,11 @@ export const MoreScreen = () => {
             key={item.key}
             testID={MOVIL_DYNAMIC_TESTIDS.MORE_ITEM(item.key)}
             role="link"
-            aria-label={t('programas', item.label)}
+            aria-label={item.label(t)}
             onPress={() => router.push(item.href)}
             style={({ pressed }) => [styles.item, { backgroundColor: pressed ? colors.surface2 : colors.surface, borderColor: colors.border, boxShadow: colors.shadow }]}
           >
-            <Text variant="heading">{t('programas', item.label)}</Text>
+            <Text variant="heading">{item.label(t)}</Text>
             <Text variant="body" tone="faint" aria-hidden>
               ›
             </Text>

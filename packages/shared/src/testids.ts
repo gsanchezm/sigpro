@@ -818,6 +818,9 @@ export const MOVIL_TESTIDS = {
   MORE_PAGE: 'more-page',
   /** Búsqueda global en móvil (en la web es un desplegable de la cabecera). */
   SEARCH_PAGE: 'search-page',
+  /** Pantallas públicas de Acceso del móvil que en la web son una vista de `AccessPage` (el formulario tiene su id; la pantalla, este). */
+  REGISTER_PAGE: 'register-page',
+  FORGOT_PAGE: 'forgot-page',
 } as const;
 
 export const MOVIL_DYNAMIC_TESTIDS = {
@@ -1144,4 +1147,15 @@ export const BUSQUEDA_DYNAMIC_TESTIDS = {
   GLOBAL_SEARCH_GROUP_TOTAL: (kind: string) => `global-search-group-total-${kind}`,
   /** `global-search-item-program-PRG-001`. */
   GLOBAL_SEARCH_ITEM: (kind: string, id: string) => `global-search-item-${kind}-${id}`,
+} as const;
+
+// search (móvil)
+export const MOVIL_SEARCH_TESTIDS = {
+  /** Reintento del error de la búsqueda («No se pudo buscar»): la web no lo tiene, la lista del móvil sí lo exige. */
+  ERROR_RETRY: 'global-search-error-retry',
+} as const;
+
+export const MOVIL_SEARCH_DYNAMIC_TESTIDS = {
+  /** `global-search-group-more-program`: «N más» bajo un grupo con más coincidencias que ítems enseñados. */
+  GROUP_MORE: (kind: string) => `global-search-group-more-${kind}`,
 } as const;

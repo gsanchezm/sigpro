@@ -362,10 +362,56 @@ for (const theme of THEMES) {
       await captureMobile(page, 'admin-denegada', theme);
     });
 
+    test('acceso: registro, errores, solicitud enviada y recuperar contraseña', async ({ page }) => {
+      await seedStorage(page.context(), { tenant: TENANT, theme });
+      await page.goto('/register');
+      await expect(page.getByRole('heading', { name: 'Solicitar acceso', level: 1 })).toBeVisible();
+      await captureMobile(page, 'registro', theme);
+
+      await page.getByRole('button', { name: 'Enviar solicitud', exact: true }).click();
+      await expect(page.getByTestId('register-terms-error')).toBeVisible();
+      await page.getByTestId('register-terms-error').scrollIntoViewIfNeeded();
+      await captureMobile(page, 'registro-errores', theme);
+
+      await page.getByLabel('Nombre', { exact: true }).fill('Ana');
+      await page.getByLabel('Apellidos', { exact: true }).fill('Prueba');
+      await page.getByLabel('Correo corporativo', { exact: true }).fill(`captura-${theme}-${Date.now()}@organizacion.es`);
+      await page.getByLabel('Organización / Unidad', { exact: true }).fill('Unidad de pruebas');
+      await page.getByLabel('Contraseña', { exact: true }).fill('Abcdefghij1!');
+      await page.getByLabel('Confirmar contraseña', { exact: true }).fill('Abcdefghij1!');
+      await page.getByRole('checkbox', { name: /He leído y acepto/ }).click();
+      await page.getByTestId('register-password-meter').scrollIntoViewIfNeeded();
+      await captureMobile(page, 'registro-medidor', theme);
+      await page.getByRole('button', { name: 'Enviar solicitud', exact: true }).click();
+      await expect(page.getByTestId('verify-panel')).toBeVisible();
+      await captureMobile(page, 'registro-enviado', theme);
+
+      await page.goto('/forgot');
+      await page.getByLabel('Correo electrónico', { exact: true }).fill('cualquiera@sigpro.test');
+      await page.getByRole('button', { name: 'Enviar enlace', exact: true }).click();
+      await expect(page.getByTestId('forgot-sent')).toBeVisible();
+      await captureMobile(page, 'recuperar', theme);
+    });
+
+    test('páginas legales y ayuda', async ({ page }) => {
+      await seedStorage(page.context(), { tenant: TENANT, theme });
+      await page.goto('/legal/terms');
+      await expect(page.getByRole('heading', { name: 'Términos de uso', level: 1 })).toBeVisible();
+      await captureMobile(page, 'legal-condiciones', theme);
+      await page.goto('/help');
+      await expect(page.getByRole('heading', { name: 'Ayuda', level: 1 })).toBeVisible();
+      await captureMobile(page, 'ayuda', theme);
+    });
+
     test('perfil', async ({ page }) => {
       await openAs(page, 'admin', '/profile', { tenant: TENANT, theme });
       await expect(page.getByTestId('profile-name')).toBeVisible();
       await captureMobile(page, 'perfil', theme);
+      await page.getByTestId('profile-live').scrollIntoViewIfNeeded();
+      await captureMobile(page, 'perfil-preferencias', theme);
+      await page.getByRole('combobox', { name: 'Idioma de la interfaz', exact: true }).click();
+      await expect(page.getByRole('dialog', { name: 'Idioma de la interfaz', exact: true })).toBeVisible();
+      await captureMobile(page, 'perfil-idioma', theme);
     });
   });
 }

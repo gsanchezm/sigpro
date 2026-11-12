@@ -7,6 +7,9 @@ export const STORAGE_KEYS = {
   lang: 'sigpro.lang',
   tenant: 'sigpro.tenant',
   session: 'sigpro.session',
+  /** Preferencias del Perfil (las mismas claves y valores `on`/`off` que la web). */
+  live: 'sigpro.live',
+  digest: 'sigpro.digest',
 } as const;
 
 export const readStorage = async (key: string): Promise<string | null> => {

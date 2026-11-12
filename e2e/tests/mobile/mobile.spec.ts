@@ -396,19 +396,26 @@ test.describe('Móvil · documentos (lectura y acciones según el rol)', () => {
 });
 
 test.describe('Móvil · perfil y alcance', () => {
-  test('perfil: idioma, tema y cierre de sesión', async ({ page }) => {
+  test('perfil: cuenta, preferencias con «Guardar» y cierre de sesión', async ({ page }) => {
     await openAs(page, 'admin', '/programs', { tenant: TENANT });
     await openMore(page, 'Perfil');
     await expect(page).toHaveURL(/\/profile$/);
-    await expect(page.getByTestId('profile-role')).toHaveText('admin');
+    await expect(page.getByTestId('profile-role')).toHaveText('Admin');
     await expect(page.getByTestId('profile-tenant')).toHaveText(TENANT);
 
-    await page.getByRole('radio', { name: 'EN', exact: true }).click();
-    await expect(page.getByRole('tab', { name: 'Programs' })).toBeVisible();
-    await page.getByRole('radio', { name: 'ES', exact: true }).click();
-    await expect(page.getByRole('tab', { name: 'Programas' })).toBeVisible();
+    // El idioma y el tema son un borrador: se aplican con «Guardar» (el detalle está en search-profile.spec.ts)
+    await page.getByRole('combobox', { name: 'Idioma de la interfaz', exact: true }).click();
+    await page.getByRole('dialog', { name: 'Idioma de la interfaz', exact: true }).getByRole('radio', { name: 'English', exact: true }).click();
+    await expect(tab(page, 'Programs')).toHaveCount(0);
+    await page.getByRole('button', { name: 'Guardar', exact: true }).click();
+    await expect(tab(page, 'Programs')).toBeVisible();
+    await page.getByRole('combobox', { name: 'Interface language', exact: true }).click();
+    await page.getByRole('dialog', { name: 'Interface language', exact: true }).getByRole('radio', { name: 'Español', exact: true }).click();
+    await page.getByRole('button', { name: 'Save', exact: true }).click();
+    await expect(tab(page, 'Programas')).toBeVisible();
 
-    await page.getByRole('button', { name: /^Cambiar tema/ }).click();
+    await page.getByRole('radio', { name: 'Oscuro', exact: true }).click();
+    await page.getByRole('button', { name: 'Guardar', exact: true }).click();
     expect(await page.evaluate(() => localStorage.getItem('sigpro.theme'))).toBe('dark');
 
     await page.getByRole('button', { name: 'Cerrar sesión' }).click();

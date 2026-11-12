@@ -9,6 +9,8 @@ interface ThemeValue {
   readonly scheme: Scheme;
   readonly colors: Palette;
   readonly toggleTheme: () => void;
+  /** Fija el tema (el «Guardar» del Perfil aplica el borrador de una vez, como la web). */
+  readonly setTheme: (scheme: Scheme) => void;
 }
 
 const ThemeContext = createContext<ThemeValue | null>(null);
@@ -24,13 +26,13 @@ export const ThemeProvider = ({ children }: { children: ReactNode }) => {
   }, []);
 
   const scheme: Scheme = stored ?? (system === 'dark' ? 'dark' : 'light');
-  const toggleTheme = useCallback(() => {
-    const next: Scheme = scheme === 'dark' ? 'light' : 'dark';
+  const setTheme = useCallback((next: Scheme) => {
     setStored(next);
     void writeStorage(STORAGE_KEYS.theme, next);
-  }, [scheme]);
+  }, []);
+  const toggleTheme = useCallback(() => setTheme(scheme === 'dark' ? 'light' : 'dark'), [scheme, setTheme]);
 
-  const value = useMemo<ThemeValue>(() => ({ scheme, colors: PALETTES[scheme], toggleTheme }), [scheme, toggleTheme]);
+  const value = useMemo<ThemeValue>(() => ({ scheme, colors: PALETTES[scheme], toggleTheme, setTheme }), [scheme, toggleTheme, setTheme]);
   return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;
 };
 

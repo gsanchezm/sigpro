@@ -20,8 +20,8 @@ Fuera de alcance, por ser propios del navegador o del curso: `/lab` (la pantalla
 | --- | --- | --- |
 | Navegación (Programas · Verificación · NC · Misión · Más) | barra lateral | [x] pestañas + «Más» (Documentos, Auditoría, Administración, Perfil) |
 | Acceso: login, MFA | [x] | [x] |
-| Acceso: registro, recuperar contraseña, reenviar verificación | [x] | [ ] |
-| Páginas legales y ayuda | [x] | [ ] |
+| Acceso: registro, recuperar contraseña, reenviar verificación | [x] | [x] |
+| Páginas legales y ayuda | [x] | [x] |
 | Programas: lista, filtros, métricas, detalle | [x] | [x] |
 | Programas: alta (asistente), edición, archivar, duplicar, eliminar, selección múltiple y CSV | [x] | [x] |
 | Hitos: alta, edición, avance, borrado | [x] | [x] |
@@ -38,5 +38,5 @@ Fuera de alcance, por ser propios del navegador o del curso: `/lab` (la pantalla
 | Administración: usuarios (rol y activo), auditoría, modo caos y reinicio del tenant | [x] | [x] |
 | Panel de misión | [x] | [x] |
 | Perfil: idioma, tema, sesión | [x] | [x] |
-| Perfil: preferencias de avisos | [x] | [ ] |
+| Perfil: preferencias de avisos | [x] | [x] |
 | Búsqueda global | [x] | [ ] |
