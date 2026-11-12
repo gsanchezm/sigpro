@@ -23,6 +23,8 @@ interface OwnerComboboxProps {
   readonly invalid?: boolean;
   readonly describedBy?: string;
   readonly inputClassName: string;
+  /** Clases extra del contenedor (p. ej. ancho mínimo dentro de un chip de filtro). */
+  readonly rootClassName?: string;
 }
 
 /** Combobox ARIA 1.2 con autocompletar: ↑↓ Enter Esc, `aria-activedescendant`, opciones con avatar. */
@@ -43,6 +45,7 @@ export const OwnerCombobox = ({
   invalid = false,
   describedBy,
   inputClassName,
+  rootClassName = "",
 }: OwnerComboboxProps) => {
   const listId = `${useId()}-list`;
   const [typed, setTyped] = useState('');
@@ -77,7 +80,7 @@ export const OwnerCombobox = ({
   };
 
   return (
-    <div className="relative">
+    <div className={`relative ${rootClassName}`}>
       <input
         id={inputId}
         role="combobox"

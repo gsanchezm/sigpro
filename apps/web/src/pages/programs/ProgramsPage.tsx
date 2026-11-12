@@ -22,8 +22,10 @@ import { BulkBar } from './BulkBar';
 import { DeleteDialog } from './DeleteDialog';
 import { Pagination } from './Pagination';
 import { ProgramCards } from './ProgramCards';
+import { ProgramPanel } from './ProgramPanel';
 import { ProgramWizard } from './ProgramWizard';
 import { ProgramsFilters } from './ProgramsFilters';
+import { ProgramsMetrics } from './ProgramsMetrics';
 import { ProgramsTable } from './ProgramsTable';
 import { DEFAULT_LIST_STATE, hasActiveFilters, nextSort, parseListParams, toListQuery, toSearchString, type ListState } from './params';
 import { useOwners, useProgramsList } from './useProgramsData';
@@ -53,12 +55,16 @@ export const ProgramsPage = () => {
   const [wizard, setWizard] = useState<{ nextCode: string } | null>(null);
   const [deleteCodes, setDeleteCodes] = useState<readonly string[] | null>(null);
   const [deleting, setDeleting] = useState(false);
+  // Panel lateral de detalle (código de la fila abierta) y recarga de las tarjetas de métricas tras cada mutación
+  const [panelCode, setPanelCode] = useState<string | null>(null);
+  const [metricsKey, setMetricsKey] = useState(0);
 
   const role = user?.role ?? 'consultant';
   const canCreate = can(role, 'program.create');
   const loading = status === 'loading';
   const isError = status === 'error';
   const rows = data?.items ?? [];
+  const panelProgram = rows.find((row) => row.code === panelCode) ?? null;
   const total = data?.total ?? 0;
   const pages = data?.pages ?? 1;
   const slow = useDelayedFlag(loading, SKELETON_DELAY_MS);
@@ -87,6 +93,7 @@ export const ProgramsPage = () => {
 
   const changeState = (next: ListState) => {
     setSelected([]);
+    setPanelCode(null);
     setState(next);
   };
 
@@ -94,6 +101,7 @@ export const ProgramsPage = () => {
     setSelected([]);
     reload();
     reloadOwners();
+    setMetricsKey((key) => key + 1);
   };
 
   const openWizard = useCallback(() => {
@@ -119,6 +127,18 @@ export const ProgramsPage = () => {
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
   }, [canCreate, openWizard, wizard, deleteCodes]);
+
+  // Esc cierra el panel lateral (salvo que haya un menú, lista o diálogo abierto: a ese le toca el Esc)
+  useEffect(() => {
+    if (!panelProgram) return;
+    const onEscape = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape' || event.defaultPrevented || wizard || deleteCodes) return;
+      if (document.querySelector('[role="menu"], [role="dialog"], [role="alertdialog"], [role="listbox"]')) return;
+      setPanelCode(null);
+    };
+    document.addEventListener('keydown', onEscape);
+    return () => document.removeEventListener('keydown', onEscape);
+  }, [panelProgram, wizard, deleteCodes]);
 
   const exportFiltered = () =>
     attempt(async () => {
@@ -147,6 +167,7 @@ export const ProgramsPage = () => {
       setState({ ...state, sort: 'code', dir: 'desc', page: 1 });
       reload();
       reloadOwners();
+      setMetricsKey((key) => key + 1);
     });
 
   const edit = (program: ProgramDto) => navigate(`/programs/${program.code}/edit`);
@@ -171,6 +192,7 @@ export const ProgramsPage = () => {
     setState({ ...state, sort: 'code', dir: 'desc', page: 1 });
     reload();
     reloadOwners();
+    setMetricsKey((key) => key + 1);
   };
 
   const onSort = (column: ProgramSortColumn) => changeState(nextSort(state, column));
@@ -220,7 +242,7 @@ export const ProgramsPage = () => {
               onClick={() => void exportFiltered()}
               disabled={exportDisabled}
               title={exportDisabled ? t('common', 'exportDisabled') : undefined}
-              className="btn btn-secondary !h-8 !px-3"
+              className="btn btn-secondary"
             >
               <DownloadIcon size={12} />
               {t('programas', 'exportCsv')}
@@ -231,16 +253,18 @@ export const ProgramsPage = () => {
               onClick={openWizard}
               disabled={!canCreate}
               title={canCreate ? `${t('programas', 'newProgram')} (N)` : t('programas', permissionDeniedReason('program.create'))}
-              className="btn btn-primary !h-8 !px-3"
+              className="btn btn-primary"
             >
               + {t('programas', 'newProgram')}
-              <kbd aria-hidden="true" className="ml-1.5 inline-grid h-4 place-items-center rounded-[3px] border border-white/35 px-[5px] font-mono text-[10px]">
+              <kbd aria-hidden="true" className="ml-1.5 inline-grid h-4 place-items-center rounded-ctl-sm border border-current/40 px-[5px] font-mono text-[10px]">
                 N
               </kbd>
             </button>
           </div>
         ) : null}
       </div>
+
+      <ProgramsMetrics refreshKey={metricsKey} />
 
       <ProgramsFilters
         state={state}
@@ -277,29 +301,34 @@ export const ProgramsPage = () => {
       ) : null}
 
       {!mobile ? (
-        <div className="overflow-hidden rounded-card border border-border bg-surface">
-          <ProgramsTable
-            rows={rows}
-            loading={loading}
-            showSkeleton={showSkeleton}
-            state={state}
-            role={role}
-            selected={selected}
-            onSort={onSort}
-            onToggle={toggleOne}
-            onToggleAll={toggleAll}
-            onEdit={edit}
-            onDuplicate={(program) => void duplicate(program)}
-            onArchive={(program) => void archive([program.code])}
-            onDelete={(program) => setDeleteCodes([program.code])}
-          />
-          {isEmpty ? emptyBlock : null}
-          <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border px-3 py-2 text-[12px] text-fg-2">
-            <span id="programs-count" data-testid={PROGRAMAS_TESTIDS.PROGRAMS_COUNT} aria-live="polite">
-              {rangeLabel}
-            </span>
-            <Pagination page={data?.page ?? 1} pages={pages} onPage={(page) => changeState({ ...state, page })} />
+        <div className="flex items-start gap-6">
+          <div className="min-w-0 flex-1 overflow-hidden rounded-card border border-border bg-surface">
+            <ProgramsTable
+              rows={rows}
+              loading={loading}
+              showSkeleton={showSkeleton}
+              state={state}
+              role={role}
+              selected={selected}
+              openCode={panelProgram?.code ?? null}
+              onOpen={setPanelCode}
+              onSort={onSort}
+              onToggle={toggleOne}
+              onToggleAll={toggleAll}
+              onEdit={edit}
+              onDuplicate={(program) => void duplicate(program)}
+              onArchive={(program) => void archive([program.code])}
+              onDelete={(program) => setDeleteCodes([program.code])}
+            />
+            {isEmpty ? emptyBlock : null}
+            <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border px-3 py-2 text-[12px] text-fg-2">
+              <span id="programs-count" data-testid={PROGRAMAS_TESTIDS.PROGRAMS_COUNT} aria-live="polite">
+                {rangeLabel}
+              </span>
+              <Pagination page={data?.page ?? 1} pages={pages} onPage={(page) => changeState({ ...state, page })} />
+            </div>
           </div>
+          {panelProgram ? <ProgramPanel program={panelProgram} onClose={() => setPanelCode(null)} /> : null}
         </div>
       ) : (
         <>

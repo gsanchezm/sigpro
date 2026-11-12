@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { NO_LIVE_NC, applyNcEvent, displayedNc, kpiCards, type LiveNc } from './kpis';
 
 const summary = {
-  kpis: { activePrograms: 2, programsTotal: 5, milestonesDone: 3, milestonesTotal: 8, ncOpen: 4, ncTotal: 10, verificationPass: 50, casesWithRuns: 6 } satisfies MissionKpis,
+  kpis: { activePrograms: 2, programsTotal: 5, programsProgress: 40, milestonesDone: 3, milestonesTotal: 8, ncOpen: 4, ncTotal: 10, verificationPass: 50, casesWithRuns: 6 } satisfies MissionKpis,
   ncBySeverity: { minor: 1, major: 2, critical: 1 },
 };
 

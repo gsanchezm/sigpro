@@ -79,3 +79,12 @@ Las utilidades de Tailwind equivalentes son `rounded-ctl`, `rounded-card` y `rou
 | Spinner | `.spinner` | hereda `currentColor` (sobre el botón primario = `--on-accent`) |
 
 **Excepciones sin variables CSS** (un data-URI no las lee): el logo, los avatares, las miniaturas de evidencia y `public/icon.svg`; sus colores están en `apps/web/src/lib/images.ts` y repiten los tokens.
+
+## Programas (fase 3)
+
+Orden de la página: cabecera (título 26/600, subtítulo, acciones) → **fila de 4 tarjetas de métricas** (`.metric`: Programas, Activos, Avance medio con barra de 6 px, NC abiertas; cifras del tenant, `GET /api/mission/summary`) → **chips de filtro** (`.chip`: «+ Estado», «+ Inicio desde», «+ Fin hasta», «+ Responsable»; activos en `--accent-soft` con «×», más «Limpiar filtros») → tabla `.data-table` + **panel lateral**.
+
+- **Panel lateral** (`programs-panel`): `<aside>` de 380 px en la rejilla (sticky bajo la barra superior), no modal. Código en mono, nombre `.section-title`, estado, responsable, fechas, presupuesto y avance. Se abre con un clic en la fila y se cierra con «×», Esc o al cambiar orden/página/filtros. Con él abierto la tabla oculta las columnas que el panel ya muestra. Por debajo de 1024 px es un drawer a ancho completo.
+- **Chips:** son los controles nativos (siempre en el DOM): `getByLabel('Estado')`, `selectOption`, `fill` y el combobox ARIA del responsable funcionan igual que antes. Los «×» se llaman «Quitar «<valor>»».
+- **Padding de página** `--page-pad` (28 px) y separación entre bloques `--block-gap` (24 px) se aplican en el `<main>` del shell.
+- **Acceso:** mismas clases base; el panel de marca es `data-theme="dark"`.

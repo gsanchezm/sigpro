@@ -89,6 +89,7 @@ export const kpiCards = (kpis: MissionKpis, nc: NcView, t: Translator): readonly
 export const EMPTY_KPIS: MissionKpis = {
   activePrograms: 0,
   programsTotal: 0,
+  programsProgress: 0,
   milestonesDone: 0,
   milestonesTotal: 0,
   ncOpen: 0,

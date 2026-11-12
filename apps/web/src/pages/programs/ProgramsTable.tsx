@@ -23,6 +23,9 @@ interface TableProps {
   readonly state: ListState;
   readonly role: Role;
   readonly selected: readonly string[];
+  /** Código del programa cuyo panel lateral está abierto (la fila se resalta). */
+  readonly openCode: string | null;
+  readonly onOpen: (code: string) => void;
   readonly onSort: (column: ProgramSortColumn) => void;
   readonly onToggle: (code: string) => void;
   readonly onToggleAll: () => void;
@@ -47,6 +50,12 @@ const COLUMNS: readonly Column[] = [
   { key: 'budget', width: 120, right: true },
   { key: 'progress', width: 160 },
 ];
+
+// Un clic en un control de la fila (enlace, casilla, menú ⋯) no abre el panel: solo el clic en el resto de la fila
+const isControl = (target: EventTarget): boolean => (target as HTMLElement).closest('a, button, input, select, textarea, label, [role="menu"], [role="menuitem"]') !== null;
+
+// Columnas que el panel lateral ya enseña (responsable, fechas y presupuesto): se ocultan mientras está abierto
+const IN_PANEL: ReadonlySet<Column['key']> = new Set(['owner', 'dates', 'budget']);
 
 const SKELETON_ROWS = 6;
 const skeleton = (className: string) => <span className={`skeleton ${className}`} />;
@@ -86,9 +95,11 @@ const ProgressHeader = ({ label }: { label: string }) => {
 };
 
 /** Tabla de programas (≥ 640 px): orden por columna con aria-sort, selección múltiple, menú ⋯ por fila. */
-export const ProgramsTable = ({ rows, loading, showSkeleton, state, role, selected, onSort, onToggle, onToggleAll, onEdit, onDuplicate, onArchive, onDelete }: TableProps) => {
+export const ProgramsTable = ({ rows, loading, showSkeleton, state, role, selected, openCode, onOpen, onSort, onToggle, onToggleAll, onEdit, onDuplicate, onArchive, onDelete }: TableProps) => {
   const { t, lang } = useI18n();
   const selectAllRef = useRef<HTMLInputElement>(null);
+  const compact = openCode !== null;
+  const columns = compact ? COLUMNS.filter((column) => !IN_PANEL.has(column.key)) : COLUMNS;
   const allSelected = rows.length > 0 && rows.every((row) => selected.includes(row.code));
   const someSelected = rows.some((row) => selected.includes(row.code));
 
@@ -112,7 +123,7 @@ export const ProgramsTable = ({ rows, loading, showSkeleton, state, role, select
         data-testid={PROGRAMAS_TESTIDS.PROGRAMS_TABLE}
         aria-busy={loading}
         aria-describedby="programs-count"
-        className="data-table w-full min-w-[860px] border-collapse text-[12.5px]"
+        className={`data-table w-full border-collapse text-[12.5px] ${compact ? 'min-w-[540px]' : 'min-w-[860px]'}`}
       >
         <thead>
           <tr className="border-b border-border">
@@ -129,7 +140,7 @@ export const ProgramsTable = ({ rows, loading, showSkeleton, state, role, select
                 className="m-0 size-3.5 align-middle accent-accent"
               />
             </th>
-            {COLUMNS.map((column) => {
+            {columns.map((column) => {
               const active = state.sort === column.key;
               const sortable = column.key !== 'progress';
               return (
@@ -173,22 +184,25 @@ export const ProgramsTable = ({ rows, loading, showSkeleton, state, role, select
                     <span className="skeleton h-3" style={{ width: `${55 + ((index * 17) % 40)}%` }} />
                   </td>
                   <td className="px-2">{skeleton('h-5 w-16 !rounded-ctl')}</td>
-                  <td className="px-2">{skeleton('h-3 w-[110px]')}</td>
-                  <td className="px-2">{skeleton('h-3 w-[150px]')}</td>
-                  <td className="px-2">{skeleton('ml-auto h-3 w-20')}</td>
+                  {compact ? null : <td className="px-2">{skeleton('h-3 w-[110px]')}</td>}
+                  {compact ? null : <td className="px-2">{skeleton('h-3 w-[150px]')}</td>}
+                  {compact ? null : <td className="px-2">{skeleton('ml-auto h-3 w-20')}</td>}
                   <td className="px-2">{skeleton('h-1.5 w-[100px]')}</td>
                   <td />
                 </tr>
               ))
             : rows.map((program) => {
                 const isSelected = selected.includes(program.code);
+                const isOpen = openCode === program.code;
                 return (
                   <tr
                     key={program.code}
                     data-testid={PROGRAMAS_DYNAMIC_TESTIDS.PROGRAMS_ROW(program.code)}
                     data-code={program.code}
+                    data-open={isOpen}
                     aria-selected={isSelected}
-                    className={`h-10 border-b border-border hover:bg-surface-2 ${isSelected ? 'bg-accent-soft' : ''}`}
+                    onClick={(event) => isControl(event.target) || onOpen(program.code)}
+                    className={`h-10 cursor-pointer border-b border-border hover:bg-surface-2 ${isSelected || isOpen ? 'bg-accent-soft' : ''}`}
                   >
                     <td className="py-0 pr-2 pl-3">
                       <input
@@ -213,16 +227,20 @@ export const ProgramsTable = ({ rows, loading, showSkeleton, state, role, select
                     <td className="px-2">
                       <StatusBadge status={program.status} />
                     </td>
-                    <td className="px-2 whitespace-nowrap">
-                      <span className="inline-flex items-center gap-1.5">
-                        <Avatar name={program.ownerName} size={20} fontPx={9} shape="circle" />
-                        {program.ownerName}
-                      </span>
-                    </td>
-                    <td className="px-2 font-mono text-[12px] whitespace-nowrap text-fg-2">
-                      {formatDate(program.startDate, lang)} → {formatDate(program.endDate, lang)}
-                    </td>
-                    <td className="px-2 text-right font-mono text-[12px] whitespace-nowrap">{formatMoney(program.budgetEur, lang)}</td>
+                    {compact ? null : (
+                      <td className="px-2 whitespace-nowrap">
+                        <span className="inline-flex items-center gap-1.5">
+                          <Avatar name={program.ownerName} size={20} fontPx={9} shape="circle" />
+                          {program.ownerName}
+                        </span>
+                      </td>
+                    )}
+                    {compact ? null : (
+                      <td className="px-2 font-mono text-[12px] whitespace-nowrap text-fg-2">
+                        {formatDate(program.startDate, lang)} → {formatDate(program.endDate, lang)}
+                      </td>
+                    )}
+                    {compact ? null : <td className="px-2 text-right font-mono text-[12px] whitespace-nowrap">{formatMoney(program.budgetEur, lang)}</td>}
                     <td className="min-w-[140px] px-2">
                       <div className="flex items-center gap-2">
                         <ProgressBar percent={program.progress} label={t('common', 'progressLabel', { code: program.code, percent: program.progress })} cancelled={program.status === 'cancelled'} />

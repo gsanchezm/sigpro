@@ -26,29 +26,26 @@ export const AuthLayout = ({ children, overlay }: { children: ReactNode; overlay
   }, [publicApi]);
 
   return (
-    <div className="relative flex min-h-screen overflow-hidden bg-bg text-[13px] leading-[1.45] text-fg">
-      {/* Panel de marca: decorativo (aria-hidden), desaparece por debajo de 640 px */}
-      <aside
-        aria-hidden="true"
-        className="hidden w-[min(40%,460px)] flex-none flex-col justify-between border-r border-[#1c2531] bg-[#0d1117] p-8 text-[#e8edf3] sm:flex"
-      >
+    <div className="relative flex min-h-screen overflow-hidden bg-bg text-fg">
+      {/* Panel de marca: decorativo (aria-hidden), siempre oscuro: data-theme="dark" vuelve a resolver los tokens a oscuro, sin hex */}
+      <aside aria-hidden="true" data-theme="dark" className="hidden w-[min(40%,460px)] flex-none flex-col justify-between border-r border-border bg-bg p-10 text-fg sm:flex">
         <div className="flex items-center gap-2.5">
           <Logo size={28} fixedDark />
           <span className="text-[15px] font-semibold tracking-[.01em]">SIGPRO</span>
         </div>
         <div className="flex flex-col gap-3.5">
-          <div className="font-mono text-[11px] tracking-[.08em] text-[#6f7c8c]">{t('common', 'brandTag')}</div>
+          <div className="font-mono text-[11px] tracking-[.08em] text-fg-3">{t('common', 'brandTag')}</div>
           <p className="m-0 max-w-[22ch] text-[22px] leading-[1.3] font-medium tracking-[-.01em] text-pretty">{t('common', 'brandClaim')}</p>
-          <dl className="mt-2 mb-0 grid grid-cols-[auto_1fr] gap-x-3.5 gap-y-1.5 font-mono text-[12px] text-[#a3afbe]">
-            <dt className="text-[#6f7c8c]">{t('common', 'brandEnv')}</dt>
+          <dl className="mt-2 mb-0 grid grid-cols-[auto_1fr] gap-x-3.5 gap-y-1.5 font-mono text-[12px] text-fg-2">
+            <dt className="text-fg-3">{t('common', 'brandEnv')}</dt>
             <dd className="m-0">{env?.env ?? '—'}</dd>
-            <dt className="text-[#6f7c8c]">{t('common', 'brandVersion')}</dt>
+            <dt className="text-fg-3">{t('common', 'brandVersion')}</dt>
             <dd className="m-0">{env ? `v${env.version}` : '—'}</dd>
-            <dt className="text-[#6f7c8c]">{t('common', 'brandClassification')}</dt>
+            <dt className="text-fg-3">{t('common', 'brandClassification')}</dt>
             <dd className="m-0">{t('common', 'brandClassificationValue')}</dd>
           </dl>
         </div>
-        <div className="text-[11.5px] text-[#6f7c8c]">{t('common', 'brandLegal')}</div>
+        <div className="text-[11.5px] text-fg-3">{t('common', 'brandLegal')}</div>
       </aside>
 
       <div className="flex min-w-0 flex-1 flex-col">
@@ -63,7 +60,7 @@ export const AuthLayout = ({ children, overlay }: { children: ReactNode; overlay
             aria-label={t('acceso', 'language')}
             value={lang}
             onChange={(event) => isSupportedLang(event.target.value) && setLang(event.target.value as Lang)}
-            className="h-8 cursor-pointer rounded-ctl border border-border bg-surface px-1.5 text-[12px] font-medium text-fg-2"
+            className="h-9 cursor-pointer rounded-ctl border border-border bg-surface px-2 text-[12px] font-medium text-fg-2"
           >
             {LANGS.map((code) => (
               <option key={code} value={code}>

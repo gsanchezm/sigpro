@@ -59,6 +59,8 @@ export const prependEvent = (events: readonly MissionEventDto[], event: MissionE
 export interface MissionKpis {
   readonly activePrograms: number;
   readonly programsTotal: number;
+  /** Media (0–100) del avance de todos los programas del tenant; los que no tienen hitos cuentan como 0 %. */
+  readonly programsProgress: number;
   readonly milestonesDone: number;
   readonly milestonesTotal: number;
   readonly ncOpen: number;

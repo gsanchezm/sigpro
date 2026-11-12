@@ -598,6 +598,32 @@ a:hover {
   .chip-x:hover {
     background: color-mix(in srgb, currentColor 14%, transparent);
   }
+  .chip-caret {
+    flex: none;
+    width: 6px;
+    height: 6px;
+    margin-left: -2px;
+    border-right: 1.5px solid currentColor;
+    border-bottom: 1.5px solid currentColor;
+    transform: rotate(45deg) translateY(-2px);
+    opacity: 0.6;
+    pointer-events: none;
+  }
+  /* Fecha: vacía, el campo nativo va transparente encima de la etiqueta «+ Inicio desde» (toda la píldora es clicable) */
+  .chip[data-active='false'] .chip-date {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    opacity: 0;
+  }
+  .chip .chip-owner {
+    width: 100%;
+    min-width: 0;
+  }
+  .chip .chip-owner::placeholder {
+    color: var(--text-2);
+    opacity: 1;
+  }
 
   /* ---- Conmutador de vista (segmentado): pastilla --surface con sombra sobre --surface-2 ---- */
   .segmented {

@@ -1,8 +1,19 @@
 # SIGPRO — Estado de la construcción
 
-Última actualización: 2026-11-11 (auditoría de código aplicada, sin subir) · **Las 4 fases están construidas, subidas a `origin/main` y desplegadas en Render** · el workflow de alumnos se ejecutó contra Render en verde
+Última actualización: 2026-11-11 (auditoría y rediseño «Ciruela» fases 1–3 subidos a `origin/main`) · **Las 4 fases están construidas y desplegadas en Render** · el workflow de alumnos se ejecutó contra Render en verde
 
 Leyenda: `[x]` hecho · `[~]` en curso · `[ ]` pendiente
+
+## Rediseño visual «1a Ciruela» (2026-11-11)
+
+Detalle y decisiones en `docs/DECISIONS.md` («Rediseño visual «1a Ciruela»») y referencia en `docs/design-system.md`. Un commit por fase.
+
+- [x] **Fase 1 — tokens, fuentes y forma.** e2e nc, access y programs: 71/71
+- [x] **Fase 2 — componentes base.** e2e web 299/299
+- [x] **Fase 3 — Acceso y Programas** (métricas, filtros como chips, panel lateral de 380 px). Verificado por piezas: `programs-panel.spec.ts` 12/12, `programs-metrics-api.spec.ts`, unit/lint/typecheck. **La suite e2e completa no pudo ejecutarse en local (el equipo se quedó sin memoria y los navegadores se cerraron); la valida el CI de GitHub tras el push.** Si el CI marca algo, es lo primero que hay que mirar
+- [ ] **Fase 4 — Requisitos** (tabla en árbol, panel con flujo de aprobación reutilizando `TRANSITIONS`/`canTransition`, vistas Documento y Matriz)
+- [ ] **Fase 5 — documentación y cierre** (regenerar `docs/screens/`, retirar `compare`, suite completa)
+- [ ] **Pendiente de decidir:** `apps/mobile` conserva la paleta anterior
 
 ## Auditoría de código (2026-11-11)
 

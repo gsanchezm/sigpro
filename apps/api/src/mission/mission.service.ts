@@ -48,6 +48,13 @@ export class MissionService {
       kpis: {
         activePrograms: programs.filter((program) => program.status === 'active').length,
         programsTotal: programs.length,
+        programsProgress: percentOf(
+          programs.reduce((sum, program) => {
+            const milestones = byProgram.get(program.code);
+            return sum + (milestones ? percentOf(milestones.done, milestones.total) : 0);
+          }, 0),
+          programs.length * 100,
+        ),
         milestonesDone: milestones.filter((m) => m.done).length,
         milestonesTotal: milestones.length,
         ncOpen: openCounts.ncOpen,

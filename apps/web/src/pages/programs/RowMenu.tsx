@@ -38,7 +38,7 @@ export const RowMenu = ({ program, role, onEdit, onDuplicate, onArchive, onDelet
     const below = anchor.bottom + 4;
     const top = below + height > window.innerHeight ? Math.max(8, anchor.top - 4 - height) : below;
     setPosition({ top, left: Math.max(8, anchor.right - MENU_WIDTH) });
-    menuRef.current?.querySelector<HTMLElement>('[role="menuitem"]:not([disabled])')?.focus();
+    menuRef.current?.querySelector<HTMLElement>('[role="menuitem"]:not([disabled])')?.focus({ preventScroll: true });
   }, [open]);
 
   useLayoutEffect(() => {

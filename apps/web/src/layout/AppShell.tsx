@@ -77,7 +77,7 @@ export const AppShell = ({ children }: { children?: ReactNode } = {}) => {
     },
   });
   const currentLabel = crumbs[crumbs.length - 1]?.label ?? '';
-  const pagePadding = isMobile ? 'p-3 gap-3' : breakpoint === 'tablet' ? 'p-4 gap-4' : 'px-6 pt-5 pb-8 gap-4';
+  const pagePadding = isMobile ? 'p-4 gap-4' : breakpoint === 'tablet' ? 'p-5 gap-5' : 'p-[var(--page-pad)] pb-10 gap-[var(--block-gap)]';
 
   return (
     <div className="relative flex min-h-screen bg-bg text-[13px] leading-[1.45] text-fg">
