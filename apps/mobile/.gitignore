@@ -1,3 +1,7 @@
 .expo/
 dist/
 expo-env.d.ts
+
+# Proyectos nativos generados por `expo prebuild` (workflow mobile-builds.yml): no se versionan
+/ios/
+/android/

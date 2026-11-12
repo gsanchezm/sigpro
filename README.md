@@ -28,7 +28,7 @@ Cifras de la última pasada: **tests unitarios** shared 119 · web 114 · api 13
 | --- | --- |
 | `apps/api` | NestJS + Prisma + PostgreSQL. JWT + roles, MFA simulado, OpenAPI en `/api/docs`, Socket.IO, `/api/admin/reset` y `/api/admin/chaos` |
 | `apps/web` | React 18 + Vite + Tailwind 4, design system «1a Ciruela» (morado, Geist) como CSS variables, claro/oscuro, ES/EN, PWA |
-| `apps/mobile` | Expo SDK 58 + Expo Router (React 19): mismas rutas, mismo cliente y mismos ids que la web (conserva la paleta anterior: el rediseño Ciruela solo cubre la web) |
+| `apps/mobile` | Expo SDK 58 + Expo Router (React 19): mismas rutas, mismo cliente y mismos ids que la web (misma paleta Ciruela y Geist que la web) |
 | `packages/shared` | Tipos, esquemas Zod, cliente HTTP, i18n ES/EN y `testids.ts` |
 | `e2e` | Playwright: specs de humo de la web y del móvil y capturas de pantalla |
 | `examples` | Proyecto Playwright + TypeScript de referencia para los alumnos (independiente del monorepo: `npm`, su propio `package.json`) |
@@ -49,7 +49,7 @@ Cifras de la última pasada: **tests unitarios** shared 119 · web 114 · api 13
 | `/programs/:code` (pestaña Hitos), `/profile` | Hitos y Perfil | Edición inline de celdas, slider con `aria-valuenow`; radios, checkbox y switch |
 | `/lab`, `/legal/terms`, `/legal/privacy`, `/help` | Laboratorio y páginas públicas | Credenciales, reset, caos, **lista de endpoints**, contraejemplos de locators (XPath frágil, textos que cambian con el caos), **descarga de `sigpro-examples.zip`**, FAQ |
 
-**App móvil** (`apps/mobile`, mismas rutas): acceso con MFA, Programas (tarjetas con filtros), No conformidades (tablero kanban; sin drag & drop: «Mover a…»), Panel de misión (tiempo real) y, en solo lectura, Requisitos y Documentos. No tiene Administración. Detalle y caveats de locators en [`docs/GUIA-ALUMNO.md`](docs/GUIA-ALUMNO.md#6-app-móvil-expo).
+**App móvil** (`apps/mobile`, mismas rutas): acceso con MFA, Programas (tarjetas con filtros), No conformidades (tablero kanban; sin drag & drop: «Mover a…»), Panel de misión (tiempo real) y, en solo lectura, Requisitos y Documentos. No tiene Administración. Detalle y caveats de locators en [`docs/GUIA-ALUMNO.md`](docs/GUIA-ALUMNO.md#6-app-móvil-expo). Para emuladores de iOS y Android: [`docs/MOBILE-EMULADORES.md`](docs/MOBILE-EMULADORES.md).
 
 El producto trae además **8 defectos plantados** para el ejercicio de reporte de defectos (`PLANTED_BUGS`, activos por defecto; `false` deja la aplicación limpia) y un **simulador de misión** (`SIMULATOR_MS`). El catálogo de defectos es solo para el instructor y no se versiona (`docs/planted-bugs.md` está en `.gitignore`); la app móvil implementa siempre el comportamiento correcto.
 

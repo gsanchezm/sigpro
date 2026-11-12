@@ -1,0 +1,160 @@
+name: Mobile builds (emuladores)
+
+# Compila la app móvil para los emuladores y deja el resultado como artefacto del run:
+#  - iOS: un .app para el Simulador de Xcode, comprimido en un zip (macOS runner; gratis en repositorios públicos).
+#  - Android: un .apk para el emulador de Android Studio.
+# No hace falta cuenta de Expo ni de Apple Developer. Se lanza a mano (Actions → «Mobile builds (emuladores)» → Run workflow)
+# o con `gh workflow run mobile-builds.yml`. Cómo instalarlos: docs/MOBILE-EMULADORES.md.
+#
+# La URL de la API se incrusta al compilar (`EXPO_PUBLIC_API_URL`): por eso es un parámetro. Los valores por defecto sirven
+# para la API local (docker compose + `pnpm --filter api start`); para apuntar a Render, pon su URL con `/api` al final.
+
+on:
+  workflow_dispatch:
+    inputs:
+      platforms:
+        description: Qué compilar
+        type: choice
+        options: [both, ios, android]
+        default: both
+      ios_api_url:
+        description: API para el simulador de iOS (localhost es la Mac)
+        default: http://localhost:3000/api
+      android_api_url:
+        description: API para el emulador de Android (10.0.2.2 es la máquina anfitriona)
+        default: http://10.0.2.2:3000/api
+      tenant:
+        description: Tenant por defecto de la pantalla de acceso
+        default: demo
+      ios_archs:
+        description: Arquitecturas del simulador (arm64 = Mac Apple Silicon, x86_64 = Mac Intel)
+        default: arm64 x86_64
+
+env:
+  CI: 'true'
+  EXPO_NO_TELEMETRY: '1'
+  EXPO_PUBLIC_TENANT: ${{ inputs.tenant }}
+
+jobs:
+  ios-simulator:
+    name: iOS · Simulador (.app en zip)
+    if: ${{ inputs.platforms != 'android' }}
+    runs-on: macos-latest
+    timeout-minutes: 75
+    env:
+      EXPO_PUBLIC_API_URL: ${{ inputs.ios_api_url }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Instalar dependencias
+        run: pnpm install --frozen-lockfile
+
+      # La app móvil consume `@sigpro/shared` desde su `dist`
+      - name: Compilar @sigpro/shared
+        run: pnpm --filter @sigpro/shared build
+
+      # Genera `apps/mobile/ios` (ignorado por git) a partir de app.json y ejecuta `pod install`
+      - name: Proyecto nativo (expo prebuild)
+        working-directory: apps/mobile
+        run: pnpm exec expo prebuild --platform ios --clean
+
+      # Release: el JavaScript va dentro del .app. Un Debug buscaría Metro en la Mac y no abriría sin él.
+      - name: Compilar para el simulador
+        working-directory: apps/mobile/ios
+        run: |
+          set -euo pipefail
+          WORKSPACE="$(ls -d ./*.xcworkspace | head -n 1)"
+          SCHEME="$(basename "$WORKSPACE" .xcworkspace)"
+          xcodebuild -workspace "$WORKSPACE" -scheme "$SCHEME" \
+            -configuration Release -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath build \
+            ARCHS="${{ inputs.ios_archs }}" ONLY_ACTIVE_ARCH=NO CODE_SIGNING_ALLOWED=NO \
+            -quiet build
+
+      - name: Comprobar el .app
+        run: |
+          set -euo pipefail
+          APP="$(find apps/mobile/ios/build/Build/Products/Release-iphonesimulator -maxdepth 1 -name '*.app' | head -n 1)"
+          test -n "$APP"
+          echo "APP=$APP" >> "$GITHUB_ENV"
+          BIN="$APP/$(basename "$APP" .app)"
+          echo "Arquitecturas: $(lipo -archs "$BIN")"
+          test -f "$APP/main.jsbundle"
+          /usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP/Info.plist"
+          /usr/libexec/PlistBuddy -c 'Print :NSAppTransportSecurity' "$APP/Info.plist"
+
+      - name: Empaquetar
+        run: |
+          mkdir -p dist-ios
+          ditto -c -k --sequesterRsrc --keepParent "$APP" dist-ios/sigpro-ios-simulator.zip
+          ls -lh dist-ios
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sigpro-ios-simulator
+          path: dist-ios/sigpro-ios-simulator.zip
+          if-no-files-found: error
+          retention-days: 30
+
+  android-emulator:
+    name: Android · Emulador (.apk)
+    if: ${{ inputs.platforms != 'ios' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      EXPO_PUBLIC_API_URL: ${{ inputs.android_api_url }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Instalar dependencias
+        run: pnpm install --frozen-lockfile
+
+      - name: Compilar @sigpro/shared
+        run: pnpm --filter @sigpro/shared build
+
+      - name: Proyecto nativo (expo prebuild)
+        working-directory: apps/mobile
+        run: pnpm exec expo prebuild --platform android --clean
+
+      # Un solo APK con las dos ABI de los emuladores (x86_64 en PC/Mac Intel, arm64-v8a en Mac Apple Silicon)
+      - name: Compilar el APK
+        working-directory: apps/mobile/android
+        run: ./gradlew assembleRelease -PreactNativeArchitectures=x86_64,arm64-v8a --no-daemon
+
+      - name: Comprobar el APK
+        run: |
+          set -euo pipefail
+          APK="$(find apps/mobile/android/app/build/outputs/apk/release -name '*.apk' | head -n 1)"
+          test -n "$APK"
+          mkdir -p dist-android
+          cp "$APK" dist-android/sigpro-android-emulator.apk
+          unzip -l dist-android/sigpro-android-emulator.apk | grep -E 'lib/(x86_64|arm64-v8a)/libhermes' || true
+          ls -lh dist-android
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sigpro-android-emulator
+          path: dist-android/sigpro-android-emulator.apk
+          if-no-files-found: error
+          retention-days: 30

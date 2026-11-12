@@ -103,6 +103,10 @@ Orden de la página: cabecera (título, selector de programa, exportar, «Nuevo 
 
 **Dónde están los datos:** `RequirementDto.tests` y `.ncs` (la API las calcula con las ejecuciones de los casos enlazados) y `TraceabilityDto.testCases[].lastResult`. Funciones puras en `packages/shared/src/requirements.ts`: `testsSummary`, `openNcsOf`, `requirementMetrics`, `sectionNumbers`, `FLOW_STATES` y `flowStepStatus`.
 
+## Móvil (`apps/mobile`)
+
+Espejo de la web con los mismos nombres de token y valores, en `apps/mobile/src/theme/tokens.ts` (más `accentHover`, `shadow` y `shadowPop`). Tipografía: Geist 400/500/600 y Geist Mono 400/500 por familia (`src/theme/fonts.ts`; en nativo el peso no se sintetiza). Escala de `Text`: título 22/600, sección 16/600, cuerpo 14/21, etiqueta 13/500, pequeño 12, mono 12,5 y cifra de métrica 26/600. Radios 8/10/12/pill y padding de pantalla 20. Componentes: `Button` (primario sin borde, secundario con borde suave y sombra), `Card`, `Badge` (22 px, punto de 6 px, `validated` en `--ok` pleno), `Chip`, `Segmented`, `Metric`/`MetricGrid` (2×2) y `ProgressBar` de 6 px. Requisitos y Programas llevan las mismas métricas y ids que la web; el flujo de aprobación es de solo lectura.
+
 ## Capturas y cierre (fase 5)
 
 Las capturas **no se versionan**: `docs/screens/` está en `.gitignore` y se genera con `pnpm e2e:screens` (web, claro/oscuro a 1440 y 390 px); las `mobile-*` salen de `pnpm e2e:mobile:screens`. Una captura con un menú o una lista abiertos se hace solo del viewport (ver `e2e/support/screens.ts`). La comparación con el handoff se retiró; la referencia visual es este documento.

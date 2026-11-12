@@ -189,7 +189,7 @@ La fase 4 no cambia el modelo de datos ni añade variables a la API: no hay migr
 
 - **La web** genera `sigpro-examples.zip` (el proyecto de `examples/`, con el workflow de alumnos y la guía) durante `pnpm --filter web build`, que ya es el comando de build de `sigpro-web`: **el repositorio completo debe estar disponible en el build** (lo está: `rootDir: .`). El enlace de `/lab` apunta a `/downloads/sigpro-examples.zip`, que Render sirve como archivo estático antes del *rewrite* a `index.html`.
 - **Swagger desde `/lab`:** el enlace se deriva de `VITE_API_URL` (`https://sigpro-api.onrender.com/api/docs`), no de la web.
-- **La app móvil no se hospeda en Render.** Se usa con Expo Go o una build de EAS; solo necesita `EXPO_PUBLIC_API_URL`. Su versión web local (`:8081`) necesita ese origen en `CORS_ORIGIN` de la API de desarrollo (ya viene en `.env.example`); en Render basta con el origen de la web.
+- **La app móvil no se hospeda en Render.** Se usa con Expo Go o con la build para emuladores (`docs/MOBILE-EMULADORES.md`); solo necesita `EXPO_PUBLIC_API_URL`. Su versión web local (`:8081`) necesita ese origen en `CORS_ORIGIN` de la API de desarrollo (ya viene en `.env.example`); en Render basta con el origen de la web.
 - **El workflow `students-e2e.yml`** corre contra estas URL por tenant; despierta la API (`/api/health`) antes de la suite y no necesita `ADMIN_KEY` (los alumnos reinician su tenant con su propio usuario `alumnoNN@sigpro.lab`). Ejecútalo una vez desde **Actions** tras desplegar para comprobar el informe unido de los dos shards.
 
 ## 9. Rollback

@@ -290,7 +290,7 @@ Abre <http://localhost:8081/login?tenant=alumno07>. Es la misma app que verías 
 | Emulador de Android | `EXPO_PUBLIC_API_URL=http://10.0.2.2:3000/api pnpm --filter mobile start` |
 | Contra Render | `EXPO_PUBLIC_API_URL=https://sigpro-api.onrender.com/api EXPO_PUBLIC_TENANT=alumno07 pnpm --filter mobile web` |
 
-La app móvil no se aloja en Render (no es un sitio web): se usa con Expo Go o con una build de EAS. En su versión web, la API debe permitir el origen `http://localhost:8081` (`CORS_ORIGIN`; ya viene así en `.env.example`).
+La app móvil no se aloja en Render (no es un sitio web): se usa con Expo Go o con la build para emuladores de iOS y Android (`docs/MOBILE-EMULADORES.md`). En su versión web, la API debe permitir el origen `http://localhost:8081` (`CORS_ORIGIN`; ya viene así en `.env.example`).
 
 ### Automatizarla con Playwright
 
