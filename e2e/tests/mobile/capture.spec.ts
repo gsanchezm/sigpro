@@ -58,6 +58,47 @@ for (const theme of THEMES) {
       await captureMobile(page, 'requisitos-documento', theme);
     });
 
+    test('requisitos: alta, traza, edición, mover, transición y matriz (sin confirmar nada)', async ({ page }) => {
+      await openAs(page, 'admin', '/programs/PRG-002/requirements', { tenant: TENANT, theme });
+      await expect(page.getByTestId('requirements-count')).toContainText('14 de 14');
+
+      await page.getByRole('button', { name: 'Nuevo requisito', exact: true }).click();
+      await expect(page.getByRole('dialog', { name: 'Nuevo requisito' })).toBeVisible();
+      await captureMobile(page, 'requisito-nuevo', theme);
+      await page.getByRole('dialog', { name: 'Nuevo requisito' }).getByRole('button', { name: 'Cancelar', exact: true }).click();
+
+      // REQ-015 es el requisito con más contenido: casos, NC y botones de acción
+      await page.getByRole('button', { name: 'Abrir detalle de REQ-015', exact: true }).click();
+      const sheet = page.getByRole('dialog', { name: 'Detalle del requisito' });
+      await expect(sheet.getByTestId('requirement-trace')).toBeVisible();
+      await captureMobile(page, 'requisito-detalle', theme);
+      await sheet.getByTestId('requirement-trace').scrollIntoViewIfNeeded();
+      await captureMobile(page, 'requisito-trazabilidad', theme);
+
+      await sheet.getByRole('button', { name: 'Editar', exact: true }).click();
+      await expect(sheet.getByTestId('requirement-edit-form')).toBeVisible();
+      await captureMobile(page, 'requisito-editar', theme);
+      await sheet.getByRole('button', { name: 'Cancelar', exact: true }).click();
+
+      await sheet.getByRole('button', { name: 'Mover a…', exact: true }).click();
+      await expect(sheet.getByTestId('requirement-move-form')).toBeVisible();
+      await captureMobile(page, 'requisito-mover', theme);
+      await sheet.getByRole('button', { name: 'Cancelar', exact: true }).click();
+      await sheet.getByRole('button', { name: 'Cerrar', exact: true }).click();
+
+      await page.getByRole('button', { name: 'Abrir detalle de REQ-017', exact: true }).click();
+      await sheet.getByRole('button', { name: 'Aprobar', exact: true }).click();
+      const transition = page.getByRole('dialog', { name: 'Cambiar el estado de REQ-017' });
+      await expect(transition).toBeVisible();
+      await captureMobile(page, 'requisito-transicion', theme);
+      await transition.getByRole('button', { name: 'Cancelar', exact: true }).click();
+      await sheet.getByRole('button', { name: 'Cerrar', exact: true }).click();
+
+      await page.getByRole('radio', { name: 'Matriz de trazabilidad' }).click();
+      await expect(page.getByTestId('matrix-table')).toBeVisible();
+      await captureMobile(page, 'requisitos-matriz', theme);
+    });
+
     test('no conformidades: tablero, columna a la vista, detalle y cierre', async ({ page }) => {
       await openAs(page, 'admin', '/nc', { tenant: TENANT, theme });
       await expect(page.getByTestId('nc-column-count-open')).toHaveText('4');

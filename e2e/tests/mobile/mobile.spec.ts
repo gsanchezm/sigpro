@@ -154,7 +154,9 @@ test.describe('Móvil · programas', () => {
   });
 });
 
-test.describe('Móvil · requisitos (solo lectura)', () => {
+// Requisitos: la paridad funcional (docs/MOBILE-PARITY.md) trae edición, transiciones y matriz; sus pruebas mutantes viven en
+// `requirements-edit.spec.ts`. Aquí solo se lee, para no alterar los datos que comparten los demás asserts (14 de 14, 93 %).
+test.describe('Móvil · requisitos (lectura y acciones según el rol)', () => {
   test.beforeEach(async ({ page }) => {
     await openAs(page, 'admin', '/programs/PRG-002/requirements', { tenant: TENANT });
     await expect(page.getByTestId('requirements-count')).toContainText('14 de 14');
@@ -177,13 +179,17 @@ test.describe('Móvil · requisitos (solo lectura)', () => {
     await expect(page.getByTestId('requirement-row-REQ-018')).toBeHidden();
   });
 
-  test('detalle en una hoja inferior y ninguna acción de edición', async ({ page }) => {
-    await page.getByRole('button', { name: 'Abrir detalle de REQ-017' }).click();
-    const sheet = page.getByRole('dialog');
+  test('detalle en una hoja inferior con las acciones del admin (editar, mover y eliminar)', async ({ page }) => {
+    await page.getByRole('button', { name: 'Abrir detalle de REQ-017', exact: true }).click();
+    const sheet = page.getByRole('dialog', { name: 'Detalle del requisito' });
     await expect(sheet).toContainText('REQ-017');
     await expect(sheet).toContainText('Borrador');
-    await expect(page.getByRole('button', { name: /Aprobar|Marcar como verificado|Validar|Guardar|Eliminar/ })).toHaveCount(0);
-    await page.getByRole('button', { name: 'Cerrar' }).click();
+    // El admin puede editar, reordenar y borrar desde la hoja; el botón de «Guardar» solo aparece al editar
+    await expect(sheet.getByRole('button', { name: 'Editar', exact: true })).toBeEnabled();
+    await expect(sheet.getByRole('button', { name: 'Mover a…', exact: true })).toBeEnabled();
+    await expect(sheet.getByRole('button', { name: 'Eliminar', exact: true })).toBeEnabled();
+    await expect(sheet.getByRole('button', { name: 'Guardar', exact: true })).toHaveCount(0);
+    await sheet.getByRole('button', { name: 'Cerrar', exact: true }).click();
     await expect(sheet).toBeHidden();
   });
 
@@ -206,18 +212,28 @@ test.describe('Móvil · requisitos (solo lectura)', () => {
     await expect(page.getByRole('dialog')).toContainText('REQ-017');
   });
 
-  test('el flujo de aprobación es de solo lectura: paso actual y sin botones de transición', async ({ page }) => {
-    await page.getByRole('button', { name: 'Abrir detalle de REQ-017' }).click(); // REQ-017: borrador
-    const flow = page.getByTestId('requirement-flow');
-    await expect(flow).toBeVisible();
+  test('el flujo muestra las transiciones del paso actual; el admin puede darlas y el resto ve el motivo', async ({ page }) => {
+    const sheet = page.getByRole('dialog', { name: 'Detalle del requisito' });
+    await page.getByRole('button', { name: 'Abrir detalle de REQ-017', exact: true }).click(); // REQ-017: borrador
+    await expect(page.getByTestId('requirement-flow')).toBeVisible();
     await expect(page.getByTestId('requirement-flow-step-draft')).toHaveAttribute('data-status', 'current');
     await expect(page.getByTestId('requirement-flow-step-approved')).toHaveAttribute('data-status', 'future');
-    await expect(page.getByTestId('requirement-transitions')).toHaveCount(0);
-    await page.getByRole('button', { name: 'Cerrar' }).click();
+    // Solo el paso actual lleva botones: «Aprobar» (admin puede)
+    await expect(page.getByTestId('requirement-transitions')).toHaveCount(1);
+    await expect(sheet.getByRole('button', { name: 'Aprobar', exact: true })).toBeEnabled();
+    await sheet.getByRole('button', { name: 'Cerrar', exact: true }).click();
 
-    await page.getByRole('button', { name: 'Abrir detalle de REQ-015' }).click(); // REQ-015: validado
+    await page.getByRole('button', { name: 'Abrir detalle de REQ-015', exact: true }).click(); // REQ-015: validado
     await expect(page.getByTestId('requirement-flow-step-draft')).toHaveAttribute('data-status', 'done');
     await expect(page.getByTestId('requirement-flow-step-validated')).toHaveAttribute('data-status', 'current');
+    await expect(sheet.getByRole('button', { name: 'Volver a borrador', exact: true })).toBeEnabled();
+    await sheet.getByRole('button', { name: 'Cerrar', exact: true }).click();
+  });
+
+  test('conmutador con tres vistas: Árbol · Documento · Matriz de trazabilidad', async ({ page }) => {
+    await expect(page.getByRole('radio', { name: 'Matriz de trazabilidad' })).toHaveAttribute('aria-checked', 'false');
+    await expect(page.getByRole('radio', { name: 'Matriz de trazabilidad' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Nuevo requisito', exact: true })).toBeEnabled();
   });
 });
 

@@ -14,9 +14,11 @@ interface Props {
   /** Acción destructiva: el botón de confirmar va en rojo. */
   readonly danger?: boolean;
   readonly busy?: boolean;
+  /** Fallo de la acción: se muestra dentro del diálogo, que queda abierto (como la web). */
+  readonly error?: string | null;
   readonly onConfirm: () => void;
   readonly onCancel: () => void;
-  /** `data-testid` del diálogo; los botones son `<testID>-confirm` y `<testID>-cancel`. */
+  /** `data-testid` del diálogo; los botones son `<testID>-confirm` y `<testID>-cancel`, y el error `<testID>-error`. */
   readonly testID: string;
 }
 
@@ -24,7 +26,7 @@ interface Props {
  * Diálogo de confirmación (`role="dialog"`): sustituye al `confirm()` nativo de la web, que no existe en iOS ni en Android.
  * Se cierra con «Cancelar», tocando el fondo o con Atrás (Android).
  */
-export const ConfirmSheet = ({ visible, title, message, confirmLabel, cancelLabel, danger = false, busy = false, onConfirm, onCancel, testID }: Props) => {
+export const ConfirmSheet = ({ visible, title, message, confirmLabel, cancelLabel, danger = false, busy = false, error, onConfirm, onCancel, testID }: Props) => {
   const { t } = useI18n();
   return (
     <Sheet
@@ -42,6 +44,11 @@ export const ConfirmSheet = ({ visible, title, message, confirmLabel, cancelLabe
       <Text variant="body" tone="muted">
         {message}
       </Text>
+      {error ? (
+        <Text variant="small" tone="danger" role="alert" testID={`${testID}-error`}>
+          {error}
+        </Text>
+      ) : null}
     </Sheet>
   );
 };

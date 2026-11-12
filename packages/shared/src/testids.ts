@@ -891,6 +891,37 @@ export const MOVIL_REQUIREMENTS_TESTIDS = {
   PROGRAM_NAME: 'requirements-program-name',
   /** Enlace de vuelta en la pantalla «Programa no encontrado». */
   NOT_FOUND_BACK: 'requirements-not-found-back',
+  /** Botón «Nuevo requisito» deshabilitado: motivo visible del rol (la web lo lleva en `title`). */
+  NEW_REASON: 'requirements-new-reason',
+  /** Acciones de la hoja de detalle (Editar, Mover a…, Eliminar), en fila. */
+  ACTIONS: 'requirement-actions',
+  /** Botón «Editar» de la hoja: cambia el cuerpo de la hoja al formulario de edición (no hay equivalente en la web). */
+  EDIT: 'requirement-edit',
+  /** Formulario de edición dentro de la hoja. */
+  EDIT_FORM: 'requirement-edit-form',
+  /** Botón «Cancelar» de la edición. */
+  EDIT_CANCEL: 'requirement-edit-cancel',
+  /** Botón «Mover a…» de la hoja: despliega el formulario de reordenación entre hermanos. */
+  MOVE: 'requirement-move',
+  /** Formulario «Mover a…» (junto a qué hermano y antes o después). */
+  MOVE_FORM: 'requirement-move-form',
+  /** Selector del hermano de referencia. */
+  MOVE_TARGET: 'requirement-move-target',
+  /** Selector de posición (antes o después). */
+  MOVE_PLACEMENT: 'requirement-move-placement',
+  /** Botón «Mover» que llama a `api.requirements.move`. */
+  MOVE_SUBMIT: 'requirement-move-submit',
+  /** Botón «Cancelar» del formulario «Mover a…». */
+  MOVE_CANCEL: 'requirement-move-cancel',
+  /** Motivo visible cuando no hay con quién intercambiar la posición. */
+  MOVE_REASON: 'requirement-move-reason',
+  /** Aviso de solo lectura de la matriz (rol sin `requirement.edit`). */
+  MATRIX_REASON: 'requirements-matrix-reason',
+  /** Pista de desplazamiento horizontal de la matriz en pantallas estrechas. */
+  MATRIX_HINT: 'requirements-matrix-hint',
+  /** Error al cargar la matriz, con reintento. */
+  MATRIX_ERROR: 'requirements-matrix-error',
+  MATRIX_ERROR_RETRY: 'requirements-matrix-error-retry',
 } as const;
 
 export const MOVIL_REQUIREMENTS_DYNAMIC_TESTIDS = {
@@ -900,6 +931,10 @@ export const MOVIL_REQUIREMENTS_DYNAMIC_TESTIDS = {
   ROW_PRIORITY: (code: string) => `requirement-row-priority-${code}`,
   /** Etiquetas dentro de la fila: `requirement-row-tags-REQ-017`. */
   ROW_TAGS: (code: string) => `requirement-row-tags-${code}`,
+  /** Motivo visible de un paso de transición deshabilitado: `requirement-transition-reason-approved`. */
+  TRANSITION_REASON: (to: string) => `requirement-transition-reason-${to}`,
+  /** Motivo visible de una acción deshabilitada de la hoja (`edit`, `move`, `delete`). */
+  ACTION_REASON: (action: string) => `requirement-action-reason-${action}`,
 } as const;
 
 // documents
