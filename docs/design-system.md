@@ -40,7 +40,7 @@ El tema se aplica con `[data-theme="light|dark"]` en `<html>`. Un contenedor con
 
 | Uso | Clase | Tamaño |
 | --- | --- | --- |
-| Título de página | `.page-title` | 26/600, `letter-spacing -0.02em` (22 px por debajo de 640 px) |
+| Título de página | `.page-title` | 26/600, `letter-spacing -0.02em` (22 px por debajo de 1024 px: `[data-layout='mobile']`) |
 | Título de sección (h2) | `.section-title` | 18/600 |
 | Cifra de métrica | `.metric-value` | 28/600, cifras tabulares |
 | Etiquetas y cabeceras de tabla | — | 12–13/500 |
@@ -102,6 +102,25 @@ Orden de la página: cabecera (título, selector de programa, exportar, «Nuevo 
 | Documento | `.doc-section` | Rejilla `88px 1fr auto`: número y código en el margen (mono 12 `--text-3`), título (16/600 en raíces, 14/600 en hijos) con la descripción saneada debajo y el badge de estado a la derecha |
 
 **Dónde están los datos:** `RequirementDto.tests` y `.ncs` (la API las calcula con las ejecuciones de los casos enlazados) y `TraceabilityDto.testCases[].lastResult`. Funciones puras en `packages/shared/src/requirements.ts`: `testsSummary`, `openNcsOf`, `requirementMetrics`, `sectionNumbers`, `FLOW_STATES` y `flowStepStatus`.
+
+## Diseño responsive de la web (un solo corte a 1024 px)
+
+`< 1024 px` (móvil y tablet) es el diseño responsive; `≥ 1024 px`, escritorio. El hook `useLayout()` y `<html data-layout="desktop|mobile">` son la única fuente del corte; no hay más breakpoints (`sm:` y `md:` de Tailwind valen lo mismo que `lg:`). Cada familia tiene **dos componentes** y se monta uno u otro. Los tokens y la forma son los mismos; cambia la composición:
+
+| Familia | Escritorio | Responsive |
+| --- | --- | --- |
+| Navegación | Barra lateral fija de 224 px, plegable a 56 px | Drawer de `min(280px, 86vw)` con scrim, desde la hamburguesa de la cabecera; sin tabbar inferior |
+| Búsqueda global | Campo de 320 px en la cabecera con popover de 440 px | Icono (36 px) que abre una pantalla completa con el campo (16 px, sin zoom en iOS) y los resultados debajo |
+| Menú de usuario | Popover de 200 px bajo el avatar | Sección al pie del drawer: avatar, nombre, rol y tres filas de 44 px |
+| Lista de Programas | Tabla con selección, orden y panel lateral de 380 px | Tarjetas con borde de 1 px y radio de tarjeta; la tarjeta navega al detalle |
+| Crear programa | Botón primario `+ Nuevo programa` | Botón flotante circular de 52 px, `bottom-4 right-4` |
+| Filtros | Chips en línea | Botón «Filtros» (con el número de activos) y hoja inferior de esquinas superiores redondeadas |
+| Acciones por fila | Menú ⋯ de 200 px | Hoja inferior con filas de 44 px, «Cerrar» y las acciones destructivas en `--danger` |
+| Pestañas del detalle | `tablist` con subrayado de acento | `<select>` nativo a ancho completo |
+| Detalle de requisito | Panel de 380 px junto al árbol | Pantalla completa con barra superior fija y «← Volver» |
+| Kanban de NC | Cinco columnas con drag & drop | Pestañas con contador y una lista de tarjetas; «Mover a…» abre la hoja de destinos |
+
+Las hojas y la pantalla de búsqueda son `Modal` (foco atrapado, Esc cierra, scrim). Los objetivos táctiles miden al menos 44 px. La correspondencia completa de ids está en `docs/DECISIONS.md` («Locators responsive») y en `/lab`.
 
 ## Móvil (`apps/mobile`)
 

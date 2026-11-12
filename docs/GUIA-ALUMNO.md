@@ -107,7 +107,7 @@ Y ejecuta:
 
 ```bash
 npm run reset      # restaura el seed de TU tenant (usa tu usuario alumnoNN@sigpro.lab)
-npm test           # corre las sesiones 2 a 11
+npm test           # corre las sesiones 2 a 11 y la 13
 npm run report     # abre el informe HTML
 ```
 
@@ -259,7 +259,7 @@ El consultor **no ve** los restringidos en la lista y recibe un 403 si abre uno 
 
 ## 5. Herramientas del laboratorio
 
-- **`/lab`**: usuarios, tenant activo, botón **Reiniciar datos** (usa un `confirm()` nativo), modo caos, lista de endpoints, contraejemplos de locators (XPath frágil, textos que cambian con el caos) y FAQ.
+- **`/lab`**: usuarios, tenant activo, botón **Reiniciar datos** (usa un `confirm()` nativo), modo caos, lista de endpoints, contraejemplos de locators (XPath frágil, textos que cambian con el caos), la tabla de **locators responsive** (las 10 familias de componentes que cambian con el ancho) y FAQ.
 - **Reinicio por API**: `POST /api/admin/reset` con el token de un admin y `x-tenant`; restaura el seed de tu tenant en menos de 2 s.
 - **Modo caos**: `PATCH /api/admin/chaos` con `{ "latencyMs": 400, "errorRate": 0, "flakyLabels": true }`. Añade latencia aleatoria, errores 500 en las escrituras (`errorRate`, de 0 a 1) y textos de botón que alternan («Guardar» ↔ «Guardar cambios»). Solo afecta a tu tenant y **sobrevive al reinicio de datos**; apágalo con ceros y `false`.
 - **Swagger**: todos los endpoints, con sus códigos de respuesta (401, 403, 404, 409, 422).
@@ -298,3 +298,69 @@ La app móvil no se aloja en Render (no es un sitio web): se usa con Expo Go o c
 - **Locators:** `getByRole('tab', { name: 'No conformidades' })` para la barra inferior, `getByRole('radio', { name: 'En pausa' })` para los filtros de selección única, `getByRole('button', …)`, `getByLabel` y `getByTestId` (los ids son los de la web: `programs-row-PRG-001`, `nc-column-open`…). Los badges llevan `data-state` / `data-severity`.
 - **No hay drag & drop en el móvil:** mover una no conformidad se hace desde su detalle con **«Mover a…»**. Cerrarla exige un comentario de al menos 20 caracteres, igual que en la web.
 - **Los botones deshabilitados** explican el motivo en un texto visible junto al botón y en el atributo `data-reason`, no en `title` (React Native no tiene `title`): `await expect(boton).toHaveAttribute('data-reason', '…')`.
+
+---
+
+## 7. Locators que cambian en modo responsive (sesión 13)
+
+La web de SIGPRO tiene **un solo corte de diseño**: por debajo de **1024 px** (móvil y tablet) se monta la variante *responsive* de cada familia de componentes; desde 1024 px, la de escritorio. `<html data-layout="desktop|mobile">` dice cuál está activa. Son **dos componentes distintos** y React monta uno u otro, **nunca los dos a la vez**: la variante contraria no está oculta con CSS, **no existe en el DOM**.
+
+### Reglas de los ids
+
+- Los `data-testid` de escritorio **no cambian**. La variante responsive es siempre **`<id de escritorio>-mobile`**, también en los dinámicos: `programs-row-PRG-001` → `programs-row-PRG-001-mobile`.
+- **No cambian de id en ningún ancho:** la pantalla de Acceso completa, los campos de formulario (`programs-filter-status`, `requirement-title`…), los diálogos, los toasts y los botones internos del asistente de alta.
+- **El nombre accesible es el mismo** en las dos variantes siempre que el rol lo permita. Cambia el **rol**: fila ↔ tarjeta (`row` ↔ `listitem`), `menuitem` ↔ botón, `tab` ↔ `<select>`.
+- Los ids que **solo existen en una variante** (sin pareja) conservan su nombre: `layout-search-toggle` (el icono de búsqueda), `layout-drawer-scrim`, `programs-search` y los del panel de filtros y la hoja de acciones (`programs-filters-apply-mobile`…).
+
+### Las 10 familias
+
+| # | Familia | Escritorio (≥ 1024 px) | Responsive (< 1024 px) | Nombre accesible |
+| --- | --- | --- | --- | --- |
+| 1 | Navegación principal | `layout-sidebar` (barra lateral) | `layout-sidebar-mobile` (drawer que abre `layout-sidebar-toggle-mobile`) | «Navegación principal» |
+| 2 | Búsqueda global | `layout-search` (campo en la cabecera, popover) | `layout-search-toggle` (icono) → `layout-search-mobile` (campo de la pantalla completa) | «Búsqueda global» |
+| 3 | Menú de usuario | `layout-user-menu` (popover con `menuitem`) | `layout-user-menu-mobile` (sección al pie del drawer: enlace «Perfil», botones) | «Menú de usuario», «Perfil», «Atajos», «Cerrar sesión» |
+| 4 | Lista de Programas | `programs-table` / `programs-row-PRG-001` (`row`) | `programs-table-mobile` / `programs-row-PRG-001-mobile` (`listitem`) | el enlace «PRG-001» |
+| 5 | Crear programa | `programs-new` (botón de la cabecera) | `programs-new-mobile` (botón flotante) | «+ Nuevo programa» |
+| 6 | Filtros de Programas | `programs-filters` (barra en línea, `search`) | `programs-filters-mobile` (botón) + `programs-filters-panel-mobile` (panel inferior) | «Filtros» |
+| 7 | Acciones por fila | `programs-row-menu` (`menu` con `menuitem`) | `programs-row-menu-mobile` (hoja inferior, `dialog` con botones) | «Acciones para PRG-001» |
+| 8 | Pestañas del detalle | `program-detail-tabs` (`tablist`) | `program-detail-tabs-mobile` (`<select>`) | «Detalle del programa» |
+| 9 | Detalle de requisito | `requirement-detail` (panel junto al árbol) | `requirement-detail-mobile` (pantalla completa) | «Detalle del requisito» (el cierre es «Cerrar» en escritorio y **«Volver»** en responsive) |
+| 10 | Kanban de NC | `nc-board` (columnas con drag & drop) | `nc-board-mobile` (pestañas por estado + «Mover a…» en cada tarjeta) | «Tablero de no conformidades» |
+
+La misma tabla está en `/lab` («Locators responsive»).
+
+### Dos formas de automatizar el mismo flujo
+
+El spec `s13-locators-responsive.spec.ts` resuelve un flujo (filtrar por «En pausa», abrir las acciones de `PRG-004`, «Ver detalle», pestaña «Hitos») **de dos formas, y cada una a 1440 y a 390 px**:
+
+- **A · `getByRole` + nombre accesible.** Casi no distingue anchos: `getByLabel('Estado')`, `getByRole('button', { name: 'Acciones para PRG-004' })`… Solo cambian de *acción* abrir el panel «Filtros» y elegir la pestaña (en responsive es un `<select>`), y de *rol* el menú (`menuitem` ↔ enlace), que se resuelve con `.or()`.
+- **B · `getByTestId`.** Cada id con pareja necesita `tid(id, isResponsive)`.
+
+```ts
+import { test, expect } from '../fixtures';
+import { tid } from '../support/responsive';
+
+test('fila o tarjeta', async ({ page, isResponsive }) => {
+  await page.goto('/programs');
+  await expect(page.getByTestId(tid('programs-row-PRG-004', isResponsive))).toBeVisible();
+  // …y la variante contraria no existe
+  await expect(page.getByTestId(tid('programs-row-PRG-004', !isResponsive))).toHaveCount(0);
+});
+```
+
+- **`isResponsive`** (fixture): `true` si el viewport del test es < 1024 px. Se calcula **al empezar el test**; si cambias el tamaño dentro del test, usa `isResponsiveNow(page)`.
+- **`tid(id, responsive)`** (helper): `programs-new` → `programs-new-mobile`.
+- **Decide por el ancho, no por `data-layout`.** Si lees el atributo para decidir qué locator usar y la app calculara mal el diseño, tu test le daría la razón a la app en lugar de detectar el fallo. Usa el atributo solo para *comprobar* el diseño.
+
+### Emular dispositivos en tu propio proyecto
+
+```ts
+projects: [
+  { name: 'desktop', use: { ...devices['Desktop Chrome'], viewport: { width: 1440, height: 900 } } },
+  // Las descripciones de iPad e iPhone traen WebKit por defecto: con Chromium emulas viewport, agente y táctil
+  { name: 'tablet', use: { ...devices['iPad (gen 7)'], defaultBrowserType: 'chromium' } },   // 810 px → responsive
+  { name: 'mobile', use: { ...devices['iPhone 14'], defaultBrowserType: 'chromium' } },       // 390 px → responsive
+],
+```
+
+Ojo: un iPad **apaisado** (`iPad (gen 7) landscape`, 1080 px) ya es escritorio.

@@ -86,7 +86,8 @@ Usuarios demo (existen en cada tenant; `?tenant=alumno01` o el selector de `/lab
 | `pnpm lint` · `pnpm typecheck` · `pnpm test` | Calidad (ESLint sin `switch`/`any`/`data-testid` ni `testID` literales, `tsc`, Vitest) |
 | `pnpm build` | Compila `shared`, `api` (Prisma + Nest), `web` (Vite; también genera el zip de `examples/`) y `mobile` (`expo export` web) |
 | `pnpm seed` | Reinicia el seed de todos los tenants desde la CLI |
-| `pnpm e2e` | Specs de humo de la web (arranca API y web; `CI=true` sirve el build con `vite preview`) |
+| `pnpm e2e` | Specs de humo de la web en escritorio (proyecto `desktop`, 1440 px, en serie; arranca API y web; `CI=true` sirve el build con `vite preview`) |
+| `pnpm e2e:responsive` | Los specs de `e2e/tests/responsive/` en los tres proyectos: `desktop` (1440 px), `tablet` (iPad, 810 px) y `mobile` (iPhone 14, 390 px), con 2 workers en local. Un solo corte de diseño a 1024 px (ver `docs/DECISIONS.md`, «Locators responsive») |
 | `pnpm e2e:mobile` | Specs de humo de la app móvil a 390 px (exportación estática en :8081; `MOBILE_SERVER=expo` usa `expo start --web`) |
 | `pnpm e2e:screens` · `pnpm e2e:mobile:screens` | Generan las capturas en `docs/screens/` (web / móvil); la carpeta está en `.gitignore` |
 | `gh workflow run mobile-builds.yml -f platforms=both` | Compila en GitHub el `.app` para el Simulador de iOS y el `.apk` para el emulador de Android (artefactos `sigpro-ios-simulator` y `sigpro-android-emulator`); guía en [`docs/MOBILE-EMULADORES.md`](docs/MOBILE-EMULADORES.md). En Windows no se puede compilar Gradle en local (CMake/ninja): usa el runner |

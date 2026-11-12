@@ -1,8 +1,27 @@
 # SIGPRO — Estado de la construcción
 
-Última actualización: 2026-11-12 (`origin/main` = `a3d1294`: auditoría, rediseño «Ciruela» fases 1–5 y móvil espejo funcional con builds para emuladores, todo subido; CI en verde: 331 e2e web + 167 móvil) · **Las 4 fases están construidas y desplegadas en Render** (Render redespliega con cada push a `main`; no se ha comprobado el despliegue de este último push) · el workflow de alumnos se ejecutó contra Render en verde
+Última actualización: 2026-11-12 (`origin/main` = `6b1101d`: auditoría, rediseño «Ciruela» fases 1–5 y móvil espejo funcional con builds para emuladores, todo subido; CI en verde en `12ce4f4`: 331 e2e web + 167 móvil. **Encima, en local y sin subir: «Locators responsive»**, ver la sección siguiente) · **Las 4 fases están construidas y desplegadas en Render** (Render redespliega con cada push a `main`; no se ha comprobado el despliegue de este último push) · el workflow de alumnos se ejecutó contra Render en verde
 
 Leyenda: `[x]` hecho · `[~]` en curso · `[ ]` pendiente
+
+## Locators responsive (2026-11-12)
+
+Un solo corte de diseño a 1024 px y dos componentes por familia, con ids `<id de escritorio>-mobile`. Decisiones y correspondencia de ids en `docs/DECISIONS.md` («Locators responsive»); la tabla de las 10 familias está en `/lab` y en `docs/GUIA-ALUMNO.md` (sección 7). **Todo lo de esta sección está verificado en local y sin subir** (ver «Verificado» y «Cabos sueltos»).
+
+- [x] **T35 · Base.** `useLayout()` (`matchMedia`) y `<html data-layout="desktop|mobile">` (también en `/login`: lo escribe `index.html` antes de pintar), `responsiveId()` / `layoutTestId()` y `RESPONSIVE_TESTIDS` / `RESPONSIVE_DYNAMIC_TESTIDS` en `testids.ts`, `RESPONSIVE_FAMILIES`, claves i18n. `useBreakpoint` retirado (13 usos migrados), los bloques CSS de 639 px pasan a `[data-layout='mobile']` y `sm:` / `md:` valen lo mismo que `lg:`. Unitarios nuevos: shared +8 (133), web +4 (118)
+- [x] **T36 · Shell, familias 1–3.** Navegación (`DesktopSidebar` / `MobileDrawer`), búsqueda global (`GlobalSearch` / `GlobalSearchScreen`, con la consulta y los resultados comunes en `search-view.tsx`) y menú de usuario (popover / sección al pie del drawer). Se retira la tabbar móvil de la web
+- [x] **T37 · Programas, familias 4–7.** Tabla / tarjetas (`listitem`), botón de cabecera / flotante, filtros en línea / botón «Filtros» con panel inferior, menú ⋯ / hoja de acciones (`ActionSheet`)
+- [x] **T38 · Detalle y NC, familias 8–10.** Pestañas / `<select>`, detalle de requisito en panel / pantalla completa con «Volver», kanban de columnas / pestañas por estado con «Mover a…»
+- [x] **T39 · Playwright.** Tres proyectos (`desktop` 1440 px, `tablet` iPad gen 7 810 px y `mobile` iPhone 14 390 px; los dos últimos con Chromium), un spec por familia en `e2e/tests/responsive/` más `layout.spec.ts` (corte 1023/1024, `data-layout` en `/login` y remontaje al cambiar el viewport a mitad de test). Actualizados los specs que corrían a 390 px o cruzaban el corte (`programs`, `search`, `nc`, `programs-panel`, `lab` y cuatro de capturas) y `screens-responsive.spec.ts` nuevo. El proyecto `chromium` se llama ahora `desktop`; el CI tiene un paso nuevo para `tablet` y `mobile`
+- [x] **T40 · `examples/`.** Fixture `isResponsive`, helper `tid()` / `isResponsiveNow()` y la **sesión 13** (`s13-locators-responsive.spec.ts`): el mismo flujo con `getByRole` (con `.or()`) y con `getByTestId` + `tid()`, a 1440 y 390 px
+- [x] **T41 · `/lab` y guía.** Sección «Locators responsive» (reglas, diseño activo y la tabla de familias), `docs/GUIA-ALUMNO.md` sección 7, `docs/design-system.md` («Diseño responsive»), README y `examples/README.md`
+- [~] **T42 · Cierre.** `pnpm lint && pnpm typecheck && pnpm test && pnpm build` en verde. **El CI de GitHub no se ha ejecutado: los commits no están subidos.**
+
+**Verificado en local (2026-11-12):** `pnpm lint` y `pnpm typecheck` (6 paquetes), unitarios shared 133 · api 145 · web 118 · móvil 337 y `pnpm build`; e2e web en modo CI contra el build de producción: **`desktop` 377 en verde y 10 omitidos de 387**, **`tablet` + `mobile` 104 en verde y 4 omitidos de 108**, 0 fallos; capturas a 390 px de todos los módulos 34 en verde (2 omitidas) y `screens-responsive` 15/15; `examples/` s13 + setup 12/12 contra un tenant local (`alumno21`); `tsc` de `e2e/` y `examples/` limpios.
+
+**No verificado:** CI de GitHub y el despliegue en Render con esta versión; Safari/WebKit real (los dispositivos se emulan con Chromium); un iPad real o un móvil físico; la sesión 13 contra Render (el workflow de alumnos no la ha ejecutado); las capturas a 1440 px de los módulos no se regeneraron (el escritorio no cambió y los e2e de escritorio pasan).
+
+**Cabos sueltos:** `workers: 2` aplicado a la configuración local de `e2e/` y a la suite responsive; `pnpm e2e` (los specs de siempre) va en serie porque comparten tenants (ver DECISIONS). La tabbar móvil de la web ya no existe (las constantes de `testids.ts` siguen, `apps/mobile` las usa). Menú ⋯ de NC, Requisitos, Verificación, Documentos e Hitos: siguen siendo popover a cualquier ancho (la familia 7 es solo Programas).
 
 ## Rediseño visual «1a Ciruela» (2026-11-11)
 
@@ -305,7 +324,7 @@ pnpm dev                              # API :3000 (siembra los tenants al arranc
 | --- | --- |
 | Calidad | `pnpm lint && pnpm typecheck && pnpm test` |
 | Specs e2e de humo | `pnpm --filter @sigpro/e2e install:browsers` (1.ª vez) y `pnpm e2e` |
-| Varias ejecuciones de Playwright a la vez | `E2E_SKIP_GLOBAL_RESET=1 pnpm --filter @sigpro/e2e exec playwright test --project=chromium tests/<spec> --output=<dir propio>` (con tenants distintos) |
+| Varias ejecuciones de Playwright a la vez | `E2E_SKIP_GLOBAL_RESET=1 pnpm --filter @sigpro/e2e exec playwright test --project=desktop tests/<spec> --output=<dir propio>` (con tenants distintos) |
 | Capturas (`docs/screens/`) | `pnpm e2e:screens` (todas) · `pnpm --filter @sigpro/e2e exec playwright test --project=screens tests/screens-nc.spec.ts` (un módulo) |
 | Defectos plantados / simulador | `PLANTED_BUGS=false` deja la app limpia · `SIMULATOR_MS=0` apaga el simulador de misión (variables de la API) |
 | Reiniciar todos los tenants | `pnpm seed` (CLI) · `node scripts/reset-all.mjs` (API, con `ADMIN_KEY`) |
