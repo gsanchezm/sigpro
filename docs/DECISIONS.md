@@ -553,3 +553,39 @@ Encargo: «locators que cambian en modo responsive». Un solo corte, dos compone
 
 - **`examples/`:** fixture `isResponsive` (fijada al empezar el test; `isResponsiveNow(page)` para cuando se cambia el tamaño dentro), helper `tid(id, responsive)` (copia propia: el proyecto es independiente del monorepo y no importa `@sigpro/shared`) y `s13-locators-responsive.spec.ts`: **el mismo flujo resuelto de dos formas** (A: `getByRole`, que sirve en ambos anchos con `.or()` donde cambia el rol; B: `getByTestId` + `tid()`), cada una a 1440 y a 390 px, más «solo existe una variante», el cambio de tamaño dentro del test y el corte 1023/1024. Es la **sesión 13** porque la 12 es el workflow de CI. Solo lectura (como s05). **La sesión 11 se actualiza** (emula un iPhone 14, así que cae en el diseño responsive): sus tests móviles ya no esperan la tabbar ni columnas con scroll horizontal, sino el cajón y las pestañas de NC con «Mover a…»; `NcBoardPage` recibe `responsive` y usa `tid()`.
 - **`/lab`:** sección «Locators responsive» con las reglas, el diseño activo (`data-layout`) y la tabla de las 10 familias (`RESPONSIVE_FAMILIES`, la misma que usa la guía). **`docs/GUIA-ALUMNO.md`:** sección 7 con las reglas, la tabla, los dos enfoques y cómo emular dispositivos.
+
+## Historias de usuario (herramientas)
+
+Decisiones al construir `packages/stories` (linter, sincronización con GitHub y matriz de cobertura) el 2026-11-13. Diseño en `docs/superpowers/specs/2026-11-13-user-stories-design.md`; guía del redactor en `docs/user-stories/README.md`. Esta fase no toca el código de las apps.
+
+### Linter
+
+- **Solo se leen `epic.md` y los `US-*.md`.** *Así `README.md` y `COBERTURA.md` conviven en la carpeta sin pasar por las reglas; el precio es que un archivo mal nombrado (`us-login-001.md`) se ignora en silencio, y la guía lo advierte en lugar de que el linter lo adivine.*
+- **`historia-como`: `## Historia` empieza por «Como » (con mayúscula, sin negritas) y contiene «quiero».** *El brief solo pedía comprobar el relato; una forma fija es la única que se puede validar, y «Como X, necesito…» o `**Como**` fallan a propósito.*
+- **`esquema-requerido` marca cada Esquema sin tabla de Ejemplos con filas, no solo exige uno.** *Un Esquema sin Ejemplos es Gherkin inválido y no daría casos de prueba. `placeholder-columna` se salta los Esquemas sin tabla para no duplicar el hallazgo.*
+- **`plataforma-unica` rechaza en una historia la etiqueta `epic` y cualquier etiqueta desconocida.** *Una historia lleva una plataforma más `no-implementada` y nada más; `epic` es solo del issue padre.*
+- **`relacionadas-existen` acepta solo ids de historias existentes (un id de épica falla) y no marca la auto-referencia.** *`relacionadas` enlaza el mismo comportamiento entre plataformas o el ideal con su contrato; la épica ya es el padre.*
+- **`ios-pendiente-nativo`: una historia `ios` solo admite `pendiente-nativo` o `no-ejecutable`.** *iOS nunca se ha abierto en un Simulador, así que ninguna historia `ios` puede declararse ejecutada ni comprobada por código.*
+- **`terminos-prohibidos` revisa título y cuerpo (bloques de código incluidos) y cubre también las frases en español que usa la propia spec.** Marca `data-testid`, `testid`, `getBy…`, `planted` (como subcadena, sin distinguir mayúsculas: `PLANTED_BUGS`, `planted_bugs.md`, `plantedBugs`) y «bug/defecto/error plantado» en singular y plural. «plantado» a secas no se marca. *Es un repositorio público: la fuga más probable es la frase en español o la variable de entorno, no solo el nombre del archivo, y el título se publica tal cual como título del issue, así que es la misma superficie que el cuerpo. Coste asumido: una palabra inglesa como «implanted» también saltaría.*
+- **`mencion-suelta` es conservadora.** Usa `\w` ASCII (un correo con parte local acentuada se marcaría), no trata como código los bloques con sangría de 4 espacios y marca una `@org/equipo` en prosa. *Un falso positivo se arregla con comillas invertidas; una mención sin marcar notifica a un tercero.*
+
+### Etiquetas de GitHub
+
+- **Ocho etiquetas con color y descripción propios** (colores sin `#`): `epic` 5319e7, `api` 0e8a16, `web` 1d76db, `movil` fbca04, `ios` 5e6065, `android` 3ddc84, `transversal` c5def5, `no-implementada` d93f0b. Descripciones en español de hasta 100 caracteres (límite de GitHub), tomadas de la tabla de la spec. *Un color por plataforma para distinguirlas en el listado (el de Android es el verde de su marca, el de iOS un gris), y `no-implementada` en rojo anaranjado para que se vea de un vistazo que no se puede probar.*
+
+### Sincronización
+
+- **`addSubIssue` pasa `replaceParent: true`.** *Los Markdown son la fuente de verdad, igual que las etiquetas se restablecen a las del archivo; sin ello, una historia que ya cuelga de otro issue falla con «already has a parent» y bloquea todos los enlaces siguientes en cada reanudación.*
+- **Solo se actualizan los issues de la cuenta autenticada que llevan la marca.** *El repositorio es público: un issue ajeno que copie la marca no debe poder hacer que la sincronización lo edite.*
+- **Ante un límite de uso se reintenta 3 veces (4 intentos en total) con una espera fija de 60 s, y las escrituras se espacian 1500 ms.** *GitHub pide esperar al menos un minuto tras un límite secundario y limita la creación de contenido en ráfaga; con una espera fija el tiempo máximo es predecible. Si se agotan los reintentos se detiene y la siguiente ejecución propone solo lo que falta.*
+- **Ninguna operación lleva `state`.** *Actualizar un issue cerrado no lo reabre, y no existe operación ni opción para cerrar o borrar.*
+
+### Cobertura
+
+- **`coverage` aborta con código 1 y sin escribir nada** cuando un extractor descartaría un elemento en silencio (un verbo de decorador, un `@Controller` con objeto, un `path` entre llaves o un `index` que no sabe leer), cuando un archivo de historia no se puede leer o cuando una fuente sale vacía. *Un elemento perdido saldría como «cubierto» o ni siquiera como hueco, y una matriz hecha con datos a medias es peor que ninguna.*
+- **El objetivo es cero huecos y no hay mecanismo de exclusión.** *La spec decía «cero o justificados»; una lista de exclusiones sería el sitio donde esconder un endpoint sin historia. Lo que no se puede probar se justifica con una historia `no-implementada`. Solo quedan fuera, fijas en el código, la raíz `/` (redirige), el comodín `*` y `/lab` (pantalla del instructor).*
+- **Dos campos opcionales del front matter, `cubre` y `permisos`.** `cubre` lista endpoints (`"POST /api/auth/login"`) o rutas (`"/login"`) y solo cuenta si la plataforma de la historia coincide (`api` → endpoints, `web` → rutas web, `movil`/`ios`/`android` → rutas móviles; `transversal` no cubre ninguno); `permisos` lista claves de `PERMISSIONS` y vale en cualquier plataforma. *Declararlo es más fiable que deducirlo del texto, y deducirlo obligaría a acoplar el requisito a nombres de rutas y funciones.*
+
+### Material de instructor
+
+- **`docs/story-discrepancies.md` está en `.gitignore`.** Guarda las desviaciones de comportamientos que existen y difieren de lo que la historia dice que se debió pedir. *El repositorio es público: una confusión del redactor en un archivo versionado filtraría justo lo que el ejercicio quiere que se descubra. Las capacidades ausentes no van ahí: ya son públicas por la etiqueta `no-implementada`.*

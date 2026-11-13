@@ -21,6 +21,8 @@ Thumbs.db
 
 # Defectos plantados: solo para el instructor. El repositorio es público, así que NO se versiona (git add -f si es privado)
 docs/planted-bugs.md
+# Discrepancias entre las historias de usuario y la app: solo para el instructor. El repositorio es público, así que NO se versiona
+docs/story-discrepancies.md
 e2e/playwright-report-mobile/
 e2e/test-results-*/
 

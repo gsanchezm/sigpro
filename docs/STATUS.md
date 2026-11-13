@@ -4,6 +4,22 @@
 
 Leyenda: `[x]` hecho · `[~]` en curso · `[ ]` pendiente
 
+## Historias de usuario (2026-11-13)
+
+Rama `feat/user-stories`, **sin subir**. Requisitos de SIGPRO como épicas e historias en español (`docs/user-stories/`), para practicar la lectura de requisitos y como referencia contra la que se prueba la app. Diseño en `docs/superpowers/specs/2026-11-13-user-stories-design.md`, guía del redactor en `docs/user-stories/README.md` y decisiones en `docs/DECISIONS.md` («Historias de usuario (herramientas)»). Esta fase no modifica el código de las apps.
+
+- [x] **Herramientas (`packages/stories`).** Modelo y esquemas del front matter, lectura tolerante a BOM y CRLF, linter de 16 reglas (`pnpm stories:lint`), borradores de issue y sincronización idempotente con GitHub (`pnpm stories:sync`, en seco por defecto, sin operación para cerrar ni borrar) y matriz de cobertura (`pnpm stories:coverage [-- --write | -- --check]`).
+- [x] **Cableado del repositorio.** Paso `Historias de usuario` (`pnpm stories:lint`) en `.github/workflows/ci.yml` justo tras el Lint; `docs/story-discrepancies.md` (material de instructor) en `.gitignore`, así que existe solo en local y hay que recrearlo con su cabecera en otro equipo; guía del redactor en `docs/user-stories/README.md`.
+- [ ] **Contenido: ninguna épica escrita todavía.** Orden previsto: piloto `EP-LOGIN` completa (API, web, móvil, iOS y Android donde difiera, con sus historias `no-implementada`) y después el resto, unas 30 épicas (borrador en la spec). Cada épica: pila limpia, ejemplos ejecutados contra ella, `pnpm stories:lint` en 0 hallazgos y un commit `docs(stories): EP-<SLUG> …`.
+- [ ] **`docs/user-stories/COBERTURA.md`.** Se genera con `pnpm stories:coverage -- --write` al terminar las épicas. Sin historias hay 128 huecos (63 endpoints, 21 rutas web, 21 rutas móviles y 23 permisos); el objetivo es cero, sin lista de exclusiones.
+- [ ] **Sincronización real con GitHub.** Nunca se ha ejecutado contra GitHub (las pruebas usan un `gh` simulado). Requiere `gh auth login`, un plan en seco revisado y la autorización explícita del usuario en ese momento: el repositorio es público. Tampoco se ha subido nada de esta rama.
+
+**Verificado en local (2026-11-13):** `pnpm lint` y `pnpm typecheck` en los 6 paquetes, `pnpm test` (shared 133 · api 145 · web 118 · móvil 337 · stories 371) y `pnpm stories:lint` (0 archivos revisados y 0 hallazgos: aún no hay épicas). La plantilla de historia y la de épica del README pasan el linter en una carpeta temporal.
+
+**Cabo suelto:** un `pnpm install` filtrado a `@sigpro/stories` (al añadir `yaml`) renombró las carpetas de `node_modules/.pnpm` de vite, vitest, tsup y vite-plugin-pwa y dejó enlaces rotos en `apps/api`, `apps/web`, `apps/mobile` y `packages/shared`, de modo que `pnpm lint` fallaba al compilar `@sigpro/shared` (tsup). `pnpm install --frozen-lockfile` lo repara sin tocar ningún archivo versionado; en CI no ocurre porque instala desde el lockfile.
+
+**No verificado:** el paso nuevo del CI no se ha ejecutado en GitHub (nada subido; el YAML se validó con el parser `yaml` del repositorio y el paso queda entre `Lint` y `Typecheck`); los ejemplos de la plantilla del README salen del código y de los textos de la interfaz, no se ejecutaron contra la app (Docker apagado en esta sesión).
+
 ## Locators responsive (2026-11-12)
 
 Un solo corte de diseño a 1024 px y dos componentes por familia, con ids `<id de escritorio>-mobile`. Decisiones y correspondencia de ids en `docs/DECISIONS.md` («Locators responsive»); la tabla de las 10 familias está en `/lab` y en `docs/GUIA-ALUMNO.md` (sección 7). **Todo lo de esta sección está verificado en local y sin subir** (ver «Verificado» y «Cabos sueltos»).

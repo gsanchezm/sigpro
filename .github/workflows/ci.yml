@@ -58,6 +58,10 @@ jobs:
       - name: Lint
         run: pnpm lint
 
+      # Linter de las historias de `docs/user-stories`: no necesita la base de datos ni el `dist` de shared
+      - name: Historias de usuario
+        run: pnpm stories:lint
+
       - name: Typecheck
         run: pnpm typecheck
 
