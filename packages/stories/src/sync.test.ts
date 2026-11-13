@@ -135,7 +135,9 @@ describe('planSync', () => {
     expect(types(ops)).toEqual(['createIssue', 'createIssue', 'linkSubIssue', 'linkSubIssue']);
   });
 
-  it('enlaza la historia cuyo padre no es la épica', () => {
+  // R9: el plan muestra el enlace (la historia es nuestra y los Markdown mandan) y el ejecutor lo completa con
+  // `replaceParent: true` (ver gh.ts), así que el enlace sustituye al padre actual en lugar de fallar.
+  it('enlaza la historia cuyo padre no es la épica: el enlace reemplaza al padre actual', () => {
     const remote = [remoteOf(epic, 1), remoteOf(story1, 2, { parentNumber: 99 }), remoteOf(story2, 3)];
     expect(plan([epic, story1, story2], remote)).toEqual([{ type: 'linkSubIssue', epicId: 'EP-LOGIN', storyId: 'US-LOGIN-001' }]);
   });

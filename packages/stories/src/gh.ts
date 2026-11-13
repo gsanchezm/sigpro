@@ -94,8 +94,13 @@ const LIST_ISSUES_QUERY = `query ListIssues($owner: String!, $name: String!, $cu
   }
 }`;
 
+/**
+ * `replaceParent: true`: si la historia ya cuelga de otro issue, el enlace lo sustituye en vez de fallar con
+ * «already has a parent» (un fallo así bloquearía todos los enlaces siguientes en cada reanudación). La historia
+ * es un issue propio y los Markdown son la fuente de verdad.
+ */
 const ADD_SUB_ISSUE_MUTATION = `mutation AddSubIssue($issueId: ID!, $subIssueId: ID!) {
-  addSubIssue(input: { issueId: $issueId, subIssueId: $subIssueId }) { issue { id } }
+  addSubIssue(input: { issueId: $issueId, subIssueId: $subIssueId, replaceParent: true }) { issue { id } }
 }`;
 
 const splitRepo = (repo: string): { owner: string; name: string } => {

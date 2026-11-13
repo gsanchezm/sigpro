@@ -138,7 +138,18 @@ describe('makeGh: escrituras (solo se comprueban los argumentos y el cuerpo, con
     expect(calls[0]?.args).toEqual(['api', 'graphql', '--input', '-']);
     const body = JSON.parse(calls[0]?.input ?? '') as { query: string; variables: Record<string, unknown> };
     expect(body.variables).toEqual({ issueId: 'epic-node', subIssueId: 'story-node' });
-    expect(body.query).toContain('addSubIssue(input: { issueId: $issueId, subIssueId: $subIssueId })');
+    expect(body.query).toContain('addSubIssue(input: { issueId: $issueId, subIssueId: $subIssueId, replaceParent: true })');
+  });
+
+  it('addSubIssue() reemplaza el padre actual (replaceParent: true) y la única mutación es addSubIssue', async () => {
+    const { run, calls } = fakeRun(JSON.stringify({ data: { addSubIssue: { issue: { id: 'epic-node' } } } }));
+    await makeGh('gsanchezm/sigpro', run).addSubIssue('epic-node', 'story-node');
+    const { query } = JSON.parse(calls[0]?.input ?? '') as { query: string };
+    expect(query).toMatch(/\breplaceParent:\s*true\b/);
+    expect(query.match(/\bmutation\b/g)).toHaveLength(1);
+    expect(query).not.toMatch(/\b(removeSubIssue|reprioritizeSubIssue|closeIssue|deleteIssue|updateIssue)\b/);
+    // El campo raíz de la mutación es solo addSubIssue.
+    expect(query.match(/\b\w+\(input:/g)).toEqual(['addSubIssue(input:']);
   });
 
   it('un error en la mutación GraphQL se propaga', async () => {
