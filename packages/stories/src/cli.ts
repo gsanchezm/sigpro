@@ -4,7 +4,9 @@
 import { join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
+import type { ParseResult } from './parse';
 import type { Finding } from './rules';
+import type { Gh } from './sync';
 
 export type CommandName = 'lint' | 'coverage' | 'sync';
 
@@ -45,13 +47,60 @@ export const formatFinding = (finding: Finding, root: string): string =>
 /** Carpeta de las historias, relativa a la raíz del repositorio. */
 const STORIES_DIR = join('docs', 'user-stories');
 
-/** `stories lint`: carga `docs/user-stories`, pasa las reglas y sale con 1 si hay algún hallazgo. */
-export const runLint = async (root: string): Promise<CommandResult> => {
+/** Carga `docs/user-stories` y le pasa las reglas: lo comparten `lint` y `sync`. */
+const loadAndLint = async (root: string): Promise<{ results: readonly ParseResult[]; findings: readonly Finding[] }> => {
   const [{ loadStoryFiles }, { lintStoryFiles }] = await Promise.all([import('./parse'), import('./rules')]);
   const results = await loadStoryFiles(join(root, STORIES_DIR));
-  const findings = lintStoryFiles(results);
+  return { results, findings: lintStoryFiles(results) };
+};
+
+/** `stories lint`: carga `docs/user-stories`, pasa las reglas y sale con 1 si hay algún hallazgo. */
+export const runLint = async (root: string): Promise<CommandResult> => {
+  const { results, findings } = await loadAndLint(root);
   const summary = `stories lint: ${results.length} archivos revisados, ${findings.length} hallazgos`;
   return { code: findings.length === 0 ? 0 : 1, stdout: [...findings.map((finding) => formatFinding(finding, root)), summary], stderr: [] };
+};
+
+/** Espera entre escrituras (`delayMs`, 1500 ms por defecto) y reloj inyectable; solo los tests lo cambian. */
+export type SyncOptions = { delayMs?: number; sleep?: (ms: number) => Promise<void> };
+
+/**
+ * `stories sync`: en seco por defecto. Carga y valida (con hallazgos aborta sin hablar con GitHub), arma los
+ * borradores, lee los issues y etiquetas del repositorio y la cuenta, e imprime el plan. Solo con `--apply`
+ * lo ejecuta. No existe ninguna opción para cerrar ni borrar issues.
+ */
+export const runSync = async (args: CliArgs, root: string, gh: Gh, options: SyncOptions = {}): Promise<CommandResult> => {
+  const { results, findings } = await loadAndLint(root);
+  if (findings.length > 0) {
+    return {
+      code: 1,
+      stdout: findings.map((finding) => formatFinding(finding, root)),
+      stderr: [`stories sync: abortado, el linter encontró ${findings.length} hallazgos; corrígelos y vuelve a ejecutarlo`],
+    };
+  }
+  const [{ renderIssue }, { applyOps, DEFAULT_DELAY_MS, describeOp, planSync, summarizeOps }] = await Promise.all([import('./render'), import('./sync')]);
+  const drafts = results.flatMap((result) => (result.ok ? [renderIssue(result.file)] : []));
+  const [me, remote, remoteLabels] = await Promise.all([gh.me(), gh.listIssues(), gh.listLabels()]);
+  const ops = planSync({ drafts, remote, remoteLabels, me });
+  const header = [`stories sync: ${drafts.length} borradores locales, ${remote.length} issues remotos (cuenta ${me})`];
+  const planLines = ops.length === 0 ? ['Nada que sincronizar: GitHub ya está al día.'] : [`Plan: ${summarizeOps(ops)}`, ...ops.map((op) => `  - ${describeOp(op)}`)];
+  if (!args.apply) {
+    const hint = ops.length === 0 ? [] : ['En seco: no se ha escrito nada en GitHub. Para ejecutar el plan: pnpm stories:sync -- --apply'];
+    return { code: 0, stdout: [...header, ...planLines, ...hint], stderr: [] };
+  }
+  if (ops.length === 0) return { code: 0, stdout: [...header, ...planLines], stderr: [] };
+  const outcome = await applyOps(ops, gh, { delayMs: options.delayMs ?? DEFAULT_DELAY_MS, sleep: options.sleep });
+  if (outcome.failedAt === null) {
+    return { code: 0, stdout: [...header, ...planLines, `Aplicadas ${outcome.done} de ${ops.length} operaciones.`], stderr: [] };
+  }
+  return {
+    code: 1,
+    stdout: [...header, ...planLines],
+    stderr: [
+      `stories sync: falló tras ${outcome.done} de ${ops.length} operaciones, en «${describeOp(outcome.failedAt)}»: ${outcome.error ?? 'error desconocido'}`,
+      'Lo ya hecho se conserva: vuelve a ejecutar `pnpm stories:sync` para ver lo que falta y `--apply` para continuar.',
+    ],
+  };
 };
 
 /** Comando que todavía no existe: avisa por stderr y sale con 1. */
@@ -64,7 +113,13 @@ type Command = (args: CliArgs, root: string) => Promise<CommandResult>;
 const COMMANDS: ReadonlyMap<CommandName, Command> = new Map<CommandName, Command>([
   ['lint', (_args, root) => runLint(root)],
   ['coverage', notImplemented('coverage')],
-  ['sync', notImplemented('sync')],
+  [
+    'sync',
+    async (args, root) => {
+      const { makeGh } = await import('./gh');
+      return runSync(args, root, makeGh());
+    },
+  ],
 ]);
 
 const USAGE = 'Uso: stories <lint | coverage | sync> [--apply] [--write] [--check]';

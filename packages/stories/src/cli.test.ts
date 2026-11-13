@@ -2,7 +2,8 @@ import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { formatFinding, parseCliArgs, runCommand, runLint } from './cli';
+import { formatFinding, parseCliArgs, runCommand, runLint, runSync } from './cli';
+import type { Gh, RemoteIssue } from './sync';
 
 describe('parseCliArgs', () => {
   it('reconoce los tres comandos', () => {
@@ -133,13 +134,151 @@ describe('runLint', () => {
   });
 });
 
+/** `Gh` falso: anota lecturas y escrituras por separado. Nada de esto llega a GitHub. */
+const fakeGh = (existing: readonly RemoteIssue[] = [], remoteLabels: readonly string[] = []): { gh: Gh; reads: string[]; writes: string[] } => {
+  const reads: string[] = [];
+  const writes: string[] = [];
+  const gh: Gh = {
+    me: async () => {
+      reads.push('me');
+      return 'gsanchezm';
+    },
+    listIssues: async () => {
+      reads.push('listIssues');
+      return existing;
+    },
+    listLabels: async () => {
+      reads.push('listLabels');
+      return remoteLabels;
+    },
+    createLabel: async (label) => void writes.push(`createLabel ${label.name}`),
+    createIssue: async (draft) => {
+      writes.push(`createIssue ${draft.id}`);
+      return { nodeId: `node-${draft.id}`, number: writes.length };
+    },
+    updateIssue: async (number, draft) => void writes.push(`updateIssue ${number} ${draft.id}`),
+    addSubIssue: async (parent, child) => void writes.push(`addSubIssue ${parent} ${child}`),
+  };
+  return { gh, reads, writes };
+};
+
+const SYNC_ARGS = { command: 'sync', apply: false, write: false, check: false } as const;
+
+describe('runSync', () => {
+  let root = '';
+
+  beforeEach(async () => {
+    root = await mkdtemp(join(tmpdir(), 'stories-sync-'));
+  });
+
+  afterEach(async () => {
+    await rm(root, { recursive: true, force: true });
+  });
+
+  const write = async (relative: string, text: string): Promise<void> => {
+    const path = join(root, relative);
+    await mkdir(join(path, '..'), { recursive: true });
+    await writeFile(path, text, 'utf8');
+  };
+
+  const writeValid = async (): Promise<void> => {
+    await write('docs/user-stories/login/epic.md', EPIC_OK);
+    await write('docs/user-stories/login/US-LOGIN-003.md', STORY_OK);
+  };
+
+  it('sin historias y sin issues remotos imprime «0 issues remotos» y un plan de 8 etiquetas, sin escribir', async () => {
+    const { gh, reads, writes } = fakeGh();
+    const result = await runSync(SYNC_ARGS, root, gh);
+    expect(result.code).toBe(0);
+    const out = result.stdout.join('\n');
+    expect(out).toContain('0 issues remotos');
+    expect(out).toContain('createLabel: 8, createIssue: 0, updateIssue: 0, linkSubIssue: 0');
+    expect(result.stdout.filter((line) => line.includes('crear etiqueta'))).toHaveLength(8);
+    expect(out).toContain('En seco');
+    expect(reads.sort()).toEqual(['listIssues', 'listLabels', 'me']);
+    expect(writes).toEqual([]);
+  });
+
+  it('con una épica y una historia el plan lista crear los dos issues y enlazarlos, y no escribe nada', async () => {
+    await writeValid();
+    const { gh, writes } = fakeGh([], ['epic', 'api', 'web', 'movil', 'ios', 'android', 'transversal', 'no-implementada']);
+    const result = await runSync(SYNC_ARGS, root, gh);
+    expect(result.code).toBe(0);
+    const out = result.stdout.join('\n');
+    expect(out).toContain('createLabel: 0, createIssue: 2, updateIssue: 0, linkSubIssue: 1');
+    expect(out).toContain('crear issue EP-LOGIN: Acceso y sesión');
+    expect(out).toContain('crear issue US-LOGIN-003: [Web] Bloquear la cuenta tras 5 intentos fallidos');
+    expect(out).toContain('enlazar US-LOGIN-003 como sub-issue de EP-LOGIN');
+    expect(writes).toEqual([]);
+  });
+
+  it('si todo está al día dice que no hay nada que sincronizar', async () => {
+    const { gh } = fakeGh([], ['epic', 'api', 'web', 'movil', 'ios', 'android', 'transversal', 'no-implementada']);
+    const result = await runSync(SYNC_ARGS, root, gh);
+    expect(result.code).toBe(0);
+    expect(result.stdout.join('\n')).toContain('Nada que sincronizar');
+  });
+
+  it('si el linter da hallazgos aborta con código 1 sin hablar con GitHub (ni siquiera leer)', async () => {
+    await write('docs/user-stories/login/epic.md', EPIC_OK);
+    await write('docs/user-stories/login/US-LOGIN-009.md', STORY_OK);
+    const { gh, reads, writes } = fakeGh();
+    const result = await runSync({ ...SYNC_ARGS, apply: true }, root, gh, { delayMs: 0 });
+    expect(result.code).toBe(1);
+    expect(result.stdout.some((line) => line.includes(': [archivo-id] '))).toBe(true);
+    expect(result.stderr.join('\n')).toContain('abortado');
+    expect(reads).toEqual([]);
+    expect(writes).toEqual([]);
+  });
+
+  it('con --apply ejecuta el plan en orden y lo cuenta en el informe', async () => {
+    await writeValid();
+    const { gh, writes } = fakeGh([], ['epic', 'api', 'web', 'movil', 'ios', 'android', 'transversal', 'no-implementada']);
+    const result = await runSync({ ...SYNC_ARGS, apply: true }, root, gh, { delayMs: 0 });
+    expect(result.code).toBe(0);
+    expect(writes).toEqual(['createIssue EP-LOGIN', 'createIssue US-LOGIN-003', 'addSubIssue node-EP-LOGIN node-US-LOGIN-003']);
+    expect(result.stdout.join('\n')).toContain('3 de 3 operaciones');
+  });
+
+  it('con --apply, si una operación falla, se detiene, sale con 1 y dice cuál y por qué', async () => {
+    await writeValid();
+    const { gh, writes } = fakeGh([], ['epic', 'api', 'web', 'movil', 'ios', 'android', 'transversal', 'no-implementada']);
+    const failing: Gh = { ...gh, createIssue: async () => Promise.reject(new Error('Validation Failed (HTTP 422)')) };
+    const result = await runSync({ ...SYNC_ARGS, apply: true }, root, failing, { delayMs: 0 });
+    expect(result.code).toBe(1);
+    const err = result.stderr.join('\n');
+    expect(err).toContain('crear issue EP-LOGIN');
+    expect(err).toContain('Validation Failed (HTTP 422)');
+    expect(err).toContain('0 de 3');
+    expect(writes).toEqual([]);
+  });
+
+  it('con --apply y nada que hacer no escribe', async () => {
+    const { gh, writes } = fakeGh([], ['epic', 'api', 'web', 'movil', 'ios', 'android', 'transversal', 'no-implementada']);
+    const result = await runSync({ ...SYNC_ARGS, apply: true }, root, gh, { delayMs: 0 });
+    expect(result.code).toBe(0);
+    expect(writes).toEqual([]);
+  });
+});
+
 describe('runCommand', () => {
-  it('coverage y sync todavía no están implementados: avisan por stderr y salen con 1', async () => {
-    const args = { apply: false, write: false, check: false } as const;
-    for (const command of ['coverage', 'sync'] as const) {
-      const result = await runCommand({ ...args, command }, tmpdir());
+  it('coverage todavía no está implementado: avisa por stderr y sale con 1', async () => {
+    const result = await runCommand({ command: 'coverage', apply: false, write: false, check: false }, tmpdir());
+    expect(result.code).toBe(1);
+    expect(result.stderr.join('\n')).toContain('no implementado');
+  });
+
+  // Solo en seco y con un hallazgo del linter: el comando aborta antes de leer nada de GitHub. Nunca se ejecuta `sync` con `apply: true` desde aquí.
+  it('sync está conectado al comando real: el linter lo aborta antes de hablar con GitHub', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'stories-cli-sync-'));
+    try {
+      await mkdir(join(root, 'docs/user-stories/login'), { recursive: true });
+      await writeFile(join(root, 'docs/user-stories/login/US-LOGIN-001.md'), 'sin front matter\n', 'utf8');
+      const result = await runCommand(SYNC_ARGS, root);
       expect(result.code).toBe(1);
-      expect(result.stderr.join('\n')).toContain('no implementado');
+      expect(result.stderr.join('\n')).toContain('abortado');
+    } finally {
+      await rm(root, { recursive: true, force: true });
     }
   });
 
