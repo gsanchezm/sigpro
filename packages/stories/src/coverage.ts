@@ -89,14 +89,88 @@ const topLevelAttributes = (text: string, from: number): string => {
 const ROUTE_OPEN = /<Route\b/g;
 const PATH_ATTRIBUTE = /\spath=(?:"([^"]*)"|'([^']*)')/;
 
+/** Atributos de primer nivel de cada `<Route …>` del archivo, en orden. */
+const routeAttributes = (appTsx: string): readonly string[] =>
+  [...appTsx.matchAll(ROUTE_OPEN)].map((match) => topLevelAttributes(appTsx, match.index + match[0].length));
+
+/** Todos los `path="…"` literales de `App.tsx`, también los que se excluyen. */
+const literalRoutePaths = (appTsx: string): readonly string[] =>
+  routeAttributes(appTsx).flatMap((attributes) => {
+    const found = PATH_ATTRIBUTE.exec(attributes);
+    return found === null ? [] : [found[1] ?? found[2] ?? ''];
+  });
+
 /** Rutas absolutas (`<Route path="/programs/:code">`) de `App.tsx`, en el orden del archivo y sin `/`, `*` ni `/lab`. Las rutas de diseño sin `path` no cuentan. */
-export const extractWebRoutes = (appTsx: string): readonly string[] =>
-  [...appTsx.matchAll(ROUTE_OPEN)]
-    .flatMap((match) => {
-      const found = PATH_ATTRIBUTE.exec(topLevelAttributes(appTsx, match.index + match[0].length));
-      return found === null ? [] : [found[1] ?? found[2] ?? ''];
-    })
-    .filter((path) => !EXCLUDED_WEB_ROUTES.has(path));
+export const extractWebRoutes = (appTsx: string): readonly string[] => literalRoutePaths(appTsx).filter((path) => !EXCLUDED_WEB_ROUTES.has(path));
+
+// ───────────────────────────── Lo que los extractores no leen ─────────────────────────────
+// Los extractores son literales a propósito: no se añade soporte para otras formas, se detecta que existen. Un
+// elemento que se pierde en silencio daría por «cubierto» algo que no se leyó, así que `extractionProblems` compara
+// lo extraído con un recuento más amplio de las mismas construcciones.
+
+/** Todos los decoradores de método HTTP de Nest, se extraigan o no (`@All`, `@Head` y `@Options` no se extraen). */
+const HTTP_DECORATOR = /@(?:Get|Post|Put|Patch|Delete|All|Head|Options)\(/g;
+
+/** Número de decoradores de método HTTP en los controladores, con cualquier argumento. Es el recuento del `grep` de la comprobación de humo. */
+export const countHttpDecorators = (controllers: readonly string[]): number =>
+  controllers.reduce((total, text) => total + [...text.matchAll(HTTP_DECORATOR)].length, 0);
+
+const CONTROLLER_OPEN = /@Controller\(/g;
+/** `@Controller()` o `@Controller('x')` con un literal de cadena sin interpolar (comillas simples, dobles o de plantilla), con coma final opcional. */
+const LITERAL_CONTROLLER = /^@Controller\(\s*(?:(['"`])(?:(?!\1|\$\{).)*\1\s*,?)?\s*\)/;
+
+/** Cuánto cambia la profundidad de paréntesis con cada carácter. */
+const PAREN_DEPTH: ReadonlyMap<string, number> = new Map([
+  ['(', 1],
+  [')', -1],
+]);
+
+/** Texto de la llamada que empieza en `start` hasta su paréntesis de cierre, en una sola línea; si no cierra, hasta el fin de la línea. */
+const callText = (text: string, start: number): string => {
+  let depth = 0;
+  for (let index = text.indexOf('(', start); index >= 0 && index < text.length; index += 1) {
+    depth += PAREN_DEPTH.get(text.charAt(index)) ?? 0;
+    if (depth === 0) return text.slice(start, index + 1).replace(/\s+/g, ' ');
+  }
+  return (text.slice(start).split('\n')[0] ?? '').trim();
+};
+
+/** Los `@Controller(…)` cuyo argumento no es vacío ni un literal de cadena (`{ path }`, una constante, una plantilla con `${}`), con su texto. */
+export const nonLiteralControllerArgs = (controllers: readonly string[]): readonly string[] =>
+  controllers.flatMap((text) =>
+    [...text.matchAll(CONTROLLER_OPEN)]
+      .filter((match) => !LITERAL_CONTROLLER.test(text.slice(match.index)))
+      .map((match) => callText(text, match.index)),
+  );
+
+const PATH_OR_INDEX_ATTRIBUTE = /\s(?:path|index)(?=[\s=/]|$)/;
+const QUOTED_VALUE = /"[^"]*"|'[^']*'/g;
+
+/** Número de `<Route>` con atributo `path` (en cualquier forma: `"…"`, `{'…'}`, `{CONST}`) o `index`; las rutas de diseño sin ninguno no cuentan. */
+export const countPathOrIndexRoutes = (appTsx: string): number =>
+  routeAttributes(appTsx).filter((attributes) => PATH_OR_INDEX_ATTRIBUTE.test(attributes.replace(QUOTED_VALUE, '""'))).length;
+
+/**
+ * Avisos de lo que `extractEndpoints` y `extractWebRoutes` dejarían perder o leerían mal; vacío si no hay nada. Se
+ * compara ANTES de cualquier deduplicación: (1) decoradores de método HTTP de cualquier verbo frente a endpoints
+ * extraídos; (2) `@Controller` con argumento que no es un literal (el prefijo saldría mal sin que cambie ningún
+ * recuento); (3) `<Route>` con `path` o `index` frente a rutas con `path` literal (las excluidas por regla cuentan como leídas).
+ */
+export const extractionProblems = (controllers: readonly string[], appTsx: string): readonly string[] => {
+  const decorators = countHttpDecorators(controllers);
+  const endpoints = extractEndpoints(controllers).length;
+  const routeElements = countPathOrIndexRoutes(appTsx);
+  const literalRoutes = literalRoutePaths(appTsx).length;
+  return [
+    ...(decorators === endpoints
+      ? []
+      : [`endpoints: decoradores de método HTTP ${decorators}, endpoints extraídos ${endpoints} (solo se extraen Get|Post|Put|Patch|Delete sin argumento o con un literal de cadena)`]),
+    ...nonLiteralControllerArgs(controllers).map((call) => `endpoints: @Controller con un argumento que no es un literal de cadena, el prefijo de sus rutas no se leería bien: ${call}`),
+    ...(routeElements === literalRoutes
+      ? []
+      : [`rutas web: elementos <Route> con path o index ${routeElements}, rutas con path literal ${literalRoutes} (solo se leen path="…" y path='…'; un path entre llaves, un index o rutas generadas con .map no se extraen)`]),
+  ];
+};
 
 // ───────────────────────────── Rutas móviles (Expo Router) ─────────────────────────────
 

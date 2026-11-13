@@ -1,5 +1,18 @@
 import { describe, expect, it } from 'vitest';
-import { buildCoverage, extractEndpoints, extractWebRoutes, holes, mobileRoutesFromFiles, renderCoverageMarkdown, summarizeHoles, type Coverage } from './coverage';
+import {
+  buildCoverage,
+  countHttpDecorators,
+  countPathOrIndexRoutes,
+  extractEndpoints,
+  extractionProblems,
+  extractWebRoutes,
+  holes,
+  mobileRoutesFromFiles,
+  nonLiteralControllerArgs,
+  renderCoverageMarkdown,
+  summarizeHoles,
+  type Coverage,
+} from './coverage';
 import type { PlatformLabel, StoryFile } from './model';
 
 const ADMIN_CONTROLLER = `
@@ -145,6 +158,117 @@ describe('extractWebRoutes', () => {
 
   it('sin rutas devuelve una lista vacía', () => {
     expect(extractWebRoutes('export const x = 1;')).toEqual([]);
+  });
+});
+
+describe('contadores en bruto de las fuentes', () => {
+  it('countHttpDecorators cuenta los ocho verbos de Nest, con o sin argumento y sea cual sea el argumento', () => {
+    const text = `@Controller('x') class X { @Get() a() {} @Post('b') b() {} @Put(B) c() {} @Patch(['d']) d() {} @Delete(':id') e() {} @All('f') f() {} @Head('g') g() {} @Options('h') h() {} }`;
+    expect(countHttpDecorators([text])).toBe(8);
+    expect(countHttpDecorators([text, ADMIN_CONTROLLER])).toBe(9);
+    expect(countHttpDecorators([])).toBe(0);
+  });
+
+  it('countHttpDecorators no cuenta @Controller ni decoradores de otro tipo', () => {
+    expect(countHttpDecorators([`@Controller('x') @UseGuards(G) @ApiOperation({}) class X {}`])).toBe(0);
+  });
+
+  it('nonLiteralControllerArgs devuelve el texto de los @Controller cuyo argumento no es vacío ni un literal de cadena', () => {
+    const text = `@Controller() class A {}\n@Controller('a') class B {}\n@Controller("b",) class C {}\n@Controller({ path: 'x',\n  version: '1' }) class D {}\n@Controller(PREFIX) class E {}\n@Controller(\`a\${b}\`) class F {}`;
+    expect(nonLiteralControllerArgs([text])).toEqual(["@Controller({ path: 'x', version: '1' })", '@Controller(PREFIX)', '@Controller(`a${b}`)']);
+  });
+
+  it('countPathOrIndexRoutes cuenta los <Route> con path (en cualquier forma) o index, y no los de diseño', () => {
+    const text = `<Route path="/a" element={<A />} /><Route path={'/b'} element={<B />} /><Route path={ROUTES.c} /><Route index element={<D />} /><Route element={<Layout />}><Route element={<Other path="/z" />} /></Route>`;
+    expect(countPathOrIndexRoutes(text)).toBe(4);
+    expect(countPathOrIndexRoutes('export const x = 1;')).toBe(0);
+  });
+
+  it('countPathOrIndexRoutes no confunde un valor de cadena con un atributo', () => {
+    expect(countPathOrIndexRoutes(`<Route element={<A />} title="path index" />`)).toBe(0);
+  });
+});
+
+describe('extractionProblems', () => {
+  const problemsOf = (controller: string, app = '<Route path="/ok" element={<A />} />'): readonly string[] => extractionProblems([controller], app);
+
+  it('con las fuentes de las pruebas anteriores (literales, rutas excluidas y de diseño) no hay nada que avisar', () => {
+    expect(extractionProblems([ADMIN_CONTROLLER, AUDIT_CONTROLLER, MILESTONES_CONTROLLER], APP_TSX)).toEqual([]);
+    expect(extractionProblems([], '')).toEqual([]);
+  });
+
+  it('@Get(ROUTE_CONST): el endpoint se perdería y se avisa con el recuento esperado y el extraído', () => {
+    const problems = problemsOf(`@Controller('x') class X { @Get(ROUTE_CONST) y() {} @Post('z') z() {} }`);
+    expect(problems).toHaveLength(1);
+    expect(problems[0]).toContain('endpoints');
+    expect(problems[0]).toMatch(/decoradores de método HTTP 2, endpoints extraídos 1/);
+  });
+
+  it('@Get([...]): un array de rutas no se ve y se avisa', () => {
+    const problems = problemsOf(`@Controller('x') class X { @Get(['a', 'b']) y() {} }`);
+    expect(problems).toHaveLength(1);
+    expect(problems[0]).toContain('endpoints');
+  });
+
+  it.each(['All', 'Head', 'Options'])('@%s(…) no es un verbo que se extraiga: se avisa', (verb) => {
+    const problems = problemsOf(`@Controller('x') class X { @${verb}('y') y() {} }`);
+    expect(problems).toHaveLength(1);
+    expect(problems[0]).toContain('endpoints');
+    expect(problems[0]).toMatch(/decoradores de método HTTP 1, endpoints extraídos 0/);
+  });
+
+  it("@Controller({ path: 'x' }): el prefijo sería incorrecto aunque el recuento de decoradores coincida; se avisa con el texto del decorador", () => {
+    const text = `@Controller({ path: 'x' }) class X { @Get('y') y() {} }`;
+    expect(countHttpDecorators([text])).toBe(extractEndpoints([text]).length);
+    const problems = problemsOf(text);
+    expect(problems).toHaveLength(1);
+    expect(problems[0]).toContain('@Controller');
+    expect(problems[0]).toContain("@Controller({ path: 'x' })");
+  });
+
+  it('@Controller(CONST): se avisa con el texto del decorador', () => {
+    const problems = problemsOf(`@Controller(PREFIX) class X { @Get('y') y() {} }`);
+    expect(problems).toHaveLength(1);
+    expect(problems[0]).toContain('@Controller(PREFIX)');
+  });
+
+  it('un @Controller sin prefijo o con literal no avisa', () => {
+    expect(problemsOf(`@Controller() class X { @Get('y') y() {} }`)).toEqual([]);
+    expect(problemsOf(`@Controller("x") class X { @Get('y') y() {} }`)).toEqual([]);
+  });
+
+  it("<Route path={'/x'} …>: el path entre llaves se descarta y se avisa", () => {
+    const problems = problemsOf(`@Controller() class X {}`, `<Route path="/ok" element={<A />} /><Route path={'/x'} element={<B />} />`);
+    expect(problems).toHaveLength(1);
+    expect(problems[0]).toContain('rutas web');
+    expect(problems[0]).toMatch(/elementos <Route> con path o index 2, rutas con path literal 1/);
+  });
+
+  it('path={ROUTES.x}: se avisa', () => {
+    const problems = problemsOf(`@Controller() class X {}`, `<Route path={ROUTES.x} element={<B />} />`);
+    expect(problems).toHaveLength(1);
+    expect(problems[0]).toContain('rutas web');
+  });
+
+  it('rutas generadas con .map: se avisa', () => {
+    const problems = problemsOf(`@Controller() class X {}`, `{PATHS.map((path) => <Route key={path} path={path} element={<B />} />)}`);
+    expect(problems).toHaveLength(1);
+    expect(problems[0]).toContain('rutas web');
+  });
+
+  it('<Route index …>: una ruta index no se extrae y se avisa', () => {
+    const problems = problemsOf(`@Controller() class X {}`, `<Route path="/ok" element={<Outlet />}><Route index element={<B />} /></Route>`);
+    expect(problems).toHaveLength(1);
+    expect(problems[0]).toContain('rutas web');
+  });
+
+  it('las rutas excluidas por regla (/, * y /lab) cuentan como extraídas y no avisan', () => {
+    expect(extractionProblems([], `<Route path="/" element={<A />} /><Route path="/lab" element={<A />} /><Route path="*" element={<A />} />`)).toEqual([]);
+  });
+
+  it('varios problemas a la vez salen todos, uno por línea de la lista', () => {
+    const problems = problemsOf(`@Controller(PREFIX) class X { @All('y') y() {} }`, `<Route index element={<B />} />`);
+    expect(problems).toHaveLength(3);
   });
 });
 

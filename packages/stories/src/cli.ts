@@ -125,7 +125,7 @@ const listTree = async (dir: string): Promise<readonly string[]> => (await readd
  * `apps/mobile/app`; los permisos llegan ya leídos. Lanza si falta algo o si alguna fuente sale vacía.
  */
 const readCoverageSources = async (root: string, permissions: readonly string[]): Promise<CoverageSources> => {
-  const { extractEndpoints, extractWebRoutes, mobileRoutesFromFiles } = await import('./coverage');
+  const { extractEndpoints, extractionProblems, extractWebRoutes, mobileRoutesFromFiles } = await import('./coverage');
   const apiDir = join(root, 'apps', 'api', 'src');
   const controllerFiles = (await listTree(apiDir)).filter((file) => file.endsWith('.controller.ts'));
   const [controllers, appTsx, mobileFiles] = await Promise.all([
@@ -133,6 +133,10 @@ const readCoverageSources = async (root: string, permissions: readonly string[])
     readFile(join(root, 'apps', 'web', 'src', 'App.tsx'), 'utf8'),
     listTree(join(root, 'apps', 'mobile', 'app')),
   ]);
+  // Los extractores son literales: si el código usa una forma que no leen (otro verbo, un @Controller con objeto, un
+  // path entre llaves, un index) se aborta, porque lo perdido saldría como «cubierto» o ni siquiera como hueco.
+  const unread = extractionProblems(controllers, appTsx);
+  if (unread.length > 0) throw new Error(['las fuentes tienen construcciones que la cobertura no lee:', ...unread.map((problem) => `  - ${problem}`)].join('\n'));
   const sources: CoverageSources = {
     endpoints: extractEndpoints(controllers),
     webRoutes: extractWebRoutes(appTsx),

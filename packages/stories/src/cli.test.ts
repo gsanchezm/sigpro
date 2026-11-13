@@ -428,6 +428,32 @@ describe('runCoverage', () => {
     expect((await runCoverage(COVERAGE_ARGS, root, [])).stderr.join('\n')).toContain('permisos');
   });
 
+  // Una construcción que los extractores no leen haría que la matriz diera por «cubierto» algo que se perdió: con
+  // cualquier bandera se sale con 1, se nombra el desajuste y no se escribe nada.
+  const UNREAD_CONSTRUCTS: readonly (readonly [string, Readonly<Record<string, string>>, string])[] = [
+    ['un decorador de método que no se extrae (@All)', { 'apps/api/src/audit/audit.controller.ts': `@Controller('audit')\nexport class AuditController {\n  @Get()\n  list() {}\n  @All('any')\n  any() {}\n}\n` }, 'decoradores de método HTTP 2, endpoints extraídos 1'],
+    ['un @Controller con argumento no literal', { 'apps/api/src/audit/audit.controller.ts': `@Controller({ path: 'audit' })\nexport class AuditController {\n  @Get()\n  list() {}\n}\n` }, "@Controller({ path: 'audit' })"],
+    ['una ruta web con el path entre llaves', { 'apps/web/src/App.tsx': `${MINI_REPO['apps/web/src/App.tsx']}<Route path={ROUTES.audit} element={<AuditPage />} />\n` }, 'elementos <Route> con path o index 4, rutas con path literal 3'],
+  ];
+
+  it.each(UNREAD_CONSTRUCTS)('%s: coverage sale con 1 y no escribe nada, sea cual sea la bandera', async (_name, override, expected) => {
+    await writeAll({ ...MINI_REPO, ...FULL_STORIES, ...override });
+    const flags = [{}, { check: true }, { write: true }, { check: true, write: true }];
+    for (const flag of flags) {
+      const result = await runCoverage({ ...COVERAGE_ARGS, ...flag }, root, PERMISSIONS);
+      expect(result.code).toBe(1);
+      expect(result.stderr.join('\n')).toContain(expected);
+      expect(await exists(COBERTURA())).toBe(false);
+    }
+  });
+
+  it('las fuentes de MINI_REPO (todo literal, con / y _layout) no disparan la comprobación de lo que se pierde', async () => {
+    await writeAll({ ...MINI_REPO, ...FULL_STORIES });
+    const result = await runCoverage(COVERAGE_ARGS, root, PERMISSIONS);
+    expect(result.code).toBe(0);
+    expect(result.stderr).toEqual([]);
+  });
+
   it('un archivo o carpeta que falta (no hay App.tsx) sale con 1 y lo dice, no lanza', async () => {
     const result = await runCoverage(COVERAGE_ARGS, root, PERMISSIONS);
     expect(result.code).toBe(1);
