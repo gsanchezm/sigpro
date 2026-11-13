@@ -33,8 +33,8 @@ Característica: Tenant de trabajo en la app móvil
       | alumno01 | alumno01@sigpro.lab | Alumno1234! | llega a /programs con los datos del tenant alumno01 |
       | alumno01 | gestor@sigpro.test | Gestor1234! | llega a /programs con los datos del tenant alumno01 |
       | demo | gestor@sigpro.test | Gestor1234! | llega a /programs con los datos del tenant demo |
-      | demo | alumno01@sigpro.lab | Alumno1234! | ve "Correo o contraseña incorrectos" con el detalle "POST /api/auth/login → 401 Unauthorized · attempts=1" |
-      | alumno02 | alumno01@sigpro.lab | Alumno1234! | ve "Correo o contraseña incorrectos" con el detalle "POST /api/auth/login → 401 Unauthorized · attempts=1" |
+      | demo | alumno01@sigpro.lab | Alumno1234! | ve "Correo o contraseña incorrectos" y sigue sin sesión |
+      | alumno02 | alumno01@sigpro.lab | Alumno1234! | ve "Correo o contraseña incorrectos" y sigue sin sesión |
 
   Esquema del escenario: La app recuerda el último tenant usado
     Dado que la última vez se entró en el tenant "<anterior>" y después se cerró sesión

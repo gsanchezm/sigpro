@@ -37,7 +37,7 @@ Característica: Tenant del inicio de sesión
       | (sin cabecera) | gestor@sigpro.test | Gestor1234! | 200 con el usuario del tenant demo |
       | (sin cabecera) | alumno01@sigpro.lab | Alumno1234! | 200 con el usuario del tenant alumno01 y el rol admin |
       | alumno01 | alumno01@sigpro.lab | Alumno1234! | 200 con el usuario del tenant alumno01 y el rol admin |
-      | alumno02 | alumno01@sigpro.lab | Alumno1234! | 401 invalid_credentials con attempts 1 |
+      | alumno02 | alumno01@sigpro.lab | Alumno1234! | 401 invalid_credentials |
       | noexiste | gestor@sigpro.test | Gestor1234! | 404 tenant_not_found |
 ```
 

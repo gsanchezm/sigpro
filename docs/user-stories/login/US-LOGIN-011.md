@@ -25,13 +25,19 @@ para entrar o encontrar enseguida cómo recuperar la contraseña o pedir una cue
 ```gherkin
 Característica: Formulario de acceso en la web
 
-  Escenario: Estado inicial del formulario
+  Esquema del escenario: Estado inicial de cada elemento del formulario
     Dado una persona sin sesión
     Cuando abre /login
-    Entonces ve el título "Iniciar sesión" y el texto "Accede con tu cuenta corporativa de SIGPRO."
-    Y el foco está en el campo "Correo electrónico"
-    Y el campo "Contraseña" está vacío y oculta lo que se escribe
-    Y la casilla "Mantener la sesión en este equipo" está marcada
+    Entonces "<elemento>" <estado>
+
+    Ejemplos:
+      | elemento | estado |
+      | Iniciar sesión | es el título de la página, con el texto «Accede con tu cuenta corporativa de SIGPRO.» |
+      | Correo electrónico | está vacío y tiene el foco |
+      | Contraseña | está vacío y oculta lo que se escribe |
+      | Mantener la sesión en este equipo | está marcada |
+      | Entrar | está habilitado |
+      | Acceder con certificado digital / SSO | está habilitado |
 
   Esquema del escenario: Las opciones del formulario llevan a su pantalla
     Dado una persona sin sesión en /login
