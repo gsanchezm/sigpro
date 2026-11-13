@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { extractGherkinBlocks, findEnglishKeywords, parseOutlines, placeholdersOf } from './gherkin';
+import { extractGherkinBlocks, findEnglishKeywords, parseOutlines, placeholdersOf, splitCodeBlocks } from './gherkin';
 
 /** Une líneas con `\n`: así cada fixture se lee como el Gherkin real y no depende de plantillas multilínea. */
 const lines = (...parts: readonly string[]): string => parts.join('\n');
@@ -77,6 +77,55 @@ describe('extractGherkinBlocks', () => {
 
   it('un bloque vacío da una cadena vacía', () => {
     expect(extractGherkinBlocks(lines('```gherkin', '```'))).toEqual(['']);
+  });
+});
+
+describe('splitCodeBlocks', () => {
+  it('separa la prosa (sin las vallas) de los bloques de código, cada uno con su lenguaje', () => {
+    const body = lines('Antes', '```gherkin', 'a', 'b', '```', 'Entre', '```ts', 'const x = 1;', '```', 'Después');
+    expect(splitCodeBlocks(body)).toEqual({
+      prose: ['Antes', 'Entre', 'Después'],
+      blocks: [
+        { language: 'gherkin', lines: ['a', 'b'] },
+        { language: 'ts', lines: ['const x = 1;'] },
+      ],
+    });
+  });
+
+  it('un cuerpo sin código es todo prosa; uno vacío tiene una línea vacía de prosa', () => {
+    expect(splitCodeBlocks(lines('uno', 'dos'))).toEqual({ prose: ['uno', 'dos'], blocks: [] });
+    expect(splitCodeBlocks('')).toEqual({ prose: [''], blocks: [] });
+  });
+
+  it('el lenguaje es la primera palabra de la cadena de información, en minúsculas; sin cadena es vacío', () => {
+    const body = lines('~~~Gherkin título', 'a', '~~~', '```', 'b', '```');
+    expect(splitCodeBlocks(body).blocks).toEqual([
+      { language: 'gherkin', lines: ['a'] },
+      { language: '', lines: ['b'] },
+    ]);
+  });
+
+  it('una valla de otro carácter o más corta no cierra el bloque; una más larga o igual sí', () => {
+    const body = lines('````md', '```gherkin', 'plantilla', '```', '~~~~', '````', 'fuera');
+    expect(splitCodeBlocks(body)).toEqual({
+      prose: ['fuera'],
+      blocks: [{ language: 'md', lines: ['```gherkin', 'plantilla', '```', '~~~~'] }],
+    });
+  });
+
+  it('un bloque sin cierre llega hasta el final y un bloque vacío tiene cero líneas', () => {
+    expect(splitCodeBlocks(lines('```text', 'a', 'b')).blocks).toEqual([{ language: 'text', lines: ['a', 'b'] }]);
+    expect(splitCodeBlocks(lines('```text', '```')).blocks).toEqual([{ language: 'text', lines: [] }]);
+  });
+
+  it('una línea con tres comillas y texto con comillas (código en línea) no abre un bloque', () => {
+    const body = lines('Usa ```x``` en línea', '```y``` y más');
+    expect(splitCodeBlocks(body)).toEqual({ prose: ['Usa ```x``` en línea', '```y``` y más'], blocks: [] });
+  });
+
+  it('tolera saltos CRLF y la sangría de la valla', () => {
+    const body = ['  ```text', 'a', '  ```', 'fin'].join('\r\n');
+    expect(splitCodeBlocks(body)).toEqual({ prose: ['fin'], blocks: [{ language: 'text', lines: ['a'] }] });
   });
 });
 

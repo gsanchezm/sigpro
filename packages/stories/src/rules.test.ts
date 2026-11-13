@@ -76,9 +76,14 @@ const story = ({ path = 'docs/user-stories/login/US-LOGIN-003.md', fm = {}, body
   file: { kind: 'story', path, fm: { ...STORY_FM, ...fm }, body },
 });
 
-const epic = (path = 'docs/user-stories/login/epic.md', id = 'EP-LOGIN', body = '## Resumen\nTodo lo relativo a entrar en la aplicación.\n'): ParseResult => ({
+const epic = (
+  path = 'docs/user-stories/login/epic.md',
+  id = 'EP-LOGIN',
+  body = '## Resumen\nTodo lo relativo a entrar en la aplicación.\n',
+  titulo = 'Acceso y sesión',
+): ParseResult => ({
   ok: true,
-  file: { kind: 'epic', path, fm: { id, tipo: 'epica', titulo: 'Acceso y sesión', etiquetas: ['epic'] }, body },
+  file: { kind: 'epic', path, fm: { id, tipo: 'epica', titulo, etiquetas: ['epic'] }, body },
 });
 
 const EPIC = epic();
@@ -424,6 +429,48 @@ describe('regla terminos-prohibidos', () => {
   it('también se aplica al cuerpo de una épica', () => {
     const findings = lintStoryFiles([epic('docs/user-stories/login/epic.md', 'EP-LOGIN', '## Resumen\nVer docs/planted-bugs.md.\n')]);
     expect(fired(findings)).toEqual(['terminos-prohibidos']);
+  });
+
+  // R8: `planted` va como subcadena (también con `_`), la frase en español admite bug/defecto/error y el título se vigila.
+  it.each([
+    ['PLANTED_BUGS', 'La app arrancada con `PLANTED_BUGS=false`.'],
+    ['planted_bugs', 'Ver docs/planted_bugs.md.'],
+    ['bug plantado', 'Es un bug plantado en el inicio de sesión.'],
+    ['defectos plantados', 'Hay defectos plantados en el módulo.'],
+    ['Errores plantados', 'Errores plantados del curso.'],
+  ])('marca %s en el cuerpo (una sola regla)', (term, sentence) => {
+    const findings = lintWorld(story({ body: bodyOf({ tail: sentence }) }));
+    expect(fired(findings)).toEqual(['terminos-prohibidos']);
+    expect(findings).toHaveLength(1);
+    expect(findings[0]?.message.toLowerCase()).toContain(term.toLowerCase());
+  });
+
+  it('cada familia de `planted` se informa una sola vez, sin duplicar planted-bugs, plantedBugs ni PLANTED_BUGS', () => {
+    const findings = lintWorld(story({ body: bodyOf({ tail: 'docs/planted-bugs.md, plantedBugs y PLANTED_BUGS.' }) }));
+    expect(findings).toHaveLength(1);
+    const reported = findings[0]?.message.split(': ').at(-1)?.split(', ');
+    expect(reported).toEqual(['planted-bugs', 'plantedBugs', 'PLANTED_BUGS']);
+  });
+
+  it.each([
+    ['data-testid', '[Web] Ver el data-testid del botón'],
+    ['PLANTED_BUGS', '[Web] Activar PLANTED_BUGS para el caso'],
+    ['bug plantado', '[Web] Un bug plantado al guardar'],
+  ])('marca %s solo en el título de una historia (el cuerpo está limpio)', (_term, titulo) => {
+    const findings = lintWorld(story({ fm: { titulo } }));
+    expect(fired(findings)).toEqual(['terminos-prohibidos']);
+    expect(findings).toHaveLength(1);
+  });
+
+  it('marca un término prohibido solo en el título de una épica', () => {
+    const findings = lintStoryFiles([epic('docs/user-stories/login/epic.md', 'EP-LOGIN', undefined, 'Acceso y planted-bugs')]);
+    expect(fired(findings)).toEqual(['terminos-prohibidos']);
+  });
+
+  it('la palabra «plantado/plantada» sola sigue pasando, en el cuerpo y en el título', () => {
+    const tail = 'El jardinero ha plantado un árbol y la semilla plantada crece; el error es del usuario.';
+    expect(lintWorld(story({ body: bodyOf({ tail }) }))).toEqual([]);
+    expect(lintWorld(story({ fm: { titulo: '[Web] Mostrar el árbol plantado' } }))).toEqual([]);
   });
 });
 

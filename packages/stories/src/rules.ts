@@ -1,7 +1,7 @@
 // Reglas de lint de las historias de usuario. Cada regla es una función pura: recibe un archivo ya leído
 // y el índice de todos los archivos, y devuelve mensajes; `lintStoryFiles` los convierte en hallazgos.
 // El catálogo es `RULES`, un mapa de id estable → regla (el orden del mapa es el orden de los hallazgos).
-import { extractGherkinBlocks, findEnglishKeywords, parseOutlines, placeholdersOf, type Outline } from './gherkin';
+import { extractGherkinBlocks, findEnglishKeywords, parseOutlines, placeholdersOf, splitCodeBlocks, type Outline } from './gherkin';
 import { PLATFORM_LABELS, TITLE_PREFIX, type PlatformLabel, type StoryFile, type Verification } from './model';
 import type { ParseResult } from './parse';
 
@@ -42,29 +42,8 @@ const outlinesOf = (body: string): readonly Outline[] => extractGherkinBlocks(bo
 // Texto del cuerpo sin código (para las menciones) y secciones
 // ---------------------------------------------------------------------------------------------------------
 
-/** Línea de valla (tres o más `` ` `` o `~`, con sangría opcional) y el resto de la línea. Misma lectura que `gherkin.ts`. */
-const FENCE_LINE = /^[ \t]*(`{3,}|~{3,})(.*)$/;
-
-type FenceScan = { fence: { char: string; length: number } | null; kept: readonly string[] };
-
-const scanFences = (scan: FenceScan, line: string): FenceScan => {
-  const match = FENCE_LINE.exec(line);
-  const marker = match?.[1];
-  const rest = match?.[2] ?? '';
-  if (scan.fence !== null) {
-    // El cierre usa el mismo carácter, es al menos tan largo como la apertura y no lleva nada más en la línea.
-    const closes = marker !== undefined && marker.charAt(0) === scan.fence.char && marker.length >= scan.fence.length && rest.trim() === '';
-    return closes ? { ...scan, fence: null } : scan;
-  }
-  // Una línea como ```` ```x``` ```` es código en línea, no una valla.
-  if (marker !== undefined && !(marker.startsWith('`') && rest.includes('`'))) {
-    return { ...scan, fence: { char: marker.charAt(0), length: marker.length } };
-  }
-  return { ...scan, kept: [...scan.kept, line] };
-};
-
-/** El texto sin los bloques de código (vallas incluidas). Un bloque sin cierre llega hasta el final. */
-const withoutFences = (text: string): string => splitLines(text).reduce<FenceScan>(scanFences, { fence: null, kept: [] }).kept.join('\n');
+/** El texto sin los bloques de código (vallas incluidas): lo lee el mismo escáner que usan las reglas de Gherkin. */
+const withoutFences = (text: string): string => splitCodeBlocks(text).prose.join('\n');
 
 /** Código en línea: una tirada de comillas invertidas, texto y la misma tirada (ni más larga ni más corta). */
 const INLINE_CODE = /(?<!`)(`+)(?!`).+?(?<!`)\1(?!`)/g;
@@ -221,19 +200,24 @@ const checkIosVerification: Check<StoryOnly> = ({ fm }) =>
     `una historia ios no se puede ejecutar: verificacion debe ser pendiente-nativo o no-ejecutable (hay «${fm.verificacion}»)`,
   );
 
-/** Términos que no pueden aparecer en el cuerpo (ni en los bloques de código): detalles de implementación y los defectos del curso. */
+/**
+ * Términos que no pueden aparecer ni en el título ni en el cuerpo (tampoco en los bloques de código): detalles de
+ * implementación y los defectos del curso. `planted` va como subcadena (`PLANTED_BUGS`, `planted_bugs.md`);
+ * `planted-bugs` y sus variantes tienen su propio término y `planted` no las repite. «plantado» a secas no se marca.
+ */
 const FORBIDDEN_TERMS: readonly RegExp[] = [
   /data-testid/gi,
   /(?<!data-)\btestid/gi,
   /\bget(?:All)?By[A-Z]\w*/g,
-  /planted-bugs/gi,
-  /plantedBugs/gi,
-  /\bplanted\b(?!-bugs)/gi,
-  /defectos?\s+plantad[oa]s?/gi,
+  /planted[-_]?bugs/gi,
+  /planted(?![-_]?bugs)/gi,
+  /\b(?:bugs?|defectos?|errores?)\s+plantad[oa]s?\b/gi,
 ];
 
-const checkForbiddenTerms: Check<StoryFile> = ({ body }) => {
-  const found = unique(FORBIDDEN_TERMS.flatMap((term) => [...body.matchAll(term)].map((match) => match[0])));
+/** El título se publica tal cual como título del issue: es la misma superficie de fuga que el cuerpo. */
+const checkForbiddenTerms: Check<StoryFile> = ({ fm, body }) => {
+  const text = `${fm.titulo}\n${body}`;
+  const found = unique(FORBIDDEN_TERMS.flatMap((term) => [...text.matchAll(term)].map((match) => match[0])));
   return unless(found.length === 0, `términos prohibidos en una historia: ${found.join(', ')}`);
 };
 

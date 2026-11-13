@@ -10,11 +10,17 @@ const splitLines = (text: string): readonly string[] => text.split(LINE_BREAK);
 // Bloques de código del cuerpo
 // ---------------------------------------------------------------------------------------------------------
 
-/** Valla abierta: con qué carácter y cuántos se abrió (el cierre debe igualarlos) y si hay que recoger su contenido. */
-type Fence = { char: string; length: number; capture: boolean };
+/** Valla abierta: con qué carácter y cuántos se abrió (el cierre debe igualarlos) y el lenguaje de su cadena de información. */
+type Fence = { char: string; length: number; language: string };
 
-/** Estado del recorrido: la valla abierta (si la hay) y las líneas de cada bloque `gherkin` encontrado. */
-type Scan = { fence: Fence | null; blocks: readonly (readonly string[])[] };
+/** Bloque de código del cuerpo: su lenguaje (en minúsculas, vacío si no lo declara) y las líneas de dentro, sin las vallas. */
+export type CodeBlock = { language: string; lines: readonly string[] };
+
+/** El cuerpo partido en dos: las líneas que no son código (sin las vallas) y los bloques de código, en orden. */
+export type SplitBody = { prose: readonly string[]; blocks: readonly CodeBlock[] };
+
+/** Estado del recorrido: la valla abierta (si la hay) más lo recogido hasta ahora. */
+type Scan = SplitBody & { fence: Fence | null };
 
 /** Apertura de valla: tres o más `` ` `` o `~`, con sangría opcional, y el resto de la línea es la cadena de información. */
 const FENCE_OPEN = /^[ \t]*(`{3,}|~{3,})(.*)$/;
@@ -32,7 +38,7 @@ const openFence = (line: string): Fence | null => {
   const info = match[2] ?? '';
   // Una línea como ```` ```gherkin``` ```` es código en línea, no una valla (solo se exige con `` ` ``).
   if (marker.startsWith('`') && info.includes('`')) return null;
-  return { char: marker.charAt(0), length: marker.length, capture: languageOf(info) === 'gherkin' };
+  return { char: marker.charAt(0), length: marker.length, language: languageOf(info) };
 };
 
 /** El cierre tiene que usar el mismo carácter y ser al menos tan largo como la apertura. */
@@ -44,24 +50,31 @@ const closesFence = (fence: Fence, line: string): boolean => {
 const scanLine = (scan: Scan, line: string): Scan => {
   if (scan.fence === null) {
     const fence = openFence(line);
-    if (fence === null) return scan;
-    return { fence, blocks: fence.capture ? [...scan.blocks, []] : scan.blocks };
+    if (fence === null) return { ...scan, prose: [...scan.prose, line] };
+    return { ...scan, fence, blocks: [...scan.blocks, { language: fence.language, lines: [] }] };
   }
   if (closesFence(scan.fence, line)) return { ...scan, fence: null };
-  if (!scan.fence.capture) return scan;
+  // Dentro de una valla todo es contenido del último bloque, también las líneas que parecen otra valla.
   const last = scan.blocks.length - 1;
-  return { ...scan, blocks: scan.blocks.map((block, index) => (index === last ? [...block, line] : block)) };
+  return { ...scan, blocks: scan.blocks.map((block, index) => (index === last ? { ...block, lines: [...block.lines, line] } : block)) };
 };
 
 /**
- * Contenido de cada bloque ```` ```gherkin ```` del cuerpo, en orden y sin las vallas. Se recorre línea a línea
- * llevando la valla abierta, de modo que un ```` ```gherkin ```` que aparece como texto dentro de otro bloque más
- * largo (una plantilla en ```` ````md ````) no cuenta. Un bloque sin cierre llega hasta el final del cuerpo.
+ * Parte el cuerpo en prosa y bloques de código. Es el único lector de vallas: `extractGherkinBlocks` y el lint de
+ * menciones (`rules.ts`) se apoyan en él, así que ambos coinciden en qué es código. Se recorre línea a línea
+ * llevando la valla abierta, de modo que una valla que aparece como texto dentro de otro bloque más largo (una
+ * plantilla en ```` ````md ````) no abre nada. Un bloque sin cierre llega hasta el final del cuerpo.
  */
+export const splitCodeBlocks = (body: string): SplitBody => {
+  const { prose, blocks } = splitLines(body).reduce<Scan>(scanLine, { fence: null, prose: [], blocks: [] });
+  return { prose, blocks };
+};
+
+/** Contenido de cada bloque ```` ```gherkin ```` del cuerpo, en orden y sin las vallas. */
 export const extractGherkinBlocks = (body: string): readonly string[] =>
-  splitLines(body)
-    .reduce<Scan>(scanLine, { fence: null, blocks: [] })
-    .blocks.map((block) => block.join('\n'));
+  splitCodeBlocks(body)
+    .blocks.filter((block) => block.language === 'gherkin')
+    .map((block) => block.lines.join('\n'));
 
 // ---------------------------------------------------------------------------------------------------------
 // Esquemas del escenario
