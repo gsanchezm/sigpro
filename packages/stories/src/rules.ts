@@ -211,7 +211,7 @@ const FORBIDDEN_TERMS: readonly RegExp[] = [
   /\bget(?:All)?By[A-Z]\w*/g,
   /planted[-_]?bugs/gi,
   /planted(?![-_]?bugs)/gi,
-  /\b(?:bugs?|defectos?|errores?)\s+plantad[oa]s?\b/gi,
+  /\b(?:bugs?|defectos?|error|errores)\s+plantad[oa]s?\b/gi,
 ];
 
 /** El título se publica tal cual como título del issue: es la misma superficie de fuga que el cuerpo. */

@@ -438,6 +438,9 @@ describe('regla terminos-prohibidos', () => {
     ['bug plantado', 'Es un bug plantado en el inicio de sesión.'],
     ['defectos plantados', 'Hay defectos plantados en el módulo.'],
     ['Errores plantados', 'Errores plantados del curso.'],
+    ['error plantado', 'Hay un error plantado en el inicio de sesión.'],
+    ['error plantada', 'Aparece el error plantada al guardar.'],
+    ['bugs plantados', 'Los bugs plantados se activan por configuración.'],
   ])('marca %s en el cuerpo (una sola regla)', (term, sentence) => {
     const findings = lintWorld(story({ body: bodyOf({ tail: sentence }) }));
     expect(fired(findings)).toEqual(['terminos-prohibidos']);
@@ -465,6 +468,11 @@ describe('regla terminos-prohibidos', () => {
   it('marca un término prohibido solo en el título de una épica', () => {
     const findings = lintStoryFiles([epic('docs/user-stories/login/epic.md', 'EP-LOGIN', undefined, 'Acceso y planted-bugs')]);
     expect(fired(findings)).toEqual(['terminos-prohibidos']);
+  });
+
+  it('«debug plantado» y «semilla plantada» no encajan con la frase (falta el límite de palabra o el sustantivo)', () => {
+    const tail = 'Con el debug plantado en el servidor y la semilla plantada en la maceta no hay fuga.';
+    expect(lintWorld(story({ body: bodyOf({ tail }) }))).toEqual([]);
   });
 
   it('la palabra «plantado/plantada» sola sigue pasando, en el cuerpo y en el título', () => {
