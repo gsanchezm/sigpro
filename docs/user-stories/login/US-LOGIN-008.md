@@ -26,8 +26,8 @@ para entrar en los datos de mi organización aunque el mismo correo exista en ot
 Característica: Tenant del inicio de sesión
 
   Esquema del escenario: El inicio de sesión ocurre en el tenant indicado o deducido
-    Dado la cabecera x-tenant <cabecera>
-    Cuando envía POST /api/auth/login con el correo "<correo>" y la contraseña "<contraseña>"
+    Dado que la petición lleva la cabecera x-tenant <cabecera>
+    Cuando envía POST /api/auth/login con el correo <correo> y la contraseña <contraseña>
     Entonces la respuesta es <respuesta>
 
     Ejemplos:

@@ -24,7 +24,7 @@ para no volver a escribir la contraseña en mi equipo y no dejar la sesión abie
 Característica: Mantener la sesión en la web
 
   Esquema del escenario: La casilla decide dónde sigue valiendo la sesión
-    Dado que "gestor@sigpro.test" inicia sesión con la casilla "Mantener la sesión en este equipo" <casilla>
+    Dado que gestor@sigpro.test inicia sesión con la casilla «Mantener la sesión en este equipo» <casilla>
     Cuando <accion>
     Entonces <resultado>
 

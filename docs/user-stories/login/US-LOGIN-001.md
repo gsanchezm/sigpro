@@ -27,32 +27,32 @@ para llamar después a los endpoints protegidos en nombre de esa persona.
 Característica: Inicio de sesión por la API
 
   Esquema del escenario: Una cuenta activa recibe una sesión o el paso del segundo factor
-    Dado el usuario de demostración "<cuenta>" con la contraseña "<contraseña>"
+    Dado que existe el usuario de demostración <cuenta> con la contraseña <contraseña>
     Cuando envía POST /api/auth/login con el correo <correo_enviado> y esa contraseña
     Entonces la respuesta es 200
-    Y "mfaRequired" vale <mfa>
+    Y mfaRequired vale <mfa>
     Y la respuesta <tokens>
-    Y el correo de la respuesta es "<cuenta>"
+    Y el correo de la respuesta es <cuenta>
 
     Ejemplos:
       | cuenta | contraseña | correo_enviado | mfa | tokens |
       | gestor@sigpro.test | Gestor1234! | gestor@sigpro.test | false | trae accessToken, refreshToken, expiresIn 900 y el usuario con el rol program_manager |
       | consultor@sigpro.test | Consul1234! | consultor@sigpro.test | false | trae accessToken, refreshToken, expiresIn 900 y el usuario con el rol consultant |
       | auditor@sigpro.test | Audit1234! | auditor@sigpro.test | false | trae accessToken, refreshToken, expiresIn 900 y el usuario con el rol auditor |
-      | gestor@sigpro.test | Gestor1234! | « Gestor@SIGPRO.test » (con un espacio delante y otro detrás) | false | trae accessToken, refreshToken, expiresIn 900 y el usuario con el rol program_manager |
+      | gestor@sigpro.test | Gestor1234! | (Gestor@SIGPRO.test con un espacio delante y otro detrás) | false | trae accessToken, refreshToken, expiresIn 900 y el usuario con el rol program_manager |
       | admin@sigpro.test | Admin1234! | admin@sigpro.test | true | trae un mfaToken y no trae accessToken ni refreshToken |
 
   Esquema del escenario: La contraseña se compara exactamente
-    Dado el usuario de demostración "gestor@sigpro.test" con la contraseña "Gestor1234!"
-    Cuando envía POST /api/auth/login con ese correo y la contraseña "<contraseña_enviada>"
+    Dado que existe el usuario de demostración gestor@sigpro.test con la contraseña Gestor1234!
+    Cuando envía POST /api/auth/login con ese correo y la contraseña <contraseña_enviada>
     Entonces la respuesta es <estado>
 
     Ejemplos:
       | contraseña_enviada | estado |
       | Gestor1234! | 200 |
-      | gestor1234! | 401 con el código invalid_credentials |
-      | Gestor1234 | 401 con el código invalid_credentials |
-      | Gestor1234!! | 401 con el código invalid_credentials |
+      | gestor1234! | 401 invalid_credentials |
+      | Gestor1234 | 401 invalid_credentials |
+      | Gestor1234!! | 401 invalid_credentials |
 ```
 
 ## Fuera de alcance

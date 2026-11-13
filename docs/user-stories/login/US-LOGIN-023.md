@@ -25,26 +25,26 @@ para entrar o encontrar enseguida cómo recuperar la contraseña o pedir una cue
 Característica: Formulario de acceso en la app móvil
 
   Esquema del escenario: Las opciones del formulario llevan a su pantalla
-    Dado una persona sin sesión en /login que ha escrito el correo <correo>
-    Cuando pulsa "<opcion>"
-    Entonces llega a <ruta> y ve el título "<titulo>"
+    Dado que una persona sin sesión en /login ha escrito el correo <correo>
+    Cuando pulsa <opcion>
+    Entonces llega a <ruta> y ve el título <titulo>
     Y <correo_destino>
 
     Ejemplos:
       | correo | opcion | ruta | titulo | correo_destino |
-      | (vacío) | ¿Olvidaste la contraseña? | /forgot | Recuperar contraseña | el campo de correo está vacío |
-      | gestor@sigpro.test | ¿Olvidaste la contraseña? | /forgot | Recuperar contraseña | el campo de correo contiene "gestor@sigpro.test" |
-      | (vacío) | Solicitar acceso | /register | Solicitar acceso | el formulario de solicitud está vacío |
+      | (vacío) | «¿Olvidaste la contraseña?» | /forgot | «Recuperar contraseña» | el campo de correo está vacío |
+      | gestor@sigpro.test | «¿Olvidaste la contraseña?» | /forgot | «Recuperar contraseña» | el campo de correo contiene gestor@sigpro.test |
+      | (vacío) | «Solicitar acceso» | /register | «Solicitar acceso» | el formulario de solicitud está vacío |
 
   Esquema del escenario: Con sesión no se vuelve a pedir el acceso
-    Dado <situacion>
+    Dado que <situacion>
     Cuando abre /login
     Entonces <resultado>
 
     Ejemplos:
       | situacion | resultado |
-      | una persona sin sesión | ve el título "Iniciar sesión" con el formulario de acceso |
-      | "gestor@sigpro.test" con la sesión iniciada | llega a /programs sin ver el formulario |
+      | una persona no tiene sesión | ve el título «Iniciar sesión» con el formulario de acceso |
+      | gestor@sigpro.test tiene la sesión iniciada | llega a /programs sin ver el formulario |
 ```
 
 ## Fuera de alcance

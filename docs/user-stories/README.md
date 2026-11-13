@@ -20,16 +20,16 @@ Cada historia se basta a sí misma: su título, su relato, sus reglas y sus crit
 
 ```text
 docs/user-stories/
-  login/                 carpeta de EP-LOGIN: el id de la épica sin «EP-», en minúsculas
+  ejemplo/               carpeta de EP-EJEMPLO: el id de la épica sin «EP-», en minúsculas
     epic.md
-    US-LOGIN-001.md
-    US-LOGIN-002.md
+    US-EJEMPLO-001.md
+    US-EJEMPLO-002.md
   COBERTURA.md           generado, no se edita a mano
   README.md              esta guía
 ```
 
 - Épica: `EP-<SLUG>` y archivo `<slug>/epic.md`. Historia: `US-<SLUG>-NNN` (tres dígitos, numeración dentro de la épica, **sin reutilizar números**) y archivo `<slug>/US-<SLUG>-NNN.md`.
-- **Solo se leen los archivos que se llaman exactamente `epic.md` o empiezan por `US-` y acaban en `.md`.** Cualquier otro nombre (`us-login-001.md`, `Epic.md`, `US_LOGIN_001.md`) **se ignora en silencio**: no se revisa, no entra en la cobertura y nunca se publica. El linter no avisa. Comprueba que el número de «archivos revisados» de su última línea coincide con los que has creado.
+- **Solo se leen los archivos que se llaman exactamente `epic.md` o empiezan por `US-` y acaban en `.md`.** Cualquier otro nombre (`us-ejemplo-001.md`, `Epic.md`, `US_EJEMPLO_001.md`) **se ignora en silencio**: no se revisa, no entra en la cobertura y nunca se publica. El linter no avisa. Comprueba que el número de «archivos revisados» de su última línea coincide con los que has creado.
 
 ## Etiquetas y plataformas
 
@@ -58,12 +58,12 @@ El front matter es para el repositorio; el cuerpo es lo que se publica. Este eje
 
 ````markdown
 ---
-id: US-LOGIN-003
+id: US-EJEMPLO-003
 tipo: historia
-epica: EP-LOGIN
+epica: EP-EJEMPLO
 titulo: "[Web] Bloquear la cuenta tras 5 intentos fallidos"
 etiquetas: [web]
-relacionadas: [US-LOGIN-002]
+relacionadas: [US-EJEMPLO-002]
 verificacion: codigo
 cubre: ["/login"]
 ---
@@ -83,17 +83,17 @@ para saber que debo pedir ayuda y no seguir intentando.
 Característica: Bloqueo de cuenta tras intentos fallidos
 
   Esquema del escenario: El quinto intento fallido bloquea la cuenta
-    Dado que el usuario "gestor@sigpro.test" ya acumula <fallos_previos> intentos fallidos
-    Cuando intenta entrar en /login con una contraseña <contraseña>
-    Entonces ve el aviso "<mensaje>"
+    Dado que gestor@sigpro.test ya acumula <fallos_previos> intentos fallidos consecutivos
+    Cuando en /login escribe ese correo y la contraseña <contraseña> y pulsa «Entrar»
+    Entonces ve <mensaje>
     Y la cuenta queda <cuenta>
 
     Ejemplos:
       | fallos_previos | contraseña | mensaje | cuenta |
-      | 3 | incorrecta | Correo o contraseña incorrectos | activa |
-      | 4 | incorrecta | Cuenta bloqueada tras varios intentos fallidos. Contacta con un administrador. | bloqueada |
-      | 4 | correcta | Sesión iniciada. Redirigiendo a Programas… | activa |
-      | 5 | correcta | Cuenta bloqueada tras varios intentos fallidos. Contacta con un administrador. | bloqueada |
+      | 3 | incorrecta | «Correo o contraseña incorrectos» | activa |
+      | 4 | incorrecta | «Cuenta bloqueada tras varios intentos fallidos. Contacta con un administrador.» | bloqueada |
+      | 4 | Gestor1234! | «Sesión iniciada. Redirigiendo a Programas…» | activa |
+      | 5 | Gestor1234! | «Cuenta bloqueada tras varios intentos fallidos. Contacta con un administrador.» | bloqueada |
 ```
 
 ## Fuera de alcance
@@ -141,7 +141,7 @@ El esquema de la épica es estricto: solo estas cuatro claves y la única etique
 
 ````markdown
 ---
-id: EP-LOGIN
+id: EP-EJEMPLO
 tipo: epica
 titulo: "Acceso con correo y contraseña"
 etiquetas: [epic]
@@ -157,9 +157,9 @@ Qué consigue el usuario con esta funcionalidad y por qué existe.
 API, web y móvil.
 
 ## Historias
-- US-LOGIN-001: [API] Iniciar sesión con credenciales válidas
-- US-LOGIN-002: [Web] Mostrar el error de credenciales incorrectas
-- US-LOGIN-003: [Web] Bloquear la cuenta tras 5 intentos fallidos
+- US-EJEMPLO-001: [API] Iniciar sesión con credenciales válidas
+- US-EJEMPLO-002: [Web] Mostrar el error de credenciales incorrectas
+- US-EJEMPLO-003: [Web] Bloquear la cuenta tras 5 intentos fallidos
 
 ## Fuera de alcance
 - Lo que esta épica no cubre.
@@ -176,6 +176,16 @@ La lista de historias de la épica se mantiene a mano. El enlace entre la épica
 - **Nada de implementación**: ninguna historia menciona términos de implementación (identificadores de prueba, localizadores) ni de la mecánica del curso, ni nombres de componentes o de funciones. El linter busca los identificadores de prueba, los localizadores y los términos de la mecánica del curso en el título y en todo el cuerpo, bloques de código incluidos, y **cuando encuentra uno imprime el término exacto** que debes quitar. Los nombres de componentes y de funciones no los detecta (ver «Lo que el linter no ve»).
 - **Sin menciones ni referencias sueltas**: GitHub convierte `@usuario` en una notificación y `#12` en un enlace a otro issue. Escríbelos entre comillas invertidas (`` `@usuario` ``) o reformula. Un correo (`admin@sigpro.test`) no cuenta.
 - **El relato** (`## Historia`) empieza por «Como » y dice qué quiere el rol («… quiero …»), con ese orden y sin negritas.
+- **Mensajes sin texto en el catálogo**: si la interfaz debería mostrar un aviso que el catálogo de textos (`packages/shared/src/i18n`) no tiene, no inventes la frase exacta. Describe su contenido («menciona “desactivada” y no menciona “pendiente de aprobación”»).
+
+### Convenciones de los Esquemas
+
+- **Textos de la interfaz entre «…»**, en los pasos y en las celdas: títulos, etiquetas, botones y avisos (`pulsa «Entrar»`, `| «Correo o contraseña incorrectos» |`). Si un marcador recibe un texto de la interfaz, las comillas van en la celda, no alrededor del marcador.
+- **Los datos van tal cual**, sin comillas: correos, contraseñas, tenants, códigos, rutas, códigos HTTP y campos de la API (`gestor@sigpro.test`, `Gestor1234!`, `alumno01`, `/programs`, `423 account_locked`).
+- **Lo que no se puede escribir literalmente va entre paréntesis**: `(vacío)` para un campo o un cuerpo vacío, `(tres espacios)`, `(sin el campo)`, `(sin cabecera)`, `(ninguno)`. Gherkin recorta los espacios de las celdas, y una celda vacía no distingue «vacío» de «ausente».
+- **Datos que no se pueden repetir** (un correo sin cuenta, cuyo contador de intentos no se reinicia, o una solicitud de acceso, que no se puede registrar dos veces) se escriben entre paréntesis y se definen en las Reglas, por ejemplo `(correo sin cuenta)`: «un correo que nunca se ha usado en ese tenant, como `nadie-` seguido de una marca de tiempo y `@sigpro.test`».
+- **El primer paso de cada Esquema empieza por «Dado que …»**.
+- **Una acción que envía un formulario dice qué se escribe en cada campo**: un envío sin correo no llega al servidor.
 
 ## Cómo se lee un Esquema del escenario
 

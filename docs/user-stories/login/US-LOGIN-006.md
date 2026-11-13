@@ -19,14 +19,15 @@ para decidir quién usa SIGPRO antes de que vea ningún dato.
 - La contraseña correcta pone el contador de intentos fallidos a cero aunque la respuesta sea 403.
 - Toda cuenta creada con una solicitud de acceso nace pendiente de aprobación.
 - En los datos de demostración, `pendiente@sigpro.test` (contraseña `Pend1234!`, rol `consultant`) está pendiente en todos los tenants.
+- En los ejemplos, `(cuenta recién solicitada)` es una solicitud de acceso hecha en la prueba con un correo que nunca se ha usado en ese tenant (como `nueva-` seguido de una marca de tiempo y `@organizacion.es`) y la contraseña `Abcdefghij1!`.
 
 ## Criterios de aceptación
 ```gherkin
 Característica: Cuenta pendiente de aprobación
 
   Esquema del escenario: Una cuenta pendiente no abre sesión
-    Dado que la cuenta "<correo>" está pendiente de aprobación
-    Cuando envía POST /api/auth/login con la contraseña "<contraseña>"
+    Dado que la cuenta <correo> está pendiente de aprobación
+    Cuando envía POST /api/auth/login con la contraseña <contraseña>
     Entonces la respuesta es <respuesta>
     Y la respuesta no incluye ningún token
 
@@ -34,14 +35,14 @@ Característica: Cuenta pendiente de aprobación
       | correo | contraseña | respuesta |
       | pendiente@sigpro.test | Pend1234! | 403 pending_approval |
       | pendiente@sigpro.test | incorrecta | 401 invalid_credentials con attempts 1 |
-      | nueva@organizacion.es (recién solicitada con la contraseña Abcdefghij1!) | Abcdefghij1! | 403 pending_approval |
-      | nueva@organizacion.es (recién solicitada con la contraseña Abcdefghij1!) | Abcdefghij1 | 401 invalid_credentials con attempts 1 |
+      | (cuenta recién solicitada) | Abcdefghij1! | 403 pending_approval |
+      | (cuenta recién solicitada) | Abcdefghij1 | 401 invalid_credentials con attempts 1 |
 
   Esquema del escenario: La contraseña correcta reinicia el contador aunque la cuenta siga pendiente
-    Dado que "pendiente@sigpro.test" acumula <fallos_previos> intentos fallidos consecutivos
-    Y envía su contraseña correcta "Pend1234!" y recibe 403 pending_approval
-    Cuando vuelve a enviar la contraseña "incorrecta"
-    Entonces la respuesta es 401 con "attempts" igual a 1
+    Dado que pendiente@sigpro.test acumula <fallos_previos> intentos fallidos consecutivos
+    Y envía su contraseña correcta Pend1234! y recibe 403 pending_approval
+    Cuando vuelve a enviar la contraseña incorrecta
+    Entonces la respuesta es 401 invalid_credentials con attempts igual a 1
 
     Ejemplos:
       | fallos_previos |

@@ -22,11 +22,11 @@ para que nadie que coja el móvil después vea mis datos.
 Característica: Botón atrás de Android tras cerrar sesión
 
   Esquema del escenario: El botón atrás no recupera la sesión cerrada
-    Dado que "<correo>" ha recorrido <recorrido> en la app Android
-    Y pulsa "Cerrar sesión" en Perfil y llega a /login
+    Dado que <correo> ha recorrido <recorrido> en la app Android
+    Y pulsa «Cerrar sesión» en Perfil y llega a /login
     Cuando pulsa el botón atrás del sistema <veces>
     Entonces no ve ninguna pantalla privada
-    Y al volver a la app ve el título "Iniciar sesión"
+    Y al volver a la app ve el título «Iniciar sesión»
 
     Ejemplos:
       | correo | recorrido | veces |

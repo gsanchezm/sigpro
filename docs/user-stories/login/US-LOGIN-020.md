@@ -25,29 +25,29 @@ para dejar el equipo sin mi sesión abierta y estar segura de ello.
 Característica: Cierre de sesión en la web
 
   Esquema del escenario: Cerrar sesión desde cada punto lleva al acceso con el aviso
-    Dado que "<correo>" tiene la sesión iniciada y está en <pantalla> con una ventana de <ancho>
-    Cuando pulsa "Cerrar sesión" en <lugar>
+    Dado que <correo> tiene la sesión iniciada y está en <pantalla> con una ventana de <ancho>
+    Cuando pulsa «Cerrar sesión» en <lugar>
     Entonces llega a /login
-    Y ve el aviso "Sesión cerrada correctamente."
+    Y ve el aviso «Sesión cerrada correctamente.»
     Y al abrir /programs vuelve a /login
 
     Ejemplos:
       | correo | pantalla | ancho | lugar |
-      | gestor@sigpro.test | /programs | 1440 px | el Menú de usuario de la cabecera |
+      | gestor@sigpro.test | /programs | 1440 px | el «Menú de usuario» de la cabecera |
       | admin@sigpro.test | /nc | 390 px | el menú de navegación |
       | consultor@sigpro.test | /profile | 1440 px | la página Perfil |
 
   Esquema del escenario: El aviso solo acompaña al cierre de sesión
-    Dado <situacion>
+    Dado que <situacion>
     Cuando <accion>
     Entonces <aviso>
 
     Ejemplos:
       | situacion | accion | aviso |
-      | que "gestor@sigpro.test" acaba de cerrar sesión | mira /login | ve "Sesión cerrada correctamente." |
-      | que "gestor@sigpro.test" acaba de cerrar sesión | pulsa "Entrar" con la contraseña "incorrecta" | ya no ve "Sesión cerrada correctamente." y ve "Correo o contraseña incorrectos" |
-      | que "gestor@sigpro.test" acaba de cerrar sesión | pulsa "¿Olvidaste la contraseña?" y vuelve con "Volver al inicio de sesión" | ya no ve "Sesión cerrada correctamente." |
-      | una persona que no ha iniciado sesión | abre /login | no ve "Sesión cerrada correctamente." |
+      | gestor@sigpro.test acaba de cerrar sesión | mira /login | ve «Sesión cerrada correctamente.» |
+      | gestor@sigpro.test acaba de cerrar sesión | escribe el correo gestor@sigpro.test y la contraseña incorrecta y pulsa «Entrar» | ya no ve «Sesión cerrada correctamente.» y ve «Correo o contraseña incorrectos» |
+      | gestor@sigpro.test acaba de cerrar sesión | pulsa «¿Olvidaste la contraseña?» y vuelve con «Volver al inicio de sesión» | ya no ve «Sesión cerrada correctamente.» |
+      | una persona no ha iniciado sesión | abre /login | no ve «Sesión cerrada correctamente.» |
 ```
 
 ## Fuera de alcance

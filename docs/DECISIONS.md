@@ -593,6 +593,9 @@ Decisiones al construir `packages/stories` (linter, sincronización con GitHub y
 - **Ninguna historia `ios` y una sola `android` (el botón atrás tras cerrar sesión, `pendiente-nativo`).** *El login no tiene ninguna rama por sistema; el botón atrás es lo único que solo existe en Android.*
 - **El panel «Usuarios de prueba» queda fuera de `EP-LOGIN`** y va con la épica de la API de plataforma y configuración. *Es una ayuda del entorno de pruebas que depende de la configuración, no parte del acceso.*
 - **En las tablas, los valores que Gherkin no puede escribir van entre paréntesis** («(vacío)», «(tres espacios)», «(sin el campo)», «(ninguno)»). *Gherkin recorta los espacios de las celdas y una celda vacía no distingue «vacío» de «ausente».*
+- **Convenciones de los Esquemas** (guía, «Convenciones de los Esquemas»): textos de la interfaz entre «…», datos sin comillas, el primer paso empieza por «Dado que», y los datos que no se pueden repetir (`(correo sin cuenta)`, `(cuenta recién solicitada)`) se definen en las Reglas. *Una sola forma para las ~37 épicas; los datos fijos no reproducibles darían ejemplos falsos la segunda vez.*
+- **Un aviso sin texto en el catálogo se describe por su contenido, no con una frase inventada.** *Una frase exacta que no existe en ningún catálogo, diseño ni plan se leería como el texto de la interfaz.*
+- **Los ejemplos de la guía usan el slug ficticio `EJEMPLO`.** *Con `LOGIN` sus ids chocaban con historias reales de otro título y plataforma.*
 
 ### Material de instructor
 

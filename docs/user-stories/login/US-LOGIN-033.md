@@ -23,15 +23,15 @@ para no escribir la contraseña cada vez en mi móvil y no dejarla abierta en un
 Característica: Mantener la sesión en la app móvil
 
   Esquema del escenario: La casilla decide si la sesión sobrevive al cierre de la app
-    Dado que "gestor@sigpro.test" inicia sesión con la casilla "Mantener la sesión en este equipo" <casilla>
+    Dado que gestor@sigpro.test inicia sesión con la casilla «Mantener la sesión en este equipo» <casilla>
     Cuando <accion>
     Entonces <resultado>
 
     Ejemplos:
       | casilla | accion | resultado |
-      | marcada | cambia de pestaña a "No conformidades" | sigue con su sesión |
+      | marcada | pasa a la pestaña de no conformidades | sigue con su sesión |
       | marcada | cierra la app y la vuelve a abrir | entra en /programs sin iniciar sesión |
-      | desmarcada | cambia de pestaña a "No conformidades" | sigue con su sesión |
+      | desmarcada | pasa a la pestaña de no conformidades | sigue con su sesión |
       | desmarcada | cierra la app y la vuelve a abrir | llega a /login y tiene que iniciar sesión |
 ```
 

@@ -24,18 +24,18 @@ para terminarla de forma explícita aunque el cliente ya no tenga un token de ac
 Característica: Cierre de sesión por la API
 
   Esquema del escenario: El cierre de sesión responde 204 sin cuerpo
-    Dado un cliente de la API <sesion>
+    Dado que un cliente de la API está <sesion>
     Cuando envía POST /api/auth/logout con el cuerpo <cuerpo>
     Entonces la respuesta es <respuesta>
 
     Ejemplos:
       | sesion | cuerpo | respuesta |
-      | con la sesión de gestor@sigpro.test | su refreshToken | 204 sin cuerpo |
-      | con la sesión de gestor@sigpro.test, que ya cerró antes | el mismo refreshToken | 204 sin cuerpo |
+      | con la sesión de gestor@sigpro.test | (su refreshToken) | 204 sin cuerpo |
+      | con la sesión de gestor@sigpro.test, que ya cerró antes | (el mismo refreshToken) | 204 sin cuerpo |
       | sin sesión | refreshToken null | 204 sin cuerpo |
-      | sin sesión | vacío | 204 sin cuerpo |
-      | sin sesión | refreshToken "no-es-un-token" | 204 sin cuerpo |
-      | sin sesión | refreshToken 123 | 422 validation_failed |
+      | sin sesión | (vacío) | 204 sin cuerpo |
+      | sin sesión | refreshToken no-es-un-token | 204 sin cuerpo |
+      | sin sesión | refreshToken 123 (un número) | 422 validation_failed |
 ```
 
 ## Fuera de alcance

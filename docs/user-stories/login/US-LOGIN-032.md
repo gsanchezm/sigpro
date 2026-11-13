@@ -24,15 +24,15 @@ para comprobar que la he escrito bien antes de enviarla, como en la web.
 Característica: Mostrar y ocultar la contraseña en la app móvil
 
   Esquema del escenario: El botón alterna la visibilidad de la contraseña
-    Dado una persona en /login que ha escrito "Consul1234!" en el campo "Contraseña"
+    Dado que una persona en /login ha escrito Consul1234! en el campo «Contraseña»
     Cuando pulsa el botón de la contraseña <veces> veces
     Entonces la contraseña se ve <visibilidad>
-    Y el botón muestra "<texto>" y se llama "<nombre>"
-    Y el campo sigue conteniendo "Consul1234!"
+    Y el botón muestra <texto> y se llama <nombre>
+    Y el campo sigue conteniendo Consul1234!
 
     Ejemplos:
       | veces | visibilidad | texto | nombre |
-      | 0 | oculta | Mostrar | Mostrar contraseña |
-      | 1 | en claro | Ocultar | Ocultar contraseña |
-      | 2 | oculta | Mostrar | Mostrar contraseña |
+      | 0 | oculta | «Mostrar» | «Mostrar contraseña» |
+      | 1 | en claro | «Ocultar» | «Ocultar contraseña» |
+      | 2 | oculta | «Mostrar» | «Mostrar contraseña» |
 ```

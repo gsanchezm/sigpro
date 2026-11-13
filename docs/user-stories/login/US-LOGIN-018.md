@@ -25,17 +25,17 @@ para comprobar que la he escrito bien antes de enviarla.
 Característica: Mostrar y ocultar la contraseña en la web
 
   Esquema del escenario: El botón alterna la visibilidad de la contraseña
-    Dado una persona en /login que ha escrito "Gestor1234!" en el campo "Contraseña"
+    Dado que una persona en /login ha escrito Gestor1234! en el campo «Contraseña»
     Cuando pulsa el botón de la contraseña <veces> veces
     Entonces la contraseña se ve <visibilidad>
-    Y el botón muestra "<texto>" y se llama "<nombre>"
+    Y el botón muestra <texto> y se llama <nombre>
     Y el botón <pulsado>
-    Y el campo sigue conteniendo "Gestor1234!"
+    Y el campo sigue conteniendo Gestor1234!
 
     Ejemplos:
       | veces | visibilidad | texto | nombre | pulsado |
-      | 0 | oculta | Mostrar | Mostrar contraseña | no está marcado como pulsado |
-      | 1 | en claro | Ocultar | Ocultar contraseña | está marcado como pulsado |
-      | 2 | oculta | Mostrar | Mostrar contraseña | no está marcado como pulsado |
-      | 3 | en claro | Ocultar | Ocultar contraseña | está marcado como pulsado |
+      | 0 | oculta | «Mostrar» | «Mostrar contraseña» | no está marcado como pulsado |
+      | 1 | en claro | «Ocultar» | «Ocultar contraseña» | está marcado como pulsado |
+      | 2 | oculta | «Mostrar» | «Mostrar contraseña» | no está marcado como pulsado |
+      | 3 | en claro | «Ocultar» | «Ocultar contraseña» | está marcado como pulsado |
 ```

@@ -23,10 +23,10 @@ para mostrar un aviso claro en lugar de un error inesperado.
 Característica: Contrato del acceso con SSO
 
   Esquema del escenario: El SSO no está disponible en ningún caso
-    Dado un cliente de la API <sesion> y la cabecera x-tenant <tenant>
+    Dado que un cliente de la API está <sesion> y envía la cabecera x-tenant <tenant>
     Cuando envía GET /api/auth/sso
-    Entonces la respuesta es 501 con el código sso_not_available
-    Y el cuerpo lleva "error" igual a "Not Implemented" y un traceId
+    Entonces la respuesta es 501 sso_not_available
+    Y el cuerpo lleva error igual a Not Implemented y un traceId
     Y la respuesta no incluye ningún token
 
     Ejemplos:

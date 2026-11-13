@@ -23,9 +23,9 @@ para dejar el móvil sin mi sesión abierta.
 Característica: Cierre de sesión en la app móvil
 
   Esquema del escenario: Cerrar sesión borra la sesión del dispositivo
-    Dado que "<correo>" tiene la sesión iniciada en la app
+    Dado que <correo> tiene la sesión iniciada en la app
     Y está en la página Perfil
-    Cuando pulsa "Cerrar sesión"
+    Cuando pulsa «Cerrar sesión»
     Entonces llega a /login
     Y <despues>
 

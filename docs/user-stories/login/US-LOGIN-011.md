@@ -10,7 +10,7 @@ cubre: ["/login"]
 ---
 
 ## Historia
-Como persona sin sesión, quiero ver en /login un formulario claro con los enlaces a las otras opciones de acceso,
+Como persona sin sesión, quiero ver en /login un formulario claro con las otras opciones de acceso a mano,
 para entrar o encontrar enseguida cómo recuperar la contraseña o pedir una cuenta.
 
 ## Reglas
@@ -26,40 +26,40 @@ para entrar o encontrar enseguida cómo recuperar la contraseña o pedir una cue
 Característica: Formulario de acceso en la web
 
   Esquema del escenario: Estado inicial de cada elemento del formulario
-    Dado una persona sin sesión
-    Cuando abre /login
-    Entonces "<elemento>" <estado>
+    Dado que una persona sin sesión abre /login
+    Cuando mira el formulario
+    Entonces <elemento> <estado>
 
     Ejemplos:
       | elemento | estado |
-      | Iniciar sesión | es el título de la página, con el texto «Accede con tu cuenta corporativa de SIGPRO.» |
-      | Correo electrónico | está vacío y tiene el foco |
-      | Contraseña | está vacío y oculta lo que se escribe |
-      | Mantener la sesión en este equipo | está marcada |
-      | Entrar | está habilitado |
-      | Acceder con certificado digital / SSO | está habilitado |
+      | «Iniciar sesión» | es el título de la página, con el texto «Accede con tu cuenta corporativa de SIGPRO.» |
+      | «Correo electrónico» | está vacío y tiene el foco |
+      | «Contraseña» | está vacía y oculta lo que se escribe |
+      | «Mantener la sesión en este equipo» | está marcada |
+      | «Entrar» | está habilitado |
+      | «Acceder con certificado digital / SSO» | está habilitado |
 
   Esquema del escenario: Las opciones del formulario llevan a su pantalla
-    Dado una persona sin sesión en /login
-    Cuando pulsa "<opcion>"
-    Entonces llega a <ruta> y ve el título "<titulo>"
-    Y al pulsar "Volver al inicio de sesión" regresa a /login
+    Dado que una persona sin sesión está en /login
+    Cuando pulsa <opcion>
+    Entonces llega a <ruta> y ve el título <titulo>
+    Y al pulsar «Volver al inicio de sesión» regresa a /login
 
     Ejemplos:
       | opcion | ruta | titulo |
-      | ¿Olvidaste la contraseña? | /forgot | Recuperar contraseña |
-      | Solicitar acceso | /register | Solicitar acceso |
+      | «¿Olvidaste la contraseña?» | /forgot | «Recuperar contraseña» |
+      | «Solicitar acceso» | /register | «Solicitar acceso» |
 
   Esquema del escenario: Con sesión no se vuelve a pedir el acceso
-    Dado <situacion>
+    Dado que <situacion>
     Cuando abre /login
     Entonces <resultado>
 
     Ejemplos:
       | situacion | resultado |
-      | una persona sin sesión | ve el formulario "Iniciar sesión" |
-      | "gestor@sigpro.test" con la sesión iniciada | llega a /programs sin ver el formulario |
-      | "consultor@sigpro.test" que acaba de cerrar sesión | ve el formulario "Iniciar sesión" |
+      | una persona no tiene sesión | ve el formulario «Iniciar sesión» |
+      | gestor@sigpro.test tiene la sesión iniciada | llega a /programs sin ver el formulario |
+      | consultor@sigpro.test acaba de cerrar sesión | ve el formulario «Iniciar sesión» |
 ```
 
 ## Fuera de alcance

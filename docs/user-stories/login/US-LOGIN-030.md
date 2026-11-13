@@ -14,7 +14,8 @@ Como persona cuya cuenta ha desactivado un administrador, quiero que el aviso de
 para dirigirme a un administrador en lugar de esperar una aprobación o volver a probar la contraseña.
 
 ## Reglas
-- Una cuenta desactivada con la contraseña correcta muestra el aviso de error «Cuenta desactivada. Contacta con un administrador.» con el detalle «POST /api/auth/login → 403 Forbidden», y no entra.
+- Una cuenta desactivada con la contraseña correcta no entra y muestra un aviso de error propio de la cuenta desactivada, con el detalle «POST /api/auth/login → 403 Forbidden».
+- Ese aviso dice que la cuenta está desactivada (menciona «desactivada») y no es el de una cuenta pendiente: no menciona «pendiente de aprobación».
 - Con una contraseña incorrecta se ve el aviso de credenciales incorrectas con su número de intento (US-LOGIN-027).
 - Al reactivar la cuenta, la persona vuelve a entrar con su contraseña.
 
@@ -23,15 +24,15 @@ para dirigirme a un administrador en lugar de esperar una aprobación o volver a
 Característica: Aviso de cuenta desactivada en la app móvil
 
   Esquema del escenario: Una cuenta desactivada no entra
-    Dado que un administrador ha <accion> la cuenta "auditor@sigpro.test"
-    Cuando en /login escribe ese correo y la contraseña "<contraseña>"
-    Y pulsa "Entrar"
+    Dado que un administrador ha <accion> la cuenta auditor@sigpro.test
+    Cuando en /login escribe ese correo y la contraseña <contraseña>
+    Y pulsa «Entrar»
     Entonces <resultado>
 
     Ejemplos:
       | accion | contraseña | resultado |
-      | desactivado | Audit1234! | ve "Cuenta desactivada. Contacta con un administrador." con el detalle "POST /api/auth/login → 403 Forbidden" y sigue sin sesión |
-      | desactivado | incorrecta | ve "Correo o contraseña incorrectos" con el detalle "POST /api/auth/login → 401 Unauthorized · attempts=1" |
+      | desactivado | Audit1234! | ve un aviso de error que menciona «desactivada» y no menciona «pendiente de aprobación», con el detalle «POST /api/auth/login → 403 Forbidden», y sigue sin sesión |
+      | desactivado | incorrecta | ve «Correo o contraseña incorrectos» con el detalle «POST /api/auth/login → 401 Unauthorized · attempts=1» |
       | desactivado y vuelto a activar | Audit1234! | llega a /programs |
 ```
 

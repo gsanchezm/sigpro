@@ -17,15 +17,15 @@ para entrar en mis datos y no en los del tenant de demostración.
 - El formulario de acceso tiene el campo «Tenant de trabajo», sin mayúscula inicial ni autocorrección.
 - El inicio de sesión se hace en el tenant escrito en ese campo; una cuenta que solo existe en otro tenant no entra y se ve el aviso de credenciales incorrectas.
 - El campo muestra el último tenant usado en la app, también después de cerrarla y volver a abrirla.
-- Si el campo se deja vacío, se usa el tenant por defecto de la instalación (`demo`).
+- El campo nunca queda vacío: al borrar todo su contenido pasa a mostrar el tenant por defecto de la instalación (`demo`).
 
 ## Criterios de aceptación
 ```gherkin
 Característica: Tenant de trabajo en la app móvil
 
   Esquema del escenario: El inicio de sesión ocurre en el tenant escrito
-    Dado una persona sin sesión en /login que escribe "<tenant>" en "Tenant de trabajo"
-    Cuando entra con el correo "<correo>" y la contraseña "<contraseña>"
+    Dado que una persona sin sesión en /login escribe <tenant> en «Tenant de trabajo»
+    Cuando escribe el correo <correo> y la contraseña <contraseña> y pulsa «Entrar»
     Entonces <resultado>
 
     Ejemplos:
@@ -33,18 +33,28 @@ Característica: Tenant de trabajo en la app móvil
       | alumno01 | alumno01@sigpro.lab | Alumno1234! | llega a /programs con los datos del tenant alumno01 |
       | alumno01 | gestor@sigpro.test | Gestor1234! | llega a /programs con los datos del tenant alumno01 |
       | demo | gestor@sigpro.test | Gestor1234! | llega a /programs con los datos del tenant demo |
-      | demo | alumno01@sigpro.lab | Alumno1234! | ve "Correo o contraseña incorrectos" y sigue sin sesión |
-      | alumno02 | alumno01@sigpro.lab | Alumno1234! | ve "Correo o contraseña incorrectos" y sigue sin sesión |
+      | demo | alumno01@sigpro.lab | Alumno1234! | ve «Correo o contraseña incorrectos» y sigue sin sesión |
+      | alumno02 | alumno01@sigpro.lab | Alumno1234! | ve «Correo o contraseña incorrectos» y sigue sin sesión |
 
   Esquema del escenario: La app recuerda el último tenant usado
-    Dado que la última vez se entró en el tenant "<anterior>" y después se cerró sesión
+    Dado que la última vez se entró en el tenant <anterior> y después se cerró sesión
     Cuando cierra la app y la vuelve a abrir en /login
-    Entonces "Tenant de trabajo" contiene "<anterior>"
+    Entonces «Tenant de trabajo» contiene <anterior>
 
     Ejemplos:
       | anterior |
       | alumno01 |
       | alumno25 |
+
+  Esquema del escenario: El campo no se queda vacío
+    Dado que «Tenant de trabajo» contiene <tenant>
+    Cuando borra todo el contenido del campo
+    Entonces el campo muestra demo
+
+    Ejemplos:
+      | tenant |
+      | alumno01 |
+      | demo |
 ```
 
 ## Fuera de alcance

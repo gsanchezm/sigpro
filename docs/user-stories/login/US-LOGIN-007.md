@@ -25,8 +25,8 @@ para retirar el acceso a quien ya no debe usar SIGPRO sin borrar su historial.
 Característica: Cuenta desactivada
 
   Esquema del escenario: Una cuenta desactivada no abre sesión
-    Dado que un administrador ha <accion> la cuenta "auditor@sigpro.test"
-    Cuando envía POST /api/auth/login con la contraseña "<contraseña>"
+    Dado que un administrador ha <accion> la cuenta auditor@sigpro.test
+    Cuando envía POST /api/auth/login con la contraseña <contraseña>
     Entonces la respuesta es <respuesta>
 
     Ejemplos:
@@ -36,8 +36,8 @@ Característica: Cuenta desactivada
       | desactivado y vuelto a activar | Audit1234! | 200 con la sesión del rol auditor |
 
   Esquema del escenario: Orden de los estados que impiden entrar
-    Dado que un administrador ha desactivado la cuenta "<correo>", que además está <otro_estado>
-    Cuando envía POST /api/auth/login con su contraseña correcta "<contraseña>"
+    Dado que un administrador ha desactivado la cuenta <correo>, que además está <otro_estado>
+    Cuando envía POST /api/auth/login con su contraseña correcta <contraseña>
     Entonces la respuesta es <respuesta>
 
     Ejemplos:

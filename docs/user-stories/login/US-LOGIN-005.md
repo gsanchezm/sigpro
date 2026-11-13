@@ -24,10 +24,10 @@ para que el bloqueo proteja la cuenta hasta que un administrador intervenga.
 Característica: Cuenta bloqueada
 
   Esquema del escenario: Una cuenta bloqueada no abre sesión
-    Dado que la cuenta "<correo>" está bloqueada
-    Cuando envía POST /api/auth/login con la contraseña "<contraseña>"
-    Entonces la respuesta es 423 con el código account_locked
-    Y la respuesta no incluye "attempts" ni ningún token
+    Dado que la cuenta <correo> está bloqueada
+    Cuando envía POST /api/auth/login con la contraseña <contraseña>
+    Entonces la respuesta es 423 account_locked
+    Y la respuesta no incluye attempts ni ningún token
 
     Ejemplos:
       | correo | contraseña |
@@ -36,8 +36,8 @@ Característica: Cuenta bloqueada
       | BLOQUEADO@sigpro.test | Block1234! |
 
   Esquema del escenario: El bloqueo manda sobre los demás estados
-    Dado que la cuenta "<correo>" está <estado>
-    Cuando envía POST /api/auth/login con su contraseña correcta "<contraseña>"
+    Dado que la cuenta <correo> está <estado>
+    Cuando envía POST /api/auth/login con su contraseña correcta <contraseña>
     Entonces la respuesta es <respuesta>
 
     Ejemplos:

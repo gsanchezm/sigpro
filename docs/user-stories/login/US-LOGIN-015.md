@@ -18,31 +18,35 @@ para saber que debo pedir ayuda a un administrador y no seguir intentando.
 - Una cuenta bloqueada muestra el aviso de error «Cuenta bloqueada tras varios intentos fallidos. Contacta con un administrador.» con el detalle «POST /api/auth/login → 423 Locked», sin número de intento.
 - Una cuenta bloqueada no entra ni con la contraseña correcta.
 - Un acceso correcto antes del 5.º fallo entra y reinicia el contador de intentos.
+- Un correo sin cuenta muestra el mismo aviso de bloqueo en su 5.º intento fallido y en los siguientes.
+- En los ejemplos, `(correo sin cuenta)` es un correo que nunca se ha usado en ese tenant, como `nadie-` seguido de una marca de tiempo y `@sigpro.test`.
 
 ## Criterios de aceptación
 ```gherkin
 Característica: Aviso de cuenta bloqueada en la web
 
   Esquema del escenario: El quinto intento fallido bloquea la cuenta
-    Dado que "gestor@sigpro.test" ya acumula <fallos_previos> intentos fallidos consecutivos
-    Cuando en /login escribe ese correo y una contraseña <contraseña>
-    Y pulsa "Entrar"
-    Entonces ve "<mensaje>"
+    Dado que <correo> ya acumula <fallos_previos> intentos fallidos consecutivos
+    Cuando en /login escribe ese correo y la contraseña <contraseña>
+    Y pulsa «Entrar»
+    Entonces ve <mensaje>
     Y la cuenta queda <cuenta>
 
     Ejemplos:
-      | fallos_previos | contraseña | mensaje | cuenta |
-      | 3 | incorrecta | Correo o contraseña incorrectos | activa |
-      | 4 | incorrecta | Cuenta bloqueada tras varios intentos fallidos. Contacta con un administrador. | bloqueada |
-      | 4 | correcta (Gestor1234!) | Sesión iniciada. Redirigiendo a Programas… | activa |
-      | 5 | correcta (Gestor1234!) | Cuenta bloqueada tras varios intentos fallidos. Contacta con un administrador. | bloqueada |
+      | correo | fallos_previos | contraseña | mensaje | cuenta |
+      | gestor@sigpro.test | 3 | incorrecta | «Correo o contraseña incorrectos» | activa |
+      | gestor@sigpro.test | 4 | incorrecta | «Cuenta bloqueada tras varios intentos fallidos. Contacta con un administrador.» | bloqueada |
+      | gestor@sigpro.test | 4 | Gestor1234! | «Sesión iniciada. Redirigiendo a Programas…» | activa |
+      | gestor@sigpro.test | 5 | Gestor1234! | «Cuenta bloqueada tras varios intentos fallidos. Contacta con un administrador.» | bloqueada |
+      | (correo sin cuenta) | 4 | incorrecta | «Cuenta bloqueada tras varios intentos fallidos. Contacta con un administrador.» | (sin cuenta) |
+      | (correo sin cuenta) | 5 | incorrecta | «Cuenta bloqueada tras varios intentos fallidos. Contacta con un administrador.» | (sin cuenta) |
 
   Esquema del escenario: Una cuenta ya bloqueada no entra
-    Dado que la cuenta "bloqueado@sigpro.test" está bloqueada
-    Cuando en /login escribe ese correo y la contraseña "<contraseña>"
-    Y pulsa "Entrar"
-    Entonces ve el aviso de error "Cuenta bloqueada tras varios intentos fallidos. Contacta con un administrador."
-    Y el detalle "POST /api/auth/login → 423 Locked"
+    Dado que la cuenta bloqueado@sigpro.test está bloqueada
+    Cuando en /login escribe ese correo y la contraseña <contraseña>
+    Y pulsa «Entrar»
+    Entonces ve el aviso de error «Cuenta bloqueada tras varios intentos fallidos. Contacta con un administrador.»
+    Y el detalle «POST /api/auth/login → 423 Locked»
     Y sigue en /login sin sesión
 
     Ejemplos:

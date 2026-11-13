@@ -25,35 +25,35 @@ para empezar a trabajar en Programas con los permisos de mi rol.
 Característica: Inicio de sesión en la web
 
   Esquema del escenario: Una cuenta activa entra en Programas
-    Dado una persona sin sesión en /login
-    Cuando escribe el correo <correo> y la contraseña "<contraseña>"
-    Y pulsa "Entrar"
-    Entonces ve "Sesión iniciada. Redirigiendo a Programas…" con el detalle "POST /api/auth/login → 200 · role=<rol>"
+    Dado que una persona sin sesión está en /login
+    Cuando escribe el correo <correo> y la contraseña <contraseña>
+    Y pulsa «Entrar»
+    Entonces ve «Sesión iniciada. Redirigiendo a Programas…» con el detalle <detalle>
     Y llega a /programs
 
     Ejemplos:
-      | correo | contraseña | rol |
-      | gestor@sigpro.test | Gestor1234! | program_manager |
-      | consultor@sigpro.test | Consul1234! | consultant |
-      | auditor@sigpro.test | Audit1234! | auditor |
-      | « GESTOR@sigpro.test » (con un espacio delante y otro detrás) | Gestor1234! | program_manager |
+      | correo | contraseña | detalle |
+      | gestor@sigpro.test | Gestor1234! | «POST /api/auth/login → 200 · role=program_manager» |
+      | consultor@sigpro.test | Consul1234! | «POST /api/auth/login → 200 · role=consultant» |
+      | auditor@sigpro.test | Audit1234! | «POST /api/auth/login → 200 · role=auditor» |
+      | (GESTOR@sigpro.test con un espacio delante y otro detrás) | Gestor1234! | «POST /api/auth/login → 200 · role=program_manager» |
 
   Esquema del escenario: Una cuenta con segundo factor pasa a la verificación
-    Dado una persona sin sesión en /login
-    Cuando escribe el correo "<correo>" y la contraseña "<contraseña>"
-    Y pulsa "Entrar"
-    Entonces ve el título "<titulo>"
+    Dado que una persona sin sesión está en /login
+    Cuando escribe el correo <correo> y la contraseña <contraseña>
+    Y pulsa «Entrar»
+    Entonces ve el título <titulo>
     Y sigue sin sesión hasta completar ese paso
 
     Ejemplos:
       | correo | contraseña | titulo |
-      | admin@sigpro.test | Admin1234! | Verificación en dos pasos |
+      | admin@sigpro.test | Admin1234! | «Verificación en dos pasos» |
 
   Esquema del escenario: Mientras espera la respuesta no se puede volver a enviar
-    Dado una persona sin sesión en /login que ha escrito "gestor@sigpro.test" y "Gestor1234!"
-    Cuando pulsa "Entrar" y el servidor tarda <espera> en responder
-    Entonces durante la espera "Entrar" está deshabilitado con la explicación "Procesando…"
-    Y al llegar la respuesta ve "Sesión iniciada. Redirigiendo a Programas…"
+    Dado que una persona sin sesión en /login ha escrito gestor@sigpro.test y Gestor1234!
+    Cuando pulsa «Entrar» y el servidor tarda <espera> en responder
+    Entonces durante la espera «Entrar» está deshabilitado con la explicación «Procesando…»
+    Y al llegar la respuesta ve «Sesión iniciada. Redirigiendo a Programas…»
 
     Ejemplos:
       | espera |

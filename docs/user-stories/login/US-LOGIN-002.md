@@ -22,13 +22,14 @@ para mostrar el mismo aviso que la interfaz y no gastar un intento con datos que
 - `password` es obligatoria y basta con un carácter; no se recorta, así que una contraseña de un solo espacio no es un campo vacío.
 - Un campo que falta en el cuerpo se trata igual que un campo vacío: motivo `required`.
 - `remember`, si se envía, debe ser un booleano.
+- En los ejemplos, `(correo sin cuenta)` es un correo que nunca se ha usado en ese tenant, como `nadie-` seguido de una marca de tiempo y `@sigpro.test`.
 
 ## Criterios de aceptación
 ```gherkin
 Característica: Validación del cuerpo del inicio de sesión
 
   Esquema del escenario: Cada campo no válido devuelve su motivo
-    Dado un cliente de la API sin sesión
+    Dado que un cliente de la API no tiene sesión
     Cuando envía POST /api/auth/login con el correo <correo> y la contraseña <contraseña>
     Entonces la respuesta es <estado>
     Y el motivo del correo es <motivo_correo>
@@ -36,7 +37,7 @@ Característica: Validación del cuerpo del inicio de sesión
 
     Ejemplos:
       | correo | contraseña | estado | motivo_correo | motivo_contraseña |
-      | (vacío) | (vacía) | 422 validation_failed | required | required |
+      | (vacío) | (vacío) | 422 validation_failed | required | required |
       | (sin el campo) | (sin el campo) | 422 validation_failed | required | required |
       | (sin el campo) | Gestor1234! | 422 validation_failed | required | (ninguno) |
       | gestor@sigpro.test | (sin el campo) | 422 validation_failed | (ninguno) | required |
@@ -44,16 +45,16 @@ Característica: Validación del cuerpo del inicio de sesión
       | no-es-un-correo | Gestor1234! | 422 validation_failed | badEmail | (ninguno) |
       | ana@sigpro | Gestor1234! | 422 validation_failed | badEmail | (ninguno) |
       | @sigpro.test | Gestor1234! | 422 validation_failed | badEmail | (ninguno) |
-      | ana @sigpro.test | Gestor1234! | 422 validation_failed | badEmail | (ninguno) |
-      | gestor@sigpro.test | (vacía) | 422 validation_failed | (ninguno) | required |
-      | a@b.c | x | 401 invalid_credentials | (ninguno) | (ninguno) |
+      | (ana @sigpro.test, con un espacio antes de la arroba) | Gestor1234! | 422 validation_failed | badEmail | (ninguno) |
+      | gestor@sigpro.test | (vacío) | 422 validation_failed | (ninguno) | required |
+      | (correo sin cuenta) | x | 401 invalid_credentials | (ninguno) | (ninguno) |
       | gestor@sigpro.test | (un espacio) | 401 invalid_credentials | (ninguno) | (ninguno) |
 
   Esquema del escenario: Una petición rechazada por validación no cuenta como intento fallido
-    Dado que "gestor@sigpro.test" no tiene intentos fallidos
-    Cuando envía <rechazadas> peticiones con la contraseña vacía
-    Y después envía la contraseña "incorrecta"
-    Entonces la respuesta es 401 con "attempts" igual a 1
+    Dado que gestor@sigpro.test no tiene intentos fallidos
+    Cuando envía <rechazadas> peticiones con la contraseña (vacío)
+    Y después envía la contraseña incorrecta
+    Entonces la respuesta es 401 invalid_credentials con attempts igual a 1
 
     Ejemplos:
       | rechazadas |
@@ -62,8 +63,8 @@ Característica: Validación del cuerpo del inicio de sesión
       | 6 |
 
   Esquema del escenario: El indicador de recordar la sesión debe ser un booleano
-    Dado un cliente de la API sin sesión
-    Cuando envía POST /api/auth/login como "gestor@sigpro.test" con "Gestor1234!" y remember <remember>
+    Dado que un cliente de la API no tiene sesión
+    Cuando envía POST /api/auth/login como gestor@sigpro.test con Gestor1234! y remember <remember>
     Entonces la respuesta es <estado>
 
     Ejemplos:
@@ -71,5 +72,5 @@ Característica: Validación del cuerpo del inicio de sesión
       | true | 200 |
       | false | 200 |
       | (sin el campo) | 200 |
-      | "si" | 422 validation_failed con un motivo para remember |
+      | (el texto si) | 422 validation_failed con un motivo para remember |
 ```

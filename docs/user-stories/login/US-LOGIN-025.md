@@ -20,36 +20,37 @@ para corregirlo sin esperar al servidor y sin gastar un intento.
 - El correo debe tener la forma `texto@dominio.extensión`, sin espacios y con una sola `@` («Introduce un correo válido»).
 - «Contraseña» es obligatoria («Campo obligatorio»); basta con un carácter.
 - Al cambiar el correo o la contraseña desaparecen los avisos de los campos, como en la web.
+- En los ejemplos, `(correo sin cuenta)` es un correo que nunca se ha usado en ese tenant, como `nadie-` seguido de una marca de tiempo y `@sigpro.test`.
 
 ## Criterios de aceptación
 ```gherkin
 Característica: Validación del formulario de acceso en la app móvil
 
   Esquema del escenario: Cada campo no válido muestra su aviso y no se envía nada
-    Dado una persona sin sesión en /login
+    Dado que una persona sin sesión está en /login
     Cuando escribe el correo <correo> y la contraseña <contraseña>
-    Y pulsa "Entrar"
+    Y pulsa «Entrar»
     Entonces bajo el correo ve <aviso_correo>
     Y bajo la contraseña ve <aviso_contraseña>
     Y <envio>
 
     Ejemplos:
       | correo | contraseña | aviso_correo | aviso_contraseña | envio |
-      | (vacío) | (vacía) | «Campo obligatorio» | «Campo obligatorio» | no se envía nada |
-      | (tres espacios) | Gestor1234! | «Campo obligatorio» | ningún aviso | no se envía nada |
-      | no-es-un-correo | Gestor1234! | «Introduce un correo válido» | ningún aviso | no se envía nada |
-      | ana@sigpro | Gestor1234! | «Introduce un correo válido» | ningún aviso | no se envía nada |
-      | gestor@sigpro.test | (vacía) | ningún aviso | «Campo obligatorio» | no se envía nada |
-      | a@b.c | x | ningún aviso | ningún aviso | se envía y el servidor responde «Correo o contraseña incorrectos» |
-      | gestor@sigpro.test | Gestor1234! | ningún aviso | ningún aviso | se envía y se inicia la sesión |
+      | (vacío) | (vacío) | «Campo obligatorio» | «Campo obligatorio» | no se envía nada |
+      | (tres espacios) | Gestor1234! | «Campo obligatorio» | (ninguno) | no se envía nada |
+      | no-es-un-correo | Gestor1234! | «Introduce un correo válido» | (ninguno) | no se envía nada |
+      | ana@sigpro | Gestor1234! | «Introduce un correo válido» | (ninguno) | no se envía nada |
+      | gestor@sigpro.test | (vacío) | (ninguno) | «Campo obligatorio» | no se envía nada |
+      | (correo sin cuenta) | x | (ninguno) | (ninguno) | se envía y el servidor responde «Correo o contraseña incorrectos» |
+      | gestor@sigpro.test | Gestor1234! | (ninguno) | (ninguno) | se envía y se inicia la sesión |
 
   Esquema del escenario: Editar un campo borra los avisos
-    Dado que tras pulsar "Entrar" con los dos campos vacíos ve "Campo obligatorio" bajo el correo y bajo la contraseña
-    Cuando escribe "<texto>" en el campo "<campo>"
+    Dado que tras pulsar «Entrar» con los dos campos vacíos ve «Campo obligatorio» bajo el correo y bajo la contraseña
+    Cuando escribe <texto> en el campo <campo>
     Entonces ya no ve ningún aviso bajo los campos
 
     Ejemplos:
       | campo | texto |
-      | Correo electrónico | g |
-      | Contraseña | x |
+      | «Correo electrónico» | g |
+      | «Contraseña» | x |
 ```

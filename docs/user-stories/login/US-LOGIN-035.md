@@ -24,15 +24,15 @@ para no escribir en el móvil una contraseña más.
 Característica: Acceso con SSO en la app móvil
 
   Esquema del escenario: La identidad corporativa abre la sesión de su cuenta
-    Dado una persona sin sesión en /login con "Tenant de trabajo" "alumno01" y la identidad corporativa "<identidad>"
-    Cuando pulsa "Acceder con certificado digital / SSO" y <accion> en el proveedor de identidad
+    Dado que una persona sin sesión en /login tiene alumno01 en «Tenant de trabajo» y la identidad corporativa <identidad>
+    Cuando pulsa «Acceder con certificado digital / SSO» y <accion> en el proveedor de identidad
     Entonces <resultado>
 
     Ejemplos:
       | identidad | accion | resultado |
       | gestor@sigpro.test | se identifica | llega a /programs con el rol program_manager en el tenant alumno01 |
-      | bloqueado@sigpro.test | se identifica | vuelve a /login y ve "Cuenta bloqueada tras varios intentos fallidos. Contacta con un administrador." |
-      | pendiente@sigpro.test | se identifica | vuelve a /login y ve "Cuenta pendiente de aprobación. Revisa tu correo." |
+      | bloqueado@sigpro.test | se identifica | vuelve a /login y ve «Cuenta bloqueada tras varios intentos fallidos. Contacta con un administrador.» |
+      | pendiente@sigpro.test | se identifica | vuelve a /login y ve «Cuenta pendiente de aprobación. Revisa tu correo.» |
       | gestor@sigpro.test | cancela | vuelve a /login sin sesión y sin ningún aviso de error |
 ```
 
