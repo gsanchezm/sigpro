@@ -1,8 +1,8 @@
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { formatFinding, parseCliArgs, runCommand, runLint, runSync } from './cli';
+import { formatFinding, parseCliArgs, runCommand, runCoverage, runLint, runSync } from './cli';
 import type { Gh, RemoteIssue } from './sync';
 
 describe('parseCliArgs', () => {
@@ -261,11 +261,197 @@ describe('runSync', () => {
   });
 });
 
-describe('runCommand', () => {
-  it('coverage todavía no está implementado: avisa por stderr y sale con 1', async () => {
-    const result = await runCommand({ command: 'coverage', apply: false, write: false, check: false }, tmpdir());
+const COVERAGE_ARGS = { command: 'coverage', apply: false, write: false, check: false } as const;
+
+/** Controlador, `App.tsx` y árbol móvil mínimos: 1 endpoint, 2 rutas web y 2 móviles (la raíz y el `_layout` no cuentan). */
+const MINI_REPO: Readonly<Record<string, string>> = {
+  'apps/api/src/audit/audit.controller.ts': `@Controller('audit')\nexport class AuditController {\n  @Get()\n  list() {}\n}\n`,
+  'apps/web/src/App.tsx': `<Routes>\n  <Route path="/" element={<Navigate to="/login" />} />\n  <Route path="/login" element={<LoginPage />} />\n  <Route path="/programs" element={<ProgramsPage />} />\n</Routes>\n`,
+  'apps/mobile/app/_layout.tsx': 'export default function Layout() {}\n',
+  'apps/mobile/app/index.tsx': 'export default function Index() {}\n',
+  'apps/mobile/app/login.tsx': 'export default function Login() {}\n',
+  'apps/mobile/app/(app)/programs/index.tsx': 'export default function Programs() {}\n',
+};
+
+const storyMd = (id: string, label: string, extra: string): string =>
+  `---\nid: ${id}\ntipo: historia\nepica: EP-AUDIT\ntitulo: "[Web] Historia ${id}"\netiquetas: [${label}]\nverificacion: ejecutada\n${extra}---\n\n## Historia\nTexto.\n`;
+
+/** Historias que cubren todo lo de `MINI_REPO` más el permiso `audit.view`. */
+const FULL_STORIES: Readonly<Record<string, string>> = {
+  'docs/user-stories/audit/US-AUDIT-001.md': storyMd('US-AUDIT-001', 'api', 'cubre: ["GET /api/audit"]\npermisos: [audit.view]\n'),
+  'docs/user-stories/audit/US-AUDIT-002.md': storyMd('US-AUDIT-002', 'web', 'cubre: ["/login", "/programs"]\n'),
+  'docs/user-stories/audit/US-AUDIT-003.md': storyMd('US-AUDIT-003', 'ios', 'cubre: ["/login", "/programs"]\n'),
+};
+
+describe('runCoverage', () => {
+  let root = '';
+  const PERMISSIONS = ['audit.view'];
+  const COBERTURA = (): string => join(root, 'docs/user-stories/COBERTURA.md');
+
+  beforeEach(async () => {
+    root = await mkdtemp(join(tmpdir(), 'stories-coverage-'));
+  });
+
+  afterEach(async () => {
+    await rm(root, { recursive: true, force: true });
+  });
+
+  const writeAll = async (files: Readonly<Record<string, string>>): Promise<void> => {
+    await Promise.all(
+      Object.entries(files).map(async ([relative, text]) => {
+        const path = join(root, relative);
+        await mkdir(join(path, '..'), { recursive: true });
+        await writeFile(path, text, 'utf8');
+      }),
+    );
+  };
+
+  const exists = (path: string): Promise<boolean> => readFile(path, 'utf8').then(() => true, () => false);
+
+  it('sin historias y sin banderas imprime todos los huecos con su tipo, el resumen por tipo, sale con 0 y no escribe nada', async () => {
+    await writeAll(MINI_REPO);
+    const result = await runCoverage(COVERAGE_ARGS, root, PERMISSIONS);
+    expect(result.code).toBe(0);
+    expect(result.stdout).toEqual([
+      'endpoint: GET /api/audit',
+      'ruta web: /login',
+      'ruta web: /programs',
+      // El árbol móvil va en orden de ruta de archivo: «(app)/…» antes que «login.tsx».
+      'ruta móvil: /programs',
+      'ruta móvil: /login',
+      'permiso: audit.view',
+      'stories coverage: 6 huecos (endpoints 1 de 1, rutas web 2 de 2, rutas móviles 2 de 2, permisos 1 de 1)',
+    ]);
+    expect(await exists(COBERTURA())).toBe(false);
+  });
+
+  it('con todo cubierto no imprime huecos y sale con 0', async () => {
+    await writeAll({ ...MINI_REPO, ...FULL_STORIES });
+    const result = await runCoverage(COVERAGE_ARGS, root, PERMISSIONS);
+    expect(result.code).toBe(0);
+    expect(result.stdout).toEqual(['stories coverage: 0 huecos (endpoints 0 de 1, rutas web 0 de 2, rutas móviles 0 de 2, permisos 0 de 1)']);
+  });
+
+  it('con --write crea docs/user-stories si no existe, escribe COBERTURA.md y sale con 0 aunque haya huecos', async () => {
+    await writeAll(MINI_REPO);
+    const result = await runCoverage({ ...COVERAGE_ARGS, write: true }, root, PERMISSIONS);
+    expect(result.code).toBe(0);
+    expect(result.stdout.join('\n')).toContain('docs/user-stories/COBERTURA.md');
+    const text = await readFile(COBERTURA(), 'utf8');
+    expect(text).toContain('| `GET /api/audit` | — |');
+    expect(text).toContain('## Rutas móviles (0 de 2 cubiertas)');
+  });
+
+  it('con --write y todo cubierto el archivo lista las historias de cada elemento', async () => {
+    await writeAll({ ...MINI_REPO, ...FULL_STORIES });
+    await runCoverage({ ...COVERAGE_ARGS, write: true }, root, PERMISSIONS);
+    const text = await readFile(COBERTURA(), 'utf8');
+    expect(text).toContain('| `GET /api/audit` | US-AUDIT-001 |');
+    expect(text).toContain('| `/login` | US-AUDIT-002 |');
+    expect(text).toContain('| `/programs` | US-AUDIT-003 |');
+    expect(text).toContain('| `audit.view` | US-AUDIT-001 |');
+  });
+
+  it('--check con huecos sale con 1 aunque el archivo esté al día', async () => {
+    await writeAll(MINI_REPO);
+    await runCoverage({ ...COVERAGE_ARGS, write: true }, root, PERMISSIONS);
+    const result = await runCoverage({ ...COVERAGE_ARGS, check: true }, root, PERMISSIONS);
     expect(result.code).toBe(1);
-    expect(result.stderr.join('\n')).toContain('no implementado');
+    expect(result.stdout).toContain('endpoint: GET /api/audit');
+    expect(result.stderr.join('\n')).toContain('huecos sin historia');
+  });
+
+  it('--check sin huecos pero sin COBERTURA.md sale con 1 y dice que no existe', async () => {
+    await writeAll({ ...MINI_REPO, ...FULL_STORIES });
+    const result = await runCoverage({ ...COVERAGE_ARGS, check: true }, root, PERMISSIONS);
+    expect(result.code).toBe(1);
+    expect(result.stderr.join('\n')).toContain('COBERTURA.md no existe');
+    expect(result.stderr.join('\n')).toContain('--write');
+  });
+
+  it('--check sin huecos y con el archivo al día sale con 0', async () => {
+    await writeAll({ ...MINI_REPO, ...FULL_STORIES });
+    await runCoverage({ ...COVERAGE_ARGS, write: true }, root, PERMISSIONS);
+    const result = await runCoverage({ ...COVERAGE_ARGS, check: true }, root, PERMISSIONS);
+    expect(result.code).toBe(0);
+    expect(result.stderr).toEqual([]);
+  });
+
+  it('--check sale con 1 si el archivo quedó desactualizado', async () => {
+    await writeAll({ ...MINI_REPO, ...FULL_STORIES });
+    await runCoverage({ ...COVERAGE_ARGS, write: true }, root, PERMISSIONS);
+    await writeAll({ 'docs/user-stories/audit/US-AUDIT-004.md': storyMd('US-AUDIT-004', 'api', 'cubre: ["GET /api/audit"]\n') });
+    const result = await runCoverage({ ...COVERAGE_ARGS, check: true }, root, PERMISSIONS);
+    expect(result.code).toBe(1);
+    expect(result.stderr.join('\n')).toContain('desactualizado');
+  });
+
+  it('--check no se deja engañar por los saltos CRLF que un editor de Windows pudo dejar en el archivo', async () => {
+    await writeAll({ ...MINI_REPO, ...FULL_STORIES });
+    await runCoverage({ ...COVERAGE_ARGS, write: true }, root, PERMISSIONS);
+    await writeFile(COBERTURA(), (await readFile(COBERTURA(), 'utf8')).replace(/\n/g, '\r\n'), 'utf8');
+    const result = await runCoverage({ ...COVERAGE_ARGS, check: true }, root, PERMISSIONS);
+    expect(result.code).toBe(0);
+  });
+
+  it('--check sin escribir no crea el archivo', async () => {
+    await writeAll({ ...MINI_REPO, ...FULL_STORIES });
+    await runCoverage({ ...COVERAGE_ARGS, check: true }, root, PERMISSIONS);
+    expect(await exists(COBERTURA())).toBe(false);
+  });
+
+  it('un archivo de historia ilegible aborta con 1 sin escribir: con datos a medias la matriz engañaría', async () => {
+    await writeAll({ ...MINI_REPO, 'docs/user-stories/audit/US-AUDIT-001.md': 'sin front matter\n' });
+    const result = await runCoverage({ ...COVERAGE_ARGS, write: true }, root, PERMISSIONS);
+    expect(result.code).toBe(1);
+    expect(result.stdout.some((line) => line.startsWith('docs/user-stories/audit/US-AUDIT-001.md: [frontmatter] '))).toBe(true);
+    expect(result.stderr.join('\n')).toContain('stories:lint');
+    expect(await exists(COBERTURA())).toBe(false);
+  });
+
+  it('una fuente vacía es un error y no un «cero huecos»: sin controladores', async () => {
+    const { 'apps/api/src/audit/audit.controller.ts': _controller, ...withoutController } = MINI_REPO;
+    await writeAll({ ...withoutController, 'apps/api/src/audit/audit.service.ts': 'export class AuditService {}\n' });
+    const result = await runCoverage(COVERAGE_ARGS, root, PERMISSIONS);
+    expect(result.code).toBe(1);
+    expect(result.stderr.join('\n')).toContain('controladores');
+  });
+
+  it('una fuente vacía es un error: App.tsx sin rutas, árbol móvil sin pantallas y lista de permisos vacía', async () => {
+    await writeAll({ ...MINI_REPO, 'apps/web/src/App.tsx': 'export const App = () => null;\n' });
+    expect((await runCoverage(COVERAGE_ARGS, root, PERMISSIONS)).stderr.join('\n')).toContain('App.tsx');
+    await writeAll(MINI_REPO);
+    await rm(join(root, 'apps/mobile/app/login.tsx'));
+    await rm(join(root, 'apps/mobile/app/(app)'), { recursive: true });
+    expect((await runCoverage(COVERAGE_ARGS, root, PERMISSIONS)).stderr.join('\n')).toContain('móvil');
+    await writeAll({ 'apps/mobile/app/login.tsx': 'export default function Login() {}\n' });
+    expect((await runCoverage(COVERAGE_ARGS, root, [])).stderr.join('\n')).toContain('permisos');
+  });
+
+  it('un archivo o carpeta que falta (no hay App.tsx) sale con 1 y lo dice, no lanza', async () => {
+    const result = await runCoverage(COVERAGE_ARGS, root, PERMISSIONS);
+    expect(result.code).toBe(1);
+    expect(result.stderr.join('\n')).toContain('stories coverage');
+  });
+});
+
+describe('runCommand', () => {
+  it('coverage está conectado al comando real y toma los permisos de @sigpro/shared', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'stories-cli-coverage-'));
+    try {
+      await Promise.all(
+        Object.entries(MINI_REPO).map(async ([relative, text]) => {
+          await mkdir(join(root, relative, '..'), { recursive: true });
+          await writeFile(join(root, relative), text, 'utf8');
+        }),
+      );
+      const result = await runCommand(COVERAGE_ARGS, root);
+      expect(result.code).toBe(0);
+      expect(result.stdout).toContain('permiso: program.create');
+      expect(result.stdout).toContain('endpoint: GET /api/audit');
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
   });
 
   // Solo en seco y con un hallazgo del linter: el comando aborta antes de leer nada de GitHub. Nunca se ejecuta `sync` con `apply: true` desde aquí.

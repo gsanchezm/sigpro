@@ -1,9 +1,11 @@
 // Línea de comandos de las historias: `stories lint | coverage | sync`. Es un borde: aquí se lee el disco y se
 // imprime; la lógica vive en `rules.ts`, `parse.ts` y los módulos de cada comando. Cada comando carga sus
 // módulos con `await import` perezoso: `lint` y `sync` no necesitan el `dist` de `@sigpro/shared`, que solo usa `coverage`.
+import { mkdir, readdir, readFile, writeFile } from 'node:fs/promises';
 import { join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
+import type { CoverageSources } from './coverage';
 import type { ParseResult } from './parse';
 import type { Finding } from './rules';
 import type { Gh } from './sync';
@@ -103,16 +105,111 @@ export const runSync = async (args: CliArgs, root: string, gh: Gh, options: Sync
   };
 };
 
-/** Comando que todavía no existe: avisa por stderr y sale con 1. */
-const notImplemented =
-  (name: CommandName) =>
-  async (): Promise<CommandResult> => ({ code: 1, stdout: [], stderr: [`stories ${name}: no implementado todavía`] });
+/** Matriz generada por `coverage --write`, relativa a la raíz del repositorio y con `/` para mostrarla. */
+const COVERAGE_FILE = join(STORIES_DIR, 'COBERTURA.md');
+const COVERAGE_FILE_LABEL = 'docs/user-stories/COBERTURA.md';
+
+/** Qué se avisa cuando una fuente de la app sale vacía: una fuente vacía no es «sin huecos», es que no se leyó bien. */
+const EMPTY_SOURCE_MESSAGES: ReadonlyMap<keyof CoverageSources, string> = new Map<keyof CoverageSources, string>([
+  ['endpoints', 'no se encontró ningún endpoint en los controladores de apps/api/src'],
+  ['webRoutes', 'no se encontró ninguna ruta web en apps/web/src/App.tsx'],
+  ['mobileRoutes', 'no se encontró ninguna ruta móvil en apps/mobile/app'],
+  ['permissions', 'la lista de permisos de @sigpro/shared está vacía'],
+]);
+
+/** Archivos y carpetas bajo `dir`, relativos a él, con `/` y en orden de código: el orden del disco no debe cambiar la salida. */
+const listTree = async (dir: string): Promise<readonly string[]> => (await readdir(dir, { recursive: true })).map((path) => path.split('\\').join('/')).sort();
+
+/**
+ * Lee del repositorio lo que tiene la app: controladores de `apps/api/src`, `App.tsx` de la web y el árbol de
+ * `apps/mobile/app`; los permisos llegan ya leídos. Lanza si falta algo o si alguna fuente sale vacía.
+ */
+const readCoverageSources = async (root: string, permissions: readonly string[]): Promise<CoverageSources> => {
+  const { extractEndpoints, extractWebRoutes, mobileRoutesFromFiles } = await import('./coverage');
+  const apiDir = join(root, 'apps', 'api', 'src');
+  const controllerFiles = (await listTree(apiDir)).filter((file) => file.endsWith('.controller.ts'));
+  const [controllers, appTsx, mobileFiles] = await Promise.all([
+    Promise.all(controllerFiles.map((file) => readFile(join(apiDir, file), 'utf8'))),
+    readFile(join(root, 'apps', 'web', 'src', 'App.tsx'), 'utf8'),
+    listTree(join(root, 'apps', 'mobile', 'app')),
+  ]);
+  const sources: CoverageSources = {
+    endpoints: extractEndpoints(controllers),
+    webRoutes: extractWebRoutes(appTsx),
+    mobileRoutes: mobileRoutesFromFiles(mobileFiles),
+    permissions,
+  };
+  const empty = [...EMPTY_SOURCE_MESSAGES].filter(([kind]) => sources[kind].length === 0).map(([, message]) => message);
+  if (empty.length > 0) throw new Error(empty.join('; '));
+  return sources;
+};
+
+/**
+ * `stories coverage`: cruza lo que tiene la app (endpoints, rutas web y móviles, permisos) con lo que cubren las
+ * historias e imprime los huecos, siempre con código 0. `--write` escribe `docs/user-stories/COBERTURA.md`;
+ * `--check` sale con 1 si hay huecos o si el archivo no coincide con lo que se generaría ahora (los CRLF no cuentan).
+ * Si algún archivo de historia no se puede leer aborta: con datos a medias la matriz sería engañosa.
+ */
+export const runCoverage = async (args: CliArgs, root: string, permissions: readonly string[]): Promise<CommandResult> => {
+  const [{ loadStoryFiles }, { buildCoverage, holes, renderCoverageMarkdown, summarizeHoles }] = await Promise.all([import('./parse'), import('./coverage')]);
+  const results = await loadStoryFiles(join(root, STORIES_DIR));
+  const unreadable = results.flatMap((result) => (result.ok ? [] : [formatFinding({ path: result.path, id: '', rule: 'frontmatter', message: result.error }, root)]));
+  if (unreadable.length > 0) {
+    return {
+      code: 1,
+      stdout: unreadable,
+      stderr: [`stories coverage: abortado, ${unreadable.length} archivos de historia no se pueden leer; corrígelos (pnpm stories:lint) y vuelve a ejecutarlo`],
+    };
+  }
+  const read = await readCoverageSources(root, permissions).then(
+    (sources) => ({ ok: true as const, sources }),
+    (error: unknown) => ({ ok: false as const, error: error instanceof Error ? error.message : String(error) }),
+  );
+  if (!read.ok) return { code: 1, stdout: [], stderr: [`stories coverage: ${read.error}`] };
+
+  const coverage = buildCoverage(read.sources, results.flatMap((result) => (result.ok ? [result.file] : [])));
+  const holeList = holes(coverage);
+  const markdown = renderCoverageMarkdown(coverage);
+  const target = join(root, COVERAGE_FILE);
+  const current = await readFile(target, 'utf8').then((text) => text.replace(/\r\n/g, '\n'), () => null);
+  if (args.write) {
+    await mkdir(join(target, '..'), { recursive: true });
+    await writeFile(target, markdown, 'utf8');
+  }
+  const stale = !args.write && current !== markdown;
+  const problems = args.check
+    ? [
+        ...(holeList.length > 0 ? ['stories coverage --check: hay huecos sin historia'] : []),
+        ...(stale ? [`stories coverage --check: ${COVERAGE_FILE_LABEL} ${current === null ? 'no existe' : 'está desactualizado'}; regenéralo con pnpm stories:coverage -- --write`] : []),
+      ]
+    : [];
+  return {
+    code: problems.length === 0 ? 0 : 1,
+    stdout: [...holeList, `stories coverage: ${summarizeHoles(coverage)}`, ...(args.write ? [`Escrito ${COVERAGE_FILE_LABEL}`] : [])],
+    stderr: problems,
+  };
+};
+
+/** Los permisos salen de `@sigpro/shared`, que solo este comando necesita; si su `dist` no está compilado lo dice en vez de lanzar. */
+const loadPermissions = async (): Promise<{ ok: true; permissions: readonly string[] } | { ok: false; error: string }> =>
+  import('@sigpro/shared').then(
+    (shared) => ({ ok: true as const, permissions: Object.keys(shared.PERMISSIONS) }),
+    (error: unknown) => ({ ok: false as const, error: error instanceof Error ? error.message : String(error) }),
+  );
 
 type Command = (args: CliArgs, root: string) => Promise<CommandResult>;
 
 const COMMANDS: ReadonlyMap<CommandName, Command> = new Map<CommandName, Command>([
   ['lint', (_args, root) => runLint(root)],
-  ['coverage', notImplemented('coverage')],
+  [
+    'coverage',
+    async (args, root) => {
+      const loaded = await loadPermissions();
+      return loaded.ok
+        ? runCoverage(args, root, loaded.permissions)
+        : { code: 1, stdout: [], stderr: [`stories coverage: no se pudo cargar @sigpro/shared (¿está compilado? pnpm --filter @sigpro/shared build): ${loaded.error}`] };
+    },
+  ],
   [
     'sync',
     async (args, root) => {
