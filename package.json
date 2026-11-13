@@ -21,6 +21,9 @@
     "e2e:screens": "pnpm --filter @sigpro/e2e screens",
     "e2e:mobile": "pnpm --filter @sigpro/e2e mobile",
     "e2e:mobile:screens": "pnpm --filter @sigpro/e2e mobile:screens",
+    "stories:lint": "pnpm --filter @sigpro/stories stories lint",
+    "stories:coverage": "pnpm --filter @sigpro/stories stories coverage",
+    "stories:sync": "pnpm --filter @sigpro/stories stories sync",
     "handoff": "serve docs/design-handoff"
   },
   "devDependencies": {
