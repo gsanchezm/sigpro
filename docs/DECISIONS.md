@@ -561,13 +561,13 @@ Decisiones al construir `packages/stories` (linter, sincronización con GitHub y
 ### Linter
 
 - **Solo se leen `epic.md` y los `US-*.md`.** *Así `README.md` y `COBERTURA.md` conviven en la carpeta sin pasar por las reglas; el precio es que un archivo mal nombrado (`us-login-001.md`) se ignora en silencio, y la guía lo advierte en lugar de que el linter lo adivine.*
-- **`historia-como`: `## Historia` empieza por «Como » (con mayúscula, sin negritas) y contiene «quiero».** *El brief solo pedía comprobar el relato; una forma fija es la única que se puede validar, y «Como X, necesito…» o `**Como**` fallan a propósito.*
+- **`historia-como`: `## Historia` empieza por «Como » (con mayúscula, sin negritas) y contiene «quiero».** *Una forma fija es la única que se puede validar; «Como X, necesito…» o `**Como**` fallan a propósito.*
 - **`esquema-requerido` marca cada Esquema sin tabla de Ejemplos con filas, no solo exige uno.** *Un Esquema sin Ejemplos es Gherkin inválido y no daría casos de prueba. `placeholder-columna` se salta los Esquemas sin tabla para no duplicar el hallazgo.*
 - **`plataforma-unica` rechaza en una historia la etiqueta `epic` y cualquier etiqueta desconocida.** *Una historia lleva una plataforma más `no-implementada` y nada más; `epic` es solo del issue padre.*
 - **`relacionadas-existen` acepta solo ids de historias existentes (un id de épica falla) y no marca la auto-referencia.** *`relacionadas` enlaza el mismo comportamiento entre plataformas o el ideal con su contrato; la épica ya es el padre.*
 - **`ios-pendiente-nativo`: una historia `ios` solo admite `pendiente-nativo` o `no-ejecutable`.** *iOS nunca se ha abierto en un Simulador, así que ninguna historia `ios` puede declararse ejecutada ni comprobada por código.*
-- **`terminos-prohibidos` revisa título y cuerpo (bloques de código incluidos) y cubre también las frases en español que usa la propia spec.** Marca `data-testid`, `testid`, `getBy…`, `planted` (como subcadena, sin distinguir mayúsculas: `PLANTED_BUGS`, `planted_bugs.md`, `plantedBugs`) y «bug/defecto/error plantado» en singular y plural. «plantado» a secas no se marca. *Es un repositorio público: la fuga más probable es la frase en español o la variable de entorno, no solo el nombre del archivo, y el título se publica tal cual como título del issue, así que es la misma superficie que el cuerpo. Coste asumido: una palabra inglesa como «implanted» también saltaría.*
-- **`mencion-suelta` es conservadora.** Usa `\w` ASCII (un correo con parte local acentuada se marcaría), no trata como código los bloques con sangría de 4 espacios y marca una `@org/equipo` en prosa. *Un falso positivo se arregla con comillas invertidas; una mención sin marcar notifica a un tercero.*
+- **`terminos-prohibidos` revisa título y cuerpo, bloques de código incluidos, y marca también `planted` como subcadena y «bug/defecto/error plantado».** *El repositorio es público y el título se publica tal cual: la fuga más probable es la frase en español o la variable de entorno, no solo el nombre del archivo.*
+- **`mencion-suelta` es conservadora** (prefiere un falso positivo, como un correo con parte local acentuada, a dejar pasar una mención). *Un falso positivo se arregla con comillas invertidas; una mención sin marcar notifica a un tercero.*
 
 ### Etiquetas de GitHub
 
@@ -584,7 +584,15 @@ Decisiones al construir `packages/stories` (linter, sincronización con GitHub y
 
 - **`coverage` aborta con código 1 y sin escribir nada** cuando un extractor descartaría un elemento en silencio (un verbo de decorador, un `@Controller` con objeto, un `path` entre llaves o un `index` que no sabe leer), cuando un archivo de historia no se puede leer o cuando una fuente sale vacía. *Un elemento perdido saldría como «cubierto» o ni siquiera como hueco, y una matriz hecha con datos a medias es peor que ninguna.*
 - **El objetivo es cero huecos y no hay mecanismo de exclusión.** *La spec decía «cero o justificados»; una lista de exclusiones sería el sitio donde esconder un endpoint sin historia. Lo que no se puede probar se justifica con una historia `no-implementada`. Solo quedan fuera, fijas en el código, la raíz `/` (redirige), el comodín `*` y `/lab` (pantalla del instructor).*
-- **Dos campos opcionales del front matter, `cubre` y `permisos`.** `cubre` lista endpoints (`"POST /api/auth/login"`) o rutas (`"/login"`) y solo cuenta si la plataforma de la historia coincide (`api` → endpoints, `web` → rutas web, `movil`/`ios`/`android` → rutas móviles; `transversal` no cubre ninguno); `permisos` lista claves de `PERMISSIONS` y vale en cualquier plataforma. *Declararlo es más fiable que deducirlo del texto, y deducirlo obligaría a acoplar el requisito a nombres de rutas y funciones.*
+- **La cobertura se declara en dos campos opcionales del front matter, `cubre` (endpoints o rutas de la plataforma de la historia) y `permisos`.** *Declararlo es más fiable que deducirlo del texto, que obligaría a acoplar el requisito a nombres de rutas y funciones.*
+
+### Contenido (piloto `EP-LOGIN`, pendiente de aprobación)
+
+- **El piloto se escribe sin pila y lleva `verificacion: codigo`.** *Docker estaba apagado por decisión del usuario; los ejemplos salen del código, de los specs que pasan en CI y del código compartido ejecutado, y se ejecutan contra la app limpia antes de publicar.*
+- **El SSO va dentro de `EP-LOGIN`: contrato 501 en `api`, aviso «SSO no disponible en el prototipo» en `web` (los dos ejecutables) e ideal `no-implementada` en `web` y `movil`.** *El aviso de la web es comportamiento real con su propio contrato, igual que el 501.*
+- **Ninguna historia `ios` y una sola `android` (el botón atrás tras cerrar sesión, `pendiente-nativo`).** *El login no tiene ninguna rama por sistema; el botón atrás es lo único que solo existe en Android.*
+- **El panel «Usuarios de prueba» queda fuera de `EP-LOGIN`** y va con la épica de la API de plataforma y configuración. *Es una ayuda del entorno de pruebas que depende de la configuración, no parte del acceso.*
+- **En las tablas, los valores que Gherkin no puede escribir van entre paréntesis** («(vacío)», «(tres espacios)», «(sin el campo)», «(ninguno)»). *Gherkin recorta los espacios de las celdas y una celda vacía no distingue «vacío» de «ausente».*
 
 ### Material de instructor
 

@@ -54,7 +54,7 @@ Reglas:
 
 ## Plantilla de una historia
 
-El front matter es para el repositorio; el cuerpo es lo que se publica. Este ejemplo está relleno con datos concretos: cópialo y sustituye. Sus datos salen del código y de los textos de la interfaz.
+El front matter es para el repositorio; el cuerpo es lo que se publica. Este ejemplo está relleno con datos concretos: cópialo y sustituye. Sus datos salen del código y de los textos de la interfaz, sin ejecutarlos contra la app; por eso lleva `verificacion: codigo`.
 
 ````markdown
 ---
@@ -64,7 +64,7 @@ epica: EP-LOGIN
 titulo: "[Web] Bloquear la cuenta tras 5 intentos fallidos"
 etiquetas: [web]
 relacionadas: [US-LOGIN-002]
-verificacion: ejecutada
+verificacion: codigo
 cubre: ["/login"]
 ---
 
@@ -172,8 +172,8 @@ La lista de historias de la épica se mantiene a mano. El enlace entre la épica
 - **Gherkin en español**: `Característica`, `Esquema del escenario`, `Ejemplos`, `Dado`, `Cuando`, `Entonces`, `Y`. El bloque va en una valla de código con el lenguaje `gherkin`.
 - **Al menos un Esquema del escenario por historia**, con su tabla de `Ejemplos`. La tabla incluye **casos negativos** y, si hay un umbral, **valores límite**: n−1, n y n+1 (el ejemplo de arriba prueba 4, 5 y 6 intentos).
 - **Datos concretos**: códigos del seed (`PRG-001`, `REQ-001`, `TC-001`, `NC-001`), usuarios demo (`docs/GUIA-ALUMNO.md`), roles, mensajes exactos de la interfaz en español y códigos HTTP.
-- **Describe lo que la funcionalidad debe hacer**, no lo que el código casualmente hace. Cada ejemplo concreto se ejecuta contra la app en marcha antes de darlo por bueno.
-- **Nada de implementación**: ninguna historia menciona términos de implementación (identificadores de prueba, localizadores) ni de la mecánica del curso, ni nombres de componentes o de funciones. El linter revisa el título y todo el cuerpo, bloques de código incluidos, y **cuando encuentra uno imprime el término exacto** que debes quitar.
+- **Describe lo que la funcionalidad debe hacer**, no lo que el código casualmente hace. Cada ejemplo concreto se ejecuta contra la app en marcha antes de darlo por bueno; si se escribió sin la app en marcha, la historia lleva `verificacion: codigo` y sus ejemplos se ejecutan antes de publicarla.
+- **Nada de implementación**: ninguna historia menciona términos de implementación (identificadores de prueba, localizadores) ni de la mecánica del curso, ni nombres de componentes o de funciones. El linter busca los identificadores de prueba, los localizadores y los términos de la mecánica del curso en el título y en todo el cuerpo, bloques de código incluidos, y **cuando encuentra uno imprime el término exacto** que debes quitar. Los nombres de componentes y de funciones no los detecta (ver «Lo que el linter no ve»).
 - **Sin menciones ni referencias sueltas**: GitHub convierte `@usuario` en una notificación y `#12` en un enlace a otro issue. Escríbelos entre comillas invertidas (`` `@usuario` ``) o reformula. Un correo (`admin@sigpro.test`) no cuenta.
 - **El relato** (`## Historia`) empieza por «Como » y dice qué quiere el rol («… quiero …»), con ese orden y sin negritas.
 
@@ -236,6 +236,7 @@ El linter es una red, no una garantía. Tenlo presente al escribir:
 4. **El linter no sabe si lo que escribes es cierto**: no ejecuta los ejemplos ni comprueba que `cubre` o `permisos` existan. De lo primero responde `verificacion`; de lo segundo, la matriz de cobertura.
 5. **Lo que se edita a mano en GitHub se pierde.** La sincronización lleva el issue al estado del archivo: el título, el cuerpo, las etiquetas y la épica padre de un issue ya sincronizado que se cambien en GitHub **se restablecen en la siguiente sincronización**. Los archivos mandan: cambia el Markdown, no el issue.
 6. **`COBERTURA.md` se genera, no se edita a mano.** Se regenera con `pnpm stories:coverage -- --write`; `-- --check` falla si no coincide con lo que se generaría ahora.
+7. **No reconoce nombres de componentes ni de funciones.** Solo busca una lista fija de términos (identificadores de prueba, localizadores y la mecánica del curso). Un nombre de componente o de función del código pasa el linter sin hallazgos: revísalo tú al escribir, igual que cualquier otro detalle de implementación (claves de almacenamiento del navegador, atributos ARIA, nombres de archivo).
 
 ## Reglas del linter
 
