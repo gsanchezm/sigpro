@@ -15,7 +15,7 @@ Que cada persona de un tenant entre en SIGPRO con su correo y su contraseña, se
 - Mostrar y ocultar la contraseña y mantener la sesión en el navegador.
 - Cierre de sesión: lo que garantiza (el cliente descarta sus tokens) y lo que no (el servidor no los revoca), y el aviso «Sesión cerrada correctamente.».
 - Acceso con certificado digital o SSO: el contrato actual (no disponible) y, como capacidad futura, lo mínimo acordado.
-- Lo que en la app móvil todavía falta respecto de la web (mostrar la contraseña, mantener la sesión, el aviso de sesión cerrada y el SSO), como capacidad futura.
+- Lo que en la app móvil todavía falta respecto de la web (mostrar la contraseña, la casilla de mantener la sesión, el aviso de sesión cerrada y el SSO), como capacidad futura.
 
 ## Plataformas
 API, web y móvil (común a iOS y Android), con una historia propia de Android para el botón atrás.

@@ -90,7 +90,7 @@ Característica: Formulario de acceso en la app móvil
     Cuando escribe el correo <correo> y la contraseña <contraseña>
     Y pulsa «Entrar»
     Entonces en menos de 1 segundo, bajo el correo ve <aviso_correo>
-    Y bajo la contraseña ve <aviso_contraseña>
+    Y en menos de 1 segundo, bajo la contraseña ve <aviso_contraseña>
     Y <envio>
 
     Ejemplos:

@@ -259,7 +259,7 @@ Cada fila de una tabla de `Ejemplos` es un caso de prueba que parte de un **esta
 Una historia se puede probar **sin leer otra** si cumple todo esto:
 
 - **Precondiciones con datos observables**: quién (correo), con qué rol, en qué tenant y en qué estado inicial (intentos fallidos, bloqueada, desactivada, sesión iniciada y en qué pantalla). Ver «Preparación del estado y aislamiento».
-- **Esperas con un límite explícito**: «en menos de 5 segundos», «a los 2 segundos sigue visible». Nunca una espera sin límite.
+- **Esperas con un límite explícito**: «en menos de 5 segundos», «a los 2 segundos sigue visible». Nunca una espera sin límite. Los límites de las historias son **tolerancias de la prueba, no garantías del producto**: 1 segundo para las reacciones de la propia pantalla que no esperan al servidor (avisos de validación, mostrar u ocultar, borrar un aviso al editar), 5 segundos para todo lo que pasa por la red o cambia de pantalla, y 2 segundos para que aparezca un aviso emergente. Los valores que sí son del producto se dicen como regla (por ejemplo, «el aviso se cierra solo a los 3 segundos»).
 - **Sin expresiones vagas**: ni «con la sesión» (di de quién y en qué tenant), ni «al cabo de un momento», «un momento», «enseguida» o «en breve» (di el límite).
 - **Las referencias a otras historias van solo en `relacionadas`**: ninguna regla ni paso remite a otra historia para entenderse o ejecutarse. Si un comportamiento de otra plataforma importa, se repite aquí con su superficie.
 - **Lo que no se prueba aquí** va en «Fuera de alcance», nombrando la épica que lo cubre.

@@ -101,15 +101,28 @@ Característica: Inicio de sesión en la web
     Y pulsa «Entrar»
     Entonces en menos de 5 segundos ve el mensaje <mensaje>
     Y la línea de detalle técnico contiene <detalle>
+    Y sigue en /login sin sesión
 
     Ejemplos:
       | correo | fallos_previos | contraseña | mensaje | detalle |
       | gestor@sigpro.test | 3 | incorrecta | «Correo o contraseña incorrectos» | POST /api/auth/login → 401 |
       | gestor@sigpro.test | 4 | incorrecta | «Cuenta bloqueada tras varios intentos fallidos. Contacta con un administrador.» | POST /api/auth/login → 423 |
-      | gestor@sigpro.test | 4 | Gestor1234! | «Sesión iniciada. Redirigiendo a Programas…» | POST /api/auth/login → 200 |
       | gestor@sigpro.test | 5 | Gestor1234! | «Cuenta bloqueada tras varios intentos fallidos. Contacta con un administrador.» | POST /api/auth/login → 423 |
       | (correo sin cuenta) | 4 | incorrecta | «Cuenta bloqueada tras varios intentos fallidos. Contacta con un administrador.» | POST /api/auth/login → 423 |
       | (correo sin cuenta) | 5 | incorrecta | «Cuenta bloqueada tras varios intentos fallidos. Contacta con un administrador.» | POST /api/auth/login → 423 |
+
+  Esquema del escenario: Con menos de 5 fallos la cuenta sigue activa y la contraseña correcta entra
+    Dado que en el tenant alumno01, recién reiniciado, gestor@sigpro.test acumula <fallos_previos> intentos fallidos consecutivos
+    Cuando en /login?tenant=alumno01 escribe ese correo y la contraseña Gestor1234!
+    Y pulsa «Entrar»
+    Entonces en menos de 5 segundos ve el mensaje «Sesión iniciada. Redirigiendo a Programas…»
+    Y la línea de detalle técnico contiene POST /api/auth/login → 200
+    Y en menos de 5 segundos más llega a /programs
+
+    Ejemplos:
+      | fallos_previos |
+      | 3 |
+      | 4 |
 
   Esquema del escenario: Una cuenta bloqueada no entra ni con su contraseña
     Dado que en el tenant alumno01, recién reiniciado, la cuenta bloqueado@sigpro.test está bloqueada

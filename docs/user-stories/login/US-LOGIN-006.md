@@ -72,7 +72,7 @@ Característica: Formulario de acceso en la web
     Cuando escribe el correo <correo> y la contraseña <contraseña>
     Y pulsa «Entrar»
     Entonces en menos de 1 segundo, bajo el correo ve <aviso_correo>
-    Y bajo la contraseña ve <aviso_contraseña>
+    Y en menos de 1 segundo, bajo la contraseña ve <aviso_contraseña>
     Y <envio>
 
     Ejemplos:
@@ -101,9 +101,9 @@ Característica: Formulario de acceso en la web
   Esquema del escenario: El botón alterna la visibilidad de la contraseña
     Dado que el tenant alumno01 está recién reiniciado y una persona sin sesión iniciada en /login?tenant=alumno01 ha escrito Gestor1234! en el campo «Contraseña»
     Cuando pulsa el botón de la contraseña <veces> veces
-    Entonces la contraseña se ve <visibilidad>
-    Y el botón muestra <texto> y se llama <nombre>
-    Y el botón <pulsado>
+    Entonces en menos de 1 segundo la contraseña se ve <visibilidad>
+    Y en menos de 1 segundo el botón muestra <texto> y se llama <nombre>
+    Y en menos de 1 segundo el botón <pulsado>
     Y el campo sigue conteniendo Gestor1234! y sigue en /login sin haber enviado nada
 
     Ejemplos:

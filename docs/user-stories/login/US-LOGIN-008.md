@@ -19,9 +19,9 @@ para no volver a escribir la contraseña en mi equipo, no dejar la sesión abier
 - Con la casilla desmarcada, la sesión solo vale en la pestaña en la que se inició: recargar o navegar en esa pestaña la mantiene, pero una pestaña nueva pide iniciar sesión.
 - «Cerrar sesión» está en el «Menú de usuario» de la cabecera (escritorio), en el menú de navegación (diseño responsive) y en la página «Perfil».
 - Al cerrar sesión se llega a /login y se ve el aviso de confirmación «Sesión cerrada correctamente.».
-- Cerrar sesión hace que **esta pestaña y las que se abran después en el mismo navegador** ya no tengan la sesión, con la casilla marcada o no: en ellas ninguna pantalla privada se abre sin volver a iniciar sesión. El servidor no revoca los tokens que ya se emitieron (decisión de diseño del laboratorio: los tokens son sin estado y no hay registro de sesiones en el servidor); lo que garantiza el cierre es que el navegador los descarta.
+- Cerrar sesión hace que **esta pestaña** ya no tenga la sesión y, **si no queda otra pestaña del mismo navegador con esa cuenta abierta**, tampoco la tengan las que se abran después, con la casilla marcada o no: en ellas ninguna pantalla privada se abre sin volver a iniciar sesión. El servidor no revoca los tokens que ya se emitieron (decisión de diseño del laboratorio: los tokens son sin estado y no hay registro de sesiones en el servidor); lo que garantiza el cierre es que el navegador los descarta.
 - El aviso «Sesión cerrada correctamente.» desaparece cuando se vuelve a intentar entrar con un correo y una contraseña que pasan la validación del formulario, o al ir a otra pantalla de Acceso. Abrir /login sin haber cerrado sesión no lo muestra.
-- Preparación de cada fila: se reinicia el tenant `alumno01` con `POST /api/admin/reset` y el token de acceso de `alumno01@sigpro.lab` (contraseña `Alumno1234!`), se abre `/login?tenant=alumno01` en un navegador sin ninguna sesión de SIGPRO guardada y, después, la cuenta de la fila inicia sesión en la propia fila con su contraseña de demostración (`Gestor1234!`, `Consul1234!`, `Audit1234!`) y la casilla como diga la fila (marcada si no lo dice).
+- Preparación de cada fila: se reinicia el tenant `alumno01` con `POST /api/admin/reset` y el token de acceso de `alumno01@sigpro.lab` (contraseña `Alumno1234!`), se abre `/login?tenant=alumno01` en una sola pestaña de un navegador sin ninguna sesión de SIGPRO guardada y, después, la cuenta de la fila inicia sesión en la propia fila con su contraseña de demostración (`Gestor1234!`, `Consul1234!`, `Audit1234!`) y la casilla como diga la fila (marcada si no lo dice).
 
 ## Criterios de aceptación
 ```gherkin
@@ -69,4 +69,4 @@ Característica: Mantener y cerrar la sesión en la web
 ## Fuera de alcance
 - Cuánto dura la sesión en cada caso y su renovación: épica de Sesión y renovación de token.
 - Lo que el servidor hace con los tokens al cerrar sesión: historia de cierre de sesión de la API de esta épica.
-- Lo que ocurre en otras pestañas del mismo navegador que ya estaban abiertas, con esa cuenta conectada, cuando se cierra sesión.
+- Lo que ocurre, al cerrar sesión, en otras pestañas del mismo navegador que ya estaban abiertas con esa cuenta conectada, y en las que se abran después mientras alguna de ellas siga abierta.
