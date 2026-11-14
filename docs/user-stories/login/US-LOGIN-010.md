@@ -14,7 +14,7 @@ para no tener que escribir una contraseña de SIGPRO.
 
 ## Reglas
 - Lo único que la app establece para esta opción es un control de /login, el botón «Acceder con certificado digital / SSO», y un endpoint, `GET /api/auth/sso`. Cómo se usan cuando la opción exista está en «Decisiones pendientes».
-- Tras pulsar el botón e identificarse en el proveedor de identidad, la persona tiene una sesión iniciada en SIGPRO sin haber escrito la contraseña de SIGPRO.
+- Tras pulsar el botón e identificarse en el proveedor con una identidad asociada a una cuenta activa de SIGPRO (cómo se asocia está pendiente), la persona tiene una sesión iniciada en SIGPRO sin haber escrito la contraseña de SIGPRO.
 - Si no llega a identificarse en el proveedor, no tiene sesión iniciada.
 - Todo lo demás (qué proveedor, a qué cuenta y a qué tenant corresponde la identidad, qué se muestra en cada caso) está sin decidir: ver «Decisiones pendientes». La historia no lo afirma.
 
@@ -30,7 +30,7 @@ Característica: Acceso con certificado digital o SSO en la web
 
     Ejemplos:
       | resultado_proveedor | resultado |
-      | se identifica | tiene una sesión iniciada en SIGPRO |
+      | se identifica con una identidad que está asociada a una cuenta activa de SIGPRO | tiene una sesión iniciada en SIGPRO |
       | cancela antes de identificarse | no tiene sesión iniciada |
 ```
 

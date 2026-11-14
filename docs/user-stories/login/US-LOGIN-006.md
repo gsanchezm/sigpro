@@ -24,7 +24,7 @@ para entrar sin gastar intentos o encontrar en la misma pantalla cómo recuperar
   - «Contraseña» es obligatoria («Campo obligatorio»); basta con un carácter, y un espacio cuenta como carácter.
   - Al cambiar el correo o la contraseña desaparecen los avisos de los campos.
 - **Mostrar la contraseña.** Dentro del campo «Contraseña» hay un botón con el texto visible «Mostrar» y el nombre accesible «Mostrar contraseña». Al pulsarlo la contraseña se ve en claro, el botón pasa a «Ocultar» (nombre accesible «Ocultar contraseña») y queda marcado como pulsado; al pulsarlo otra vez vuelve a ocultarse. Mostrar u ocultar no cambia lo escrito ni envía el formulario.
-- Preparación: cada fila abre `/login?tenant=alumno01` en un navegador sin ninguna sesión de SIGPRO guardada, salvo que la fila diga que alguien ha iniciado sesión. Las filas que envían el formulario con `gestor@sigpro.test` parten del tenant `alumno01` recién reiniciado (`POST /api/admin/reset` con el token de `alumno01@sigpro.lab`, contraseña `Alumno1234!`), porque un envío con la contraseña incorrecta cuenta como intento fallido.
+- Preparación de cada fila: se reinicia el tenant `alumno01` con `POST /api/admin/reset` y el token de acceso de `alumno01@sigpro.lab` (contraseña `Alumno1234!`), y se abre `/login?tenant=alumno01` en un navegador sin ninguna sesión de SIGPRO guardada; si la fila dice que alguien ha iniciado sesión, lo hace después del reinicio, en la propia fila. Así cada fila es independiente: un envío con la contraseña incorrecta cuenta como intento fallido.
 - En los ejemplos, `(correo sin cuenta)` es un correo nuevo en cada fila y en cada ejecución: `nadie-` seguido de una marca de tiempo y `@sigpro.test`.
 
 ## Criterios de aceptación
@@ -32,7 +32,7 @@ para entrar sin gastar intentos o encontrar en la misma pantalla cómo recuperar
 Característica: Formulario de acceso en la web
 
   Esquema del escenario: Estado inicial de cada elemento del formulario
-    Dado que una persona sin sesión iniciada abre /login?tenant=alumno01
+    Dado que el tenant alumno01 está recién reiniciado y una persona sin sesión iniciada abre /login?tenant=alumno01
     Cuando mira el formulario
     Entonces <elemento> <estado>
 
@@ -46,10 +46,10 @@ Característica: Formulario de acceso en la web
       | «Acceder con certificado digital / SSO» | está habilitado |
 
   Esquema del escenario: Las opciones del formulario llevan a su pantalla
-    Dado que una persona sin sesión iniciada está en /login?tenant=alumno01
+    Dado que el tenant alumno01 está recién reiniciado y una persona sin sesión iniciada está en /login?tenant=alumno01
     Cuando pulsa <opcion>
-    Entonces llega a <ruta> y ve el título <titulo>
-    Y al pulsar «Volver al inicio de sesión» regresa a /login
+    Entonces en menos de 5 segundos llega a <ruta> y ve el título <titulo>
+    Y al pulsar «Volver al inicio de sesión» en menos de 5 segundos regresa a /login
 
     Ejemplos:
       | opcion | ruta | titulo |
@@ -57,21 +57,21 @@ Característica: Formulario de acceso en la web
       | «Solicitar acceso» | /register | «Solicitar acceso» |
 
   Esquema del escenario: Con una sesión iniciada no se vuelve a pedir el acceso
-    Dado que en este navegador <situacion>
+    Dado que el tenant alumno01 está recién reiniciado y en este navegador <situacion>
     Cuando abre /login?tenant=alumno01
     Entonces <resultado>
 
     Ejemplos:
       | situacion | resultado |
-      | nadie ha iniciado sesión | ve el formulario «Iniciar sesión» |
-      | gestor@sigpro.test ha iniciado sesión en alumno01 con Gestor1234! | llega a /programs sin ver el formulario |
-      | consultor@sigpro.test ha iniciado sesión en alumno01 y después ha pulsado «Cerrar sesión» | ve el formulario «Iniciar sesión» |
+      | nadie ha iniciado sesión | en menos de 5 segundos ve el formulario «Iniciar sesión» |
+      | gestor@sigpro.test ha iniciado sesión en alumno01 con Gestor1234! | en menos de 5 segundos llega a /programs sin ver el formulario |
+      | consultor@sigpro.test ha iniciado sesión en alumno01 y después ha pulsado «Cerrar sesión» | en menos de 5 segundos ve el formulario «Iniciar sesión» |
 
   Esquema del escenario: Cada campo no válido muestra su aviso y no se envía nada
-    Dado que una persona sin sesión iniciada está en /login?tenant=alumno01 y el tenant alumno01 está recién reiniciado
+    Dado que el tenant alumno01 está recién reiniciado y una persona sin sesión iniciada está en /login?tenant=alumno01
     Cuando escribe el correo <correo> y la contraseña <contraseña>
     Y pulsa «Entrar»
-    Entonces bajo el correo ve <aviso_correo>
+    Entonces en menos de 1 segundo, bajo el correo ve <aviso_correo>
     Y bajo la contraseña ve <aviso_contraseña>
     Y <envio>
 
@@ -89,9 +89,9 @@ Característica: Formulario de acceso en la web
       | gestor@sigpro.test | Gestor1234! | (ninguno) | (ninguno) | se envía y en menos de 5 segundos llega a /programs |
 
   Esquema del escenario: Editar un campo borra los avisos de los campos
-    Dado que una persona sin sesión iniciada en /login?tenant=alumno01 ha pulsado «Entrar» con los dos campos vacíos y ve «Campo obligatorio» bajo el correo y bajo la contraseña
+    Dado que el tenant alumno01 está recién reiniciado y una persona sin sesión iniciada en /login?tenant=alumno01 ha pulsado «Entrar» con los dos campos vacíos y ve «Campo obligatorio» bajo el correo y bajo la contraseña
     Cuando escribe <texto> en el campo <campo>
-    Entonces ya no ve ningún aviso bajo los campos
+    Entonces en menos de 1 segundo ya no ve ningún aviso bajo los campos
 
     Ejemplos:
       | campo | texto |
@@ -99,7 +99,7 @@ Característica: Formulario de acceso en la web
       | «Contraseña» | x |
 
   Esquema del escenario: El botón alterna la visibilidad de la contraseña
-    Dado que una persona sin sesión iniciada en /login?tenant=alumno01 ha escrito Gestor1234! en el campo «Contraseña»
+    Dado que el tenant alumno01 está recién reiniciado y una persona sin sesión iniciada en /login?tenant=alumno01 ha escrito Gestor1234! en el campo «Contraseña»
     Cuando pulsa el botón de la contraseña <veces> veces
     Entonces la contraseña se ve <visibilidad>
     Y el botón muestra <texto> y se llama <nombre>

@@ -24,7 +24,7 @@ para entrar en los datos de mi organización sin gastar intentos y encontrar en 
   - «Correo electrónico» es obligatorio («Campo obligatorio»); se ignoran los espacios del principio y del final. Debe tener la forma `texto@dominio.extensión`, sin espacios y con una sola `@` («Introduce un correo válido»).
   - «Contraseña» es obligatoria («Campo obligatorio»); basta con un carácter.
   - Al cambiar el correo o la contraseña desaparecen los avisos de los campos, como en la web.
-- Preparación de cada fila: la app está en /login sin ninguna sesión de SIGPRO guardada en el dispositivo (en Expo web, en el navegador) y con `alumno01` en «Tenant de trabajo», salvo que la fila diga otra cosa. Las filas que envían el formulario con una cuenta de demostración parten del tenant `alumno01` recién reiniciado (`POST /api/admin/reset` con el token de `alumno01@sigpro.lab`, contraseña `Alumno1234!`).
+- Preparación de cada fila: se reinicia el tenant `alumno01` con `POST /api/admin/reset` y el token de acceso de `alumno01@sigpro.lab` (contraseña `Alumno1234!`), y también `alumno02` o `alumno25` cuando la fila los usa, con el token de `alumno02@sigpro.lab` o `alumno25@sigpro.lab` (misma contraseña). Después la app está en /login sin ninguna sesión de SIGPRO guardada en el dispositivo (en Expo web, en el navegador) y con `alumno01` en «Tenant de trabajo», salvo que la fila diga otra cosa; si la fila dice que alguien ha iniciado sesión, lo hace en la propia fila.
 - En los ejemplos, `(correo sin cuenta)` es un correo nuevo en cada fila y en cada ejecución (`nadie-` seguido de una marca de tiempo y `@sigpro.test`). `(cuenta recién solicitada en alumno01)` es una solicitud de acceso hecha en la propia fila en el tenant `alumno01` («Solicitar acceso» con `alumno01` en «Tenant de trabajo») con un correo nuevo (`nueva-` seguido de una marca de tiempo y `@organizacion.es`) y la contraseña `Abcdefghij1!`.
 
 ## Criterios de aceptación
@@ -32,9 +32,9 @@ para entrar en los datos de mi organización sin gastar intentos y encontrar en 
 Característica: Formulario de acceso en la app móvil
 
   Esquema del escenario: Las opciones del formulario llevan a su pantalla
-    Dado que una persona sin sesión iniciada en /login, con alumno01 en «Tenant de trabajo», ha escrito el correo <correo>
+    Dado que el tenant alumno01 está recién reiniciado y una persona sin sesión iniciada en /login, con alumno01 en «Tenant de trabajo», ha escrito el correo <correo>
     Cuando pulsa <opcion>
-    Entonces llega a <ruta> y ve el título <titulo>
+    Entonces en menos de 5 segundos llega a <ruta> y ve el título <titulo>
     Y <correo_destino>
 
     Ejemplos:
@@ -44,14 +44,14 @@ Característica: Formulario de acceso en la app móvil
       | (vacío) | «Solicitar acceso» | /register | «Solicitar acceso» | el formulario de solicitud está vacío |
 
   Esquema del escenario: Con una sesión iniciada no se vuelve a pedir el acceso
-    Dado que en la app <situacion>
+    Dado que el tenant alumno01 está recién reiniciado y en la app <situacion>
     Cuando abre /login
     Entonces <resultado>
 
     Ejemplos:
       | situacion | resultado |
-      | nadie ha iniciado sesión | ve el título «Iniciar sesión» con el formulario de acceso |
-      | gestor@sigpro.test ha iniciado sesión en alumno01 con Gestor1234! | llega a /programs sin ver el formulario |
+      | nadie ha iniciado sesión | en menos de 5 segundos ve el título «Iniciar sesión» con el formulario de acceso |
+      | gestor@sigpro.test ha iniciado sesión en alumno01 con Gestor1234! | en menos de 5 segundos llega a /programs sin ver el formulario |
 
   Esquema del escenario: El inicio de sesión ocurre en el tenant escrito
     Dado que los tenants alumno01 y alumno02 están recién reiniciados y una persona sin sesión iniciada en /login escribe <tenant> en «Tenant de trabajo»
@@ -60,15 +60,15 @@ Característica: Formulario de acceso en la app móvil
 
     Ejemplos:
       | tenant | correo | contraseña | resultado |
-      | alumno01 | alumno01@sigpro.lab | Alumno1234! | en menos de 5 segundos llega a /programs y su Perfil muestra el tenant alumno01 |
-      | alumno01 | gestor@sigpro.test | Gestor1234! | en menos de 5 segundos llega a /programs y su Perfil muestra el tenant alumno01 |
-      | alumno02 | gestor@sigpro.test | Gestor1234! | en menos de 5 segundos llega a /programs y su Perfil muestra el tenant alumno02 |
+      | alumno01 | alumno01@sigpro.lab | Alumno1234! | en menos de 5 segundos llega a /programs y la página «Perfil» muestra el tenant alumno01 |
+      | alumno01 | gestor@sigpro.test | Gestor1234! | en menos de 5 segundos llega a /programs y la página «Perfil» muestra el tenant alumno01 |
+      | alumno02 | gestor@sigpro.test | Gestor1234! | en menos de 5 segundos llega a /programs y la página «Perfil» muestra el tenant alumno02 |
       | alumno02 | (cuenta recién solicitada en alumno01) | Abcdefghij1! | en menos de 5 segundos ve «Correo o contraseña incorrectos» y sigue sin sesión |
 
   Esquema del escenario: La app recuerda el último tenant usado
-    Dado que en la app gestor@sigpro.test ha iniciado sesión con Gestor1234! y <anterior> en «Tenant de trabajo», y después ha pulsado «Cerrar sesión» en Perfil
+    Dado que el tenant <anterior> está recién reiniciado y en la app gestor@sigpro.test ha iniciado sesión con Gestor1234! y <anterior> en «Tenant de trabajo», y después ha pulsado «Cerrar sesión» en la página «Perfil»
     Cuando cierra la app y la vuelve a abrir en /login
-    Entonces «Tenant de trabajo» contiene <anterior>
+    Entonces en menos de 5 segundos desde que se abre, «Tenant de trabajo» contiene <anterior>
 
     Ejemplos:
       | anterior |
@@ -76,9 +76,9 @@ Característica: Formulario de acceso en la app móvil
       | alumno25 |
 
   Esquema del escenario: El campo de tenant no se queda vacío
-    Dado que una persona sin sesión iniciada en /login tiene <tenant> en «Tenant de trabajo»
+    Dado que el tenant alumno01 está recién reiniciado y una persona sin sesión iniciada en /login tiene <tenant> en «Tenant de trabajo»
     Cuando borra todo el contenido del campo
-    Entonces el campo muestra demo
+    Entonces en menos de 1 segundo el campo muestra demo
 
     Ejemplos:
       | tenant |
@@ -86,10 +86,10 @@ Característica: Formulario de acceso en la app móvil
       | demo |
 
   Esquema del escenario: Cada campo no válido muestra su aviso y no se envía nada
-    Dado que una persona sin sesión iniciada está en /login con alumno01 en «Tenant de trabajo» y el tenant recién reiniciado
+    Dado que el tenant alumno01 está recién reiniciado y una persona sin sesión iniciada está en /login con alumno01 en «Tenant de trabajo»
     Cuando escribe el correo <correo> y la contraseña <contraseña>
     Y pulsa «Entrar»
-    Entonces bajo el correo ve <aviso_correo>
+    Entonces en menos de 1 segundo, bajo el correo ve <aviso_correo>
     Y bajo la contraseña ve <aviso_contraseña>
     Y <envio>
 
@@ -104,9 +104,9 @@ Característica: Formulario de acceso en la app móvil
       | gestor@sigpro.test | Gestor1234! | (ninguno) | (ninguno) | se envía y en menos de 5 segundos llega a /programs |
 
   Esquema del escenario: Editar un campo borra los avisos de los campos
-    Dado que una persona sin sesión iniciada en /login, con alumno01 en «Tenant de trabajo», ha pulsado «Entrar» con los dos campos vacíos y ve «Campo obligatorio» bajo el correo y bajo la contraseña
+    Dado que el tenant alumno01 está recién reiniciado y una persona sin sesión iniciada en /login, con alumno01 en «Tenant de trabajo», ha pulsado «Entrar» con los dos campos vacíos y ve «Campo obligatorio» bajo el correo y bajo la contraseña
     Cuando escribe <texto> en el campo <campo>
-    Entonces ya no ve ningún aviso bajo los campos
+    Entonces en menos de 1 segundo ya no ve ningún aviso bajo los campos
 
     Ejemplos:
       | campo | texto |

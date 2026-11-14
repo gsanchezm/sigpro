@@ -15,17 +15,17 @@ para usar el correo y la contraseña sin quedarme esperando.
 
 ## Reglas
 - Pulsar «Acceder con certificado digital / SSO» muestra un aviso emergente informativo con el mensaje «SSO no disponible en el prototipo» y una línea de detalle técnico que contiene `GET /api/auth/sso → 501`.
-- El mensaje y la línea de detalle técnico son criterios distintos; la línea muestra la petición HTTP real, como en el resto de avisos de Acceso (`docs/DECISIONS.md`, la línea sobre el detalle técnico de Acceso en «Historias de usuario»).
+- El mensaje y la línea de detalle técnico son criterios distintos; la línea muestra la petición HTTP real, como en el resto de avisos de Acceso. Es una decisión de diseño del laboratorio, no un diagnóstico.
 - El aviso se cierra solo a los 3 segundos de aparecer.
 - No se inicia ninguna sesión, se sigue en /login y no se borra lo escrito en el formulario.
-- Preparación: cada fila abre `/login?tenant=alumno01` en un navegador sin ninguna sesión de SIGPRO guardada. Pulsar el botón no cambia ningún dato, así que no hace falta reiniciar el tenant.
+- Preparación de cada fila: se reinicia el tenant `alumno01` con `POST /api/admin/reset` y el token de acceso de `alumno01@sigpro.lab` (contraseña `Alumno1234!`), y se abre `/login?tenant=alumno01` en un navegador sin ninguna sesión de SIGPRO guardada.
 
 ## Criterios de aceptación
 ```gherkin
 Característica: Aviso de SSO no disponible en la web
 
   Esquema del escenario: El botón de SSO avisa de que no está disponible
-    Dado que una persona sin sesión iniciada en /login?tenant=alumno01 tiene el formulario <escrito>
+    Dado que el tenant alumno01 está recién reiniciado y una persona sin sesión iniciada en /login?tenant=alumno01 tiene el formulario <escrito>
     Cuando pulsa «Acceder con certificado digital / SSO»
     Entonces en menos de 2 segundos ve el aviso informativo con el mensaje «SSO no disponible en el prototipo»
     Y la línea de detalle técnico del aviso contiene GET /api/auth/sso → 501
@@ -38,7 +38,7 @@ Característica: Aviso de SSO no disponible en la web
       | con el correo gestor@sigpro.test y la contraseña Gestor1234! |
 
   Esquema del escenario: El aviso se cierra solo a los 3 segundos
-    Dado que una persona sin sesión iniciada en /login?tenant=alumno01 acaba de pulsar «Acceder con certificado digital / SSO» y ve el aviso «SSO no disponible en el prototipo»
+    Dado que el tenant alumno01 está recién reiniciado y una persona sin sesión iniciada en /login?tenant=alumno01 acaba de pulsar «Acceder con certificado digital / SSO» y ve el aviso «SSO no disponible en el prototipo»
     Cuando pasan <segundos> segundos desde que apareció
     Entonces el aviso <estado>
 

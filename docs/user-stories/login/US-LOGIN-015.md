@@ -14,7 +14,7 @@ para no tener que escribir en el móvil una contraseña de SIGPRO.
 
 ## Reglas
 - El requisito es la paridad con la web: la pantalla de acceso de la app tiene el mismo control que /login de la web, el botón «Acceder con certificado digital / SSO», y un único control para esta opción.
-- Tras pulsar el botón e identificarse en el proveedor de identidad, la persona tiene una sesión iniciada en la app sin haber escrito la contraseña de SIGPRO.
+- Tras pulsar el botón e identificarse en el proveedor con una identidad asociada a una cuenta activa de SIGPRO (cómo se asocia está pendiente), la persona tiene una sesión iniciada en la app sin haber escrito la contraseña de SIGPRO.
 - Si no llega a identificarse en el proveedor, no tiene sesión iniciada.
 - Todo lo demás está sin decidir, igual que en la web: ver «Decisiones pendientes». La historia no lo afirma.
 
@@ -30,7 +30,7 @@ Característica: Acceso con certificado digital o SSO en la app móvil
 
     Ejemplos:
       | resultado_proveedor | resultado |
-      | se identifica | tiene una sesión iniciada en la app |
+      | se identifica con una identidad que está asociada a una cuenta activa de SIGPRO | tiene una sesión iniciada en la app |
       | cancela antes de identificarse | no tiene sesión iniciada |
 ```
 

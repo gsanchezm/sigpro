@@ -33,8 +33,8 @@ API, web y móvil (común a iOS y Android), con una historia propia de Android p
 - US-LOGIN-010: [Web] Entrar con «Acceder con certificado digital / SSO» sin la contraseña de SIGPRO
 - US-LOGIN-011: [Móvil] Formulario de acceso: elementos, tenant de trabajo y validación antes de enviar
 - US-LOGIN-012: [Móvil] Iniciar sesión: entrar en Programas o ver por qué no se puede
-- US-LOGIN-013: [Móvil] Cerrar sesión desde el perfil
-- US-LOGIN-014: [Móvil] Mostrar la contraseña, mantener la sesión y ver el aviso de sesión cerrada, como en la web
+- US-LOGIN-013: [Móvil] Mantener la sesión al cerrar la app y cerrarla desde el perfil
+- US-LOGIN-014: [Móvil] Mostrar la contraseña, la casilla de mantener la sesión y el aviso de sesión cerrada, como en la web
 - US-LOGIN-015: [Móvil] Entrar con «Acceder con certificado digital / SSO» sin la contraseña de SIGPRO
 - US-LOGIN-016: [Android] El botón atrás tras cerrar sesión no vuelve a una pantalla privada
 

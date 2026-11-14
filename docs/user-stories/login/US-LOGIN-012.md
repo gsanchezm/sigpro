@@ -28,20 +28,20 @@ para trabajar desde el móvil con los permisos de mi rol o saber si debo corregi
   | Cuenta pendiente de aprobación | «Cuenta pendiente de aprobación. Revisa tu correo.» | `POST /api/auth/login → 403` |
   | Cuenta desactivada | «Tu cuenta está desactivada. Contacta con un administrador.» | `POST /api/auth/login → 403` |
 
-- El mensaje y la línea de detalle técnico son criterios distintos. La línea es una función deliberada del laboratorio: muestra la petición HTTP real para relacionar la pantalla con la API (`docs/DECISIONS.md`, «Traza del overlay de redirección» y la línea sobre el detalle técnico de Acceso en «Historias de usuario»).
+- El mensaje y la línea de detalle técnico son criterios distintos. La línea es una función deliberada del laboratorio: muestra la petición HTTP real para relacionar la pantalla con la API. Es una decisión de diseño del laboratorio, no un diagnóstico.
 - La cuenta se bloquea en el 5.º intento fallido consecutivo; con 4 sigue activa, y un acceso correcto antes del 5.º fallo entra y pone el contador a cero. Una cuenta bloqueada no entra ni con la contraseña correcta.
 - Un correo sin cuenta se trata igual que una cuenta existente con la contraseña incorrecta, también en el 5.º intento, que muestra el aviso de cuenta bloqueada: ningún aviso revela si hay una cuenta con ese correo.
 - Con una contraseña incorrecta, una cuenta pendiente o desactivada muestra el aviso de credenciales incorrectas.
 - El aviso de error desaparece al cambiar el correo o la contraseña, como en la web.
-- Preparación de cada fila: se reinicia el tenant `alumno01` con `POST /api/admin/reset` y el token de `alumno01@sigpro.lab` (contraseña `Alumno1234!`), y la app está en /login sin ninguna sesión de SIGPRO guardada y con `alumno01` en «Tenant de trabajo». Los fallos previos se provocan después del reinicio, en /login o con `POST /api/auth/login` (cabecera `x-tenant: alumno01`), con ese correo y una contraseña incorrecta. Para desactivar o reactivar `auditor@sigpro.test`, `alumno01@sigpro.lab` usa Administración o `PATCH /api/admin/users/u4` con `active: false` o `active: true`.
+- Preparación de cada fila: se reinicia el tenant `alumno01` con `POST /api/admin/reset` y el token de `alumno01@sigpro.lab` (contraseña `Alumno1234!`), y la app está en /login sin ninguna sesión de SIGPRO guardada y con `alumno01` en «Tenant de trabajo». Los fallos previos se provocan después del reinicio, en /login o con `POST /api/auth/login` (cabecera `x-tenant: alumno01`), con ese correo y una contraseña incorrecta. Para desactivar o reactivar `auditor@sigpro.test`, `alumno01@sigpro.lab` usa «Administración» o `PATCH /api/admin/users/u4` con `active: false` o `active: true`.
 - En los ejemplos, `(correo sin cuenta)` es un correo nuevo en cada fila y en cada ejecución (`nadie-` seguido de una marca de tiempo y `@sigpro.test`), y sus fallos previos se envían en la propia fila. `(cuenta recién solicitada)` es una solicitud hecha en la propia fila con «Solicitar acceso» y `alumno01` en «Tenant de trabajo», con un correo nuevo (`nueva-` seguido de una marca de tiempo y `@organizacion.es`) y la contraseña `Abcdefghij1!`.
 
 ## Criterios de aceptación
 ```gherkin
 Característica: Inicio de sesión en la app móvil
 
-  Esquema del escenario: Una cuenta activa entra en Programas
-    Dado que una persona sin sesión iniciada está en /login con alumno01 en «Tenant de trabajo» y el tenant recién reiniciado
+  Esquema del escenario: Una cuenta activa entra en «Programas»
+    Dado que el tenant alumno01 está recién reiniciado y una persona sin sesión iniciada está en /login con alumno01 en «Tenant de trabajo»
     Cuando escribe el correo <correo> y la contraseña <contraseña>
     Y <envia>
     Entonces <resultado>
@@ -55,11 +55,11 @@ Característica: Inicio de sesión en la app móvil
       | admin@sigpro.test | Admin1234! | pulsa «Entrar» | en menos de 5 segundos ve el título «Verificación en dos pasos» y no tiene sesión iniciada |
 
   Esquema del escenario: Mientras espera la respuesta no se puede volver a enviar
-    Dado que una persona sin sesión iniciada en /login, con alumno01 en «Tenant de trabajo», ha escrito gestor@sigpro.test y Gestor1234!
+    Dado que el tenant alumno01 está recién reiniciado y una persona sin sesión iniciada en /login, con alumno01 en «Tenant de trabajo», ha escrito gestor@sigpro.test y Gestor1234!
     Y la prueba retrasa <espera> la respuesta de POST /api/auth/login
     Cuando pulsa «Entrar»
     Entonces durante la espera «Entrar» muestra que está ocupado y no se puede volver a pulsar
-    Y al llegar la respuesta llega a /programs
+    Y en menos de 5 segundos desde que llega la respuesta está en /programs
 
     Ejemplos:
       | espera |
@@ -86,16 +86,28 @@ Característica: Inicio de sesión en la app móvil
     Dado que en el tenant alumno01, recién reiniciado, <correo> acumula <fallos_previos> intentos fallidos consecutivos
     Cuando en /login, con alumno01 en «Tenant de trabajo», escribe ese correo y la contraseña <contraseña>
     Y pulsa «Entrar»
-    Entonces en menos de 5 segundos <resultado>
+    Entonces en menos de 5 segundos ve el mensaje <mensaje>
+    Y la línea de detalle técnico contiene <detalle>
+    Y sigue en /login sin sesión
 
     Ejemplos:
-      | correo | fallos_previos | contraseña | resultado |
-      | consultor@sigpro.test | 3 | incorrecta | ve el mensaje «Correo o contraseña incorrectos» y la línea de detalle técnico contiene POST /api/auth/login → 401 |
-      | consultor@sigpro.test | 4 | incorrecta | ve el mensaje «Cuenta bloqueada tras varios intentos fallidos. Contacta con un administrador.» y la línea de detalle técnico contiene POST /api/auth/login → 423 |
-      | consultor@sigpro.test | 4 | Consul1234! | llega a /programs |
-      | consultor@sigpro.test | 5 | Consul1234! | ve el mensaje «Cuenta bloqueada tras varios intentos fallidos. Contacta con un administrador.» y la línea de detalle técnico contiene POST /api/auth/login → 423 |
-      | (correo sin cuenta) | 4 | incorrecta | ve el mensaje «Cuenta bloqueada tras varios intentos fallidos. Contacta con un administrador.» y la línea de detalle técnico contiene POST /api/auth/login → 423 |
-      | (correo sin cuenta) | 5 | incorrecta | ve el mensaje «Cuenta bloqueada tras varios intentos fallidos. Contacta con un administrador.» y la línea de detalle técnico contiene POST /api/auth/login → 423 |
+      | correo | fallos_previos | contraseña | mensaje | detalle |
+      | consultor@sigpro.test | 3 | incorrecta | «Correo o contraseña incorrectos» | POST /api/auth/login → 401 |
+      | consultor@sigpro.test | 4 | incorrecta | «Cuenta bloqueada tras varios intentos fallidos. Contacta con un administrador.» | POST /api/auth/login → 423 |
+      | consultor@sigpro.test | 5 | Consul1234! | «Cuenta bloqueada tras varios intentos fallidos. Contacta con un administrador.» | POST /api/auth/login → 423 |
+      | (correo sin cuenta) | 4 | incorrecta | «Cuenta bloqueada tras varios intentos fallidos. Contacta con un administrador.» | POST /api/auth/login → 423 |
+      | (correo sin cuenta) | 5 | incorrecta | «Cuenta bloqueada tras varios intentos fallidos. Contacta con un administrador.» | POST /api/auth/login → 423 |
+
+  Esquema del escenario: Con menos de 5 fallos la cuenta sigue activa y la contraseña correcta entra
+    Dado que en el tenant alumno01, recién reiniciado, consultor@sigpro.test acumula <fallos_previos> intentos fallidos consecutivos
+    Cuando en /login, con alumno01 en «Tenant de trabajo», escribe ese correo y la contraseña Consul1234!
+    Y pulsa «Entrar»
+    Entonces en menos de 5 segundos llega a /programs
+
+    Ejemplos:
+      | fallos_previos |
+      | 3 |
+      | 4 |
 
   Esquema del escenario: Una cuenta bloqueada no entra ni con su contraseña
     Dado que en el tenant alumno01, recién reiniciado, la cuenta bloqueado@sigpro.test está bloqueada
@@ -127,7 +139,7 @@ Característica: Inicio de sesión en la app móvil
   Esquema del escenario: El aviso de error desaparece al corregir los datos
     Dado que en el tenant alumno01, recién reiniciado, una persona en /login con alumno01 en «Tenant de trabajo» ha escrito consultor@sigpro.test con la contraseña incorrecta, ha pulsado «Entrar» y ve el aviso «Correo o contraseña incorrectos»
     Cuando cambia el contenido del campo <campo>
-    Entonces deja de ver el aviso de error
+    Entonces en menos de 1 segundo deja de ver el aviso de error
 
     Ejemplos:
       | campo |

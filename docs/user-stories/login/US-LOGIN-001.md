@@ -25,10 +25,10 @@ para llamar después a los endpoints protegidos en nombre de esa persona y con l
   - `password` es obligatoria y basta con un carácter; no se recorta, así que una contraseña de un solo espacio no es un campo vacío.
   - Un campo que falta en el cuerpo se trata igual que un campo vacío: motivo `required`.
   - `remember`, si se envía, debe ser un booleano.
-- **Tenant.** Se indica con la cabecera `x-tenant`. Las cuentas de demostración existen en todos los tenants (`demo` y `alumno01` … `alumno25`), así que el correo y la contraseña solos no identifican el tenant. Sin cabecera, el tenant es el único que tiene ese correo; si el correo está en varios tenants o en ninguno, el tenant es `demo`. Un tenant que no existe responde 404 `tenant_not_found` y no cuenta como intento fallido. La sesión pertenece al tenant en el que se inició (campo `tenant` del usuario), y una cuenta solo existe en su tenant.
+- **Tenant.** Se indica con la cabecera `x-tenant`. Las cuentas de demostración existen en todos los tenants (`demo` y `alumno01` … `alumno25`), así que el correo y la contraseña solos no identifican el tenant. Sin cabecera, el tenant es el único que tiene ese correo; si el correo está en varios tenants o en ninguno, el tenant es `demo` (esta última regla no lleva ejemplo: `demo` es compartido y las pruebas no lo usan). Un tenant que no existe responde 404 `tenant_not_found` y no cuenta como intento fallido. La sesión pertenece al tenant en el que se inició (campo `tenant` del usuario), y una cuenta solo existe en su tenant.
 - Cada tenant `alumnoNN` tiene además su propia cuenta de administración, `alumnoNN@sigpro.lab`, con la contraseña `Alumno1234!` y sin segundo factor.
-- Preparación de cada fila: se reinicia el tenant `alumno01` con `POST /api/admin/reset` y el token de `alumno01@sigpro.lab`, y las peticiones llevan la cabecera `x-tenant: alumno01` salvo que la fila diga otra cosa. Las filas sin cabecera trabajan en `demo` y solo inician sesión con contraseñas correctas, que no cambian el estado de la cuenta.
-- En los ejemplos, `(correo sin cuenta)` es un correo nuevo en cada fila y en cada ejecución: `nadie-` seguido de una marca de tiempo y `@sigpro.test`. `(cuenta recién solicitada en alumno01)` es una solicitud de acceso hecha en la propia fila en el tenant `alumno01` («Solicitar acceso» en `/register?tenant=alumno01`) con un correo nuevo (`nueva-` seguido de una marca de tiempo y `@organizacion.es`) y la contraseña `Abcdefghij1!`.
+- Preparación de cada fila: se reinicia el tenant `alumno01` con `POST /api/admin/reset` y el token de acceso de `alumno01@sigpro.lab` (contraseña `Alumno1234!`), y también el tenant `alumno02`, con el token de `alumno02@sigpro.lab`, cuando la fila lo usa. Las peticiones llevan la cabecera `x-tenant: alumno01` salvo que la fila diga otra cosa.
+- En los ejemplos, `(correo sin cuenta)` es un correo nuevo en cada fila y en cada ejecución: `nadie-` seguido de una marca de tiempo y `@sigpro.test`. `(cuenta recién solicitada en alumno01)` es una cuenta creada en la propia fila con `POST /api/auth/register`, la cabecera `x-tenant: alumno01` y el cuerpo `first` Ana, `last` Prueba, `email` un correo nuevo (`nueva-` seguido de una marca de tiempo y `@organizacion.es`), `org` Unidad de pruebas, `role` consultant, `password` y `confirm` Abcdefghij1! y `terms` true.
 
 ## Criterios de aceptación
 ```gherkin
@@ -117,13 +117,12 @@ Característica: Inicio de sesión por la API
       | cabecera | correo | contraseña | respuesta |
       | alumno01 | gestor@sigpro.test | Gestor1234! | 200 con el usuario del tenant alumno01 |
       | alumno02 | gestor@sigpro.test | Gestor1234! | 200 con el usuario del tenant alumno02 |
-      | (sin cabecera) | gestor@sigpro.test | Gestor1234! | 200 con el usuario del tenant demo |
       | (sin cabecera) | alumno01@sigpro.lab | Alumno1234! | 200 con el usuario del tenant alumno01 y el rol admin |
       | alumno01 | alumno01@sigpro.lab | Alumno1234! | 200 con el usuario del tenant alumno01 y el rol admin |
       | noexiste | gestor@sigpro.test | Gestor1234! | 404 tenant_not_found |
 
   Esquema del escenario: Una cuenta solo existe en su tenant
-    Dado que en el tenant alumno01, recién reiniciado, existe (cuenta recién solicitada en alumno01)
+    Dado que los tenants alumno01 y alumno02 están recién reiniciados y en alumno01 existe (cuenta recién solicitada en alumno01)
     Cuando envía POST /api/auth/login con la cabecera x-tenant <cabecera>, ese correo y la contraseña Abcdefghij1!
     Entonces la respuesta es <respuesta>
 

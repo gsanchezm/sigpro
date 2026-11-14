@@ -17,14 +17,14 @@ para mostrar un aviso claro en lugar de un error inesperado.
 - `GET /api/auth/sso` es público y responde siempre 501 con `code: "sso_not_available"`.
 - La respuesta tiene el mismo formato que el resto de errores de la API: `statusCode: 501`, `error: "Not Implemented"`, `message`, `code` y un `traceId`.
 - La respuesta no depende de la sesión ni del tenant, y no inicia ninguna sesión.
-- Preparación: la petición no cambia ningún dato, así que no hace falta reiniciar. Para la fila con sesión, `gestor@sigpro.test` inicia sesión en la propia fila con `POST /api/auth/login`, la cabecera `x-tenant: alumno01` y la contraseña `Gestor1234!`, y la petición lleva su `accessToken` en `Authorization: Bearer`.
+- Preparación de cada fila: se reinicia el tenant `alumno01` con `POST /api/admin/reset` y el token de acceso de `alumno01@sigpro.lab` (contraseña `Alumno1234!`). En la fila con sesión, después `gestor@sigpro.test` inicia sesión con `POST /api/auth/login`, la cabecera `x-tenant: alumno01` y la contraseña `Gestor1234!`, y la petición lleva su `accessToken` en `Authorization: Bearer`.
 
 ## Criterios de aceptación
 ```gherkin
 Característica: Contrato del acceso con SSO
 
   Esquema del escenario: El SSO no está disponible en ningún caso
-    Dado que el cliente de la API <autorizacion> y envía la cabecera x-tenant <tenant>
+    Dado que el tenant alumno01 está recién reiniciado y el cliente de la API <autorizacion> y envía la cabecera x-tenant <tenant>
     Cuando envía GET /api/auth/sso
     Entonces la respuesta es 501 sso_not_available
     Y el cuerpo lleva error igual a Not Implemented y un traceId

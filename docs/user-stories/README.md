@@ -246,7 +246,7 @@ Cada fila de una tabla de `Ejemplos` es un caso de prueba que parte de un **esta
    - *Cuenta desactivada*: un administrador del tenant la desactiva (Administración, o `PATCH /api/admin/users/<id>` con `active: false`).
    - *Sesión iniciada*: se inicia sesión en la propia prueba con la cuenta y el tenant de la fila.
 4. **Datos que no se pueden repetir**: un correo sin cuenta se escribe `(correo sin cuenta)` y es **un correo nuevo en cada fila y en cada ejecución**: `nadie-` seguido de una marca de tiempo y `@sigpro.test`. Una solicitud de acceso se escribe `(cuenta recién solicitada)`: una solicitud hecha en la prueba con un correo nuevo, `nueva-` seguido de una marca de tiempo y `@organizacion.es`.
-5. **Restauración**: `POST /api/admin/reset` con `Authorization: Bearer` y el token de acceso de un administrador del tenant (en `alumnoNN`, el de `alumnoNN@sigpro.lab`). El reinicio se aplica al tenant del token; la cabecera `x-tenant` no lo cambia. Se hace **antes de cada fila que altere contadores o estados de cuentas** y al terminar.
+5. **Restauración**: `POST /api/admin/reset` con `Authorization: Bearer` y el token de acceso de un administrador del tenant (en `alumnoNN`, el de `alumnoNN@sigpro.lab`). El reinicio se aplica al tenant del token; la cabecera `x-tenant` no lo cambia. Se hace **antes de cada fila**, también de las que solo inician sesión con la contraseña correcta (otra prueba anterior puede haber dejado la cuenta bloqueada), y al terminar. Cada primer paso lo dice: «Dado que el tenant alumno01 está recién reiniciado…».
 
 **Qué restaura el reinicio y qué no:**
 
@@ -266,7 +266,7 @@ Una historia se puede probar **sin leer otra** si cumple todo esto:
 
 ## Detalle técnico visible
 
-En las pantallas de Acceso de la web y de la app móvil, el aviso de error y la pantalla de redirección muestran, bajo el mensaje para la persona, una **línea de detalle técnico** con la petición HTTP real: `POST /api/auth/login → 423 Locked`, `POST /api/auth/login → 401 Unauthorized · attempts=2` o `POST /api/auth/login → 200 · role=program_manager`. Es una **función deliberada del laboratorio**, no un diagnóstico: sale del diseño de las pantallas (alerta con título y traza HTTP) y de `docs/DECISIONS.md` («Traza del overlay de redirección»), y deja relacionar lo que se ve con la API.
+En las pantallas de Acceso de la web y de la app móvil, el aviso de error y la pantalla de redirección muestran, bajo el mensaje para la persona, una **línea de detalle técnico** con la petición HTTP real: `POST /api/auth/login → 423 Locked`, `POST /api/auth/login → 401 Unauthorized · attempts=2` o `POST /api/auth/login → 200 · role=program_manager`. Es una **función deliberada del laboratorio**, no un diagnóstico: sale del diseño de las pantallas (la alerta lleva un título y la traza HTTP; la pantalla de redirección, el endpoint real y el rol), y deja relacionar lo que se ve con la API.
 
 En las historias:
 
@@ -283,7 +283,7 @@ En las historias:
 - **Nada de implementación**: ninguna historia menciona términos de implementación (identificadores de prueba, localizadores) ni de la mecánica del curso, ni nombres de componentes o de funciones. El linter busca los identificadores de prueba, los localizadores y los términos de la mecánica del curso en el título y en todo el cuerpo, bloques de código incluidos, y **cuando encuentra uno imprime el término exacto** que debes quitar. Los nombres de componentes y de funciones no los detecta (ver «Lo que el linter no ve»).
 - **Sin menciones ni referencias sueltas**: GitHub convierte `@usuario` en una notificación y `#12` en un enlace a otro issue. Escríbelos entre comillas invertidas (`` `@usuario` ``) o reformula. Un correo (`admin@sigpro.test`) no cuenta.
 - **El relato** (`## Historia`) empieza por «Como » y dice qué quiere el rol («… quiero …»), con ese orden y sin negritas.
-- **Mensajes sin texto en el catálogo**: si la interfaz debería mostrar un aviso que el catálogo de textos (`packages/shared/src/i18n`) no tiene, no inventes la frase exacta: describe su contenido («menciona “desactivada” y no menciona “pendiente de aprobación”») o, si el usuario fija el texto, escribe ese texto exacto. El aviso de cuenta desactivada tiene texto fijado por el usuario: «Tu cuenta está desactivada. Contacta con un administrador.».
+- **Mensajes sin texto en el catálogo**: si la interfaz debería mostrar un aviso que el catálogo de textos (`packages/shared/src/i18n`) no tiene, no inventes la frase exacta: describe su contenido (en una pantalla ficticia de reservas, por ejemplo: «menciona “caducada” y no menciona “cancelada”») o, si el usuario fija el texto, escribe ese texto exacto.
 
 ### Convenciones de los Esquemas
 
@@ -309,7 +309,7 @@ Un **Esquema del escenario** es una plantilla con huecos y una tabla que los rel
 Cuando la app no tiene una capacidad o solo la simula (aprobar cuentas pendientes, el correo real de recuperación y de verificación, el acceso con SSO, las lagunas conocidas del móvil), la historia describe **lo mínimo acordado de esa capacidad**, no el contrato actual ni un diseño inventado.
 
 - **Cuándo se usa.** Solo para capacidades **sin ningún camino de código real** o **simuladas a propósito**. Un comportamiento que existe pero es incorrecto, o difiere de lo que debería hacer, **nunca** se marca `no-implementada`: se describe con lo que debe hacer, como cualquier otra historia. En caso de duda: si hay pantalla, ruta o endpoint con comportamiento real, no es `no-implementada`.
-- **Cómo se marca.** Etiqueta `no-implementada` en `etiquetas` y `verificacion: no-ejecutable`; una cosa implica la otra y el linter lo exige en los dos sentidos. Sus ejemplos se revisan por lectura contra el plan, `docs/DECISIONS.md` y la plataforma que sí tiene la capacidad; no se ejecutan.
+- **Cómo se marca.** Etiqueta `no-implementada` en `etiquetas` y `verificacion: no-ejecutable`; una cosa implica la otra y el linter lo exige en los dos sentidos. Sus ejemplos se revisan por lectura contra el plan y la plataforma que sí tiene la capacidad; no se ejecutan.
 - **Qué afirma.** Solo lo que ya existe en otra plataforma (la paridad con la web es el requisito, y la historia web va en `relacionadas`) o lo que se ha decidido. **Una historia no puede afirmar lo que está sin decidir**: proveedor, método, textos o estados que nadie ha fijado van a `## Decisiones pendientes`, con una viñeta cada uno (regla `decisiones-pendientes`; «- Ninguna.» si no queda nada).
 - **Patrón de dos historias para un sucedáneo con contrato observable.** Si lo que hay en su lugar tiene un comportamiento que se puede probar, ese contrato tiene su **propia historia vigente**, aparte de la capacidad futura, y se enlazan con `relacionadas`:
   - `POST /api/auth/forgot` responde 202 sin enviar nada, igual exista o no el correo. La historia «llega un correo con el enlace» es `no-implementada`; la historia «el endpoint responde 202 con la misma respuesta» es una historia `api` vigente (con `cubre: ["POST /api/auth/forgot"]`). Lo mismo vale para `/resend`.
