@@ -32,6 +32,15 @@ export const markerOf = (body: string): string | null => MARKER_PATTERN.exec(bod
 const visibleLine = (id: string, epicId: string | null): string =>
   epicId === null ? `**Id:** ${id}` : `**Id:** ${id} · **Épica:** ${epicId}`;
 
+/**
+ * Línea de estado de una historia: quien solo ve el issue publicado sabe si debe probarlo contra la app.
+ * Depende solo de la etiqueta `no-implementada` (`verificacion` no se publica). La épica no lleva estado.
+ */
+const STATUS_CURRENT = '**Estado:** vigente — la app debe cumplirlo; si no lo cumple, es un defecto.';
+const STATUS_FUTURE = '**Estado:** capacidad futura — la app todavía no la tiene; no se prueba contra la app.';
+
+const statusLine = (labels: readonly string[]): string => (labels.includes('no-implementada') ? STATUS_FUTURE : STATUS_CURRENT);
+
 /** Sección final con las historias relacionadas, una por línea; vacía si no hay ninguna. */
 const relatedSection = (ids: readonly string[]): string =>
   ids.length === 0 ? '' : ['## Relacionadas', ...ids.map((id) => `- ${id}`)].join('\n');
@@ -40,32 +49,33 @@ const relatedSection = (ids: readonly string[]): string =>
 const cleanBody = (body: string): string => body.replace(/\r\n?/g, '\n').trimEnd();
 
 /**
- * Cuerpo del issue: marca, línea visible, cuerpo original y relacionadas. Cada bloque va separado por una línea
- * en blanco y el texto no acaba en salto de línea (GitHub recorta el final y la sincronización compara el texto).
- * El front matter y `verificacion` no llegan aquí: solo se usa `body`.
+ * Cuerpo del issue: cabecera (marca, línea visible y, en una historia, la de estado), cuerpo original y
+ * relacionadas. Cada bloque va separado por una línea en blanco y el texto no acaba en salto de línea (GitHub
+ * recorta el final y la sincronización compara el texto). El front matter y `verificacion` no llegan aquí.
  */
-const bodyOf = (id: string, epicId: string | null, body: string, related: readonly string[]): string =>
-  [[storyMarker(id), visibleLine(id, epicId)].join('\n'), cleanBody(body), relatedSection(related)]
-    .filter((block) => block !== '')
-    .join('\n\n');
+const bodyOf = (header: readonly string[], body: string, related: readonly string[]): string =>
+  [header.join('\n'), cleanBody(body), relatedSection(related)].filter((block) => block !== '').join('\n\n');
 
 const draftOf = (
   kind: IssueDraft['kind'],
   fm: Heading,
   epicId: string | null,
+  header: readonly string[],
   body: string,
   related: readonly string[],
 ): IssueDraft => ({
   id: fm.id,
   kind,
   title: fm.titulo,
-  body: bodyOf(fm.id, epicId, body, related),
+  body: bodyOf(header, body, related),
   labels: [...fm.etiquetas],
   epicId,
 });
 
 /** Convierte un archivo de épica o de historia en el borrador del issue que lo publica. */
 export const renderIssue = (file: StoryFile): IssueDraft => {
-  if (file.kind === 'epic') return draftOf('epic', file.fm, null, file.body, []);
-  return draftOf('story', file.fm, file.fm.epica, file.body, file.fm.relacionadas ?? []);
+  const { fm } = file;
+  if (file.kind === 'epic') return draftOf('epic', fm, null, [storyMarker(fm.id), visibleLine(fm.id, null)], file.body, []);
+  const header = [storyMarker(fm.id), visibleLine(fm.id, file.fm.epica), statusLine(fm.etiquetas)];
+  return draftOf('story', fm, file.fm.epica, header, file.body, file.fm.relacionadas ?? []);
 };

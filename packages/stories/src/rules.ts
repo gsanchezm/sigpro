@@ -234,6 +234,24 @@ const checkLooseMentions: Check<StoryFile> = ({ body }) => {
   );
 };
 
+/** Viñeta de lista con texto (`- …` o `* …`); una viñeta vacía no cuenta. */
+const BULLET = /^\s*[-*]\s+\S/;
+
+/**
+ * Una capacidad futura no puede afirmar lo que está sin decidir: toda historia `no-implementada` lleva
+ * `## Decisiones pendientes` con al menos una viñeta («- Ninguna.» si de verdad no queda nada). Las viñetas
+ * dentro de bloques de código no cuentan.
+ */
+const checkPendingDecisions: Check<StoryOnly> = ({ fm, body }) => {
+  if (!fm.etiquetas.includes('no-implementada')) return [];
+  const section = sectionOf(withoutFences(body), 'Decisiones pendientes');
+  if (section === null) return ['una historia no-implementada debe tener la sección «## Decisiones pendientes» (con «- Ninguna.» si no queda nada)'];
+  return unless(
+    splitLines(section).some((row) => BULLET.test(row)),
+    'la sección «## Decisiones pendientes» debe tener al menos una viñeta (con «- Ninguna.» si no queda nada)',
+  );
+};
+
 // ---------------------------------------------------------------------------------------------------------
 // Catálogo
 // ---------------------------------------------------------------------------------------------------------
@@ -259,7 +277,7 @@ const defineRule = (id: string, messagesOf: (ctx: RuleContext) => readonly strin
   (ctx) => messagesOf(ctx).map((message) => ({ path: pathOf(ctx.result), id: idOf(ctx.result), rule: id, message })),
 ];
 
-/** Las 16 reglas, con id estable. El orden de este mapa es el orden en que salen los hallazgos de cada archivo. */
+/** Las 17 reglas, con id estable. El orden de este mapa es el orden en que salen los hallazgos de cada archivo. */
 export const RULES: ReadonlyMap<string, Rule> = new Map<string, Rule>([
   defineRule('frontmatter', ({ result }) => (result.ok ? [] : [result.error])),
   defineRule('id-unico', forFiles(checkUniqueId)),
@@ -277,6 +295,7 @@ export const RULES: ReadonlyMap<string, Rule> = new Map<string, Rule>([
   defineRule('ios-pendiente-nativo', forStories(checkIosVerification)),
   defineRule('terminos-prohibidos', forFiles(checkForbiddenTerms)),
   defineRule('mencion-suelta', forFiles(checkLooseMentions)),
+  defineRule('decisiones-pendientes', forStories(checkPendingDecisions)),
 ]);
 
 const buildIndex = (results: readonly ParseResult[]): StoryIndex => {

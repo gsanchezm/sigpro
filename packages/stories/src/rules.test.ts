@@ -43,7 +43,10 @@ type BodyParts = { intro?: string; gherkin?: readonly string[]; tail?: string };
 
 const fenced = (gherkin: readonly string[]): string => lines('```gherkin', ...gherkin, '```');
 
-/** Cuerpo de la historia de ejemplo; `tail` va al final, en «Fuera de alcance». */
+/** Sección de decisiones pendientes válida: la exige toda historia `no-implementada`. */
+const PENDING = lines('## Decisiones pendientes', '- Qué proveedor de identidad se usa.');
+
+/** Cuerpo de la historia de ejemplo; `tail` va al final, tras «Fuera de alcance». */
 const bodyOf = ({ intro = INTRO, gherkin = OUTLINE, tail }: BodyParts = {}): string =>
   lines(
     intro,
@@ -112,7 +115,7 @@ describe('lintStoryFiles: caso positivo y catálogo de reglas', () => {
     expect(lintStoryFiles([])).toEqual([]);
   });
 
-  it('define exactamente las 16 reglas estables', () => {
+  it('define exactamente las 17 reglas estables', () => {
     expect([...RULES.keys()]).toEqual([
       'frontmatter',
       'id-unico',
@@ -130,6 +133,7 @@ describe('lintStoryFiles: caso positivo y catálogo de reglas', () => {
       'ios-pendiente-nativo',
       'terminos-prohibidos',
       'mencion-suelta',
+      'decisiones-pendientes',
     ]);
   });
 
@@ -188,7 +192,8 @@ describe('regla plataforma-unica', () => {
 
   it('marca una historia sin etiqueta de plataforma', () => {
     expect(fired(lintWorld(story({ fm: { etiquetas: [] } })))).toEqual(['plataforma-unica']);
-    expect(fired(lintWorld(story({ fm: { etiquetas: ['no-implementada'], verificacion: 'no-ejecutable' } })))).toEqual(['plataforma-unica']);
+    const fm: Partial<StoryFrontmatter> = { etiquetas: ['no-implementada'], verificacion: 'no-ejecutable' };
+    expect(fired(lintWorld(story({ fm, body: bodyOf({ tail: PENDING }) })))).toEqual(['plataforma-unica']);
   });
 
   it('marca una etiqueta que no es de historia (epic) o desconocida', () => {
@@ -197,7 +202,8 @@ describe('regla plataforma-unica', () => {
   });
 
   it('acepta la etiqueta no-implementada junto a la de plataforma', () => {
-    expect(lintWorld(story({ fm: { etiquetas: ['web', 'no-implementada'], verificacion: 'no-ejecutable' } }))).toEqual([]);
+    const fm: Partial<StoryFrontmatter> = { etiquetas: ['web', 'no-implementada'], verificacion: 'no-ejecutable' };
+    expect(lintWorld(story({ fm, body: bodyOf({ tail: PENDING }) }))).toEqual([]);
   });
 });
 
@@ -380,7 +386,8 @@ describe('regla no-ejecutable-etiqueta', () => {
   });
 
   it('marca la etiqueta no-implementada con una verificacion distinta de no-ejecutable', () => {
-    const findings = lintWorld(story({ fm: { etiquetas: ['web', 'no-implementada'], verificacion: 'ejecutada' } }));
+    const fm: Partial<StoryFrontmatter> = { etiquetas: ['web', 'no-implementada'], verificacion: 'ejecutada' };
+    const findings = lintWorld(story({ fm, body: bodyOf({ tail: PENDING }) }));
     expect(fired(findings)).toEqual(['no-ejecutable-etiqueta']);
   });
 });
@@ -395,7 +402,50 @@ describe('regla ios-pendiente-nativo', () => {
 
   it('acepta pendiente-nativo y, con la etiqueta no-implementada, no-ejecutable', () => {
     expect(lintWorld(story({ fm: { ...ios, verificacion: 'pendiente-nativo' } }))).toEqual([]);
-    expect(lintWorld(story({ fm: { ...ios, etiquetas: ['ios', 'no-implementada'], verificacion: 'no-ejecutable' } }))).toEqual([]);
+    const fm: Partial<StoryFrontmatter> = { ...ios, etiquetas: ['ios', 'no-implementada'], verificacion: 'no-ejecutable' };
+    expect(lintWorld(story({ fm, body: bodyOf({ tail: PENDING }) }))).toEqual([]);
+  });
+});
+
+describe('regla decisiones-pendientes', () => {
+  const future: Partial<StoryFrontmatter> = { etiquetas: ['web', 'no-implementada'], verificacion: 'no-ejecutable' };
+
+  it('marca una historia no-implementada sin la sección «## Decisiones pendientes»', () => {
+    const findings = lintWorld(story({ fm: future }));
+    expect(fired(findings)).toEqual(['decisiones-pendientes']);
+    expect(messagesOf(findings, 'decisiones-pendientes')[0]).toContain('## Decisiones pendientes');
+  });
+
+  it('marca la sección vacía o sin ninguna viñeta', () => {
+    expect(fired(lintWorld(story({ fm: future, body: bodyOf({ tail: '## Decisiones pendientes' }) })))).toEqual(['decisiones-pendientes']);
+    const prose = lines('## Decisiones pendientes', 'Falta decidir el proveedor.');
+    expect(fired(lintWorld(story({ fm: future, body: bodyOf({ tail: prose }) })))).toEqual(['decisiones-pendientes']);
+  });
+
+  it('una viñeta vacía no cuenta', () => {
+    const empty = lines('## Decisiones pendientes', '- ');
+    expect(fired(lintWorld(story({ fm: future, body: bodyOf({ tail: empty }) })))).toEqual(['decisiones-pendientes']);
+  });
+
+  it('una viñeta dentro de un bloque de código no cuenta', () => {
+    const fencedBullet = lines('## Decisiones pendientes', '```text', '- proveedor', '```');
+    expect(fired(lintWorld(story({ fm: future, body: bodyOf({ tail: fencedBullet }) })))).toEqual(['decisiones-pendientes']);
+  });
+
+  it('la viñeta de otra sección posterior no cuenta', () => {
+    const later = lines('## Decisiones pendientes', '', '## Notas', '- algo');
+    expect(fired(lintWorld(story({ fm: future, body: bodyOf({ tail: later }) })))).toEqual(['decisiones-pendientes']);
+  });
+
+  it('acepta una viñeta, también «Ninguna.», con - o con *', () => {
+    expect(lintWorld(story({ fm: future, body: bodyOf({ tail: PENDING }) }))).toEqual([]);
+    expect(lintWorld(story({ fm: future, body: bodyOf({ tail: lines('## Decisiones pendientes', '- Ninguna.') }) }))).toEqual([]);
+    expect(lintWorld(story({ fm: future, body: bodyOf({ tail: lines('## Decisiones pendientes', '* Proveedor.') }) }))).toEqual([]);
+  });
+
+  it('una historia sin no-implementada no la necesita, y la épica tampoco', () => {
+    expect(lintWorld(story())).toEqual([]);
+    expect(lintWorld(story({ body: bodyOf({ tail: PENDING }) }))).toEqual([]);
   });
 });
 

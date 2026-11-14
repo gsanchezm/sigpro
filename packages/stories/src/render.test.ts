@@ -58,6 +58,8 @@ const fileOf = (path: string, text: string): StoryFile => {
 
 const MARKER = '<!-- sigpro-story-id: US-LOGIN-003 -->';
 const VISIBLE_LINE = '**Id:** US-LOGIN-003 · **Épica:** EP-LOGIN';
+const STATUS_CURRENT = '**Estado:** vigente — la app debe cumplirlo; si no lo cumple, es un defecto.';
+const STATUS_FUTURE = '**Estado:** capacidad futura — la app todavía no la tiene; no se prueba contra la app.';
 
 describe('storyMarker', () => {
   it('devuelve el comentario HTML con el id, con el formato exacto', () => {
@@ -89,8 +91,12 @@ describe('renderIssue de una historia', () => {
     expect(draft.body.split('\n').slice(0, 2)).toEqual([MARKER, VISIBLE_LINE]);
   });
 
-  it('conserva el cuerpo original entre la línea visible y las relacionadas', () => {
-    expect(draft.body).toContain(`${VISIBLE_LINE}\n\n${story.body.trimEnd()}\n\n## Relacionadas`);
+  it('justo después de la línea visible va la línea de estado (vigente, sin no-implementada)', () => {
+    expect(draft.body.split('\n').slice(0, 3)).toEqual([MARKER, VISIBLE_LINE, STATUS_CURRENT]);
+  });
+
+  it('conserva el cuerpo original entre la línea de estado y las relacionadas', () => {
+    expect(draft.body).toContain(`${STATUS_CURRENT}\n\n${story.body.trimEnd()}\n\n## Relacionadas`);
   });
 
   it('añade la sección Relacionadas con cada id, una por línea', () => {
@@ -121,6 +127,28 @@ describe('renderIssue de una historia', () => {
 
   it('la lista de etiquetas del borrador no es la misma referencia que la del front matter', () => {
     expect(draft.labels).not.toBe(story.fm.etiquetas);
+  });
+});
+
+describe('renderIssue: línea de estado', () => {
+  it('una historia no-implementada lleva la línea de capacidad futura y no la de vigente', () => {
+    const text = STORY_TEXT.replace('etiquetas: [web]', 'etiquetas: [web, no-implementada]').replace(
+      'verificacion: ejecutada',
+      'verificacion: no-ejecutable',
+    );
+    const body = renderIssue(fileOf('a/US-LOGIN-003.md', text)).body;
+    expect(body.split('\n').slice(0, 3)).toEqual([MARKER, VISIBLE_LINE, STATUS_FUTURE]);
+    expect(body).not.toContain('vigente');
+  });
+
+  it('el estado depende solo de la etiqueta no-implementada, no de verificacion', () => {
+    const text = STORY_TEXT.replace('verificacion: ejecutada', 'verificacion: codigo');
+    expect(renderIssue(fileOf('a/US-LOGIN-003.md', text)).body).toContain(STATUS_CURRENT);
+  });
+
+  it('cada historia lleva una sola línea de estado', () => {
+    const body = renderIssue(fileOf('a/US-LOGIN-003.md', STORY_TEXT)).body;
+    expect(body.match(/\*\*Estado:\*\*/g)).toHaveLength(1);
   });
 });
 
@@ -162,6 +190,10 @@ describe('renderIssue de una épica', () => {
   it('la línea visible lleva el id y no menciona la épica', () => {
     expect(draft.body.split('\n').slice(0, 2)).toEqual(['<!-- sigpro-story-id: EP-LOGIN -->', '**Id:** EP-LOGIN']);
     expect(draft.body).not.toContain('Épica');
+  });
+
+  it('una épica no lleva línea de estado', () => {
+    expect(draft.body).not.toContain('**Estado:**');
   });
 
   it('conserva el cuerpo y no añade Relacionadas', () => {
