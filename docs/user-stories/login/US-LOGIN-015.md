@@ -2,58 +2,43 @@
 id: US-LOGIN-015
 tipo: historia
 epica: EP-LOGIN
-titulo: "[Web] Avisar del bloqueo de la cuenta"
-etiquetas: [web]
-relacionadas: [US-LOGIN-004, US-LOGIN-005, US-LOGIN-014, US-LOGIN-028]
-verificacion: codigo
-cubre: ["/login"]
+titulo: "[Móvil] Entrar con «Acceder con certificado digital / SSO» sin la contraseña de SIGPRO"
+etiquetas: [movil, no-implementada]
+relacionadas: [US-LOGIN-005, US-LOGIN-010]
+verificacion: no-ejecutable
 ---
 
 ## Historia
-Como persona con una cuenta en SIGPRO, quiero ver un aviso claro cuando mi cuenta se bloquea o ya está bloqueada,
-para saber que debo pedir ayuda a un administrador y no seguir intentando.
+Como persona de una organización con identidad corporativa, quiero entrar en la app móvil identificándome en el proveedor de identidad de mi organización, como en la web,
+para no tener que escribir en el móvil una contraseña de SIGPRO.
 
 ## Reglas
-- La cuenta se bloquea en el 5.º intento fallido consecutivo; con 4 sigue activa.
-- Una cuenta bloqueada muestra el aviso de error «Cuenta bloqueada tras varios intentos fallidos. Contacta con un administrador.» con el detalle «POST /api/auth/login → 423 Locked», sin número de intento.
-- Una cuenta bloqueada no entra ni con la contraseña correcta.
-- Un acceso correcto antes del 5.º fallo entra y reinicia el contador de intentos.
-- Un correo sin cuenta muestra el mismo aviso de bloqueo en su 5.º intento fallido y en los siguientes.
-- En los ejemplos, `(correo sin cuenta)` es un correo que nunca se ha usado en ese tenant, como `nadie-` seguido de una marca de tiempo y `@sigpro.test`.
+- El requisito es la paridad con la web: la pantalla de acceso de la app tiene el mismo control que /login de la web, el botón «Acceder con certificado digital / SSO», y un único control para esta opción.
+- Tras pulsar el botón e identificarse en el proveedor de identidad, la persona tiene una sesión iniciada en la app sin haber escrito la contraseña de SIGPRO.
+- Si no llega a identificarse en el proveedor, no tiene sesión iniciada.
+- Todo lo demás está sin decidir, igual que en la web: ver «Decisiones pendientes». La historia no lo afirma.
 
 ## Criterios de aceptación
 ```gherkin
-Característica: Aviso de cuenta bloqueada en la web
+Característica: Acceso con certificado digital o SSO en la app móvil
 
-  Esquema del escenario: El quinto intento fallido bloquea la cuenta
-    Dado que <correo> ya acumula <fallos_previos> intentos fallidos consecutivos
-    Cuando en /login escribe ese correo y la contraseña <contraseña>
-    Y pulsa «Entrar»
-    Entonces ve <mensaje>
-    Y la cuenta queda <cuenta>
-
-    Ejemplos:
-      | correo | fallos_previos | contraseña | mensaje | cuenta |
-      | gestor@sigpro.test | 3 | incorrecta | «Correo o contraseña incorrectos» | activa |
-      | gestor@sigpro.test | 4 | incorrecta | «Cuenta bloqueada tras varios intentos fallidos. Contacta con un administrador.» | bloqueada |
-      | gestor@sigpro.test | 4 | Gestor1234! | «Sesión iniciada. Redirigiendo a Programas…» | activa |
-      | gestor@sigpro.test | 5 | Gestor1234! | «Cuenta bloqueada tras varios intentos fallidos. Contacta con un administrador.» | bloqueada |
-      | (correo sin cuenta) | 4 | incorrecta | «Cuenta bloqueada tras varios intentos fallidos. Contacta con un administrador.» | (sin cuenta) |
-      | (correo sin cuenta) | 5 | incorrecta | «Cuenta bloqueada tras varios intentos fallidos. Contacta con un administrador.» | (sin cuenta) |
-
-  Esquema del escenario: Una cuenta ya bloqueada no entra
-    Dado que la cuenta bloqueado@sigpro.test está bloqueada
-    Cuando en /login escribe ese correo y la contraseña <contraseña>
-    Y pulsa «Entrar»
-    Entonces ve el aviso de error «Cuenta bloqueada tras varios intentos fallidos. Contacta con un administrador.»
-    Y el detalle «POST /api/auth/login → 423 Locked»
-    Y sigue en /login sin sesión
+  Esquema del escenario: Identificarse en el proveedor abre una sesión sin la contraseña de SIGPRO
+    Dado que una persona sin sesión iniciada está en /login de la app con alumno01 en «Tenant de trabajo»
+    Cuando pulsa «Acceder con certificado digital / SSO» y <resultado_proveedor> en el proveedor de identidad
+    Entonces <resultado>
+    Y no ha escrito la contraseña de SIGPRO en ningún momento
 
     Ejemplos:
-      | contraseña |
-      | Block1234! |
-      | incorrecta |
+      | resultado_proveedor | resultado |
+      | se identifica | tiene una sesión iniciada en la app |
+      | cancela antes de identificarse | no tiene sesión iniciada |
 ```
 
+## Decisiones pendientes
+- Las mismas que en la web: qué proveedor de identidad se usa, si «certificado digital» y «SSO» son el mismo flujo, cómo se asocia la identidad con una cuenta (no está decidido que sea por el correo), en qué tenant entra la sesión, identidades sin cuenta o con varias, estados de la cuenta y qué ve la persona en cada caso.
+- Si el tenant de la sesión es el de «Tenant de trabajo» o lo decide el proveedor.
+- Cómo se abre el proveedor desde la app (navegador del sistema o una vista dentro de la app) y cómo vuelve a ella.
+- Qué muestra la app mientras la opción no exista: si lleva ya el botón con un aviso de «no disponible», como la web («SSO no disponible en el prototipo»), o no lo muestra.
+
 ## Fuera de alcance
-- El desbloqueo de la cuenta por un administrador (épica de Usuarios y roles).
+- La respuesta actual del servidor mientras esta capacidad no existe: historia vigente de la API en esta épica.

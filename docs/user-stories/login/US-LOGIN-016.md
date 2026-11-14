@@ -2,41 +2,39 @@
 id: US-LOGIN-016
 tipo: historia
 epica: EP-LOGIN
-titulo: "[Web] Avisar de una cuenta pendiente de aprobación"
-etiquetas: [web]
-relacionadas: [US-LOGIN-006, US-LOGIN-017, US-LOGIN-029]
-verificacion: codigo
-cubre: ["/login"]
+titulo: "[Android] El botón atrás tras cerrar sesión no vuelve a una pantalla privada"
+etiquetas: [android]
+relacionadas: [US-LOGIN-013]
+verificacion: pendiente-nativo
 ---
 
 ## Historia
-Como persona que ha solicitado acceso, quiero saber al intentar entrar que mi cuenta aún no está aprobada,
-para esperar la aprobación en lugar de pensar que me he equivocado de contraseña.
+Como persona que acaba de cerrar sesión en un móvil Android, quiero que el botón atrás del sistema no me devuelva a las pantallas de mi sesión,
+para que nadie que coja el móvil después vea mis datos.
 
 ## Reglas
-- Una cuenta pendiente de aprobación con la contraseña correcta muestra el aviso de error «Cuenta pendiente de aprobación. Revisa tu correo.» con el detalle «POST /api/auth/login → 403 Forbidden · reason=pending_approval», y no entra.
-- Con una contraseña incorrecta se ve el aviso de credenciales incorrectas con su número de intento (US-LOGIN-014): el estado de la cuenta solo se muestra con la contraseña correcta.
-- Toda cuenta recién solicitada desde «Solicitar acceso» está pendiente de aprobación.
-- En los ejemplos, `(cuenta recién solicitada)` es una solicitud de acceso hecha en la prueba con un correo que nunca se ha usado en ese tenant (como `nueva-` seguido de una marca de tiempo y `@organizacion.es`) y la contraseña `Abcdefghij1!`.
+- Tras «Cerrar sesión», el botón atrás de Android no muestra ninguna pantalla de la sesión cerrada (Perfil, Programas ni ninguna otra pantalla privada).
+- Desde la pantalla de acceso a la que se llega al cerrar sesión, el botón atrás deja la app, como en cualquier pantalla inicial.
+- Al volver a la app se ve la pantalla de acceso, sin sesión iniciada.
+- Preparación de cada fila: la app Android está instalada y sin ninguna sesión de SIGPRO guardada, con `alumno01` en «Tenant de trabajo»; la cuenta de la fila inicia sesión en la propia fila con su contraseña de demostración (`Gestor1234!`, `Consul1234!`) y recorre las pantallas de la fila. No cambia ningún dato del tenant.
 
 ## Criterios de aceptación
 ```gherkin
-Característica: Aviso de cuenta pendiente de aprobación en la web
+Característica: Botón atrás de Android tras cerrar sesión
 
-  Esquema del escenario: Una cuenta pendiente no entra
-    Dado que la cuenta <correo> está pendiente de aprobación
-    Cuando en /login escribe ese correo y la contraseña <contraseña>
-    Y pulsa «Entrar»
-    Entonces ve el aviso de error <mensaje>
-    Y el detalle <detalle>
-    Y sigue en /login sin sesión
+  Esquema del escenario: El botón atrás no recupera la sesión cerrada
+    Dado que <correo> ha iniciado sesión en la app Android con alumno01 en «Tenant de trabajo» y ha recorrido <recorrido>
+    Y pulsa «Cerrar sesión» en Perfil y en menos de 5 segundos llega a /login
+    Cuando pulsa el botón atrás del sistema <veces>
+    Entonces no ve ninguna pantalla privada
+    Y al volver a abrir la app ve el título «Iniciar sesión»
 
     Ejemplos:
-      | correo | contraseña | mensaje | detalle |
-      | pendiente@sigpro.test | Pend1234! | «Cuenta pendiente de aprobación. Revisa tu correo.» | «POST /api/auth/login → 403 Forbidden · reason=pending_approval» |
-      | pendiente@sigpro.test | incorrecta | «Correo o contraseña incorrectos» | «POST /api/auth/login → 401 Unauthorized · attempts=1» |
-      | (cuenta recién solicitada) | Abcdefghij1! | «Cuenta pendiente de aprobación. Revisa tu correo.» | «POST /api/auth/login → 403 Forbidden · reason=pending_approval» |
+      | correo | recorrido | veces |
+      | consultor@sigpro.test | Programas y después Más y Perfil | una vez |
+      | gestor@sigpro.test | Programas, el detalle de PRG-001, Más y Perfil | una vez |
+      | gestor@sigpro.test | Programas, el detalle de PRG-001, Más y Perfil | tres veces seguidas |
 ```
 
 ## Fuera de alcance
-- La aprobación de la cuenta (épica de Usuarios y roles) y la solicitud de acceso (épica de Registro).
+- El cierre de sesión común a iOS y Android: historia móvil de cierre de sesión de esta épica.

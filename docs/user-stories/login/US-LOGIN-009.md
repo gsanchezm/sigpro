@@ -2,41 +2,51 @@
 id: US-LOGIN-009
 tipo: historia
 epica: EP-LOGIN
-titulo: "[API] Cerrar sesión"
-etiquetas: [api]
-relacionadas: [US-LOGIN-020, US-LOGIN-031]
+titulo: "[Web] Avisar de que el acceso con certificado digital o SSO no está disponible"
+etiquetas: [web]
+relacionadas: [US-LOGIN-005, US-LOGIN-010]
 verificacion: codigo
-cubre: ["POST /api/auth/logout"]
+cubre: ["/login"]
 ---
 
 ## Historia
-Como cliente de la API, quiero avisar al servidor de que la persona cierra su sesión,
-para terminarla de forma explícita aunque el cliente ya no tenga un token de acceso vigente.
+Como persona que prefiere entrar con su identidad corporativa, quiero que el botón de certificado digital o SSO me diga que esa opción no está disponible,
+para usar el correo y la contraseña sin quedarme esperando.
 
 ## Reglas
-- `POST /api/auth/logout` es público: no necesita cabecera `Authorization`, porque se puede cerrar una sesión cuyo token de acceso ya caducó.
-- El cuerpo es opcional; el único campo que se tiene en cuenta es `refreshToken`, que puede ser un texto o `null`.
-- La respuesta es 204, sin cuerpo, también si el `refreshToken` ya no es válido o no se envía: cerrar sesión dos veces no es un error.
-- Un `refreshToken` que no es texto ni `null` responde 422 `validation_failed`.
+- Pulsar «Acceder con certificado digital / SSO» muestra un aviso emergente informativo con el mensaje «SSO no disponible en el prototipo» y una línea de detalle técnico que contiene `GET /api/auth/sso → 501`.
+- El mensaje y la línea de detalle técnico son criterios distintos; la línea muestra la petición HTTP real, como en el resto de avisos de Acceso.
+- El aviso se cierra solo a los 3 segundos de aparecer.
+- No se inicia ninguna sesión, se sigue en /login y no se borra lo escrito en el formulario.
+- Preparación: cada fila abre `/login?tenant=alumno01` en un navegador sin ninguna sesión de SIGPRO guardada. Pulsar el botón no cambia ningún dato, así que no hace falta reiniciar el tenant.
 
 ## Criterios de aceptación
 ```gherkin
-Característica: Cierre de sesión por la API
+Característica: Aviso de SSO no disponible en la web
 
-  Esquema del escenario: El cierre de sesión responde 204 sin cuerpo
-    Dado que un cliente de la API está <sesion>
-    Cuando envía POST /api/auth/logout con el cuerpo <cuerpo>
-    Entonces la respuesta es <respuesta>
+  Esquema del escenario: El botón de SSO avisa de que no está disponible
+    Dado que una persona sin sesión iniciada en /login?tenant=alumno01 tiene el formulario <escrito>
+    Cuando pulsa «Acceder con certificado digital / SSO»
+    Entonces en menos de 2 segundos ve el aviso informativo con el mensaje «SSO no disponible en el prototipo»
+    Y la línea de detalle técnico del aviso contiene GET /api/auth/sso → 501
+    Y sigue en /login sin sesión
+    Y el formulario sigue <escrito>
 
     Ejemplos:
-      | sesion | cuerpo | respuesta |
-      | con la sesión de gestor@sigpro.test | (su refreshToken) | 204 sin cuerpo |
-      | con la sesión de gestor@sigpro.test, que ya cerró antes | (el mismo refreshToken) | 204 sin cuerpo |
-      | sin sesión | refreshToken null | 204 sin cuerpo |
-      | sin sesión | (vacío) | 204 sin cuerpo |
-      | sin sesión | refreshToken no-es-un-token | 204 sin cuerpo |
-      | sin sesión | refreshToken 123 (un número) | 422 validation_failed |
+      | escrito |
+      | (vacío) |
+      | con el correo gestor@sigpro.test y la contraseña Gestor1234! |
+
+  Esquema del escenario: El aviso se cierra solo a los 3 segundos
+    Dado que una persona sin sesión iniciada en /login?tenant=alumno01 acaba de pulsar «Acceder con certificado digital / SSO» y ve el aviso «SSO no disponible en el prototipo»
+    Cuando pasan <segundos> segundos desde que apareció
+    Entonces el aviso <estado>
+
+    Ejemplos:
+      | segundos | estado |
+      | 2 | sigue visible |
+      | 4 | ya no está |
 ```
 
 ## Fuera de alcance
-- Si el `refreshToken` sigue sirviendo para renovar la sesión después de cerrarla (épica de Sesión y renovación de token).
+- El acceso con certificado digital o SSO como capacidad futura: historia `no-implementada` de la web en esta épica.

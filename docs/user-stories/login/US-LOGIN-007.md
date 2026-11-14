@@ -2,47 +2,144 @@
 id: US-LOGIN-007
 tipo: historia
 epica: EP-LOGIN
-titulo: "[API] Rechazar el inicio de sesión de una cuenta desactivada"
-etiquetas: [api]
-relacionadas: [US-LOGIN-017, US-LOGIN-030, US-LOGIN-006]
+titulo: "[Web] Iniciar sesión: entrar en Programas o ver por qué no se puede"
+etiquetas: [web]
+relacionadas: [US-LOGIN-001, US-LOGIN-002, US-LOGIN-003, US-LOGIN-006, US-LOGIN-012]
 verificacion: codigo
-cubre: ["POST /api/auth/login"]
+cubre: ["/login"]
 ---
 
 ## Historia
-Como administrador de un tenant, quiero que una cuenta que he desactivado no pueda abrir sesión,
-para retirar el acceso a quien ya no debe usar SIGPRO sin borrar su historial.
+Como persona con una cuenta en SIGPRO, quiero entrar con mi correo y mi contraseña o, si no puedo, ver un aviso claro de por qué y cuántas veces he fallado,
+para empezar a trabajar con los permisos de mi rol o saber si debo corregir la contraseña, esperar una aprobación o pedir ayuda a un administrador.
 
 ## Reglas
-- Una cuenta desactivada con la contraseña correcta responde 403 con `code: "account_disabled"` y no recibe ningún token.
-- Con una contraseña incorrecta responde 401 `invalid_credentials` con `attempts`, como cualquier otra cuenta.
-- Si la cuenta está a la vez pendiente de aprobación y desactivada, manda la pendiente: 403 `pending_approval`. Si además está bloqueada, manda el bloqueo: 423 `account_locked`.
-- Al reactivarla, la cuenta vuelve a entrar con su contraseña.
-- Ninguna cuenta de los datos de demostración nace desactivada: un administrador la desactiva desde Administración (por ejemplo `auditor@sigpro.test`, contraseña `Audit1234!`).
+- Mientras se espera la respuesta, el formulario se marca como ocupado y «Entrar» queda deshabilitado con la explicación «Procesando…» y un indicador de carga.
+- Con credenciales válidas y una cuenta sin segundo factor aparece una pantalla de transición con el mensaje «Sesión iniciada. Redirigiendo a Programas…» y una línea de detalle técnico que contiene `POST /api/auth/login → 200` y `role=` seguido del rol de la cuenta; en menos de 5 segundos desde que se pulsó «Entrar» se está en /programs.
+- Con una cuenta con segundo factor, en lugar de entrar se pasa al paso «Verificación en dos pasos», todavía sin sesión.
+- El correo se puede escribir con mayúsculas o con espacios al principio y al final.
+- Si el servidor rechaza el acceso, se sigue en /login sin sesión, con el correo y la contraseña escritos, y aparece encima de los campos un aviso de error con un mensaje y, debajo, una línea de detalle técnico:
+
+  | Caso | Mensaje | La línea de detalle técnico contiene |
+  | --- | --- | --- |
+  | Credenciales incorrectas | «Correo o contraseña incorrectos» | `POST /api/auth/login → 401` y `attempts=N`, el número de intento fallido consecutivo |
+  | Cuenta bloqueada, o el 5.º intento fallido consecutivo | «Cuenta bloqueada tras varios intentos fallidos. Contacta con un administrador.» | `POST /api/auth/login → 423` |
+  | Cuenta pendiente de aprobación | «Cuenta pendiente de aprobación. Revisa tu correo.» | `POST /api/auth/login → 403` |
+  | Cuenta desactivada | «Tu cuenta está desactivada. Contacta con un administrador.» | `POST /api/auth/login → 403` |
+
+- El mensaje y la línea de detalle técnico son criterios distintos. La línea es una función deliberada del laboratorio: muestra la petición HTTP real para relacionar la pantalla con la API.
+- La cuenta se bloquea en el 5.º intento fallido consecutivo; con 4 sigue activa, y un acceso correcto antes del 5.º fallo entra y pone el contador a cero. Una cuenta bloqueada no entra ni con la contraseña correcta.
+- Un correo sin cuenta se trata igual que una cuenta existente con la contraseña incorrecta, también en el 5.º intento, que muestra el aviso de cuenta bloqueada: ningún aviso revela si hay una cuenta con ese correo.
+- Con una contraseña incorrecta, una cuenta pendiente o desactivada muestra el aviso de credenciales incorrectas: su estado solo se muestra con la contraseña correcta.
+- El aviso de error desaparece al cambiar el correo o la contraseña.
+- Preparación de cada fila: se reinicia el tenant `alumno01` con `POST /api/admin/reset` y el token de `alumno01@sigpro.lab` (contraseña `Alumno1234!`), y se abre `/login?tenant=alumno01` en un navegador sin ninguna sesión de SIGPRO guardada. Los fallos previos se provocan después del reinicio, en /login o con `POST /api/auth/login` (cabecera `x-tenant: alumno01`), con ese correo y una contraseña incorrecta. Para desactivar o reactivar `auditor@sigpro.test`, `alumno01@sigpro.lab` usa Administración o `PATCH /api/admin/users/u4` con `active: false` o `active: true`.
+- En los ejemplos, `(correo sin cuenta)` es un correo nuevo en cada fila y en cada ejecución (`nadie-` seguido de una marca de tiempo y `@sigpro.test`), y sus fallos previos se envían en la propia fila. `(cuenta recién solicitada)` es una solicitud hecha en la propia fila en `/register?tenant=alumno01` con un correo nuevo (`nueva-` seguido de una marca de tiempo y `@organizacion.es`) y la contraseña `Abcdefghij1!`.
 
 ## Criterios de aceptación
 ```gherkin
-Característica: Cuenta desactivada
+Característica: Inicio de sesión en la web
 
-  Esquema del escenario: Una cuenta desactivada no abre sesión
-    Dado que un administrador ha <accion> la cuenta auditor@sigpro.test
-    Cuando envía POST /api/auth/login con la contraseña <contraseña>
-    Entonces la respuesta es <respuesta>
-
-    Ejemplos:
-      | accion | contraseña | respuesta |
-      | desactivado | Audit1234! | 403 account_disabled sin ningún token |
-      | desactivado | incorrecta | 401 invalid_credentials con attempts 1 |
-      | desactivado y vuelto a activar | Audit1234! | 200 con la sesión del rol auditor |
-
-  Esquema del escenario: Orden de los estados que impiden entrar
-    Dado que un administrador ha desactivado la cuenta <correo>, que además está <otro_estado>
-    Cuando envía POST /api/auth/login con su contraseña correcta <contraseña>
-    Entonces la respuesta es <respuesta>
+  Esquema del escenario: Una cuenta activa entra en Programas
+    Dado que una persona sin sesión iniciada está en /login?tenant=alumno01, con el tenant recién reiniciado
+    Cuando escribe el correo <correo> y la contraseña <contraseña>
+    Y pulsa «Entrar»
+    Entonces ve el mensaje «Sesión iniciada. Redirigiendo a Programas…»
+    Y la línea de detalle técnico contiene POST /api/auth/login → 200 y role=<rol>
+    Y en menos de 5 segundos llega a /programs
 
     Ejemplos:
-      | correo | otro_estado | contraseña | respuesta |
-      | auditor@sigpro.test | activa en lo demás | Audit1234! | 403 account_disabled |
-      | pendiente@sigpro.test | pendiente de aprobación | Pend1234! | 403 pending_approval |
-      | bloqueado@sigpro.test | bloqueada | Block1234! | 423 account_locked |
+      | correo | contraseña | rol |
+      | gestor@sigpro.test | Gestor1234! | program_manager |
+      | consultor@sigpro.test | Consul1234! | consultant |
+      | auditor@sigpro.test | Audit1234! | auditor |
+      | (GESTOR@sigpro.test con un espacio delante y otro detrás) | Gestor1234! | program_manager |
+
+  Esquema del escenario: Una cuenta con segundo factor pasa a la verificación
+    Dado que una persona sin sesión iniciada está en /login?tenant=alumno01, con el tenant recién reiniciado
+    Cuando escribe el correo <correo> y la contraseña <contraseña>
+    Y pulsa «Entrar»
+    Entonces en menos de 5 segundos ve el título <titulo>
+    Y no tiene sesión iniciada hasta completar ese paso
+
+    Ejemplos:
+      | correo | contraseña | titulo |
+      | admin@sigpro.test | Admin1234! | «Verificación en dos pasos» |
+
+  Esquema del escenario: Mientras espera la respuesta no se puede volver a enviar
+    Dado que una persona sin sesión iniciada en /login?tenant=alumno01 ha escrito gestor@sigpro.test y Gestor1234!
+    Y la prueba retrasa <espera> la respuesta de POST /api/auth/login en el navegador
+    Cuando pulsa «Entrar»
+    Entonces durante la espera el formulario está ocupado y «Entrar» está deshabilitado con la explicación «Procesando…»
+    Y al llegar la respuesta ve el mensaje «Sesión iniciada. Redirigiendo a Programas…»
+
+    Ejemplos:
+      | espera |
+      | 1 segundo |
+      | 3 segundos |
+
+  Esquema del escenario: Las credenciales incorrectas muestran el número de intento
+    Dado que en el tenant alumno01, recién reiniciado, <correo> acumula <fallos_previos> intentos fallidos consecutivos
+    Cuando en /login?tenant=alumno01 escribe ese correo y la contraseña <contraseña>
+    Y pulsa «Entrar»
+    Entonces en menos de 5 segundos ve el aviso de error con el mensaje «Correo o contraseña incorrectos»
+    Y la línea de detalle técnico contiene POST /api/auth/login → 401 y attempts=<intento>
+    Y sigue en /login sin sesión, con ese correo escrito
+
+    Ejemplos:
+      | correo | fallos_previos | contraseña | intento |
+      | gestor@sigpro.test | 0 | incorrecta | 1 |
+      | gestor@sigpro.test | 1 | incorrecta | 2 |
+      | gestor@sigpro.test | 3 | incorrecta | 4 |
+      | (correo sin cuenta) | 0 | incorrecta | 1 |
+      | (correo sin cuenta) | 1 | Gestor1234! | 2 |
+      | (correo sin cuenta) | 3 | incorrecta | 4 |
+      | pendiente@sigpro.test | 0 | incorrecta | 1 |
+
+  Esquema del escenario: El quinto intento fallido bloquea la cuenta y una cuenta bloqueada no entra
+    Dado que en el tenant alumno01, recién reiniciado, <correo> acumula <fallos_previos> intentos fallidos consecutivos
+    Cuando en /login?tenant=alumno01 escribe ese correo y la contraseña <contraseña>
+    Y pulsa «Entrar»
+    Entonces en menos de 5 segundos ve el mensaje <mensaje>
+    Y la línea de detalle técnico contiene <detalle>
+
+    Ejemplos:
+      | correo | fallos_previos | contraseña | mensaje | detalle |
+      | gestor@sigpro.test | 3 | incorrecta | «Correo o contraseña incorrectos» | POST /api/auth/login → 401 |
+      | gestor@sigpro.test | 4 | incorrecta | «Cuenta bloqueada tras varios intentos fallidos. Contacta con un administrador.» | POST /api/auth/login → 423 |
+      | gestor@sigpro.test | 4 | Gestor1234! | «Sesión iniciada. Redirigiendo a Programas…» | POST /api/auth/login → 200 |
+      | gestor@sigpro.test | 5 | Gestor1234! | «Cuenta bloqueada tras varios intentos fallidos. Contacta con un administrador.» | POST /api/auth/login → 423 |
+      | (correo sin cuenta) | 4 | incorrecta | «Cuenta bloqueada tras varios intentos fallidos. Contacta con un administrador.» | POST /api/auth/login → 423 |
+      | (correo sin cuenta) | 5 | incorrecta | «Cuenta bloqueada tras varios intentos fallidos. Contacta con un administrador.» | POST /api/auth/login → 423 |
+      | bloqueado@sigpro.test | 0 | Block1234! | «Cuenta bloqueada tras varios intentos fallidos. Contacta con un administrador.» | POST /api/auth/login → 423 |
+      | bloqueado@sigpro.test | 0 | incorrecta | «Cuenta bloqueada tras varios intentos fallidos. Contacta con un administrador.» | POST /api/auth/login → 423 |
+
+  Esquema del escenario: Una cuenta pendiente de aprobación o desactivada no entra y lo dice
+    Dado que en el tenant alumno01, recién reiniciado, la cuenta <correo> está <estado>
+    Cuando en /login?tenant=alumno01 escribe ese correo y la contraseña <contraseña>
+    Y pulsa «Entrar»
+    Entonces en menos de 5 segundos ve el mensaje <mensaje>
+    Y la línea de detalle técnico contiene <detalle>
+
+    Ejemplos:
+      | correo | estado | contraseña | mensaje | detalle |
+      | pendiente@sigpro.test | pendiente de aprobación | Pend1234! | «Cuenta pendiente de aprobación. Revisa tu correo.» | POST /api/auth/login → 403 |
+      | (cuenta recién solicitada) | pendiente de aprobación | Abcdefghij1! | «Cuenta pendiente de aprobación. Revisa tu correo.» | POST /api/auth/login → 403 |
+      | auditor@sigpro.test | desactivada | Audit1234! | «Tu cuenta está desactivada. Contacta con un administrador.» | POST /api/auth/login → 403 |
+      | auditor@sigpro.test | desactivada | incorrecta | «Correo o contraseña incorrectos» | POST /api/auth/login → 401 |
+      | auditor@sigpro.test | desactivada y vuelta a activar | Audit1234! | «Sesión iniciada. Redirigiendo a Programas…» | POST /api/auth/login → 200 |
+
+  Esquema del escenario: El aviso de error desaparece al corregir los datos
+    Dado que en el tenant alumno01, recién reiniciado, una persona en /login?tenant=alumno01 ha escrito gestor@sigpro.test con la contraseña incorrecta, ha pulsado «Entrar» y ve el aviso «Correo o contraseña incorrectos»
+    Cuando cambia el contenido del campo <campo>
+    Entonces deja de ver el aviso de error
+
+    Ejemplos:
+      | campo |
+      | «Correo electrónico» |
+      | «Contraseña» |
 ```
+
+## Fuera de alcance
+- El paso «Verificación en dos pasos»: épica del segundo factor (MFA).
+- El desbloqueo, la aprobación, la desactivación y la reactivación de cuentas: épica de Usuarios y roles.
+- Los avisos de error genéricos (sin conexión o error inesperado del servidor) y el panel «Usuarios de prueba».
