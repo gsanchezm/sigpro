@@ -66,7 +66,7 @@ Característica: Formulario de acceso en la app móvil
       | alumno02 | (cuenta recién solicitada en alumno01) | Abcdefghij1! | en menos de 5 segundos ve «Correo o contraseña incorrectos» y sigue sin sesión |
 
   Esquema del escenario: La app recuerda el último tenant usado
-    Dado que en la app se ha iniciado sesión en el tenant <anterior> y después se ha pulsado «Cerrar sesión»
+    Dado que en la app gestor@sigpro.test ha iniciado sesión con Gestor1234! y <anterior> en «Tenant de trabajo», y después ha pulsado «Cerrar sesión» en Perfil
     Cuando cierra la app y la vuelve a abrir en /login
     Entonces «Tenant de trabajo» contiene <anterior>
 

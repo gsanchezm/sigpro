@@ -28,7 +28,7 @@ para trabajar desde el móvil con los permisos de mi rol o saber si debo corregi
   | Cuenta pendiente de aprobación | «Cuenta pendiente de aprobación. Revisa tu correo.» | `POST /api/auth/login → 403` |
   | Cuenta desactivada | «Tu cuenta está desactivada. Contacta con un administrador.» | `POST /api/auth/login → 403` |
 
-- El mensaje y la línea de detalle técnico son criterios distintos. La línea es una función deliberada del laboratorio: muestra la petición HTTP real para relacionar la pantalla con la API.
+- El mensaje y la línea de detalle técnico son criterios distintos. La línea es una función deliberada del laboratorio: muestra la petición HTTP real para relacionar la pantalla con la API (`docs/DECISIONS.md`, «Traza del overlay de redirección» y la línea sobre el detalle técnico de Acceso en «Historias de usuario»).
 - La cuenta se bloquea en el 5.º intento fallido consecutivo; con 4 sigue activa, y un acceso correcto antes del 5.º fallo entra y pone el contador a cero. Una cuenta bloqueada no entra ni con la contraseña correcta.
 - Un correo sin cuenta se trata igual que una cuenta existente con la contraseña incorrecta, también en el 5.º intento, que muestra el aviso de cuenta bloqueada: ningún aviso revela si hay una cuenta con ese correo.
 - Con una contraseña incorrecta, una cuenta pendiente o desactivada muestra el aviso de credenciales incorrectas.
@@ -82,7 +82,7 @@ Característica: Inicio de sesión en la app móvil
       | (correo sin cuenta) | 3 | 4 |
       | pendiente@sigpro.test | 0 | 1 |
 
-  Esquema del escenario: El quinto intento fallido bloquea la cuenta y una cuenta bloqueada no entra
+  Esquema del escenario: El quinto intento fallido consecutivo bloquea la cuenta
     Dado que en el tenant alumno01, recién reiniciado, <correo> acumula <fallos_previos> intentos fallidos consecutivos
     Cuando en /login, con alumno01 en «Tenant de trabajo», escribe ese correo y la contraseña <contraseña>
     Y pulsa «Entrar»
@@ -96,8 +96,19 @@ Característica: Inicio de sesión en la app móvil
       | consultor@sigpro.test | 5 | Consul1234! | ve el mensaje «Cuenta bloqueada tras varios intentos fallidos. Contacta con un administrador.» y la línea de detalle técnico contiene POST /api/auth/login → 423 |
       | (correo sin cuenta) | 4 | incorrecta | ve el mensaje «Cuenta bloqueada tras varios intentos fallidos. Contacta con un administrador.» y la línea de detalle técnico contiene POST /api/auth/login → 423 |
       | (correo sin cuenta) | 5 | incorrecta | ve el mensaje «Cuenta bloqueada tras varios intentos fallidos. Contacta con un administrador.» y la línea de detalle técnico contiene POST /api/auth/login → 423 |
-      | bloqueado@sigpro.test | 0 | Block1234! | ve el mensaje «Cuenta bloqueada tras varios intentos fallidos. Contacta con un administrador.» y la línea de detalle técnico contiene POST /api/auth/login → 423 |
-      | bloqueado@sigpro.test | 0 | incorrecta | ve el mensaje «Cuenta bloqueada tras varios intentos fallidos. Contacta con un administrador.» y la línea de detalle técnico contiene POST /api/auth/login → 423 |
+
+  Esquema del escenario: Una cuenta bloqueada no entra ni con su contraseña
+    Dado que en el tenant alumno01, recién reiniciado, la cuenta bloqueado@sigpro.test está bloqueada
+    Cuando en /login, con alumno01 en «Tenant de trabajo», escribe ese correo y la contraseña <contraseña>
+    Y pulsa «Entrar»
+    Entonces en menos de 5 segundos ve el mensaje «Cuenta bloqueada tras varios intentos fallidos. Contacta con un administrador.»
+    Y la línea de detalle técnico contiene POST /api/auth/login → 423
+    Y sigue en /login sin sesión
+
+    Ejemplos:
+      | contraseña |
+      | Block1234! |
+      | incorrecta |
 
   Esquema del escenario: Una cuenta pendiente de aprobación o desactivada no entra y lo dice
     Dado que en el tenant alumno01, recién reiniciado, la cuenta <correo> está <estado>

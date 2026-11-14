@@ -17,7 +17,7 @@ para descartar mis tokens con seguridad sabiendo que el servidor no los invalida
 - `POST /api/auth/logout` es público: no necesita cabecera `Authorization`, porque se puede cerrar una sesión cuyo token de acceso ya caducó.
 - El cuerpo es opcional; el único campo que se tiene en cuenta es `refreshToken`, que puede ser un texto o `null`. Un `refreshToken` que no es texto ni `null` responde 422 `validation_failed`.
 - **Lo que garantiza:** la respuesta es 204, sin cuerpo, también si el `refreshToken` ya no es válido, ya se usó para cerrar sesión o no se envía. Cerrar sesión dos veces no es un error. Cerrar la sesión consiste en que **el cliente descarte** su `accessToken` y su `refreshToken`.
-- **Lo que no garantiza:** el servidor **no revoca ningún token**. Los tokens son sin estado (no hay registro de sesiones en el servidor), así que los ya emitidos siguen valiendo hasta caducar:
+- **Lo que no garantiza:** el servidor **no revoca ningún token**. Los tokens son sin estado (no hay registro de sesiones en el servidor; `docs/DECISIONS.md`, «Refresh token sin estado» y «El JWT sigue siendo sin estado»), así que los ya emitidos siguen valiendo hasta caducar:
   - el `accessToken` (900 segundos desde que se emitió) sigue autorizando peticiones;
   - con el mismo `refreshToken` (7 días desde que se emitió si se inició sesión con `remember: true`, 12 horas con `remember: false`), `POST /api/auth/refresh` sigue respondiendo 200 con una sesión nueva mientras no caduque y la cuenta no esté bloqueada, pendiente de aprobación ni desactivada.
 - Lo único que deja sin efecto un `refreshToken` antes de caducar es el estado de la cuenta: si la cuenta se bloquea o se desactiva, la renovación responde 401 `invalid_token`.
@@ -54,7 +54,7 @@ Característica: Cierre de sesión por la API
       | false | nadie cambia la cuenta | POST /api/auth/refresh con ese refreshToken | 200 con un accessToken y un refreshToken nuevos |
       | true | nadie cambia la cuenta | GET /api/auth/me con ese accessToken | 200 con el usuario gestor@sigpro.test |
       | true | nadie cambia la cuenta | GET /api/programs con ese accessToken | 200 con los programas del tenant alumno01 |
-      | true | alumno01@sigpro.lab desactiva la cuenta gestor@sigpro.test | POST /api/auth/refresh con ese refreshToken | 401 invalid_token |
+      | true | alumno01@sigpro.lab desactiva la cuenta gestor@sigpro.test con PATCH /api/admin/users/u2 y active false | POST /api/auth/refresh con ese refreshToken | 401 invalid_token |
 ```
 
 ## Fuera de alcance

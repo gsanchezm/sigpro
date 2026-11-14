@@ -15,7 +15,7 @@ para usar el correo y la contraseña sin quedarme esperando.
 
 ## Reglas
 - Pulsar «Acceder con certificado digital / SSO» muestra un aviso emergente informativo con el mensaje «SSO no disponible en el prototipo» y una línea de detalle técnico que contiene `GET /api/auth/sso → 501`.
-- El mensaje y la línea de detalle técnico son criterios distintos; la línea muestra la petición HTTP real, como en el resto de avisos de Acceso.
+- El mensaje y la línea de detalle técnico son criterios distintos; la línea muestra la petición HTTP real, como en el resto de avisos de Acceso (`docs/DECISIONS.md`, la línea sobre el detalle técnico de Acceso en «Historias de usuario»).
 - El aviso se cierra solo a los 3 segundos de aparecer.
 - No se inicia ninguna sesión, se sigue en /login y no se borra lo escrito en el formulario.
 - Preparación: cada fila abre `/login?tenant=alumno01` en un navegador sin ninguna sesión de SIGPRO guardada. Pulsar el botón no cambia ningún dato, así que no hace falta reiniciar el tenant.
