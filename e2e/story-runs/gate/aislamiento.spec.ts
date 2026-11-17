@@ -174,7 +174,9 @@ const previousGateRuns = (): readonly GateRun[] => {
   return saved.runs ?? [];
 };
 
-test.afterEach((_fixtures, testInfo) => {
+// Playwright exige el patrón de desestructuración en el primer argumento de un hook, aunque no se use ninguna fixture
+// eslint-disable-next-line no-empty-pattern
+test.afterEach(({}, testInfo) => {
   ran += 1;
   if (testInfo.status !== testInfo.expectedStatus) failed += 1;
 });
