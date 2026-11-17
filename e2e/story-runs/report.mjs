@@ -134,9 +134,16 @@ const buildsProven = Boolean(buildsRecord) && problems.length === problemsBefore
 
 // --- La API usa la base aislada: un centinela (marcador escrito por la API y hallado por consulta directa en PostgreSQL) de la
 // MISMA instancia de la API (mismo arranque) y anterior a la puerta de cada ejecución ----------------------------------------
-for (const run of gateRunsUsed) {
+// El centinela MÁS RECIENTE de la misma instancia de la API (mismo arranque) y anterior a la puerta de la ejecución
+const sentinelFor = (run) => {
   const apiStart = Date.parse(run.environment.served?.apiStartedAt ?? '');
-  const match = sentinels.find((sentinel) => sentinel.foundInIsolatedDb === true && sentinel.port5432Accessible === false && Math.abs(Date.parse(sentinel.apiStartedAt) - apiStart) <= 5000 && sentinel.checkedAt <= run.startedAt);
+  return sentinels
+    .filter((sentinel) => sentinel.foundInIsolatedDb === true && sentinel.port5432Accessible === false && Math.abs(Date.parse(sentinel.apiStartedAt) - apiStart) <= 5000 && sentinel.checkedAt <= run.startedAt)
+    .sort((a, b) => (a.checkedAt < b.checkedAt ? -1 : 1))
+    .at(-1);
+};
+for (const run of gateRunsUsed) {
+  const match = sentinelFor(run);
   if (!match) problems.push(`${run.runId}: no consta que la API de esa ejecución escribiera en la base aislada (ningún centinela de la misma instancia de la API comprobado antes de la puerta)`);
 }
 const withError = [...seen.values()].filter(({ row }) => row.verdict === 'error-de-prueba');
@@ -170,8 +177,7 @@ out(`- **Con qué se probó (arnés):** commit ${harnessCommits.map((commit) => 
 for (const story of stories) out(`  - ${story.header.story}: ${SURFACE_LABEL[story.header.surface] ?? story.header.surface} · runId ${story.header.runId} · empezó ${story.header.startedAt ?? '?'} · terminó ${story.header.executedAt}`);
 out(`- **Aislamiento:** la puerta \`e2e/story-runs/gate/aislamiento.spec.ts\` es un proyecto del que dependen \`api\`, \`web\` y \`mobile\`, y cada historia se niega a ejecutar si la puerta no consta superada en SU ejecución. Consta superada en ${gateRunsUsed.filter((run) => run.passed).length} de las ${runIds.length} ejecuciones de estos resultados. En cada una midió, en ese momento: ${gateRunsUsed.map((run) => `5432 ${run.environment.ports['5432'] ? '**accesible**' : 'inaccesible'} y ${run.environment.isolatedPgPort} ${run.environment.ports[String(run.environment.isolatedPgPort)] ? 'accesible' : '**inaccesible**'} (Node ${run.environment.node}, el que ejecuta las pruebas; no el de la API)`).join('; ')}. Evidencia en \`docs/story-runs/aislamiento.json\`. Cada fila reinicia su tenant, comprueba que el caos está a cero y usa correos únicos y sesiones propias.`);
 out(`- **La API usa la base aislada:** ${gateRunsUsed.map((run) => {
-  const apiStart = Date.parse(run.environment.served?.apiStartedAt ?? '');
-  const match = sentinels.find((sentinel) => sentinel.foundInIsolatedDb === true && sentinel.port5432Accessible === false && Math.abs(Date.parse(sentinel.apiStartedAt) - apiStart) <= 5000 && sentinel.checkedAt <= run.startedAt);
+  const match = sentinelFor(run);
   return match ? `${run.runId}: la API (arrancada ${match.apiStartedAt}) escribió el marcador \`${match.email}\` y se halló por consulta directa en PostgreSQL (puerto ${match.isolatedPgPort}) a las ${match.checkedAt}; el 5432 estaba inaccesible` : `${run.runId}: **no consta**`;
 }).join('; ')}. Es una comprobación por consulta directa de lo que escribe la API (script local \`entorno/db-sentinel.mjs\`), no una demostración de que la API no use además otra base.`);
 out(`- **Qué NO verifica el arnés:** que el simulador de misión de la API esté apagado, ni la versión de la base de datos${entorno ? ` (la versión ${entorno.postgres.version.split(',')[0]} sale de \`entorno.json\`, una foto hecha a mano el ${entorno.capturedAt}, no medida por la ejecución)` : ''}.`);
