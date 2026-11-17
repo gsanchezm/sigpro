@@ -71,6 +71,10 @@ for (const story of stories) {
         if (story.header.surface === 'web' && served.web?.matchesDist !== true) problems.push(`${story.header.story}: no consta que lo que sirve la web sea el index.html del dist (matchesDist=${served.web?.matchesDist})`);
         if (story.header.surface === 'expo-web' && served.mobile?.matchesDist !== true) problems.push(`${story.header.story}: no consta que lo que sirve la app móvil sea el index.html del dist (matchesDist=${served.mobile?.matchesDist})`);
       }
+      // El proceso que escucha en el puerto de la API debe ejecutar `apps/api/dist/main.js` de ESTE repositorio (ruta absoluta)
+      const apiMain = resolve(root, 'apps', 'api', 'dist', 'main.js').replaceAll('\\', '/').toLowerCase();
+      const apiCommand = String(environment.apiProcess?.commandLine ?? '').replaceAll('\\', '/').replaceAll('"', '').toLowerCase();
+      if (!apiCommand.includes(apiMain)) problems.push(`${story.header.story}: no consta que el proceso que escucha en el puerto de la API ejecute ${apiMain} (línea de comandos: ${environment.apiProcess?.commandLine ?? 'no se pudo leer'})`);
     }
     if (gateRun.commit !== story.header.commit) problems.push(`${story.header.story}: la puerta y las filas de su ejecución no son del mismo commit del arnés (${gateRun.commit?.slice(0, 7) ?? '?'} frente a ${story.header.commit?.slice(0, 7) ?? '?'})`);
     if (gateRun.harnessDirty !== false) problems.push(`${story.header.story}: el arnés tenía cambios sin confirmar durante la puerta de su ejecución`);
@@ -105,46 +109,63 @@ for (let i = 1; i < windows.length; i += 1) if (windows[i].start < windows[i - 1
 // --- Procedencia de los builds: solo se da por demostrada si el registro de construcción (builds.json) es completo y coherente ---
 // El registro lo escribe `e2e/story-runs/build.mjs`: commit, entradas sin confirmar, comando y huella de cada build. No está
 // firmado: la demostración vale en la medida en que ese registro sea fiable.
-const BUILD_INPUTS = ['apps', 'packages', 'examples', 'package.json', 'pnpm-lock.yaml', 'pnpm-workspace.yaml', 'tsconfig.base.json'];
-const problemsBeforeBuilds = problems.length;
+// Las MISMAS entradas que vigila build.mjs (el build web mete en el zip de ejemplos la guía del alumno y el workflow de alumnos)
+const BUILD_INPUTS = ['apps', 'packages', 'examples', 'package.json', 'pnpm-lock.yaml', 'pnpm-workspace.yaml', 'tsconfig.base.json', 'docs/GUIA-ALUMNO.md', '.github/workflows/students-e2e.yml'];
+const buildProblems = [];
 if (buildsRecord) {
-  if (buildsRecord.complete !== true) problems.push(`El registro de construcción no está completo (pendiente: ${(buildsRecord.pending ?? []).join(', ') || 'desconocido'})`);
-  if (buildsRecord.inputsDirty !== false) problems.push('Los builds se construyeron con entradas sin confirmar: no se pueden atribuir a un commit');
-  for (const build of buildsRecord.builds ?? []) if (build.exitCode !== 0 || build.aborted) problems.push(`El build ${build.name} no terminó bien (código ${build.exitCode}${build.aborted ? ', abortado por memoria' : ''})`);
+  // El registro debe declarar TODAS las entradas que este informe vigila: si no, un registro antiguo daría por buenas entradas nuevas
+  const missingInputs = BUILD_INPUTS.filter((input) => !(buildsRecord.inputs ?? []).includes(input));
+  if (missingInputs.length > 0) buildProblems.push('El registro de construcción no cubre estas entradas de los builds: ' + missingInputs.join(', ') + ' (hay que reconstruir con el build.mjs actual)');
+  if (buildsRecord.changedDuringBuild) buildProblems.push('La construcción se invalidó: ' + buildsRecord.changedDuringBuild);
+  if (buildsRecord.complete !== true) buildProblems.push('El registro de construcción no está completo (pendiente: ' + ((buildsRecord.pending ?? []).join(', ') || 'desconocido') + ')');
+  if (buildsRecord.inputsDirty !== false) buildProblems.push('Los builds se construyeron con entradas sin confirmar: no se pueden atribuir a un commit');
+  for (const build of buildsRecord.builds ?? []) if (build.exitCode !== 0 || build.aborted) buildProblems.push('El build ' + build.name + ' no terminó bien (código ' + build.exitCode + (build.aborted ? ', abortado por memoria' : '') + ')');
   for (const run of gateRunsUsed) {
     for (const build of buildsRecord.builds ?? []) {
       const measured = run.environment.builds?.[build.name];
-      if (!measured || measured.sha256 !== build.fingerprint?.sha256) problems.push(`La huella del build ${build.name} medida por la puerta (${run.runId}) no coincide con la registrada al construirlo`);
+      if (!measured || measured.sha256 !== build.fingerprint?.sha256) buildProblems.push('La huella del build ' + build.name + ' medida por la puerta (' + run.runId + ') no coincide con la registrada al construirlo');
     }
-    if (!(buildsRecord.endedAt && buildsRecord.endedAt <= run.startedAt)) problems.push(`La ejecución ${run.runId} empezó antes de que terminara la construcción de los builds`);
+    if (!(buildsRecord.endedAt && buildsRecord.endedAt <= run.startedAt)) buildProblems.push('La ejecución ' + run.runId + ' empezó antes de que terminara la construcción de los builds');
   }
   // Un archivo de entorno (ignorado por git) que cambie después de construir invalidaría la atribución del build
-  for (const [file, recorded] of Object.entries(buildsRecord.envFiles ?? {})) {
-    const path = resolve(root, file);
+  for (const [envFile, recorded] of Object.entries(buildsRecord.envFiles ?? {})) {
+    const path = resolve(root, envFile);
     const current = existsSync(path) ? createHash('sha256').update(readFileSync(path)).digest('hex') : null;
-    if (current !== recorded.sha256) problems.push(`El archivo de entorno ${file} cambió (o desapareció) desde la construcción de los builds`);
+    if (current !== recorded.sha256) buildProblems.push('El archivo de entorno ' + envFile + ' cambió (o desapareció) desde la construcción de los builds');
   }
-  if (git(['cat-file', '-e', `${buildsRecord.commit}^{commit}`]) === null) problems.push(`El commit con el que se construyeron los builds (${String(buildsRecord.commit).slice(0, 7)}) ya no existe`);
+  if (git(['cat-file', '-e', buildsRecord.commit + '^{commit}']) === null) buildProblems.push('El commit con el que se construyeron los builds (' + String(buildsRecord.commit).slice(0, 7) + ') ya no existe');
   else {
-    if (git(['merge-base', '--is-ancestor', buildsRecord.commit, 'HEAD']) === null) problems.push(`El commit de los builds ${buildsRecord.commit.slice(0, 7)} no es antecesor de HEAD`);
-    if (git(['diff', '--quiet', buildsRecord.commit, 'HEAD', '--', ...BUILD_INPUTS]) === null) problems.push('Las entradas de los builds cambiaron entre el commit con el que se construyeron y HEAD');
+    if (git(['merge-base', '--is-ancestor', buildsRecord.commit, 'HEAD']) === null) buildProblems.push('El commit de los builds ' + buildsRecord.commit.slice(0, 7) + ' no es antecesor de HEAD');
+    if (git(['diff', '--quiet', buildsRecord.commit, 'HEAD', '--', ...BUILD_INPUTS]) === null) buildProblems.push('Las entradas de los builds cambiaron entre el commit con el que se construyeron y HEAD');
   }
 }
-const buildsProven = Boolean(buildsRecord) && problems.length === problemsBeforeBuilds;
+problems.push(...buildProblems);
+const buildsProven = Boolean(buildsRecord) && buildProblems.length === 0;
 
 // --- La API usa la base aislada: un centinela (marcador escrito por la API y hallado por consulta directa en PostgreSQL) de la
 // MISMA instancia de la API (mismo arranque) y anterior a la puerta de cada ejecución ----------------------------------------
 // El centinela MÁS RECIENTE de la misma instancia de la API (mismo arranque) y anterior a la puerta de la ejecución
+const SENTINEL_TOLERANCE_MS = 2000;
 const sentinelFor = (run) => {
   const apiStart = Date.parse(run.environment.served?.apiStartedAt ?? '');
   return sentinels
-    .filter((sentinel) => sentinel.foundInIsolatedDb === true && sentinel.port5432Accessible === false && Math.abs(Date.parse(sentinel.apiStartedAt) - apiStart) <= 5000 && sentinel.checkedAt <= run.startedAt)
-    .sort((a, b) => (a.checkedAt < b.checkedAt ? -1 : 1))
+    .filter(
+      (sentinel) =>
+        sentinel.foundInIsolatedDb === true &&
+        sentinel.port5432Accessible === false &&
+        sentinel.apiUrl === run.environment.served?.urls?.api &&
+        sentinel.isolatedPgPort === run.environment.isolatedPgPort &&
+        typeof sentinel.scriptSha256 === 'string' &&
+        typeof sentinel.systemIdentifier === 'string' &&
+        Math.abs(Date.parse(sentinel.apiStartedAt) - apiStart) <= SENTINEL_TOLERANCE_MS &&
+        sentinel.checkedAt <= run.startedAt,
+    )
+    .sort((x, y) => (x.checkedAt < y.checkedAt ? -1 : 1))
     .at(-1);
 };
 for (const run of gateRunsUsed) {
   const match = sentinelFor(run);
-  if (!match) problems.push(`${run.runId}: no consta que la API de esa ejecución escribiera en la base aislada (ningún centinela de la misma instancia de la API comprobado antes de la puerta)`);
+  if (!match) problems.push(run.runId + ': no consta que la API de esa ejecución escribiera en la base aislada (ningún centinela de la misma instancia de la API, con su URL y su puerto, comprobado antes de la puerta)');
 }
 const withError = [...seen.values()].filter(({ row }) => row.verdict === 'error-de-prueba');
 for (const { row } of withError) problems.push(`Error del arnés en ${row.rowId}: ${row.observed}`);
@@ -178,9 +199,9 @@ for (const story of stories) out(`  - ${story.header.story}: ${SURFACE_LABEL[sto
 out(`- **Aislamiento:** la puerta \`e2e/story-runs/gate/aislamiento.spec.ts\` es un proyecto del que dependen \`api\`, \`web\` y \`mobile\`, y cada historia se niega a ejecutar si la puerta no consta superada en SU ejecución. Consta superada en ${gateRunsUsed.filter((run) => run.passed).length} de las ${runIds.length} ejecuciones de estos resultados. En cada una midió, en ese momento: ${gateRunsUsed.map((run) => `5432 ${run.environment.ports['5432'] ? '**accesible**' : 'inaccesible'} y ${run.environment.isolatedPgPort} ${run.environment.ports[String(run.environment.isolatedPgPort)] ? 'accesible' : '**inaccesible**'} (Node ${run.environment.node}, el que ejecuta las pruebas; no el de la API)`).join('; ')}. Evidencia en \`docs/story-runs/aislamiento.json\`. Cada fila reinicia su tenant, comprueba que el caos está a cero y usa correos únicos y sesiones propias.`);
 out(`- **La API usa la base aislada:** ${gateRunsUsed.map((run) => {
   const match = sentinelFor(run);
-  return match ? `${run.runId}: la API (arrancada ${match.apiStartedAt}) escribió el marcador \`${match.email}\` y se halló por consulta directa en PostgreSQL (puerto ${match.isolatedPgPort}) a las ${match.checkedAt}; el 5432 estaba inaccesible` : `${run.runId}: **no consta**`;
+  return match ? `${run.runId}: la API de ${match.apiUrl} (arrancada ${match.apiStartedAt}) escribió el marcador \`${match.email}\` y se halló por consulta directa en PostgreSQL ${match.postgresVersion} (puerto ${match.isolatedPgPort}, identidad ${String(match.systemIdentifier).slice(0, 10)}…) a las ${match.checkedAt}; el 5432 estaba inaccesible; hash del script del centinela ${String(match.scriptSha256).slice(0, 12)}…` : `${run.runId}: **no consta**`;
 }).join('; ')}. Es una comprobación por consulta directa de lo que escribe la API (script local \`entorno/db-sentinel.mjs\`), no una demostración de que la API no use además otra base.`);
-out(`- **Qué NO verifica el arnés:** que el simulador de misión de la API esté apagado, ni la versión de la base de datos${entorno ? ` (la versión ${entorno.postgres.version.split(',')[0]} sale de \`entorno.json\`, una foto hecha a mano el ${entorno.capturedAt}, no medida por la ejecución)` : ''}.`);
+out(`- **Qué NO verifica el arnés:** que el simulador de misión de la API esté apagado, ni que la API no use ADEMÁS otra base de datos (el centinela prueba a dónde escribe, no que no haya otra). La versión y la identidad de PostgreSQL las registra el centinela, no la propia ejecución${entorno ? ` (la foto manual \`entorno.json\` es solo de la configuración de la API)` : ''}.`);
 out();
 out('### Contra qué app se probó (builds)');
 out();
@@ -196,7 +217,14 @@ if (buildsProven) {
     out(`| ${build.name} | \`${build.command}\` | ${build.endedAt} | ${build.minFreeMb ?? '—'} MB | ${build.fingerprint.files} | ${build.fingerprint.bytes} | \`${build.fingerprint.sha256.slice(0, 16)}…\` | ${same ? `coincide en las ${gateRunsUsed.length} ejecuciones` : '**NO coincide**'} |`);
   }
   out();
-  out(`**Procedencia de los builds: demostrada por el registro de construcción.** La huella registrada al construir coincide con la que midió la puerta en cada ejecución, el commit de construcción es antecesor de HEAD y ninguna entrada de los builds (${BUILD_INPUTS.join(', ')}) ha cambiado entre \`${buildsRecord.commit.slice(0, 7)}\` y HEAD (${since ? since.split('\n').length : 0} commits posteriores, ninguno toca esas entradas). Archivos de entorno presentes al construir (solo su hash, sin cambios desde entonces): ${Object.keys(buildsRecord.envFiles ?? {}).join(', ') || 'ninguno'}; variables de entorno relevantes: ${Object.keys(buildsRecord.buildEnv ?? {}).join(', ') || 'ninguna'}. **Límite:** el registro no está firmado y la demostración supone que \`build.mjs\` se ejecutó tal cual. Es el commit de las FUENTES de los builds: el del arnés y el de las historias son otros (ver arriba).`);
+  const nvmrc = existsSync(resolve(root, '.nvmrc')) ? readFileSync(resolve(root, '.nvmrc'), 'utf8').trim() : null;
+  out(`**Procedencia de los builds: demostrada por el registro de construcción, dentro de estos límites.** La huella registrada al construir coincide con la que midió la puerta en cada ejecución, el commit de construcción es antecesor de HEAD y ninguna entrada de los builds (${BUILD_INPUTS.join(', ')}) ha cambiado entre \`${buildsRecord.commit.slice(0, 7)}\` y HEAD (${since ? since.split('\n').length : 0} commits posteriores, ninguno toca esas entradas). Archivos de entorno presentes al construir (solo su hash, sin cambios desde entonces): ${Object.keys(buildsRecord.envFiles ?? {}).join(', ') || 'ninguno'}; variables de entorno relevantes: ${Object.keys(buildsRecord.buildEnv ?? {}).join(', ') || 'ninguna'}. Es el commit de las FUENTES de los builds: el del arnés y el de las historias son otros (ver arriba).`);
+  out();
+  out('**Límites de esta demostración (lo que NO cubre):**');
+  out('- El registro de construcción y los centinelas **no están firmados** y suponen que `build.mjs` y `db-sentinel.mjs` se ejecutaron tal cual (del segundo consta su hash en cada centinela; el primero no está firmado).');
+  out(`- No cubre los \`node_modules\` instalados, el cliente Prisma generado, la caché de Metro de Expo ni la versión de Node con la que se construyó (${buildsRecord.node}${nvmrc ? `, frente a la ${nvmrc} que declara \`.nvmrc\`` : ''}).`);
+  out('- Que lo que sirven los puertos sea ese `dist`: por **contenido** (`index.html`) para la web y la app móvil; para la API, por la **línea de comandos del proceso** que escucha (ejecuta `apps/api/dist/main.js` de este repositorio) y por las fechas, no por contenido. Una API reiniciada después de la puerta no se detecta.');
+  out('- La huella del `dist` prueba su contenido, no que ese contenido salga de esas fuentes: se apoya en que dos reconstrucciones limpias desde el mismo commit dan las mismas huellas (construcciones deterministas).');
 } else {
   out('Se usan los `dist` que hay en disco; **ningún `dist` guarda de qué commit salió** y no hay un registro de construcción coherente que lo demuestre (`builds.json`). Lo único que se puede registrar es su huella y la fecha de sus archivos (medidas por la puerta en cada ejecución; si cambiaran entre ejecuciones, el informe lo marca como problema):');
   out();
@@ -215,7 +243,8 @@ if (buildsProven) {
 out();
 out('**Lo que la puerta comprobó de lo servido, en cada ejecución** (no prueba el commit, pero sí que lo servido es lo que hay en disco):');
 for (const run of gateRunsUsed) {
-  const served = run.environment.served;
+  // Si la puerta no registró qué sirven los puertos, el informe lo dice como problema (arriba) y aquí no se cae
+  const served = run.environment.served ?? { urls: {}, web: {}, mobile: {} };
   const yesNo = (value) => (value === true ? 'sí' : value === false ? '**NO**' : 'no se comprobó en esta ejecución (no había servidor)');
   out(`- ${stories.find((story) => story.header.runId === run.runId)?.header.surface ?? '?'} (${run.runId}): URLs ${Object.values(served.urls).join(', ')}; la web sirve el index.html del dist: ${yesNo(served.web.matchesDist)}; la app móvil sirve el index.html del dist: ${yesNo(served.mobile.matchesDist)}; la API arrancó (${served.apiStartedAt ?? '?'}) después de construir su dist y el del paquete compartido: ${yesNo(served.apiStartedAfterBuild)}.`);
 }

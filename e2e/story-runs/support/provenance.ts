@@ -173,6 +173,30 @@ const servedPage = async (url: string, distIndex: string): Promise<ServedPage> =
   return { url, reachable: served !== null, matchesDist: served === null || onDisk === null ? null : served === onDisk };
 };
 
+/** El proceso que escucha en el puerto de la API: su PID y su línea de comandos (debe ejecutar `apps/api/dist/main.js` de ESTE repositorio). */
+export interface ApiProcess {
+  readonly pid: number;
+  readonly commandLine: string;
+}
+
+/** Identifica, en Windows, el proceso que escucha en el puerto de la API. `null` si no se pudo (otra plataforma, nada escuchando…). */
+const apiListener = (port: string): ApiProcess | null => {
+  if (process.platform !== 'win32') return null;
+  try {
+    const script = `$c = Get-NetTCPConnection -LocalPort ${port} -State Listen -ErrorAction Stop | Select-Object -First 1; $p = Get-CimInstance Win32_Process -Filter "ProcessId=$($c.OwningProcess)"; "$($p.ProcessId)|$($p.CommandLine)"`;
+    const out = execFileSync('powershell', ['-NoProfile', '-Command', script], { encoding: 'utf8' }).trim();
+    const separator = out.indexOf('|');
+    return separator < 0 ? null : { pid: Number(out.slice(0, separator)), commandLine: out.slice(separator + 1) };
+  } catch {
+    return null;
+  }
+};
+
+const normalizePath = (text: string): string => text.replaceAll('\\', '/').replaceAll('"', '').toLowerCase();
+/** ¿Ejecuta el proceso `apps/api/dist/main.js` de este repositorio (ruta absoluta)? */
+export const runsApiDist = (processInfo: ApiProcess | null): boolean =>
+  processInfo !== null && normalizePath(processInfo.commandLine).includes(normalizePath(resolve(REPO_ROOT, 'apps', 'api', 'dist', 'main.js')));
+
 const newest = (build: BuildFingerprint): number => (build.newestMtime ? Date.parse(build.newestMtime) : Number.NaN);
 
 export interface RuntimeEnvironment {
@@ -185,6 +209,8 @@ export interface RuntimeEnvironment {
   readonly isolatedPgPort: number;
   readonly builds: Readonly<Record<keyof typeof BUILD_DIRS, BuildFingerprint>>;
   readonly served: ServedCheck;
+  /** Proceso que escuchaba en el puerto de la API durante la puerta. */
+  readonly apiProcess: ApiProcess | null;
   readonly settings: RunSettings;
 }
 
@@ -210,6 +236,7 @@ export const captureEnvironment = async (info: TestInfo): Promise<RuntimeEnviron
       apiStartedAt: Number.isNaN(apiStartedMs) ? null : new Date(apiStartedMs).toISOString(),
       apiStartedAfterBuild: Number.isNaN(apiStartedMs) || Number.isNaN(lastBuildMs) ? null : apiStartedMs >= lastBuildMs,
     },
+    apiProcess: apiListener(new URL(API_URL).port || '3000'),
     settings: effectiveSettings(info),
   };
 };
@@ -223,6 +250,7 @@ export const environmentProblems = (environment: RuntimeEnvironment): readonly s
   ...(environment.served.web.matchesDist === false ? [`Lo que sirve ${environment.served.web.url} no es el index.html de ${BUILD_DIRS.web} (¿servidor de desarrollo u otro build?)`] : []),
   ...(environment.served.mobile.matchesDist === false ? [`Lo que sirve ${environment.served.mobile.url} no es el index.html de ${BUILD_DIRS.mobile} (¿servidor de desarrollo u otro build?)`] : []),
   ...(environment.served.apiStartedAfterBuild === false ? ['La API arrancó ANTES de que se construyera su dist (o el del paquete compartido): no está sirviendo el build que hay en disco'] : []),
+  ...(runsApiDist(environment.apiProcess) ? [] : [`El proceso que escucha en el puerto de la API no ejecuta ${resolve(REPO_ROOT, 'apps', 'api', 'dist', 'main.js')} (línea de comandos: ${environment.apiProcess?.commandLine ?? 'no se pudo leer'}): no se demuestra que la API ejecute el dist medido`]),
   ...Object.values(environment.builds).flatMap((build) => (build.error ? [`No se pudo leer el build ${build.path}: ${build.error}`] : [])),
   ...settingsProblems(environment.settings).map((problem) => `Ajuste de ejecución no admitido: ${problem}`),
 ];

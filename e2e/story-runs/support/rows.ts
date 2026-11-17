@@ -270,16 +270,19 @@ const register = (run: Registration): void => {
       const config = await readConfig(run.tenants[0] ?? 'alumno01').catch(() => undefined);
       // Una ejecución incompleta (p. ej. una sola fila con --grep) o con errores del arnés va aparte (`partial/`) y NO pisa el JSON
       // completo y limpio de la historia: así un fallo no destruye la evidencia buena anterior
-      const clean = complete && all.every((result) => result.verdict !== 'error-de-prueba');
+      // El resultado se asocia a un commit: con el arnés sin confirmar, o con la API con los defectos del curso activos, tampoco es
+      // un resultado válido y no debe sustituir a uno bueno (el informe lo marcaría, pero la evidencia buena ya se habría perdido)
+      const harnessIsDirty = git(['status', '--porcelain', '--', 'e2e/story-runs', 'e2e/playwright.stories.config.ts']) !== '';
+      const apiPlantedBugs = config ? field(config.body, 'plantedBugs') : 'desconocido';
+      const clean = complete && all.every((result) => result.verdict !== 'error-de-prueba') && !harnessIsDirty && apiPlantedBugs === false;
       writeJsonResult(clean ? `EP-LOGIN/${run.story}.json` : `EP-LOGIN/partial/${run.story}.json`, {
         header: {
           story: run.story,
           surface: run.surface,
           apiUrl: API_URL,
-          apiPlantedBugs: config ? field(config.body, 'plantedBugs') : 'desconocido',
+          apiPlantedBugs,
           commit: git(['rev-parse', 'HEAD']),
-          // El resultado se asocia a un commit: si el arnés tenía cambios sin confirmar, el informe lo marca como problema
-          harnessDirty: git(['status', '--porcelain', '--', 'e2e/story-runs', 'e2e/playwright.stories.config.ts']) !== '',
+          harnessDirty: harnessIsDirty,
           storiesCommit: manifest.storiesCommit,
           manifestGeneratedAt: manifest.generatedAt,
           node: process.version,

@@ -45,7 +45,7 @@ const rememberFlag: ApiRowHandler = async (row) => {
   const body = bodyOf({ email: fromSteps(row, NO_FAILED_ATTEMPTS), password: fromSteps(row, /la contraseña (\S+) y remember/), remember: rememberOf(cell(row, 'remember')) });
   const result = await postLogin(TENANT_A, body);
   const reason = reasonOf(result, 'remember');
-  // La fila solo pide «un motivo para remember»: se anota el que da la app porque no es de los que enumeran las Reglas
+  // La fila solo pide «un motivo para remember»: si el motivo observado no es de los que enumeran las Reglas, se anota
   return finish(row, result, reason === undefined ? {} : { note: `El motivo observado para remember es «${reason}», que no es uno de los enumerados en las Reglas (required, badEmail); la fila solo pide un motivo` });
 };
 
