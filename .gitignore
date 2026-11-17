@@ -28,3 +28,6 @@ e2e/test-results-*/
 
 # Capturas de pantalla (pnpm e2e:screens / e2e:mobile:screens): se generan en local y no se versionan
 docs/screens/
+
+# Resultados de la ejecución de los ejemplos de las historias (observado y discrepancias): solo instructor, NO se versiona
+docs/story-runs/
