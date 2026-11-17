@@ -2,14 +2,16 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { formatFinding, parseCliArgs, runCommand, runCoverage, runLint, runSync } from './cli';
+import { formatFinding, parseCliArgs, runCommand, runCoverage, runLint, runManifest, runSync, type ReadGit } from './cli';
+import type { StoriesGit } from './git';
 import type { Gh, RemoteIssue } from './sync';
 
 describe('parseCliArgs', () => {
-  it('reconoce los tres comandos', () => {
+  it('reconoce los cuatro comandos', () => {
     expect(parseCliArgs(['lint']).command).toBe('lint');
     expect(parseCliArgs(['coverage']).command).toBe('coverage');
     expect(parseCliArgs(['sync']).command).toBe('sync');
+    expect(parseCliArgs(['manifest']).command).toBe('manifest');
   });
 
   it('sin comando o con uno desconocido devuelve command null', () => {
@@ -18,8 +20,8 @@ describe('parseCliArgs', () => {
     expect(parseCliArgs(['--apply']).command).toBeNull();
   });
 
-  it('las banderas son false por defecto', () => {
-    expect(parseCliArgs(['lint'])).toEqual({ command: 'lint', apply: false, write: false, check: false });
+  it('las banderas son false por defecto y --out es null', () => {
+    expect(parseCliArgs(['lint'])).toEqual({ command: 'lint', apply: false, write: false, check: false, out: null });
     expect(parseCliArgs(['sync']).apply).toBe(false);
   });
 
@@ -29,13 +31,25 @@ describe('parseCliArgs', () => {
     expect(parseCliArgs(['coverage', '--check']).check).toBe(true);
   });
 
+  it('--out toma la ruta que le sigue, también con = y detrás de un -- suelto', () => {
+    expect(parseCliArgs(['manifest', '--out', 'docs/story-runs/manifest.json'])).toEqual({ command: 'manifest', apply: false, write: false, check: false, out: 'docs/story-runs/manifest.json' });
+    expect(parseCliArgs(['manifest', '--out=salida.json']).out).toBe('salida.json');
+    expect(parseCliArgs(['manifest', '--', '--out', 'salida.json']).out).toBe('salida.json');
+    expect(parseCliArgs(['--out', 'salida.json', 'manifest'])).toMatchObject({ command: 'manifest', out: 'salida.json' });
+  });
+
+  it('--out sin valor queda como cadena vacía y no se confunde con «sin --out»', () => {
+    expect(parseCliArgs(['manifest', '--out']).out).toBe('');
+    expect(parseCliArgs(['manifest']).out).toBeNull();
+  });
+
   it('ignora un -- suelto: así lo reenvía `pnpm stories:sync -- --apply`', () => {
-    expect(parseCliArgs(['sync', '--', '--apply'])).toEqual({ command: 'sync', apply: true, write: false, check: false });
+    expect(parseCliArgs(['sync', '--', '--apply'])).toEqual({ command: 'sync', apply: true, write: false, check: false, out: null });
     expect(parseCliArgs(['--', 'lint']).command).toBe('lint');
   });
 
   it('una opción desconocida no lanza ni cambia el comando', () => {
-    expect(parseCliArgs(['lint', '--desconocida'])).toEqual({ command: 'lint', apply: false, write: false, check: false });
+    expect(parseCliArgs(['lint', '--desconocida'])).toEqual({ command: 'lint', apply: false, write: false, check: false, out: null });
   });
 });
 
@@ -162,7 +176,7 @@ const fakeGh = (existing: readonly RemoteIssue[] = [], remoteLabels: readonly st
   return { gh, reads, writes };
 };
 
-const SYNC_ARGS = { command: 'sync', apply: false, write: false, check: false } as const;
+const SYNC_ARGS = { command: 'sync', apply: false, write: false, check: false, out: null } as const;
 
 describe('runSync', () => {
   let root = '';
@@ -261,7 +275,7 @@ describe('runSync', () => {
   });
 });
 
-const COVERAGE_ARGS = { command: 'coverage', apply: false, write: false, check: false } as const;
+const COVERAGE_ARGS = { command: 'coverage', apply: false, write: false, check: false, out: null } as const;
 
 /** Controlador, `App.tsx` y árbol móvil mínimos: 1 endpoint, 2 rutas web y 2 móviles (la raíz y el `_layout` no cuentan). */
 const MINI_REPO: Readonly<Record<string, string>> = {
@@ -461,7 +475,158 @@ describe('runCoverage', () => {
   });
 });
 
+const MANIFEST_ARGS = { command: 'manifest', apply: false, write: false, check: false, out: null } as const;
+
+/** Estado de git inyectado: anota cuántas veces se leyó para comprobar que un fallo del linter ni lo consulta. */
+const fakeGit = (state: StoriesGit = { storiesCommit: 'f'.repeat(40), dirty: false }): { readGit: ReadGit; reads: string[] } => {
+  const reads: string[] = [];
+  const readGit: ReadGit = async (root) => {
+    reads.push(root);
+    return state;
+  };
+  return { readGit, reads };
+};
+
+const FIXED_NOW = (): Date => new Date('2026-11-17T12:00:00.000Z');
+
+/** Forma del JSON que escribe `manifest`; lo que no se comprueba aquí lo cubre `manifest.test.ts`. */
+type ManifestJson = { generatedAt: string; storiesCommit: string | null; dirty: boolean; rows: readonly { rowId: string; cells: Record<string, string>; resolvedSteps: string[] }[] };
+
+describe('runManifest', () => {
+  let root = '';
+
+  beforeEach(async () => {
+    root = await mkdtemp(join(tmpdir(), 'stories-manifest-'));
+  });
+
+  afterEach(async () => {
+    await rm(root, { recursive: true, force: true });
+  });
+
+  const write = async (relative: string, text: string): Promise<void> => {
+    const path = join(root, relative);
+    await mkdir(join(path, '..'), { recursive: true });
+    await writeFile(path, text, 'utf8');
+  };
+
+  const writeValid = async (): Promise<void> => {
+    await write('docs/user-stories/login/epic.md', EPIC_OK);
+    await write('docs/user-stories/login/US-LOGIN-003.md', STORY_OK);
+  };
+
+  const exists = (path: string): Promise<boolean> => readFile(path, 'utf8').then(() => true, () => false);
+
+  it('sin --out imprime solo el JSON por la salida estándar, con el commit, el estado y las filas', async () => {
+    await writeValid();
+    const { readGit, reads } = fakeGit();
+    const result = await runManifest(MANIFEST_ARGS, root, readGit, FIXED_NOW);
+    expect(result.code).toBe(0);
+    expect(result.stderr).toEqual([]);
+    expect(result.stdout).toHaveLength(1);
+    const manifest = JSON.parse(result.stdout[0] ?? '') as ManifestJson;
+    expect(manifest.generatedAt).toBe('2026-11-17T12:00:00.000Z');
+    expect(manifest.storiesCommit).toBe('f'.repeat(40));
+    expect(manifest.dirty).toBe(false);
+    expect(manifest.rows.map((row) => row.rowId)).toEqual(['US-LOGIN-003/E1/F1', 'US-LOGIN-003/E1/F2']);
+    expect(manifest.rows[1]?.cells).toEqual({ intentos: '5', mensaje: 'Cuenta bloqueada' });
+    expect(manifest.rows[1]?.resolvedSteps).toEqual(['Dado un usuario con 5 intentos fallidos', 'Entonces ve el mensaje "Cuenta bloqueada"']);
+    expect(reads).toEqual([root]);
+  });
+
+  it('las claves del JSON son las del contrato, en ese orden, y cada fila lleva todos sus campos', async () => {
+    await writeValid();
+    const result = await runManifest(MANIFEST_ARGS, root, fakeGit().readGit, FIXED_NOW);
+    const manifest = JSON.parse(result.stdout[0] ?? '') as Record<string, unknown> & { rows: Record<string, unknown>[] };
+    expect(Object.keys(manifest)).toEqual(['generatedAt', 'storiesCommit', 'dirty', 'rows']);
+    expect(Object.keys(manifest.rows[0] ?? {})).toEqual(['rowId', 'story', 'platform', 'verificacion', 'noImplementada', 'esquemaIndex', 'esquema', 'rowIndex', 'cells', 'resolvedSteps']);
+    expect(manifest.rows[0]).toMatchObject({ story: 'US-LOGIN-003', platform: 'web', verificacion: 'ejecutada', noImplementada: false, esquemaIndex: 1, esquema: 'Intentos fallidos', rowIndex: 1 });
+  });
+
+  it('si git falla (commit null y dirty true) lo traslada tal cual al JSON', async () => {
+    await writeValid();
+    const result = await runManifest(MANIFEST_ARGS, root, fakeGit({ storiesCommit: null, dirty: true }).readGit, FIXED_NOW);
+    const manifest = JSON.parse(result.stdout[0] ?? '') as ManifestJson;
+    expect(manifest.storiesCommit).toBeNull();
+    expect(manifest.dirty).toBe(true);
+  });
+
+  it('con --out relativo escribe el archivo bajo la raíz del repositorio (creando las carpetas) y resume las filas por historia', async () => {
+    await writeValid();
+    const result = await runManifest({ ...MANIFEST_ARGS, out: 'docs/story-runs/manifest.json' }, root, fakeGit().readGit, FIXED_NOW);
+    expect(result.code).toBe(0);
+    const text = await readFile(join(root, 'docs/story-runs/manifest.json'), 'utf8');
+    expect(text.endsWith('}\n')).toBe(true);
+    const manifest = JSON.parse(text) as ManifestJson;
+    expect(manifest.rows).toHaveLength(2);
+    expect(result.stdout[0]).toBe('stories manifest: 2 filas de 1 historias escritas en docs/story-runs/manifest.json (commit fffffff, sin cambios sin confirmar)');
+    expect(result.stdout.slice(1)).toEqual(['  US-LOGIN-003: 2 filas']);
+  });
+
+  it('con --out absoluto escribe justo ahí', async () => {
+    await writeValid();
+    const target = join(root, 'fuera', 'm.json');
+    const result = await runManifest({ ...MANIFEST_ARGS, out: target }, root, fakeGit({ storiesCommit: null, dirty: true }).readGit, FIXED_NOW);
+    expect(result.code).toBe(0);
+    expect(result.stdout[0]).toContain('sin commit, con cambios sin confirmar');
+    expect(await exists(target)).toBe(true);
+  });
+
+  it('con --out sin ruta sale con 2 y no lee nada ni escribe', async () => {
+    await writeValid();
+    const { readGit, reads } = fakeGit();
+    const result = await runManifest({ ...MANIFEST_ARGS, out: '' }, root, readGit, FIXED_NOW);
+    expect(result.code).toBe(2);
+    expect(result.stderr.join('\n')).toContain('--out');
+    expect(reads).toEqual([]);
+  });
+
+  it('con un hallazgo del linter sale con 1, lo imprime, no consulta git y no escribe el manifiesto', async () => {
+    await write('docs/user-stories/login/epic.md', EPIC_OK);
+    await write('docs/user-stories/login/US-LOGIN-009.md', STORY_OK);
+    const { readGit, reads } = fakeGit();
+    const result = await runManifest({ ...MANIFEST_ARGS, out: 'docs/story-runs/manifest.json' }, root, readGit, FIXED_NOW);
+    expect(result.code).toBe(1);
+    expect(result.stdout.some((line) => line.startsWith('docs/user-stories/login/US-LOGIN-009.md: [archivo-id] '))).toBe(true);
+    expect(result.stderr.join('\n')).toContain('abortado');
+    expect(reads).toEqual([]);
+    expect(await exists(join(root, 'docs/story-runs/manifest.json'))).toBe(false);
+  });
+
+  it('un archivo que no se puede leer sale con 1 y no escribe nada', async () => {
+    await writeValid();
+    await write('docs/user-stories/login/US-LOGIN-001.md', 'sin front matter\n');
+    const result = await runManifest({ ...MANIFEST_ARGS, out: 'm.json' }, root, fakeGit().readGit, FIXED_NOW);
+    expect(result.code).toBe(1);
+    expect(result.stdout.some((line) => line.includes(': [frontmatter] '))).toBe(true);
+    expect(await exists(join(root, 'm.json'))).toBe(false);
+  });
+
+  it('sin historias el manifiesto tiene cero filas y el código es 0', async () => {
+    const result = await runManifest(MANIFEST_ARGS, root, fakeGit().readGit, FIXED_NOW);
+    expect(result.code).toBe(0);
+    expect((JSON.parse(result.stdout[0] ?? '') as ManifestJson).rows).toEqual([]);
+  });
+});
+
 describe('runCommand', () => {
+  // Fuera de un repositorio `git` falla: el comando real debe dar commit null y dirty true, no lanzar.
+  it('manifest está conectado al comando real y a git', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'stories-cli-manifest-'));
+    try {
+      await mkdir(join(root, 'docs/user-stories/login'), { recursive: true });
+      await writeFile(join(root, 'docs/user-stories/login/epic.md'), EPIC_OK, 'utf8');
+      await writeFile(join(root, 'docs/user-stories/login/US-LOGIN-003.md'), STORY_OK, 'utf8');
+      const result = await runCommand(MANIFEST_ARGS, root);
+      expect(result.code).toBe(0);
+      const manifest = JSON.parse(result.stdout[0] ?? '') as ManifestJson;
+      expect(manifest.rows).toHaveLength(2);
+      expect(manifest.storiesCommit).toBeNull();
+      expect(manifest.dirty).toBe(true);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
   it('coverage está conectado al comando real y toma los permisos de @sigpro/shared', async () => {
     const root = await mkdtemp(join(tmpdir(), 'stories-cli-coverage-'));
     try {
@@ -495,8 +660,9 @@ describe('runCommand', () => {
   });
 
   it('sin comando imprime el uso por stderr y sale con 2', async () => {
-    const result = await runCommand({ command: null, apply: false, write: false, check: false }, tmpdir());
+    const result = await runCommand({ command: null, apply: false, write: false, check: false, out: null }, tmpdir());
     expect(result.code).toBe(2);
     expect(result.stderr.join('\n')).toContain('lint');
+    expect(result.stderr.join('\n')).toContain('manifest');
   });
 });

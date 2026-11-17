@@ -202,6 +202,14 @@ const PLACEHOLDER = /<([^\s<>](?:[^<>]*[^\s<>])?)>/g;
 export const placeholdersOf = (step: string): readonly string[] =>
   [...step.matchAll(PLACEHOLDER)].map((match) => match[1] ?? '');
 
+/**
+ * Sustituye cada `<marcador>` del paso por el valor que tenga en `values`; el que no esté se deja tal cual. Es una
+ * sola pasada con la misma expresión que `placeholdersOf`: lo sustituido no se vuelve a leer (una celda que contenga
+ * `<otro>` no se expande) y el valor va literal (`$&` en una celda no es un patrón de reemplazo).
+ */
+export const substitutePlaceholders = (step: string, values: ReadonlyMap<string, string>): string =>
+  step.replace(PLACEHOLDER, (marker, name: string) => values.get(name) ?? marker);
+
 /** Palabras clave de bloque en inglés (llevan `:` pegado) y de paso (van seguidas de espacio), de la más larga a la más corta. */
 const ENGLISH_BLOCK_KEYWORDS = ['Scenario Outline', 'Scenario Template', 'Scenarios', 'Scenario', 'Examples', 'Example', 'Background', 'Feature', 'Rule'] as const;
 const ENGLISH_STEP_KEYWORDS = ['Given', 'When', 'Then', 'And', 'But'] as const;

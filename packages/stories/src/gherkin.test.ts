@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { extractGherkinBlocks, findEnglishKeywords, parseOutlines, placeholdersOf, splitCodeBlocks } from './gherkin';
+import { extractGherkinBlocks, findEnglishKeywords, parseOutlines, placeholdersOf, splitCodeBlocks, substitutePlaceholders } from './gherkin';
 
 /** Une líneas con `\n`: así cada fixture se lee como el Gherkin real y no depende de plantillas multilínea. */
 const lines = (...parts: readonly string[]): string => parts.join('\n');
@@ -373,6 +373,42 @@ describe('placeholdersOf', () => {
   it('se puede llamar varias veces seguidas con el mismo resultado', () => {
     const step = 'Cuando envío <usuario> con <contraseña>';
     expect(placeholdersOf(step)).toEqual(placeholdersOf(step));
+  });
+});
+
+describe('substitutePlaceholders', () => {
+  const values = new Map([
+    ['usuario', 'admin@sigpro.test'],
+    ['año', '2026'],
+    ['vacío', ''],
+  ]);
+
+  it('sustituye cada aparición de cada marcador, también con acentos y ñ', () => {
+    expect(substitutePlaceholders('Cuando <usuario> pide <año> y otra vez <usuario>', values)).toBe('Cuando admin@sigpro.test pide 2026 y otra vez admin@sigpro.test');
+  });
+
+  it('un marcador que no está en el mapa se deja tal cual, y también una comparación con < y >', () => {
+    expect(substitutePlaceholders('Entonces <fantasma> con valor < 5 y > 3', values)).toBe('Entonces <fantasma> con valor < 5 y > 3');
+  });
+
+  it('un valor vacío sustituye el marcador por nada', () => {
+    expect(substitutePlaceholders('a<vacío>b', values)).toBe('ab');
+  });
+
+  it('es una sola pasada y el valor va literal: no se expanden marcadores ni patrones de reemplazo', () => {
+    const tricky = new Map([
+      ['a', '<b>'],
+      ['b', 'cuesta $& y $1'],
+    ]);
+    expect(substitutePlaceholders('<a> y <b>', tricky)).toBe('<b> y cuesta $& y $1');
+  });
+
+  it('no mira las propiedades heredadas de Object', () => {
+    expect(substitutePlaceholders('<constructor> <toString>', values)).toBe('<constructor> <toString>');
+  });
+
+  it('un paso sin marcadores no cambia', () => {
+    expect(substitutePlaceholders('Dado un usuario con cuenta activa', values)).toBe('Dado un usuario con cuenta activa');
   });
 });
 

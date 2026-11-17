@@ -1,18 +1,20 @@
-// Línea de comandos de las historias: `stories lint | coverage | sync`. Es un borde: aquí se lee el disco y se
+// Línea de comandos de las historias: `stories lint | coverage | sync | manifest`. Es un borde: aquí se lee el disco y se
 // imprime; la lógica vive en `rules.ts`, `parse.ts` y los módulos de cada comando. Cada comando carga sus
-// módulos con `await import` perezoso: `lint` y `sync` no necesitan el `dist` de `@sigpro/shared`, que solo usa `coverage`.
+// módulos con `await import` perezoso: `lint`, `sync` y `manifest` no necesitan el `dist` de `@sigpro/shared`, que solo usa `coverage`.
 import { mkdir, readdir, readFile, writeFile } from 'node:fs/promises';
-import { join, relative, resolve } from 'node:path';
+import { dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
 import type { CoverageSources } from './coverage';
+import type { StoriesGit } from './git';
 import type { ParseResult } from './parse';
 import type { Finding } from './rules';
 import type { Gh } from './sync';
 
-export type CommandName = 'lint' | 'coverage' | 'sync';
+export type CommandName = 'lint' | 'coverage' | 'sync' | 'manifest';
 
-export type CliArgs = { command: CommandName | null; apply: boolean; write: boolean; check: boolean };
+/** `out` es la ruta de `--out`: `null` si no se pasó y `''` si se pasó sin valor (`manifest` lo rechaza). */
+export type CliArgs = { command: CommandName | null; apply: boolean; write: boolean; check: boolean; out: string | null };
 
 /** Resultado de un comando: lo que se imprime en cada flujo y el código de salida. */
 export type CommandResult = { code: number; stdout: readonly string[]; stderr: readonly string[] };
@@ -21,7 +23,14 @@ const COMMAND_NAMES: ReadonlyMap<string, CommandName> = new Map<string, CommandN
   ['lint', 'lint'],
   ['coverage', 'coverage'],
   ['sync', 'sync'],
+  ['manifest', 'manifest'],
 ]);
+
+/** `--out <ruta>`; sin valor (por ejemplo, `--out` al final) queda como cadena vacía para que `manifest` lo rechace en vez de volcar el JSON por la salida estándar. */
+const outOf = (value: unknown): string | null => {
+  if (value === undefined) return null;
+  return typeof value === 'string' ? value : '';
+};
 
 /**
  * Lee los argumentos (sin `node` ni el script). Puro. Ignora un `--` suelto, porque `pnpm stories:sync -- --apply`
@@ -30,7 +39,7 @@ const COMMAND_NAMES: ReadonlyMap<string, CommandName> = new Map<string, CommandN
 export const parseCliArgs = (argv: readonly string[]): CliArgs => {
   const { values, positionals } = parseArgs({
     args: argv.filter((arg) => arg !== '--'),
-    options: { apply: { type: 'boolean' }, write: { type: 'boolean' }, check: { type: 'boolean' } },
+    options: { apply: { type: 'boolean' }, write: { type: 'boolean' }, check: { type: 'boolean' }, out: { type: 'string' } },
     allowPositionals: true,
     strict: false,
   });
@@ -39,6 +48,7 @@ export const parseCliArgs = (argv: readonly string[]): CliArgs => {
     apply: values.apply === true,
     write: values.write === true,
     check: values.check === true,
+    out: outOf(values.out),
   };
 };
 
@@ -194,6 +204,50 @@ export const runCoverage = async (args: CliArgs, root: string, permissions: read
   };
 };
 
+/** Cómo se lee el estado de git de las historias; el borde real es `readStoriesGit` (`git.ts`) y los tests inyectan uno falso. */
+export type ReadGit = (root: string) => Promise<StoriesGit>;
+
+/** Ruta legible para el resumen: relativa a la raíz y con `/` en cualquier sistema. */
+const displayPath = (root: string, target: string): string => relative(root, target).split('\\').join('/');
+
+/**
+ * `stories manifest`: la lista de todas las filas de todos los Esquemas de las historias (`manifest.ts`) como JSON
+ * `{ generatedAt, storiesCommit, dirty, rows }`. `storiesCommit` y `dirty` los da `readGit`; sin `--out` el JSON va
+ * por la salida estándar y con `--out <ruta>` se escribe en ese archivo (la ruta es relativa a la raíz del
+ * repositorio, no a donde `pnpm --filter` lance el proceso; las carpetas que falten se crean). Con hallazgos del
+ * linter o con archivos que no se pueden leer sale con 1 y no escribe nada: un manifiesto a medias dejaría filas fuera.
+ */
+export const runManifest = async (args: CliArgs, root: string, readGit: ReadGit, now: () => Date = () => new Date()): Promise<CommandResult> => {
+  if (args.out === '') return { code: 2, stdout: [], stderr: ['stories manifest: --out necesita una ruta (--out <ruta>)'] };
+  const { results, findings } = await loadAndLint(root);
+  // Un archivo ilegible ya sale como hallazgo `frontmatter`; se cuenta aparte por si alguna vez dejara de hacerlo.
+  const unreadable = results.filter((result) => !result.ok).length;
+  if (findings.length > 0 || unreadable > 0) {
+    return {
+      code: 1,
+      stdout: findings.map((finding) => formatFinding(finding, root)),
+      stderr: [`stories manifest: abortado, ${findings.length} hallazgos del linter y ${unreadable} archivos ilegibles; corrígelos (pnpm stories:lint) y vuelve a ejecutarlo`],
+    };
+  }
+  const [{ buildManifestRows, countRowsByStory }, git] = await Promise.all([import('./manifest'), readGit(root)]);
+  const rows = buildManifestRows(results.flatMap((result) => (result.ok ? [result.file] : [])));
+  const json = JSON.stringify({ generatedAt: now().toISOString(), storiesCommit: git.storiesCommit, dirty: git.dirty, rows }, null, 2);
+  if (args.out === null) return { code: 0, stdout: [json], stderr: [] };
+  const target = resolve(root, args.out);
+  await mkdir(dirname(target), { recursive: true });
+  await writeFile(target, `${json}\n`, 'utf8');
+  const perStory = [...countRowsByStory(rows)];
+  const state = `${git.storiesCommit === null ? 'sin commit' : `commit ${git.storiesCommit.slice(0, 7)}`}, ${git.dirty ? 'con cambios sin confirmar' : 'sin cambios sin confirmar'}`;
+  return {
+    code: 0,
+    stdout: [
+      `stories manifest: ${rows.length} filas de ${perStory.length} historias escritas en ${displayPath(root, target)} (${state})`,
+      ...perStory.map(([story, count]) => `  ${story}: ${count} ${count === 1 ? 'fila' : 'filas'}`),
+    ],
+    stderr: [],
+  };
+};
+
 /** Los permisos salen de `@sigpro/shared`, que solo este comando necesita; si su `dist` no está compilado lo dice en vez de lanzar. */
 const loadPermissions = async (): Promise<{ ok: true; permissions: readonly string[] } | { ok: false; error: string }> =>
   import('@sigpro/shared').then(
@@ -221,9 +275,16 @@ const COMMANDS: ReadonlyMap<CommandName, Command> = new Map<CommandName, Command
       return runSync(args, root, makeGh());
     },
   ],
+  [
+    'manifest',
+    async (args, root) => {
+      const { readStoriesGit } = await import('./git');
+      return runManifest(args, root, readStoriesGit);
+    },
+  ],
 ]);
 
-const USAGE = 'Uso: stories <lint | coverage | sync> [--apply] [--write] [--check]';
+const USAGE = 'Uso: stories <lint | coverage | sync | manifest> [--apply] [--write] [--check] [--out <ruta>]';
 
 /** Despacha al comando elegido; sin comando (o desconocido) imprime el uso y sale con 2. */
 export const runCommand = async (args: CliArgs, root: string): Promise<CommandResult> => {

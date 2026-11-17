@@ -347,6 +347,7 @@ Desde la raíz del repositorio:
 | `pnpm stories:lint` | Lee `docs/user-stories`, aplica las reglas y sale con código 1 si hay algún hallazgo. Imprime `ruta: [regla] mensaje` y, al final, `stories lint: N archivos revisados, M hallazgos`. Lo ejecuta el CI. |
 | `pnpm stories:coverage` | Cruza los endpoints, las rutas web y móviles y los permisos de la app con lo que cubren las historias e imprime los huecos (código 0). Con `-- --write` escribe `COBERTURA.md`; con `-- --check` sale con 1 si hay huecos o si `COBERTURA.md` está desactualizado. Necesita `@sigpro/shared` compilado (`pnpm --filter @sigpro/shared build`). El objetivo es **cero huecos**, sin lista de exclusiones. |
 | `pnpm stories:sync` | Compara los archivos con los issues de GitHub e imprime el plan **en seco**: no escribe nada. Con `-- --apply` ejecuta el plan. Necesita la CLI `gh` con sesión iniciada. |
+| `pnpm stories:manifest` | Genera el manifiesto de filas (cada fila de cada Esquema, con sus celdas y sus pasos resueltos) como JSON, por la salida estándar o en la ruta de `-- --out <ruta>`; sale con 1 si hay hallazgos del linter. |
 
 Sobre `stories:sync`:
 
