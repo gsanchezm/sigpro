@@ -30,6 +30,10 @@ const BUILDS = [
   { name: 'mobile', command: 'pnpm --filter mobile build', dist: 'apps/mobile/dist' },
 ];
 
+// Archivos de entorno y variables que pueden influir en un build aunque git los ignore: se registra su HASH (nunca su contenido)
+const ENV_FILES = ['.env', '.env.local', 'apps/web/.env', 'apps/web/.env.local', 'apps/mobile/.env', 'apps/mobile/.env.local', 'apps/api/.env'];
+const ENV_VARS = /^(VITE_|EXPO_|NODE_ENV$|CI$|API_TARGET$|WEB_PORT$)/;
+
 const git = (args) => execFileSync('git', args, { cwd: root, encoding: 'utf8' }).trim();
 const out = (text) => console.log(text);
 const sha256 = (data) => createHash('sha256').update(data).digest('hex');
@@ -89,6 +93,11 @@ const record = {
   node: process.version,
   pnpm: toolVersion('pnpm'),
   minFreeMbGuard: MIN_MB,
+  // Los archivos de entorno (solo hash y fecha) y las variables relevantes con las que se construyó
+  envFiles: Object.fromEntries(
+    ENV_FILES.filter((file) => existsSync(resolve(root, file))).map((file) => [file, { sha256: sha256(readFileSync(resolve(root, file))), mtime: statSync(resolve(root, file)).mtime.toISOString() }]),
+  ),
+  buildEnv: Object.fromEntries(Object.entries(process.env).filter(([name]) => ENV_VARS.test(name))),
   startedAt: new Date().toISOString(),
   endedAt: null,
   complete: false,

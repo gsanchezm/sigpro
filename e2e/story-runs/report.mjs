@@ -4,6 +4,7 @@
 // `error-de-prueba` o si las cabeceras no coinciden (distinto commit de las historias o defectos del curso activos).
 // Uso (desde la raíz): node e2e/story-runs/report.mjs
 import { execFileSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
@@ -117,6 +118,12 @@ if (buildsRecord) {
     }
     if (!(buildsRecord.endedAt && buildsRecord.endedAt <= run.startedAt)) problems.push(`La ejecución ${run.runId} empezó antes de que terminara la construcción de los builds`);
   }
+  // Un archivo de entorno (ignorado por git) que cambie después de construir invalidaría la atribución del build
+  for (const [file, recorded] of Object.entries(buildsRecord.envFiles ?? {})) {
+    const path = resolve(root, file);
+    const current = existsSync(path) ? createHash('sha256').update(readFileSync(path)).digest('hex') : null;
+    if (current !== recorded.sha256) problems.push(`El archivo de entorno ${file} cambió (o desapareció) desde la construcción de los builds`);
+  }
   if (git(['cat-file', '-e', `${buildsRecord.commit}^{commit}`]) === null) problems.push(`El commit con el que se construyeron los builds (${String(buildsRecord.commit).slice(0, 7)}) ya no existe`);
   else {
     if (git(['merge-base', '--is-ancestor', buildsRecord.commit, 'HEAD']) === null) problems.push(`El commit de los builds ${buildsRecord.commit.slice(0, 7)} no es antecesor de HEAD`);
@@ -183,7 +190,7 @@ if (buildsProven) {
     out(`| ${build.name} | \`${build.command}\` | ${build.endedAt} | ${build.minFreeMb ?? '—'} MB | ${build.fingerprint.files} | ${build.fingerprint.bytes} | \`${build.fingerprint.sha256.slice(0, 16)}…\` | ${same ? `coincide en las ${gateRunsUsed.length} ejecuciones` : '**NO coincide**'} |`);
   }
   out();
-  out(`**Procedencia de los builds: demostrada por el registro de construcción.** La huella registrada al construir coincide con la que midió la puerta en cada ejecución, el commit de construcción es antecesor de HEAD y ninguna entrada de los builds (${BUILD_INPUTS.join(', ')}) ha cambiado entre \`${buildsRecord.commit.slice(0, 7)}\` y HEAD (${since ? since.split('\n').length : 0} commits posteriores, ninguno toca esas entradas). **Límite:** el registro no está firmado y la demostración supone que \`build.mjs\` se ejecutó tal cual. Es el commit de las FUENTES de los builds: el del arnés y el de las historias son otros (ver arriba).`);
+  out(`**Procedencia de los builds: demostrada por el registro de construcción.** La huella registrada al construir coincide con la que midió la puerta en cada ejecución, el commit de construcción es antecesor de HEAD y ninguna entrada de los builds (${BUILD_INPUTS.join(', ')}) ha cambiado entre \`${buildsRecord.commit.slice(0, 7)}\` y HEAD (${since ? since.split('\n').length : 0} commits posteriores, ninguno toca esas entradas). Archivos de entorno presentes al construir (solo su hash, sin cambios desde entonces): ${Object.keys(buildsRecord.envFiles ?? {}).join(', ') || 'ninguno'}; variables de entorno relevantes: ${Object.keys(buildsRecord.buildEnv ?? {}).join(', ') || 'ninguna'}. **Límite:** el registro no está firmado y la demostración supone que \`build.mjs\` se ejecutó tal cual. Es el commit de las FUENTES de los builds: el del arnés y el de las historias son otros (ver arriba).`);
 } else {
   out('Se usan los `dist` que hay en disco; **ningún `dist` guarda de qué commit salió** y no hay un registro de construcción coherente que lo demuestre (`builds.json`). Lo único que se puede registrar es su huella y la fecha de sus archivos (medidas por la puerta en cada ejecución; si cambiaran entre ejecuciones, el informe lo marca como problema):');
   out();

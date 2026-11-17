@@ -63,6 +63,7 @@ const CASES = [
   ['la huella registrada al construir no coincide con la medida', (d) => mutate(d, 'builds.json', (b) => { b.builds[0].fingerprint.sha256 = 'e'.repeat(64); }), /no coincide con la registrada/],
   ['la construcción no está completa', (d) => mutate(d, 'builds.json', (b) => { b.complete = false; b.pending = ['mobile']; }), /no está completo/],
   ['los builds se construyeron con entradas sin confirmar', (d) => mutate(d, 'builds.json', (b) => { b.inputsDirty = true; }), /entradas sin confirmar/],
+  ['un archivo de entorno cambió después de construir', (d) => mutate(d, 'builds.json', (b) => { const file = Object.keys(b.envFiles)[0]; b.envFiles[file].sha256 = 'd'.repeat(64); }), /archivo de entorno/],
   ['la construcción terminó después de empezar una ejecución', (d) => mutate(d, 'builds.json', (b) => { b.endedAt = '2099-01-01T00:00:00.000Z'; }), /antes de que terminara la construcción/],
   ['no hay centinela de la base aislada', (d) => writeFileSync(join(d, 'centinelas.json'), '[]', 'utf8'), /no consta que la API de esa ejecución escribiera en la base aislada/],
   ['el centinela vio el 5432 accesible', (d) => mutate(d, 'centinelas.json', (list) => list.forEach((s) => { s.port5432Accessible = true; })), /no consta que la API de esa ejecución escribiera en la base aislada/],
