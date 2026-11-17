@@ -25,10 +25,12 @@ if (rejected.length > 0) {
   throw new Error(`Esta suite no admite ${rejected.join(', ')}: usa «npx playwright test -c playwright.stories.config.ts --project=<api|web|mobile>» desde la línea de comandos, sin opciones de paralelismo, repetición ni UI (ver docs/story-runs/LEEME.md).`);
 }
 
-// Una ejecución completa = un identificador NUEVO en cada carga del config (se ignora cualquiera exportado de antemano): el
-// config se carga en el proceso principal y los workers (que Playwright reinicia tras un fallo) lo heredan, así los resultados
-// guardados fila a fila se distinguen de los de otra ejecución.
-process.env.SIGPRO_STORIES_RUN_ID = new Date().toISOString();
+// Una ejecución completa = un identificador propio: el config se carga en el proceso principal Y en cada worker (que Playwright
+// reinicia tras un fallo), así que los workers deben conservar el del principal, y los resultados guardados fila a fila se
+// distinguen de los de otra ejecución. El identificador lleva el PID del proceso principal: uno exportado de antemano por
+// alguien no lo lleva (ni el del padre de un worker) y se sustituye por uno nuevo, así no se puede reutilizar un `runId`.
+const ownedRunId = (id: string | undefined): boolean => id !== undefined && (id.endsWith(`_${process.pid}`) || id.endsWith(`_${process.ppid}`));
+if (!ownedRunId(process.env.SIGPRO_STORIES_RUN_ID)) process.env.SIGPRO_STORIES_RUN_ID = `${new Date().toISOString()}_${process.pid}`;
 
 const WEB_URL = process.env.E2E_WEB_URL ?? 'http://localhost:5173';
 const MOBILE_URL = process.env.E2E_MOBILE_URL ?? 'http://localhost:8081';
