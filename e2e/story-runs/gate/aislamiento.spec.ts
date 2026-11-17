@@ -18,11 +18,14 @@ import {
   type ApiResult,
 } from '../support/api';
 import { RESULTS_ROOT, writeJsonResult } from '../support/evidence';
+import { captureEnvironment, environmentProblems, type RuntimeEnvironment } from '../support/provenance';
 
 // PUERTA DE AISLAMIENTO. Demuestra, con salida registrada, que las filas de las historias se pueden repetir sin
 // interferencias: qué restablece el reinicio de un tenant y qué NO, cómo se comporta el caos, las sesiones y los correos
 // únicos. Si algo de esto cambia, las líneas «Preparación» de las historias y del README dejan de ser ciertas.
-// Falla si la pila no es la esperada (defectos del curso activos, caos encendido o tenants sin su seed).
+// Falla si la pila no es la esperada (defectos del curso activos, caos encendido o tenants sin su seed), si la ejecución no es
+// en serie (un worker, sin reintentos ni repeticiones ni fragmentos) o si la base de datos de Docker del usuario está accesible.
+// Registra, medidos en el momento de la ejecución, los ajustes efectivos, los puertos y la huella de los builds servidos.
 
 const T1 = 'alumno01';
 const T2 = 'alumno02';
@@ -105,8 +108,7 @@ const scenarioUnknownEmail = async (tenant: string): Promise<unknown> => {
   const before: Signature[] = [];
   for (let attempt = 1; attempt <= 2; attempt += 1) before.push(sig(await wrongLogin(tenant, email)));
   await resetTenant(tenant);
-  // Tras el reinicio del tenant el contador sigue donde estaba: el siguiente intento es el 3.º, no el 1.º. Se queda por debajo
-  // del umbral de bloqueo a propósito: la puerta prueba el aislamiento, no cómo trata la app el umbral de un correo sin cuenta.
+  // Tras el reinicio del tenant el contador sigue donde estaba: el siguiente intento es el 3.º, no el 1.º (basta para probarlo)
   const afterReset = sig(await wrongLogin(tenant, email));
   const otherEmail = sig(await wrongLogin(tenant, uniqueEmail('otro')));
   return { before, afterReset, otherEmail };
@@ -160,10 +162,16 @@ const EXPECTED_TESTS = 8;
 let ran = 0;
 let failed = 0;
 const RUN_ID = process.env.SIGPRO_STORIES_RUN_ID ?? 'sin-id';
+const STARTED_AT = new Date().toISOString();
+let environment: RuntimeEnvironment | undefined;
 
 interface GateRun {
   readonly runId: string;
   readonly passed: boolean;
+  readonly startedAt: string;
+  readonly endedAt: string;
+  /** Entorno medido por la puerta en esta ejecución (ajustes efectivos, puertos, huella de los builds). */
+  readonly environment: RuntimeEnvironment | null;
 }
 
 /** Ejecuciones anteriores de la puerta (una por cada `playwright test` completo): el informe exige que la de cada historia pasara. */
@@ -182,23 +190,33 @@ test.afterEach(({}, testInfo) => {
 });
 
 test.afterAll(async () => {
-  // Deja el tenant sin caos y con su seed, pase lo que pase
-  await setChaos(T1, NO_CHAOS);
-  await resetTenant(T1);
-  await resetTenant(T2);
-  const passed = failed === 0 && ran === EXPECTED_TESTS;
+  // Deja el tenant sin caos y con su seed, pase lo que pase (si la API no responde, el registro se escribe igualmente)
+  await (async () => {
+    await setChaos(T1, NO_CHAOS);
+    await resetTenant(T1);
+    await resetTenant(T2);
+  })().catch(() => undefined);
+  const passed = failed === 0 && ran === EXPECTED_TESTS && environment !== undefined && environmentProblems(environment).length === 0;
   writeJsonResult('aislamiento.json', {
     generatedAt: new Date().toISOString(),
     runId: RUN_ID,
     passed,
     ran,
     failed,
-    runs: [...previousGateRuns().filter((run) => run.runId !== RUN_ID), { runId: RUN_ID, passed }],
+    runs: [
+      ...previousGateRuns().filter((run) => run.runId !== RUN_ID),
+      { runId: RUN_ID, passed, startedAt: STARTED_AT, endedAt: new Date().toISOString(), environment: environment ?? null },
+    ],
     entries: evidence,
   });
 });
 
-test('0. la pila es la esperada: defectos del curso apagados y caos apagado', async () => {
+// eslint-disable-next-line no-empty-pattern
+test('0. la pila es la esperada: ejecución en serie, base aislada, defectos del curso apagados y caos apagado', async ({}, testInfo) => {
+  // Lo primero, sin tocar la API: los ajustes efectivos y el entorno medido ahora (no una foto hecha a mano)
+  environment = await captureEnvironment(testInfo);
+  record('Entorno medido por la puerta', environment, 'Ajustes en serie; la base de Docker (5432) inaccesible; PostgreSQL aislado accesible; huella de los builds');
+  expect(environmentProblems(environment), 'el entorno de la ejecución').toEqual([]);
   const config = await readConfig(T1);
   const health = await call('GET', '/health');
   record('Configuración pública de alumno01', { status: config.status, body: config.body }, 'plantedBugs debe ser false y el caos, cero');

@@ -9,6 +9,20 @@ import { defineConfig, devices } from '@playwright/test';
 //
 // Proyectos: `api` (sin navegador), `web` (escritorio 1440 px) y `mobile` (Expo web a 390 px; NO es nativo).
 
+// Esta suite NO admite, y se niega a cargar con ellos:
+//  - el modo UI y el servidor de pruebas (lo que usa, p. ej., la extensión de VS Code): se saltan la puerta de aislamiento y
+//    conservan el mismo identificador de ejecución durante toda la sesión, así que mezclarían resultados de estados distintos;
+//  - `--workers`/`-j`, `--retries`, `--repeat-each`, `--fully-parallel` y `--shard`: el aislamiento entre filas depende de la
+//    ejecución en serie (un worker, sin reintentos ni repeticiones ni fragmentos);
+//  - `--no-deps`: quita la puerta de aislamiento.
+// Es la defensa de la línea de comandos. Como segunda defensa, la puerta y cada historia leen los valores EFECTIVOS y se niegan a
+// ejecutar si no son los de la serie (por ejemplo, si alguien edita este archivo), y el informe lo vuelve a comprobar.
+const REJECTED_FLAGS = ['--ui', '--ui-host', '--ui-port', 'test-server', '--workers', '--retries', '--repeat-each', '--fully-parallel', '--shard', '--no-deps'];
+const rejected = process.argv.filter((arg) => REJECTED_FLAGS.some((flag) => arg === flag || arg.startsWith(`${flag}=`)) || /^-j\d*$/.test(arg));
+if (rejected.length > 0) {
+  throw new Error(`Esta suite no admite ${rejected.join(', ')}: usa «npx playwright test -c playwright.stories.config.ts --project=<api|web|mobile>» desde la línea de comandos, sin opciones de paralelismo, repetición ni UI (ver docs/story-runs/LEEME.md).`);
+}
+
 // Una ejecución completa = un identificador: el config se carga en el proceso principal y los workers (que Playwright
 // reinicia tras un fallo) lo heredan, así los resultados guardados fila a fila se distinguen de los de otra ejecución.
 process.env.SIGPRO_STORIES_RUN_ID ??= new Date().toISOString();

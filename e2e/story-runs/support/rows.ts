@@ -4,6 +4,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { API_URL, NO_CHAOS, field, readConfig, setChaos } from './api';
 import { RESULTS_ROOT, writeJsonResult } from './evidence';
+import { effectiveSettings, settingsProblems } from './provenance';
 
 // MARCO DE EJECUCIÓN POR FILA. Cada fila de cada Esquema de una historia (manifiesto: `pnpm stories:manifest`) es UNA prueba,
 // con un manejador que traduce las celdas de la fila a acciones y devuelve lo que se OBSERVÓ junto a lo que la historia ESPERA.
@@ -140,6 +141,19 @@ const assertManifestFresh = (manifest: Manifest): void => {
   }
 };
 
+const STARTED_AT = new Date().toISOString();
+
+/**
+ * La puerta de aislamiento debe constar superada EN ESTA ejecución (mismo `runId`). Con `--no-deps` la puerta no corre y aquí eso
+ * impide ejecutar cualquier fila: no basta con que el informe lo detecte después.
+ */
+const assertGatePassed = (): void => {
+  const path = resolve(RESULTS_ROOT, 'aislamiento.json');
+  const saved = existsSync(path) ? (JSON.parse(readFileSync(path, 'utf8')) as { readonly runs?: ReadonlyArray<{ readonly runId: string; readonly passed: boolean }> }) : {};
+  const run = (saved.runs ?? []).find((entry) => entry.runId === RUN_ID);
+  if (!run?.passed) throw new Error(`La puerta de aislamiento no consta superada en esta ejecución (runId ${RUN_ID}): ¿se usó --no-deps, o falló? No se ejecuta ninguna fila.`);
+};
+
 /** La app debe ser la esperada y los tenants de la historia, sin caos. Devuelve el estado observado para el encabezado. */
 export const assertCleanStack = async (tenants: readonly string[]): Promise<{ readonly plantedBugs: boolean }> => {
   const first = await readConfig(tenants[0] ?? 'alumno01');
@@ -206,10 +220,14 @@ const register = (run: Registration): void => {
   let preconditionFailed = false;
 
   test.describe(run.story, () => {
-    test.beforeAll(() => {
+    // eslint-disable-next-line no-empty-pattern
+    test.beforeAll(({}, testInfo) => {
       try {
         assertManifestFresh(manifest);
         if (rows.length === 0) throw new Error(`El manifiesto no tiene filas de ${run.story}`);
+        const settings = settingsProblems(effectiveSettings(testInfo));
+        if (settings.length > 0) throw new Error(`Ajustes de ejecución no admitidos: ${settings.join('; ')}. El aislamiento entre filas exige ejecución en serie.`);
+        assertGatePassed();
       } catch (error) {
         preconditionFailed = true;
         throw error;
@@ -222,7 +240,8 @@ const register = (run: Registration): void => {
       else test(row.rowId, async () => runRow(row, undefined));
     }
 
-    test.afterAll(async () => {
+    // eslint-disable-next-line no-empty-pattern
+    test.afterAll(async ({}, testInfo) => {
       if (preconditionFailed) return;
       // Lo que no llegó a ejecutarse (p. ej. porque el proceso se interrumpió o se repitió una sola fila) queda registrado como
       // error del arnés, nunca como una fila «no ejecutable» legítima
@@ -259,6 +278,9 @@ const register = (run: Registration): void => {
           manifestGeneratedAt: manifest.generatedAt,
           node: process.version,
           runId: RUN_ID,
+          // Ajustes efectivos de esta ejecución (el informe exige los de ejecución en serie) y cuándo empezaron las filas
+          settings: effectiveSettings(testInfo),
+          startedAt: STARTED_AT,
           executedAt: new Date().toISOString(),
         },
         totals: { rows: all.length, ...totals },
