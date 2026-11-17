@@ -268,8 +268,10 @@ const register = (run: Registration): void => {
       );
       const totals = all.reduce<Record<string, number>>((acc, r) => ({ ...acc, [r.verdict]: (acc[r.verdict] ?? 0) + 1 }), {});
       const config = await readConfig(run.tenants[0] ?? 'alumno01').catch(() => undefined);
-      // Una ejecución incompleta (p. ej. una sola fila con --grep) va aparte y NO pisa el JSON completo de la historia
-      writeJsonResult(complete ? `EP-LOGIN/${run.story}.json` : `EP-LOGIN/partial/${run.story}.json`, {
+      // Una ejecución incompleta (p. ej. una sola fila con --grep) o con errores del arnés va aparte (`partial/`) y NO pisa el JSON
+      // completo y limpio de la historia: así un fallo no destruye la evidencia buena anterior
+      const clean = complete && all.every((result) => result.verdict !== 'error-de-prueba');
+      writeJsonResult(clean ? `EP-LOGIN/${run.story}.json` : `EP-LOGIN/partial/${run.story}.json`, {
         header: {
           story: run.story,
           surface: run.surface,
