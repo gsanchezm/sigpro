@@ -18,7 +18,7 @@ import {
   type ApiResult,
 } from '../support/api';
 import { RESULTS_ROOT, writeJsonResult } from '../support/evidence';
-import { captureEnvironment, environmentProblems, type RuntimeEnvironment } from '../support/provenance';
+import { captureEnvironment, environmentProblems, harnessCommit, harnessDirty, type RuntimeEnvironment } from '../support/provenance';
 
 // PUERTA DE AISLAMIENTO. Demuestra, con salida registrada, que las filas de las historias se pueden repetir sin
 // interferencias: qué restablece el reinicio de un tenant y qué NO, cómo se comporta el caos, las sesiones y los correos
@@ -170,6 +170,9 @@ interface GateRun {
   readonly passed: boolean;
   readonly startedAt: string;
   readonly endedAt: string;
+  /** Commit del arnés y si tenía cambios sin confirmar al ejecutar la puerta. */
+  readonly commit: string;
+  readonly harnessDirty: boolean;
   /** Entorno medido por la puerta en esta ejecución (ajustes efectivos, puertos, huella de los builds). */
   readonly environment: RuntimeEnvironment | null;
 }
@@ -186,7 +189,8 @@ const previousGateRuns = (): readonly GateRun[] => {
 // eslint-disable-next-line no-empty-pattern
 test.afterEach(({}, testInfo) => {
   ran += 1;
-  if (testInfo.status !== testInfo.expectedStatus) failed += 1;
+  // Un reintento (p. ej. declarado en un spec con `describe.configure({ retries })`) invalida la ejecución en serie
+  if (testInfo.status !== testInfo.expectedStatus || testInfo.retry !== 0) failed += 1;
 });
 
 test.afterAll(async () => {
@@ -205,7 +209,7 @@ test.afterAll(async () => {
     failed,
     runs: [
       ...previousGateRuns().filter((run) => run.runId !== RUN_ID),
-      { runId: RUN_ID, passed, startedAt: STARTED_AT, endedAt: new Date().toISOString(), environment: environment ?? null },
+      { runId: RUN_ID, passed, startedAt: STARTED_AT, endedAt: new Date().toISOString(), commit: harnessCommit(), harnessDirty: harnessDirty(), environment: environment ?? null },
     ],
     entries: evidence,
   });

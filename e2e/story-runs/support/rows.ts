@@ -141,8 +141,6 @@ const assertManifestFresh = (manifest: Manifest): void => {
   }
 };
 
-const STARTED_AT = new Date().toISOString();
-
 /**
  * La puerta de aislamiento debe constar superada EN ESTA ejecución (mismo `runId`). Con `--no-deps` la puerta no corre y aquí eso
  * impide ejecutar cualquier fila: no basta con que el informe lo detecte después.
@@ -197,7 +195,9 @@ const register = (run: Registration): void => {
     return saved.runId === RUN_ID ? saved.result : undefined;
   };
 
-  const runRow = async (row: ManifestRow, fixtures: BrowserFixtures | undefined): Promise<void> => {
+  const runRow = async (row: ManifestRow, fixtures: BrowserFixtures | undefined, retry: number): Promise<void> => {
+    // Un reintento (p. ej. declarado en un spec) invalida la ejecución en serie: se niega, no se reintenta en silencio
+    if (retry !== 0) throw new Error(`Reintento ${retry} de ${row.rowId}: esta suite no admite reintentos`);
     const started = performance.now();
     const base = { rowId: row.rowId, esquemaIndex: row.esquemaIndex, esquema: row.esquema, rowIndex: row.rowIndex, cells: row.cells, resolvedSteps: row.resolvedSteps };
     if (!run.hasHandler(row.esquemaIndex)) {
@@ -218,10 +218,13 @@ const register = (run: Registration): void => {
 
   // Si la precondición falla (manifiesto obsoleto…), `afterAll` no debe escribir nada: pisaría un JSON bueno con filas sin evaluar
   let preconditionFailed = false;
+  // Cuándo empezó ESTA historia (su `beforeAll`), no cuándo se cargó el módulo del worker
+  let storyStartedAt = new Date().toISOString();
 
   test.describe(run.story, () => {
     // eslint-disable-next-line no-empty-pattern
     test.beforeAll(({}, testInfo) => {
+      storyStartedAt = new Date().toISOString();
       try {
         assertManifestFresh(manifest);
         if (rows.length === 0) throw new Error(`El manifiesto no tiene filas de ${run.story}`);
@@ -236,8 +239,9 @@ const register = (run: Registration): void => {
 
     for (const row of rows) {
       // Solo las pruebas de navegador piden `page`: así las de API no abren un navegador
-      if (run.browser) test(row.rowId, async ({ page, context }) => runRow(row, { page, context }));
-      else test(row.rowId, async () => runRow(row, undefined));
+      if (run.browser) test(row.rowId, async ({ page, context }, testInfo) => runRow(row, { page, context }, testInfo.retry));
+      // eslint-disable-next-line no-empty-pattern
+      else test(row.rowId, async ({}, testInfo) => runRow(row, undefined, testInfo.retry));
     }
 
     // eslint-disable-next-line no-empty-pattern
@@ -280,7 +284,7 @@ const register = (run: Registration): void => {
           runId: RUN_ID,
           // Ajustes efectivos de esta ejecución (el informe exige los de ejecución en serie) y cuándo empezaron las filas
           settings: effectiveSettings(testInfo),
-          startedAt: STARTED_AT,
+          startedAt: storyStartedAt,
           executedAt: new Date().toISOString(),
         },
         totals: { rows: all.length, ...totals },
