@@ -4,7 +4,8 @@ import { defineConfig, devices } from '@playwright/test';
 //
 // A propósito NO hay `webServer` ni `globalSetup`: la pila (PostgreSQL propio, API con PLANTED_BUGS=false, web y Expo web)
 // la levanta quien ejecuta, y el spec de `gate/` se niega a seguir si la pila no es la esperada. Así ningún reinicio global
-// ni ningún arranque automático toca otra base de datos. Ver docs/user-stories/README.md («Cómo se ejecutan los ejemplos»).
+// ni ningún arranque automático toca otra base de datos. Pasos para levantarla y repetir la ejecución: docs/story-runs/LEEME.md
+// (carpeta local del instructor, fuera de git).
 //
 // Proyectos: `api` (sin navegador), `web` (escritorio 1440 px) y `mobile` (Expo web a 390 px; NO es nativo).
 
