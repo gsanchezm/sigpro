@@ -116,8 +116,8 @@ interface RowResult extends Outcome {
   readonly ms: number;
 }
 
-/** Identifica una ejecución completa: lo fija el config de Playwright en el proceso principal y los workers lo heredan. */
-const RUN_ID = process.env.STORY_RUN_ID ?? 'sin-id';
+/** Identifica una ejecución completa: lo fija el config de Playwright en el proceso principal y los workers lo heredan. No lo fijes a mano: dos ejecuciones con el mismo id mezclarían filas. */
+const RUN_ID = process.env.SIGPRO_STORIES_RUN_ID ?? 'sin-id';
 const rowFile = (rowId: string): string => `EP-LOGIN/rows/${rowId.replaceAll('/', '__')}.json`;
 
 const git = (args: readonly string[]): string => {
@@ -187,7 +187,8 @@ const register = (run: Registration): void => {
     const started = performance.now();
     const base = { rowId: row.rowId, esquemaIndex: row.esquemaIndex, esquema: row.esquema, rowIndex: row.rowIndex, cells: row.cells, resolvedSteps: row.resolvedSteps };
     if (!run.hasHandler(row.esquemaIndex)) {
-      saveRow({ ...base, ...notExecutable('(sin manejador)', `El Esquema ${row.esquemaIndex} no tiene manejador en el arnés`), ms: 0 });
+      // Un fallo del arnés, no una fila «no ejecutable»: el informe debe poder distinguir lo que no se pudo ejecutar de lo que se olvidó
+      saveRow({ ...base, verdict: 'error-de-prueba', expected: '(sin manejador)', observed: `El Esquema ${row.esquemaIndex} no tiene manejador en el arnés`, note: 'Fila sin manejador', ms: 0 });
       throw new Error(`Fila sin manejador: ${row.rowId}`);
     }
     try {
@@ -201,10 +202,18 @@ const register = (run: Registration): void => {
     }
   };
 
+  // Si la precondición falla (manifiesto obsoleto…), `afterAll` no debe escribir nada: pisaría un JSON bueno con filas sin evaluar
+  let preconditionFailed = false;
+
   test.describe(run.story, () => {
     test.beforeAll(() => {
-      assertManifestFresh(manifest);
-      if (rows.length === 0) throw new Error(`El manifiesto no tiene filas de ${run.story}`);
+      try {
+        assertManifestFresh(manifest);
+        if (rows.length === 0) throw new Error(`El manifiesto no tiene filas de ${run.story}`);
+      } catch (error) {
+        preconditionFailed = true;
+        throw error;
+      }
     });
 
     for (const row of rows) {
@@ -214,7 +223,10 @@ const register = (run: Registration): void => {
     }
 
     test.afterAll(async () => {
-      // Lo que no llegó a ejecutarse (p. ej. porque el proceso se interrumpió) queda registrado, no desaparece
+      if (preconditionFailed) return;
+      // Lo que no llegó a ejecutarse (p. ej. porque el proceso se interrumpió o se repitió una sola fila) queda registrado como
+      // error del arnés, nunca como una fila «no ejecutable» legítima
+      const complete = rows.every((row) => results.has(row.rowId) || loadSavedRow(row.rowId) !== undefined);
       const all = rows.map(
         (row): RowResult =>
           results.get(row.rowId) ?? loadSavedRow(row.rowId) ?? {
@@ -224,19 +236,25 @@ const register = (run: Registration): void => {
             rowIndex: row.rowIndex,
             cells: row.cells,
             resolvedSteps: row.resolvedSteps,
-            ...notExecutable('(no evaluado)', 'La fila no llegó a ejecutarse'),
+            verdict: 'error-de-prueba',
+            expected: '(no evaluado)',
+            observed: '(la fila no llegó a ejecutarse en esta ejecución)',
+            note: 'Ejecución incompleta: no es un hallazgo sobre la app',
             ms: 0,
           },
       );
       const totals = all.reduce<Record<string, number>>((acc, r) => ({ ...acc, [r.verdict]: (acc[r.verdict] ?? 0) + 1 }), {});
       const config = await readConfig(run.tenants[0] ?? 'alumno01').catch(() => undefined);
-      writeJsonResult(`EP-LOGIN/${run.story}.json`, {
+      // Una ejecución incompleta (p. ej. una sola fila con --grep) va aparte y NO pisa el JSON completo de la historia
+      writeJsonResult(complete ? `EP-LOGIN/${run.story}.json` : `EP-LOGIN/partial/${run.story}.json`, {
         header: {
           story: run.story,
           surface: run.surface,
           apiUrl: API_URL,
           apiPlantedBugs: config ? field(config.body, 'plantedBugs') : 'desconocido',
           commit: git(['rev-parse', 'HEAD']),
+          // El resultado se asocia a un commit: si el arnés tenía cambios sin confirmar, el informe lo marca como problema
+          harnessDirty: git(['status', '--porcelain', '--', 'e2e/story-runs', 'e2e/playwright.stories.config.ts']) !== '',
           storiesCommit: manifest.storiesCommit,
           manifestGeneratedAt: manifest.generatedAt,
           node: process.version,

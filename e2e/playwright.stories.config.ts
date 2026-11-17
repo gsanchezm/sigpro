@@ -11,7 +11,7 @@ import { defineConfig, devices } from '@playwright/test';
 
 // Una ejecución completa = un identificador: el config se carga en el proceso principal y los workers (que Playwright
 // reinicia tras un fallo) lo heredan, así los resultados guardados fila a fila se distinguen de los de otra ejecución.
-process.env.STORY_RUN_ID ??= new Date().toISOString();
+process.env.SIGPRO_STORIES_RUN_ID ??= new Date().toISOString();
 
 const WEB_URL = process.env.E2E_WEB_URL ?? 'http://localhost:5173';
 const MOBILE_URL = process.env.E2E_MOBILE_URL ?? 'http://localhost:8081';
@@ -35,8 +35,10 @@ export default defineConfig({
     screenshot: 'off',
   },
   projects: [
-    { name: 'api', testMatch: ['**/gate/**/*.spec.ts', '**/api/**/*.spec.ts'] },
-    { name: 'web', testMatch: '**/web/**/*.spec.ts', use: { ...devices['Desktop Chrome'], viewport: { width: 1440, height: 900 }, baseURL: WEB_URL } },
-    { name: 'mobile', testMatch: '**/mobile/**/*.spec.ts', use: { ...devices['Desktop Chrome'], ...phone, baseURL: MOBILE_URL } },
+    // La puerta de aislamiento es un proyecto aparte y los demás DEPENDEN de él: si no pasa, no se ejecuta ninguna fila
+    { name: 'gate', testMatch: '**/gate/**/*.spec.ts' },
+    { name: 'api', testMatch: '**/api/**/*.spec.ts', dependencies: ['gate'] },
+    { name: 'web', testMatch: '**/web/**/*.spec.ts', use: { ...devices['Desktop Chrome'], viewport: { width: 1440, height: 900 }, baseURL: WEB_URL }, dependencies: ['gate'] },
+    { name: 'mobile', testMatch: '**/mobile/**/*.spec.ts', use: { ...devices['Desktop Chrome'], ...phone, baseURL: MOBILE_URL }, dependencies: ['gate'] },
   ],
 });

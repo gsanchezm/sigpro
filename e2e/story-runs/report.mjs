@@ -13,6 +13,7 @@ const dir = resolve(results, 'EP-LOGIN');
 const readJson = (path) => JSON.parse(readFileSync(path, 'utf8'));
 const manifest = readJson(resolve(results, 'manifest.json'));
 const entorno = existsSync(resolve(results, 'entorno.json')) ? readJson(resolve(results, 'entorno.json')) : null;
+const gate = existsSync(resolve(results, 'aislamiento.json')) ? readJson(resolve(results, 'aislamiento.json')) : null;
 const files = readdirSync(dir).filter((name) => /^US-.*\.json$/.test(name)).sort();
 const stories = files.map((name) => readJson(resolve(dir, name)));
 
@@ -23,11 +24,20 @@ const SURFACE_LABEL = { api: 'API (HTTP)', web: 'Web, escritorio 1440 px', 'expo
 const problems = [];
 const expectedIds = new Set(manifest.rows.map((row) => row.rowId));
 const seen = new Map();
-for (const story of stories) for (const row of story.rows) seen.set(row.rowId, { story, row });
+for (const story of stories) {
+  for (const row of story.rows) {
+    if (seen.has(row.rowId)) problems.push(`Fila duplicada en los resultados: ${row.rowId}`);
+    if (!VERDICTS.includes(row.verdict)) problems.push(`Veredicto desconocido «${row.verdict}» en ${row.rowId}`);
+    seen.set(row.rowId, { story, row });
+  }
+}
 for (const id of expectedIds) if (!seen.has(id)) problems.push(`Falta el resultado de la fila ${id}`);
 for (const id of seen.keys()) if (!expectedIds.has(id)) problems.push(`Resultado de una fila que no está en el manifiesto: ${id}`);
 for (const story of stories) {
   if (story.header.storiesCommit !== manifest.storiesCommit) problems.push(`${story.header.story}: commit de las historias ${story.header.storiesCommit} ≠ manifiesto ${manifest.storiesCommit}`);
+  if (story.header.harnessDirty !== false) problems.push(`${story.header.story}: el arnés tenía cambios sin confirmar al ejecutar (harnessDirty=${story.header.harnessDirty}); el resultado no se puede asociar a un commit`);
+  const gateRun = (gate?.runs ?? []).find((run) => run.runId === story.header.runId);
+  if (!gateRun?.passed) problems.push(`${story.header.story}: la puerta de aislamiento no consta como superada en su ejecución (runId ${story.header.runId})`);
   if (story.header.apiPlantedBugs !== false) problems.push(`${story.header.story}: la API tenía los defectos del curso activos o desconocidos (${story.header.apiPlantedBugs})`);
 }
 const withError = [...seen.values()].filter(({ row }) => row.verdict === 'error-de-prueba');
@@ -54,14 +64,16 @@ out('> Documento del instructor, **ignorado por git** (repositorio público). Lo
 out();
 out('## Cómo se ejecutó');
 out();
-const first = stories[0]?.header;
-out(`- **Código del arnés:** commit \`${first?.commit?.slice(0, 7) ?? '?'}\` · **historias:** commit \`${manifest.storiesCommit?.slice(0, 7) ?? '?'}\` (sin cambios sin confirmar al ejecutar) · manifiesto generado ${manifest.generatedAt}.`);
+out(`- **Historias:** commit \`${manifest.storiesCommit?.slice(0, 7) ?? '?'}\` (sin cambios sin confirmar al ejecutar) · manifiesto generado ${manifest.generatedAt}.`);
+out('- **Código del arnés y ejecución** (cada historia se ejecuta entera de una vez; una ejecución por superficie):');
+for (const story of stories) out(`  - ${story.header.story}: ${SURFACE_LABEL[story.header.surface] ?? story.header.surface} · commit \`${story.header.commit?.slice(0, 7) ?? '?'}\` · runId ${story.header.runId} · ${story.header.executedAt}`);
 if (entorno) {
   out(`- **Base de datos:** ${entorno.postgres.version}, base \`${entorno.postgres.database}\` en el puerto ${entorno.postgres.port} (${entorno.postgres.tenants} tenants con su seed). Aislada: sin Docker ni Render; el puerto 5432 (el Docker del usuario) estaba ${entorno.puertos['5432 (Docker del usuario)'] ? '**abierto**' : 'cerrado'}.`);
   out(`- **API:** \`${stories[0]?.header.apiUrl}\` con \`plantedBugs: ${entorno.api.plantedBugs}\` (defectos del curso apagados), caos a cero, sin simulador de misión. Node ${entorno.node}.`);
 }
-out('- **Web y móvil:** se sirvieron los `dist` ya construidos el 2026-11-12 14:37 (-06:00); el único commit posterior en web, móvil, shared y api es `d4eb6f7` (NC y filtros de Programas, ninguno de Acceso).');
-out('- **Aislamiento:** antes de ejecutar nada pasó la puerta `e2e/story-runs/gate/aislamiento.spec.ts` (8 pruebas; evidencia en `docs/story-runs/aislamiento.json`). Cada fila reinicia su tenant, comprueba que el caos está a cero y usa correos únicos y sesiones propias.');
+if (entorno?.dist) out(`- **Web y móvil:** ${entorno.dist}`);
+const gateRuns = gate?.runs ?? [];
+out(`- **Aislamiento:** la puerta \`e2e/story-runs/gate/aislamiento.spec.ts\` es un proyecto del que dependen \`api\`, \`web\` y \`mobile\`; consta superada en ${gateRuns.filter((run) => run.passed).length} de ${gateRuns.length} ejecuciones registradas (evidencia en \`docs/story-runs/aislamiento.json\`). Cada fila reinicia su tenant, comprueba que el caos está a cero y usa correos únicos y sesiones propias.`);
 out('- **Veredictos:** `coincide` (la app hace lo que dice la historia), `discrepa` (no lo hace; la historia es la fuente de verdad), `pendiente-de-decision` (depende de algo que la historia deja pendiente), `no-ejecutable` (no se pudo o no se debe ejecutar aquí; motivo en la nota). Un `error-de-prueba` sería un fallo del arnés y no se admite en la entrega.');
 out('- **Tiempos:** la columna `ms` es el tiempo de la fila entera (preparación incluida), un dato, no un veredicto. Las historias no fijan plazos de respuesta.');
 out();
