@@ -8,6 +8,10 @@ import { defineConfig, devices } from '@playwright/test';
 //
 // Proyectos: `api` (sin navegador), `web` (escritorio 1440 px) y `mobile` (Expo web a 390 px; NO es nativo).
 
+// Una ejecución completa = un identificador: el config se carga en el proceso principal y los workers (que Playwright
+// reinicia tras un fallo) lo heredan, así los resultados guardados fila a fila se distinguen de los de otra ejecución.
+process.env.STORY_RUN_ID ??= new Date().toISOString();
+
 const WEB_URL = process.env.E2E_WEB_URL ?? 'http://localhost:5173';
 const MOBILE_URL = process.env.E2E_MOBILE_URL ?? 'http://localhost:8081';
 const phone = { viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, hasTouch: true };

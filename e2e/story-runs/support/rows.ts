@@ -1,6 +1,6 @@
 import { test, type BrowserContext, type Page } from '@playwright/test';
 import { execFileSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { API_URL, NO_CHAOS, field, readConfig, setChaos } from './api';
 import { RESULTS_ROOT, writeJsonResult } from './evidence';
@@ -116,6 +116,10 @@ interface RowResult extends Outcome {
   readonly ms: number;
 }
 
+/** Identifica una ejecución completa: lo fija el config de Playwright en el proceso principal y los workers lo heredan. */
+const RUN_ID = process.env.STORY_RUN_ID ?? 'sin-id';
+const rowFile = (rowId: string): string => `EP-LOGIN/rows/${rowId.replaceAll('/', '__')}.json`;
+
 const git = (args: readonly string[]): string => {
   try {
     return execFileSync('git', [...args], { encoding: 'utf8', cwd: resolve(RESULTS_ROOT, '..', '..') }).trim();
@@ -166,20 +170,33 @@ const register = (run: Registration): void => {
   const rows = manifest.rows.filter((row) => row.story === run.story);
   const results = new Map<string, RowResult>();
 
+  // Cada resultado se guarda en disco al momento: si una prueba lanza una excepción, Playwright reinicia el worker y el mapa en
+  // memoria se pierde; el JSON final se arma con lo guardado de ESTA ejecución (mismo `RUN_ID`) y nunca con restos de otra.
+  const saveRow = (result: RowResult): void => {
+    results.set(result.rowId, result);
+    writeJsonResult(rowFile(result.rowId), { runId: RUN_ID, result });
+  };
+  const loadSavedRow = (rowId: string): RowResult | undefined => {
+    const path = resolve(RESULTS_ROOT, rowFile(rowId));
+    if (!existsSync(path)) return undefined;
+    const saved = JSON.parse(readFileSync(path, 'utf8')) as { readonly runId: string; readonly result: RowResult };
+    return saved.runId === RUN_ID ? saved.result : undefined;
+  };
+
   const runRow = async (row: ManifestRow, fixtures: BrowserFixtures | undefined): Promise<void> => {
     const started = performance.now();
     const base = { rowId: row.rowId, esquemaIndex: row.esquemaIndex, esquema: row.esquema, rowIndex: row.rowIndex, cells: row.cells, resolvedSteps: row.resolvedSteps };
     if (!run.hasHandler(row.esquemaIndex)) {
-      results.set(row.rowId, { ...base, ...notExecutable('(sin manejador)', `El Esquema ${row.esquemaIndex} no tiene manejador en el arnés`), ms: 0 });
+      saveRow({ ...base, ...notExecutable('(sin manejador)', `El Esquema ${row.esquemaIndex} no tiene manejador en el arnés`), ms: 0 });
       throw new Error(`Fila sin manejador: ${row.rowId}`);
     }
     try {
       await assertCleanStack(run.tenants);
       const result = await run.execute(row, fixtures);
-      results.set(row.rowId, { ...base, ...result, ms: Math.round(performance.now() - started) });
+      saveRow({ ...base, ...result, ms: Math.round(performance.now() - started) });
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      results.set(row.rowId, { ...base, verdict: 'error-de-prueba', expected: '(no evaluado)', observed: message, note: 'Excepción del arnés; no es un hallazgo sobre la app', ms: Math.round(performance.now() - started) });
+      saveRow({ ...base, verdict: 'error-de-prueba', expected: '(no evaluado)', observed: message, note: 'Excepción del arnés; no es un hallazgo sobre la app', ms: Math.round(performance.now() - started) });
       throw error;
     }
   };
@@ -200,7 +217,7 @@ const register = (run: Registration): void => {
       // Lo que no llegó a ejecutarse (p. ej. porque el proceso se interrumpió) queda registrado, no desaparece
       const all = rows.map(
         (row): RowResult =>
-          results.get(row.rowId) ?? {
+          results.get(row.rowId) ?? loadSavedRow(row.rowId) ?? {
             rowId: row.rowId,
             esquemaIndex: row.esquemaIndex,
             esquema: row.esquema,
@@ -223,6 +240,7 @@ const register = (run: Registration): void => {
           storiesCommit: manifest.storiesCommit,
           manifestGeneratedAt: manifest.generatedAt,
           node: process.version,
+          runId: RUN_ID,
           executedAt: new Date().toISOString(),
         },
         totals: { rows: all.length, ...totals },
