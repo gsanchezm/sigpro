@@ -20,7 +20,8 @@ const results = resolve(root, 'docs', 'story-runs');
 const MIN_MB = Number(process.env.SIGPRO_BUILD_MIN_FREE_MB ?? '500');
 
 // Lo que entra en un build: si algo de esto tiene cambios sin confirmar, el build no se puede atribuir a un commit
-const INPUTS = ['apps', 'packages', 'examples', 'package.json', 'pnpm-lock.yaml', 'pnpm-workspace.yaml', 'tsconfig.base.json'];
+// (`apps/web/scripts/zip-examples.mjs` mete en el zip de ejemplos `docs/GUIA-ALUMNO.md` y el workflow de alumnos)
+const INPUTS = ['apps', 'packages', 'examples', 'package.json', 'pnpm-lock.yaml', 'pnpm-workspace.yaml', 'tsconfig.base.json', 'docs/GUIA-ALUMNO.md', '.github/workflows/students-e2e.yml'];
 
 // Mismo orden que las dependencias: la API, la web y la app móvil leen `packages/shared/dist`
 const BUILDS = [
@@ -63,9 +64,9 @@ const fingerprint = (relativeDir) => {
   }
 };
 
-const portOpen = (port) =>
+const probe = (host, port) =>
   new Promise((done) => {
-    const socket = createConnection({ host: '127.0.0.1', port, timeout: 1500 });
+    const socket = createConnection({ host, port, timeout: 1500 });
     socket.once('connect', () => {
       socket.destroy();
       done(true);
@@ -76,6 +77,9 @@ const portOpen = (port) =>
       done(false);
     });
   });
+
+// IPv4 e IPv6: Vite escucha a veces solo en `::1`
+const portOpen = async (port) => (await Promise.all([probe('127.0.0.1', port), probe('::1', port)])).some(Boolean);
 
 const toolVersion = (command) => {
   try {
@@ -105,14 +109,26 @@ const record = {
   pending: BUILDS.map((build) => build.name),
 };
 
+// Cada intento deja SU registro (`builds/<intento>.json`); `builds.json` solo se sustituye cuando el intento está COMPLETO y
+// comprobado, así un intento abortado o con entradas sucias nunca destruye el registro bueno anterior
+const attempt = record.startedAt.replaceAll(':', '-').replaceAll('.', '-');
 const save = () => {
-  mkdirSync(results, { recursive: true });
-  writeFileSync(resolve(results, 'builds.json'), `${JSON.stringify(record, null, 2)}\n`, 'utf8');
+  mkdirSync(resolve(results, 'builds'), { recursive: true });
+  const text = `${JSON.stringify(record, null, 2)}\n`;
+  writeFileSync(resolve(results, 'builds', `${attempt}.json`), text, 'utf8');
+  if (record.complete === true) writeFileSync(resolve(results, 'builds.json'), text, 'utf8');
+};
+
+// El commit y las entradas se leen al empezar Y otra vez al terminar cada build: un cambio o un checkout durante la construcción
+// invalida el intento
+const changedSinceStart = () => {
+  if (git(['rev-parse', 'HEAD']) !== record.commit) return `HEAD cambió durante la construcción (era ${record.commit.slice(0, 7)})`;
+  if (git(['status', '--porcelain', '--', ...INPUTS]) !== '') return 'las entradas de los builds tienen cambios sin confirmar durante la construcción';
+  return null;
 };
 
 if (record.inputsDirty) {
-  save();
-  out('ABORTADO: las entradas de los builds tienen cambios sin confirmar; el build no se podría atribuir a un commit.');
+  out('ABORTADO: las entradas de los builds tienen cambios sin confirmar; el build no se podría atribuir a un commit (no se escribe ningún registro).');
   process.exit(2);
 }
 for (const port of [3000, 5173, 8081]) {
@@ -124,7 +140,7 @@ for (const port of [3000, 5173, 8081]) {
 
 const backups = resolve(tmpdir(), `sigpro-dist-anteriores-${Date.now()}`);
 mkdirSync(backups, { recursive: true });
-mkdirSync(resolve(results, 'builds'), { recursive: true });
+mkdirSync(resolve(results, 'builds', attempt), { recursive: true });
 save();
 out(`Commit ${record.commit.slice(0, 7)} · entradas sin confirmar: no · Node ${record.node} · pnpm ${record.pnpm} · guarda de memoria ${MIN_MB} MB`);
 
@@ -138,7 +154,7 @@ const killTree = (pid) => {
 
 const runGuarded = (build) =>
   new Promise((done) => {
-    const log = createWriteStream(resolve(results, 'builds', `${build.name}.log`));
+    const log = createWriteStream(resolve(results, 'builds', attempt, `${build.name}.log`));
     const child = spawn(build.command, { cwd: root, shell: true, stdio: ['ignore', 'pipe', 'pipe'] });
     child.stdout.pipe(log, { end: false });
     child.stderr.pipe(log, { end: false });
@@ -177,9 +193,18 @@ for (const build of BUILDS) {
     save();
     process.exit(result.aborted ? 3 : 1);
   }
+  const changed = changedSinceStart();
+  if (changed) {
+    record.changedDuringBuild = changed;
+    record.endedAt = new Date().toISOString();
+    save();
+    out(`INVALIDADO tras «${build.name}»: ${changed}. Pendiente: ${record.pending.join(', ')}.`);
+    process.exit(4);
+  }
 }
 
-record.complete = record.pending.length === 0;
+record.complete = record.pending.length === 0 && changedSinceStart() === null;
 record.endedAt = new Date().toISOString();
 save();
-out(`Builds completos desde ${record.commit.slice(0, 7)}. Registro en docs/story-runs/builds.json; los dist anteriores en ${backups}.`);
+out(record.complete ? `Builds completos desde ${record.commit.slice(0, 7)}. Registro en docs/story-runs/builds.json (y en builds/${attempt}.json); los dist anteriores en ${backups}.` : 'El intento NO quedó completo: builds.json no se ha sustituido.');
+process.exit(record.complete ? 0 : 4);
