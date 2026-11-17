@@ -108,11 +108,16 @@ const noBody = (): Check => ({
   verify: (result) => (result.body === null ? undefined : `con cuerpo (${typeof result.body})`),
 });
 
+const TENANT_FIELDS = ['tenant', 'tenantId'] as const;
+
+/** Lista de programas con al menos uno; su tenant solo se puede comprobar si los elementos lo traen (si no, no se comprueba). */
 const programs = (tenant: string): Check => ({
-  label: `la lista de programas del tenant ${tenant} (con al menos uno)`,
+  label: `la lista de programas del tenant ${tenant} (con al menos uno; su tenant se comprueba solo si los elementos lo traen)`,
   verify: (result) => {
     const items = Array.isArray(result.body) ? result.body : field(result.body, 'items');
-    return Array.isArray(items) && items.length > 0 ? undefined : `lista de programas ${Array.isArray(items) ? 'vacía' : 'ausente'}`;
+    if (!Array.isArray(items) || items.length === 0) return `lista de programas ${Array.isArray(items) ? 'vacía' : 'ausente'}`;
+    const foreign = items.filter((item: unknown) => isRecord(item) && TENANT_FIELDS.some((key) => has(item, key) && item[key] !== tenant));
+    return foreign.length === 0 ? undefined : `${foreign.length} programas de otro tenant`;
   },
 });
 

@@ -1,6 +1,6 @@
 import { NEW_ACCOUNT_PASSWORD, TENANT_A, TENANT_B, WRONG_PASSWORD, failedLogins, requestAccount, resetTenants } from '../../support/prepare';
 import { defineApiRows, type ApiRowHandler } from '../../support/rows';
-import { bodyOf, cell, emailOf, finish, fromSteps, passwordOf, postLogin, premise, rememberOf, statuses, tenantHeaderOf } from './common';
+import { bodyOf, cell, emailOf, finish, fromSteps, passwordOf, postLogin, premise, reasonOf, rememberOf, requirePreparation, statuses, tenantHeaderOf } from './common';
 
 // US-LOGIN-001 — Iniciar sesión con correo y contraseña en un tenant. Las expectativas salen de los pasos «Entonces/Y» de cada
 // fila (`finish` los lee del manifiesto); aquí solo se prepara el estado y se traduce cada celda a la petición.
@@ -23,7 +23,10 @@ const exactPassword: ApiRowHandler = async (row) => {
   return finish(row, result);
 };
 
-/** Esquema 4: N peticiones con contraseña vacía (rechazadas por validación) y después una con contraseña incorrecta. */
+/**
+ * Esquema 4: N peticiones con contraseña vacía (rechazadas por validación) y después una con contraseña incorrecta. Que las N
+ * peticiones se rechacen con 422 es justo lo que evalúa la fila, así que esa premisa NO es preparación: si falla, la fila discrepa.
+ */
 const rejectedDoNotCount: ApiRowHandler = async (row) => {
   await resetTenants([TENANT_A]);
   const email = fromSteps(row, NO_FAILED_ATTEMPTS);
@@ -40,7 +43,10 @@ const rejectedDoNotCount: ApiRowHandler = async (row) => {
 const rememberFlag: ApiRowHandler = async (row) => {
   await resetTenants([TENANT_A]);
   const body = bodyOf({ email: fromSteps(row, NO_FAILED_ATTEMPTS), password: fromSteps(row, /la contraseña (\S+) y remember/), remember: rememberOf(cell(row, 'remember')) });
-  return finish(row, await postLogin(TENANT_A, body));
+  const result = await postLogin(TENANT_A, body);
+  const reason = reasonOf(result, 'remember');
+  // La fila solo pide «un motivo para remember»: se anota el que da la app porque no es de los que enumeran las Reglas
+  return finish(row, result, reason === undefined ? {} : { note: `El motivo observado para remember es «${reason}», que no es uno de los enumerados en las Reglas (required, badEmail); la fila solo pide un motivo` });
 };
 
 /** Esquema 6: la cabecera x-tenant decide el tenant (o no hay cabecera y se deduce del correo). */
@@ -54,8 +60,9 @@ const tenantHeader: ApiRowHandler = async (row) => {
 const accountOnlyInItsTenant: ApiRowHandler = async (row) => {
   await resetTenants([TENANT_A, TENANT_B]);
   const account = await requestAccount(TENANT_A);
+  const premises = requirePreparation(row, [premise('la cuenta se solicita en alumno01 con POST /api/auth/register', account.result.status >= 200 && account.result.status < 300, `HTTP ${account.result.status}`)]);
   const result = await postLogin(tenantHeaderOf(cell(row, 'cabecera')), { email: account.email, password: NEW_ACCOUNT_PASSWORD });
-  return finish(row, result, { premises: [premise('la cuenta se solicita en alumno01 con POST /api/auth/register', account.result.status >= 200 && account.result.status < 300, `HTTP ${account.result.status}`)] });
+  return finish(row, result, { premises });
 };
 
 defineApiRows({

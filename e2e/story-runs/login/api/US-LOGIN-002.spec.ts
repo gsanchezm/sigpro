@@ -1,7 +1,7 @@
 import type { ApiResult } from '../../support/api';
 import { TENANT_A, TENANT_B, WRONG_PASSWORD, failedLogins, resetTenants } from '../../support/prepare';
 import { defineApiRows, type ApiRowHandler, type ManifestRow } from '../../support/rows';
-import { bodyOf, cell, emailOf, finish, fromSteps, passwordOf, postLogin, premise, statuses, tenantHeaderOf } from './common';
+import { bodyOf, cell, emailOf, finish, fromSteps, passwordOf, postLogin, premise, requirePreparation, statuses, tenantHeaderOf } from './common';
 
 // US-LOGIN-002 — Rechazar credenciales incorrectas y bloquear la cuenta en el 5.º intento fallido. Las expectativas salen de
 // los pasos «Entonces/Y» de cada fila; los fallos previos se envían DESPUÉS del reinicio y con el mismo correo que la fila.
@@ -26,7 +26,12 @@ const afterFailures =
     const prior = await failedLogins(TENANT_A, email, count);
     const password = passwordColumn === undefined ? WRONG_PASSWORD : passwordOf(cell(row, passwordColumn));
     const result = await postLogin(TENANT_A, bodyOf({ email, password }));
-    return finish(row, result, { history: history(count, prior) });
+    // La regla «Gestor@SIGPRO.test y gestor@sigpro.test comparten contador» no se puede ejercitar con una fila que no mezcle las dos formas
+    const mixedCase = email !== email.toLowerCase();
+    return finish(row, result, {
+      history: history(count, prior),
+      ...(mixedCase ? { note: `La regla de que ${email} y ${email.toLowerCase()} comparten contador no se ejercita en esta fila: todos los intentos, previos y final, se envían con ${email}, como dice la Preparación; ninguna fila de la historia mezcla las dos formas` } : {}),
+    });
   };
 
 /** Esquema 3: la cuenta bloqueada del seed no abre sesión ni con su contraseña. */
@@ -44,11 +49,10 @@ const counterResets: ApiRowHandler = async (row) => {
   const count = previousFailures(row);
   const prior = await failedLogins(TENANT_A, email, count);
   const correct = await postLogin(TENANT_A, { email, password });
+  // «Y después entra con la contraseña correcta y recibe 200» es preparación: sin él no hay contador que reiniciar
+  const premises = requirePreparation(row, [premise('entra con la contraseña correcta y recibe 200', correct.status === 200, `HTTP ${correct.status}`)]);
   const result = await postLogin(TENANT_A, { email, password: WRONG_PASSWORD });
-  return finish(row, result, {
-    history: history(count, prior),
-    premises: [premise('entra con la contraseña correcta y recibe 200', correct.status === 200, `HTTP ${correct.status}`)],
-  });
+  return finish(row, result, { history: history(count, prior), premises });
 };
 
 /** Esquema 5: el contador es de cada correo en cada tenant. */

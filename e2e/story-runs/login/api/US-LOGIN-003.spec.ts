@@ -1,10 +1,11 @@
 import { errorCode, field, usersByEmail } from '../../support/api';
 import { DEMO, TENANT_A, WRONG_PASSWORD, failedLogins, requestAccount, resetTenants, setAccountActive } from '../../support/prepare';
 import { defineApiRows, type ApiRowHandler } from '../../support/rows';
-import { cell, finish, fromSteps, passwordOf, postLogin, premise, statuses, strict, type Premise } from './common';
+import { cell, finish, fromSteps, passwordOf, postLogin, premise, requirePreparation, statuses, strict, type Premise } from './common';
 
 // US-LOGIN-003 — Rechazar el inicio de sesión de una cuenta pendiente de aprobación o desactivada. Las expectativas salen de
-// los pasos «Entonces/Y» de cada fila; la preparación (reinicio, fallos previos, desactivar o reactivar) va por HTTP.
+// los pasos «Entonces/Y» de cada fila; la preparación (reinicio, fallos previos, desactivar o reactivar) va por HTTP y, si no deja
+// el estado de partida que dan por hecho los pasos «Dado», lanza (`requirePreparation`): no es una discrepancia de la app.
 
 /** Estado de una cuenta que la historia da por hecho; solo se comparan las claves indicadas. */
 interface AccountState {
@@ -42,8 +43,9 @@ const pendingAccount: ApiRowHandler = async (row) => {
   await resetTenants([TENANT_A]);
   const account = await strict('cuenta pendiente', PENDING_ACCOUNTS, cell(row, 'correo'))();
   const pending = await stateIs(`${cell(row, 'correo')} está pendiente de aprobación`, account.email, { pending: true });
+  const premises = requirePreparation(row, [...account.premises, pending]);
   const result = await postLogin(TENANT_A, { email: account.email, password: passwordOf(cell(row, 'contraseña')) });
-  return finish(row, result, { premises: [...account.premises, pending] });
+  return finish(row, result, { premises });
 };
 
 /** Acciones del administrador sobre la cuenta (`PATCH /api/admin/users/<id>` con `active`), en orden. */
@@ -67,16 +69,19 @@ const disabledAccount: ApiRowHandler = async (row) => {
   const email = fromSteps(row, /la cuenta (\S+@\S+)/);
   const sequence = strict('accion', ADMIN_ACTIONS, cell(row, 'accion'));
   const finalActive = sequence.at(-1) === true;
-  const premises = [...(await applyActive(email, sequence)), await stateIs(`${email} queda ${finalActive ? 'activa' : 'desactivada'}`, email, { active: finalActive })];
+  const premises = requirePreparation(row, [...(await applyActive(email, sequence)), await stateIs(`${email} queda ${finalActive ? 'activa' : 'desactivada'}`, email, { active: finalActive })]);
   const result = await postLogin(TENANT_A, { email, password: passwordOf(cell(row, 'contraseña')) });
   return finish(row, result, { premises });
 };
 
-/** Lo que la columna `otro_estado` dice de la cuenta desactivada: si además está bloqueada o pendiente de aprobación. */
+/**
+ * Lo que la columna `otro_estado` dice de la cuenta desactivada, y solo eso: «pendiente de aprobación» no exige nada sobre el
+ * bloqueo ni «bloqueada» sobre la aprobación (la historia no lo dice). Las tres banderas reales quedan en lo observado.
+ */
 const OTHER_STATES: ReadonlyMap<string, AccountState> = new Map<string, AccountState>([
   ['activa en lo demás', { locked: false, pending: false }],
-  ['pendiente de aprobación', { locked: false, pending: true }],
-  ['bloqueada', { locked: true, pending: false }],
+  ['pendiente de aprobación', { pending: true }],
+  ['bloqueada', { locked: true }],
 ]);
 
 /** Esquema 3: orden de los estados (bloqueada, pendiente, desactivada) cuando una cuenta desactivada además tiene otro estado. */
@@ -85,7 +90,7 @@ const stateOrder: ApiRowHandler = async (row) => {
   const email = cell(row, 'correo');
   const otherState = cell(row, 'otro_estado');
   const flags = strict('otro_estado', OTHER_STATES, otherState);
-  const premises = [...(await applyActive(email, [false])), await stateIs(`${email} está desactivada y además ${otherState}`, email, { active: false, ...flags })];
+  const premises = requirePreparation(row, [...(await applyActive(email, [false])), await stateIs(`${email} está desactivada y además ${otherState}`, email, { active: false, ...flags })]);
   const result = await postLogin(TENANT_A, { email, password: passwordOf(cell(row, 'contraseña')) });
   return finish(row, result, { premises });
 };
@@ -100,12 +105,13 @@ const counterResetsWhilePending: ApiRowHandler = async (row) => {
   const pending = await stateIs(`${email} está pendiente de aprobación`, email, { pending: true });
   const prior = await failedLogins(TENANT_A, email, count);
   const correct = await postLogin(TENANT_A, { email, password });
-  const result = await postLogin(TENANT_A, { email, password: WRONG_PASSWORD });
   const code = errorCode(correct);
-  return finish(row, result, {
-    history: `Previos: ${count} fallos (HTTP ${statuses(prior)})`,
-    premises: [pending, premise('envía su contraseña correcta y recibe 403 pending_approval', correct.status === 403 && code === 'pending_approval', `HTTP ${correct.status}${code === undefined ? '' : ` ${code}`}`)],
-  });
+  const premises = requirePreparation(row, [
+    pending,
+    premise('envía su contraseña correcta y recibe 403 pending_approval', correct.status === 403 && code === 'pending_approval', `HTTP ${correct.status}${code === undefined ? '' : ` ${code}`}`),
+  ]);
+  const result = await postLogin(TENANT_A, { email, password: WRONG_PASSWORD });
+  return finish(row, result, { history: `Previos: ${count} fallos (HTTP ${statuses(prior)})`, premises });
 };
 
 defineApiRows({

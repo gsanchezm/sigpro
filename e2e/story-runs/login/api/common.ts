@@ -1,6 +1,6 @@
-import { LOGIN_PATH, call, uniqueEmail, type ApiResult } from '../../support/api';
+import { LOGIN_PATH, call, field, uniqueEmail, type ApiResult } from '../../support/api';
 import { WRONG_PASSWORD } from '../../support/prepare';
-import { describeExpectation, describeObserved, expectationFromSteps, judge, redact, type Check, type CheckContext, type Expectation } from '../../support/response';
+import { describeExpectation, describeObserved, expectationFromSteps, judge, redact, type CheckContext, type Expectation } from '../../support/response';
 import { outcome, type ManifestRow, type Outcome } from '../../support/rows';
 
 // Piezas comunes de las historias de API de EP-LOGIN: traducción de las celdas de las tablas de Ejemplos a peticiones y
@@ -83,7 +83,11 @@ export const postLogin = (tenant: string | undefined, body: Readonly<Record<stri
 /** Estados de una serie de respuestas, para contar lo que pasó en los pasos previos. */
 export const statuses = (results: readonly ApiResult[]): string => results.map((result) => result.status).join(', ');
 
-/** Algo que la historia da por hecho antes de actuar («recibe 200», «la cuenta queda bloqueada»). Si no se cumple, la fila discrepa. */
+/**
+ * Algo que la historia da por hecho antes de actuar («recibe 200», «la cuenta queda bloqueada»). Si es PREPARACIÓN (fabricar el
+ * estado de partida), `requirePreparation` lanza cuando falla: no es una discrepancia de la app sino un error del arnés. Solo si
+ * la premisa es justo lo que la fila evalúa se pasa a `finish` sin `requirePreparation` y entonces falla como `discrepa`.
+ */
 export interface Premise {
   readonly label: string;
   readonly ok: boolean;
@@ -97,27 +101,39 @@ export interface FinishOptions {
   readonly expectation?: Expectation;
   readonly premises?: readonly Premise[];
   readonly context?: CheckContext;
-  /** Comprobaciones adicionales que salen de las Reglas de la historia y no de una fila de la tabla. */
-  readonly extraChecks?: readonly Check[];
   /** Lo observado en los pasos previos, en una frase y sin secretos. */
   readonly history?: string;
   readonly note?: string;
   readonly evidence?: Readonly<Record<string, unknown>>;
 }
 
-/** La preparación no dejó la situación que la historia da por hecho: la fila discrepa sin llegar a la petición. */
-export const blocked = (row: ManifestRow, premises: readonly Premise[]): Outcome => {
+/**
+ * Exige que la PREPARACIÓN de la fila haya dejado el estado de partida que la historia da por hecho. Si no, lanza: el estado no se
+ * pudo fabricar, así que la fila no se puede evaluar y queda como `error-de-prueba` (no como una discrepancia de la app).
+ * Devuelve las mismas premisas para mostrarlas en lo esperado y lo observado.
+ */
+export const requirePreparation = (row: ManifestRow, premises: readonly Premise[]): readonly Premise[] => {
   const failed = premises.filter((item) => !item.ok);
-  const reasons = failed.map((item) => `no se cumple lo que la historia da por hecho («${item.label}»): ${item.observed}`).join('; ');
-  return outcome(false, describeExpectation(expectationOf(row)), `No se llegó a la petición de la fila; ${failed.map((item) => item.observed).join('; ')}`, { note: reasons });
+  if (failed.length === 0) return premises;
+  return failPreparation(row, failed.map((item) => `«${item.label}»`).join('; '), failed.map((item) => item.observed).join('; '));
+};
+
+/** Lanza el error de preparación (sirve también para estrechar un valor que falta: `valor ?? failPreparation(…)`). */
+export const failPreparation = (row: ManifestRow, what: string, observed: string): never => {
+  throw new Error(`La preparación de ${row.rowId} no dejó el estado de partida: ${what} (${observed})`);
+};
+
+/** Motivo (texto) que la API da a un campo en `errors`, si lo da. */
+export const reasonOf = (result: ApiResult, target: string): string | undefined => {
+  const reason = field(field(result.body, 'errors'), target);
+  return typeof reason === 'string' ? reason : undefined;
 };
 
 export const expectationOf = (row: ManifestRow): Expectation => expectationFromSteps(row.resolvedSteps);
 
 /** Compara la respuesta final con lo que dicen los pasos de la fila y arma el `Outcome` (expected, observed, veredicto, nota). */
 export const finish = (row: ManifestRow, result: ApiResult, options: FinishOptions = {}): Outcome => {
-  const base = options.expectation ?? expectationOf(row);
-  const expectation: Expectation = { ...base, checks: [...base.checks, ...(options.extraChecks ?? [])] };
+  const expectation = options.expectation ?? expectationOf(row);
   const judgement = judge(expectation, result, options.context);
   const premises = options.premises ?? [];
   const failedPremises = premises.filter((item) => !item.ok);
