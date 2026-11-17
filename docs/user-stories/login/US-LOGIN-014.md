@@ -26,7 +26,7 @@ Característica: Ayudas del acceso de la web en la app móvil
   Esquema del escenario: El control alterna la visibilidad de la contraseña
     Dado que el tenant alumno01 está recién reiniciado y una persona sin sesión iniciada en /login ha escrito Consul1234! en «Contraseña»
     Cuando pulsa el control de la contraseña <veces> veces
-    Entonces en menos de 1 segundo la contraseña se ve <visibilidad>
+    Entonces la contraseña se ve <visibilidad>
     Y el campo sigue conteniendo Consul1234! y no se ha enviado nada
 
     Ejemplos:
@@ -38,7 +38,7 @@ Característica: Ayudas del acceso de la web en la app móvil
   Esquema del escenario: La casilla de mantener la sesión aparece marcada
     Dado que el tenant alumno01 está recién reiniciado y en la app <situacion>
     Cuando llega a /login
-    Entonces en menos de 5 segundos ve la casilla «Mantener la sesión en este equipo» marcada
+    Entonces ve la casilla «Mantener la sesión en este equipo» marcada
 
     Ejemplos:
       | situacion |
@@ -52,10 +52,10 @@ Característica: Ayudas del acceso de la web en la app móvil
 
     Ejemplos:
       | situacion | accion | aviso |
-      | consultor@sigpro.test ha iniciado sesión en alumno01 y está en la página «Perfil» | pulsa «Cerrar sesión» | en menos de 5 segundos llega a /login y ve «Sesión cerrada correctamente.» |
-      | consultor@sigpro.test acaba de pulsar «Cerrar sesión» | escribe el correo consultor@sigpro.test y la contraseña incorrecta y pulsa «Entrar» | ya no ve «Sesión cerrada correctamente.» y en menos de 5 segundos ve «Correo o contraseña incorrectos» |
-      | consultor@sigpro.test acaba de pulsar «Cerrar sesión» | pulsa «¿Olvidaste la contraseña?» y vuelve con «Volver al inicio de sesión» | en menos de 5 segundos está de vuelta en /login y ya no ve «Sesión cerrada correctamente.» |
-      | nadie ha iniciado sesión | abre la app | en menos de 5 segundos ve /login y no ve «Sesión cerrada correctamente.» |
+      | consultor@sigpro.test ha iniciado sesión en alumno01 y está en la página «Perfil» | pulsa «Cerrar sesión» | llega a /login y ve «Sesión cerrada correctamente.» |
+      | consultor@sigpro.test acaba de pulsar «Cerrar sesión» | escribe el correo consultor@sigpro.test y la contraseña incorrecta y pulsa «Entrar» | ya no ve «Sesión cerrada correctamente.» y ve «Correo o contraseña incorrectos» |
+      | consultor@sigpro.test acaba de pulsar «Cerrar sesión» | pulsa «¿Olvidaste la contraseña?» y vuelve con «Volver al inicio de sesión» | está de vuelta en /login y ya no ve «Sesión cerrada correctamente.» |
+      | nadie ha iniciado sesión | abre la app | ve /login y no ve «Sesión cerrada correctamente.» |
 ```
 
 ## Decisiones pendientes

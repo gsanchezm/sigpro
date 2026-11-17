@@ -75,6 +75,7 @@ El cuerpo publicado de cada **historia** lleva, justo debajo de la línea `**Id:
 - La línea la escribe la sincronización a partir de la etiqueta `no-implementada`; no la escribas a mano.
 - El issue **no dice si la app cumple hoy** una historia vigente. Las diferencias conocidas entre una historia vigente y la app son material del instructor y no se publican: encontrarlas es el ejercicio.
 - `verificacion` (front matter) no se publica: dice cómo se escribió la historia (ver «Valores de `verificacion`»), no si la app la cumple.
+- Una historia vigente también puede llevar «Decisiones pendientes»: lo que describe ahí existe hoy pero no está decidido, así que no es un criterio y que la app lo tenga, lo cambie o no lo tenga no se reporta como defecto.
 
 ## Plantilla de una historia
 
@@ -110,7 +111,7 @@ Característica: Bloqueo de cuenta tras intentos fallidos
   Esquema del escenario: El quinto intento fallido bloquea la cuenta
     Dado que en el tenant alumno01, recién reiniciado, gestor@sigpro.test acumula <fallos_previos> intentos fallidos consecutivos
     Cuando en /login?tenant=alumno01 escribe ese correo y la contraseña <contraseña> y pulsa «Entrar»
-    Entonces en menos de 5 segundos ve <mensaje>
+    Entonces ve <mensaje>
     Y la cuenta queda <cuenta>
 
     Ejemplos:
@@ -125,7 +126,7 @@ Característica: Bloqueo de cuenta tras intentos fallidos
 - El desbloqueo de la cuenta por un administrador.
 ````
 
-Una historia `no-implementada` lleva además la sección `## Decisiones pendientes` (regla `decisiones-pendientes`): lo que la historia no puede afirmar porque nadie lo ha decidido todavía. Si de verdad no queda nada, la viñeta dice «Ninguna.».
+Una historia `no-implementada` lleva además la sección `## Decisiones pendientes` (regla `decisiones-pendientes`): lo que la historia no puede afirmar porque nadie lo ha decidido todavía. Si de verdad no queda nada, la viñeta dice «Ninguna.». Una historia vigente puede llevar la misma sección para dejar constancia de algo que existe hoy y está sin decidir (ver «Detalle técnico visible: decisión de producto pendiente»); el linter solo la exige a las `no-implementada`.
 
 ````markdown
 ---
@@ -251,6 +252,7 @@ Cada fila de una tabla de `Ejemplos` es un caso de prueba que parte de un **esta
 **Qué restaura el reinicio y qué no:**
 
 - Restaura **todos los datos del tenant** desde el seed: las cuentas con su estado (intentos fallidos a cero, bloqueo, pendiente de aprobación, activa o no y rol) y el resto de datos. Borra las cuentas solicitadas durante las pruebas. Conserva la configuración del modo caos del tenant.
+- **Como el reinicio no apaga el caos**, quien ejecuta un ejemplo comprueba antes de cada fila que el caos del tenant está apagado (`GET /api/config` devuelve `chaos` con latencia 0, tasa de error 0 y etiquetas no variables) y, si no lo está, lo apaga (`PATCH /api/admin/chaos` con el administrador del tenant).
 - **No** restaura el número de intentos de un correo que no tiene cuenta: no es un dato del tenant. Por eso esas filas usan siempre un correo nuevo, nunca uno ya usado.
 - **No** cierra las sesiones abiertas antes del reinicio: los tokens ya emitidos siguen valiendo hasta caducar (ver «Cerrar sesión» en la épica de Login).
 
@@ -259,20 +261,31 @@ Cada fila de una tabla de `Ejemplos` es un caso de prueba que parte de un **esta
 Una historia se puede probar **sin leer otra** si cumple todo esto:
 
 - **Precondiciones con datos observables**: quién (correo), con qué rol, en qué tenant y en qué estado inicial (intentos fallidos, bloqueada, desactivada, sesión iniciada y en qué pantalla). Ver «Preparación del estado y aislamiento».
-- **Esperas con un límite explícito**: «en menos de 5 segundos», «a los 2 segundos sigue visible». Nunca una espera sin límite. Los límites de las historias son **tolerancias de la prueba, no garantías del producto**: 1 segundo para las reacciones de la propia pantalla que no esperan al servidor (avisos de validación, mostrar u ocultar, borrar un aviso al editar), 5 segundos para todo lo que pasa por la red o cambia de pantalla, y 2 segundos para que aparezca un aviso emergente. Los valores que sí son del producto se dicen como regla (por ejemplo, «el aviso se cierra solo a los 3 segundos»).
-- **Sin expresiones vagas**: ni «con la sesión» (di de quién y en qué tenant), ni «al cabo de un momento», «un momento», «enseguida» o «en breve» (di el límite).
+- **Esperas sin plazos ni adjetivos**: la historia no fija en cuánto tiempo ocurre algo y tampoco deja la espera implícita en un adjetivo (**prohibido**: «enseguida», «al cabo de un momento», «un momento», «en breve»). Dice qué se ve y qué ocurre, y remite a «Tolerancias de la prueba» para saber cuánto se espera.
+- **Sin expresiones vagas**: ni «con la sesión» (di de quién y en qué tenant).
 - **Las referencias a otras historias van solo en `relacionadas`**: ninguna regla ni paso remite a otra historia para entenderse o ejecutarse. Si un comportamiento de otra plataforma importa, se repite aquí con su superficie.
 - **Lo que no se prueba aquí** va en «Fuera de alcance», nombrando la épica que lo cubre.
 
-## Detalle técnico visible
+## Tolerancias de la prueba
 
-En las pantallas de Acceso de la web y de la app móvil, el aviso de error y la pantalla de redirección muestran, bajo el mensaje para la persona, una **línea de detalle técnico** con la petición HTTP real: `POST /api/auth/login → 423 Locked`, `POST /api/auth/login → 401 Unauthorized · attempts=2` o `POST /api/auth/login → 200 · role=program_manager`. Es una **función deliberada del laboratorio**, no un diagnóstico: sale del diseño de las pantallas (la alerta lleva un título y la traza HTTP; la pantalla de redirección, el endpoint real y el rol), y deja relacionar lo que se ve con la API.
+Las esperas no son requisitos de las historias.
+
+- **Los Esquemas no fijan plazos de respuesta.** Dicen qué se ve y qué ocurre, no en cuánto tiempo: «ve el mensaje …», «llega a /programs», «deja de ver el aviso de error».
+- **Quien ejecuta un ejemplo espera con un límite que elige y registra.** Referencia del piloto: 5 segundos para lo que pasa por la red o cambia de pantalla, 1 segundo para las reacciones locales de la propia pantalla (avisos de validación, mostrar u ocultar, borrar un aviso al editar) y 2 segundos para que aparezca un aviso emergente. Son **tolerancias de la prueba, no garantías del producto**.
+- **Para comprobar que algo no ocurre** (por ejemplo, que no se ve ninguna pantalla privada) se observa durante un tiempo que elige la prueba.
+- **Si una fila solo se cumple con más espera**, se registra el tiempo observado como dato aparte: no es un incumplimiento ni un requisito.
+- **Un plazo es un requisito solo si el producto lo define y la historia lo dice como regla, con el motivo.** Ejemplos: el aviso emergente se cierra solo a los 3 segundos; el `accessToken` dura 900 segundos. Los datos de entrada de un Esquema tampoco son tolerancias: la latencia que la prueba inyecta («la prueba retrasa 3 segundos la respuesta») o el momento en que se mira un aviso («cuando pasan 4 segundos desde que apareció»).
+
+## Detalle técnico visible: decisión de producto pendiente
+
+Hoy, en las pantallas de Acceso, el aviso de error muestra bajo el mensaje una **línea de detalle técnico** con la petición HTTP real (método, ruta y código de estado y, en el inicio de sesión incorrecto, el número de intento); la pantalla de redirección de la web muestra además el rol, y el aviso emergente de SSO muestra la suya. Es lo único que muestra hoy el número de intento. **No está decidido** si esa línea forma parte del producto, qué debe contener ni si el número de intento debe verse también en el propio mensaje.
 
 En las historias:
 
-- **El mensaje y la línea de detalle técnico son criterios distintos**, en pasos distintos.
-- **La línea se afirma con el mínimo estable**: contiene el método, la ruta y el código de estado (`POST /api/auth/login → 423`). Lo que sigue al código (`Locked`, `· reason=…`) no forma parte del criterio salvo que la historia lo diga. Dos excepciones, escritas siempre: `attempts=N` en un 401 del inicio de sesión (es el único sitio donde se ve el número de intento) y `role=<rol>` en la pantalla de redirección.
-- En los pasos y en las celdas el detalle va **sin «…»**: se comprueba que la línea lo contiene, no que sea igual.
+- **No la afirman ni la excluyen.** Ningún paso, regla ni celda habla de ella: los Esquemas comprueban el mensaje y lo que se ve o se alcanza (pantalla, ruta, estado de la sesión).
+- **Quien ejecuta un ejemplo puede anotarla** como dato aparte, pero un veredicto nunca depende de ella: que esté, falte o cambie de texto no aprueba ni suspende ninguna fila.
+- **Las historias que la ven hoy lo dicen en «Decisiones pendientes»**, como descripción de lo que existe y marcada como pendiente, no como requisito.
+- Cuando el producto lo decida, se escribe como regla de las historias afectadas y se añaden sus pasos.
 
 ## Reglas de redacción
 
@@ -287,8 +300,7 @@ En las historias:
 
 ### Convenciones de los Esquemas
 
-- **Textos de la interfaz entre «…»**, en los pasos y en las celdas: títulos, etiquetas, botones y avisos (`pulsa «Entrar»`, `| «Correo o contraseña incorrectos» |`). Si un marcador recibe un texto de la interfaz, las comillas van en la celda, no alrededor del marcador. La línea de detalle técnico es la excepción (ver «Detalle técnico visible»).
-- **Los datos van tal cual**, sin comillas: correos, contraseñas, tenants, códigos, rutas, códigos HTTP y campos de la API (`gestor@sigpro.test`, `Gestor1234!`, `alumno01`, `/programs`, `423 account_locked`).
+- **Textos de la interfaz entre «…»**, en los pasos y en las celdas: títulos, etiquetas, botones y avisos (`pulsa «Entrar»`, `| «Correo o contraseña incorrectos» |`). Si un marcador recibe un texto de la interfaz, las comillas van en la celda, no alrededor del marcador.- **Los datos van tal cual**, sin comillas: correos, contraseñas, tenants, códigos, rutas, códigos HTTP y campos de la API (`gestor@sigpro.test`, `Gestor1234!`, `alumno01`, `/programs`, `423 account_locked`).
 - **Lo que no se puede escribir literalmente va entre paréntesis**: `(vacío)` para un campo o un cuerpo vacío, `(tres espacios)`, `(sin el campo)`, `(sin cabecera)`, `(ninguno)`. Gherkin recorta los espacios de las celdas, y una celda vacía no distingue «vacío» de «ausente».
 - **Datos que no se pueden repetir** (un correo sin cuenta o una solicitud de acceso) se escriben entre paréntesis y se definen en las Reglas: `(correo sin cuenta)` y `(cuenta recién solicitada)`, como en «Preparación del estado y aislamiento».
 - **El primer paso de cada Esquema empieza por «Dado que …»** y dice el tenant y el estado inicial.

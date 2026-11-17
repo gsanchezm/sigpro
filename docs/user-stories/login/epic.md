@@ -11,7 +11,7 @@ Que cada persona de un tenant entre en SIGPRO con su correo y su contraseña, se
 ## Alcance
 - Inicio de sesión con correo y contraseña en la API, la web y la app móvil, en el tenant que corresponde, con la validación de los campos antes de enviar y del cuerpo en el servidor.
 - Respuesta a credenciales incorrectas con el número de intento y bloqueo en el 5.º intento fallido consecutivo, también para un correo sin cuenta.
-- Avisos de cuenta bloqueada, pendiente de aprobación y desactivada, con su mensaje y su línea de detalle técnico.
+- Avisos de cuenta bloqueada, pendiente de aprobación y desactivada, con su mensaje.
 - Mostrar y ocultar la contraseña y mantener la sesión en el navegador.
 - Cierre de sesión: lo que garantiza (el cliente descarta sus tokens) y lo que no (el servidor no los revoca), y el aviso «Sesión cerrada correctamente.».
 - Acceso con certificado digital o SSO: el contrato actual (no disponible) y, como capacidad futura, lo mínimo acordado.

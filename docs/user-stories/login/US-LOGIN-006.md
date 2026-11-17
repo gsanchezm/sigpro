@@ -48,8 +48,8 @@ Característica: Formulario de acceso en la web
   Esquema del escenario: Las opciones del formulario llevan a su pantalla
     Dado que el tenant alumno01 está recién reiniciado y una persona sin sesión iniciada está en /login?tenant=alumno01
     Cuando pulsa <opcion>
-    Entonces en menos de 5 segundos llega a <ruta> y ve el título <titulo>
-    Y al pulsar «Volver al inicio de sesión» en menos de 5 segundos regresa a /login
+    Entonces llega a <ruta> y ve el título <titulo>
+    Y al pulsar «Volver al inicio de sesión» regresa a /login
 
     Ejemplos:
       | opcion | ruta | titulo |
@@ -63,16 +63,16 @@ Característica: Formulario de acceso en la web
 
     Ejemplos:
       | situacion | resultado |
-      | nadie ha iniciado sesión | en menos de 5 segundos ve el formulario «Iniciar sesión» |
-      | gestor@sigpro.test ha iniciado sesión en alumno01 con Gestor1234! | en menos de 5 segundos llega a /programs sin ver el formulario |
-      | consultor@sigpro.test ha iniciado sesión en alumno01 y después ha pulsado «Cerrar sesión» | en menos de 5 segundos ve el formulario «Iniciar sesión» |
+      | nadie ha iniciado sesión | ve el formulario «Iniciar sesión» |
+      | gestor@sigpro.test ha iniciado sesión en alumno01 con Gestor1234! | llega a /programs sin ver el formulario |
+      | consultor@sigpro.test ha iniciado sesión en alumno01 y después ha pulsado «Cerrar sesión» | ve el formulario «Iniciar sesión» |
 
   Esquema del escenario: Cada campo no válido muestra su aviso y no se envía nada
     Dado que el tenant alumno01 está recién reiniciado y una persona sin sesión iniciada está en /login?tenant=alumno01
     Cuando escribe el correo <correo> y la contraseña <contraseña>
     Y pulsa «Entrar»
-    Entonces en menos de 1 segundo, bajo el correo ve <aviso_correo>
-    Y en menos de 1 segundo, bajo la contraseña ve <aviso_contraseña>
+    Entonces bajo el correo ve <aviso_correo>
+    Y bajo la contraseña ve <aviso_contraseña>
     Y <envio>
 
     Ejemplos:
@@ -84,14 +84,14 @@ Característica: Formulario de acceso en la web
       | @sigpro.test | Gestor1234! | «Introduce un correo válido» | (ninguno) | no se envía el formulario |
       | (ana @sigpro.test, con un espacio antes de la arroba) | Gestor1234! | «Introduce un correo válido» | (ninguno) | no se envía el formulario |
       | gestor@sigpro.test | (vacío) | (ninguno) | «Campo obligatorio» | no se envía el formulario |
-      | gestor@sigpro.test | (un espacio) | (ninguno) | (ninguno) | se envía y en menos de 5 segundos ve el aviso «Correo o contraseña incorrectos» |
-      | (correo sin cuenta) | x | (ninguno) | (ninguno) | se envía y en menos de 5 segundos ve el aviso «Correo o contraseña incorrectos» |
-      | gestor@sigpro.test | Gestor1234! | (ninguno) | (ninguno) | se envía y en menos de 5 segundos llega a /programs |
+      | gestor@sigpro.test | (un espacio) | (ninguno) | (ninguno) | se envía y ve el aviso «Correo o contraseña incorrectos» |
+      | (correo sin cuenta) | x | (ninguno) | (ninguno) | se envía y ve el aviso «Correo o contraseña incorrectos» |
+      | gestor@sigpro.test | Gestor1234! | (ninguno) | (ninguno) | se envía y llega a /programs |
 
   Esquema del escenario: Editar un campo borra los avisos de los campos
     Dado que el tenant alumno01 está recién reiniciado y una persona sin sesión iniciada en /login?tenant=alumno01 ha pulsado «Entrar» con los dos campos vacíos y ve «Campo obligatorio» bajo el correo y bajo la contraseña
     Cuando escribe <texto> en el campo <campo>
-    Entonces en menos de 1 segundo ya no ve ningún aviso bajo los campos
+    Entonces ya no ve ningún aviso bajo los campos
 
     Ejemplos:
       | campo | texto |
@@ -101,9 +101,9 @@ Característica: Formulario de acceso en la web
   Esquema del escenario: El botón alterna la visibilidad de la contraseña
     Dado que el tenant alumno01 está recién reiniciado y una persona sin sesión iniciada en /login?tenant=alumno01 ha escrito Gestor1234! en el campo «Contraseña»
     Cuando pulsa el botón de la contraseña <veces> veces
-    Entonces en menos de 1 segundo la contraseña se ve <visibilidad>
-    Y en menos de 1 segundo el botón muestra <texto> y se llama <nombre>
-    Y en menos de 1 segundo el botón <pulsado>
+    Entonces la contraseña se ve <visibilidad>
+    Y el botón muestra <texto> y se llama <nombre>
+    Y el botón <pulsado>
     Y el campo sigue conteniendo Gestor1234! y sigue en /login sin haber enviado nada
 
     Ejemplos:

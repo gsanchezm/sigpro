@@ -34,18 +34,18 @@ Característica: Mantener y cerrar la sesión en la web
 
     Ejemplos:
       | casilla | accion | resultado |
-      | marcada | recarga /programs | en menos de 5 segundos ve /programs sin volver a iniciar sesión |
-      | marcada | escribe la dirección de /programs en una pestaña nueva del mismo navegador | en menos de 5 segundos ve /programs sin iniciar sesión |
-      | desmarcada | recarga /programs | en menos de 5 segundos ve /programs sin volver a iniciar sesión |
-      | desmarcada | escribe la dirección de /programs en una pestaña nueva del mismo navegador | en menos de 5 segundos llega a /login y tiene que iniciar sesión |
-      | desmarcada | abre /profile en la misma pestaña y después vuelve a /programs | en menos de 5 segundos ve /programs sin volver a iniciar sesión |
+      | marcada | recarga /programs | ve /programs sin volver a iniciar sesión |
+      | marcada | escribe la dirección de /programs en una pestaña nueva del mismo navegador | ve /programs sin iniciar sesión |
+      | desmarcada | recarga /programs | ve /programs sin volver a iniciar sesión |
+      | desmarcada | escribe la dirección de /programs en una pestaña nueva del mismo navegador | llega a /login y tiene que iniciar sesión |
+      | desmarcada | abre /profile en la misma pestaña y después vuelve a /programs | ve /programs sin volver a iniciar sesión |
 
   Esquema del escenario: Cerrar sesión desde cada punto lleva al acceso con el aviso
     Dado que el tenant alumno01 está recién reiniciado y <correo> ha iniciado sesión en /login?tenant=alumno01 con la casilla marcada y está en <pantalla> con una ventana de <ancho>
     Cuando pulsa «Cerrar sesión» en <lugar>
-    Entonces en menos de 5 segundos llega a /login
-    Y en menos de 5 segundos ve el aviso «Sesión cerrada correctamente.»
-    Y al abrir /programs en esa pestaña o en una nueva, en menos de 5 segundos llega a /login
+    Entonces llega a /login
+    Y ve el aviso «Sesión cerrada correctamente.»
+    Y al abrir /programs en esa pestaña o en una nueva, llega a /login
 
     Ejemplos:
       | correo | pantalla | ancho | lugar |
@@ -60,10 +60,10 @@ Característica: Mantener y cerrar la sesión en la web
 
     Ejemplos:
       | situacion | accion | aviso |
-      | gestor@sigpro.test ha iniciado sesión en alumno01 y acaba de pulsar «Cerrar sesión» | mira /login | en menos de 5 segundos ve «Sesión cerrada correctamente.» |
-      | gestor@sigpro.test ha iniciado sesión en alumno01 y acaba de pulsar «Cerrar sesión» | escribe el correo gestor@sigpro.test y la contraseña incorrecta y pulsa «Entrar» | ya no ve «Sesión cerrada correctamente.» y en menos de 5 segundos ve «Correo o contraseña incorrectos» |
-      | gestor@sigpro.test ha iniciado sesión en alumno01 y acaba de pulsar «Cerrar sesión» | pulsa «¿Olvidaste la contraseña?» y vuelve con «Volver al inicio de sesión» | en menos de 5 segundos está de vuelta en /login y ya no ve «Sesión cerrada correctamente.» |
-      | nadie ha iniciado sesión | abre /login?tenant=alumno01 | en menos de 5 segundos ve el formulario «Iniciar sesión» y no ve «Sesión cerrada correctamente.» |
+      | gestor@sigpro.test ha iniciado sesión en alumno01 y acaba de pulsar «Cerrar sesión» | mira /login | ve «Sesión cerrada correctamente.» |
+      | gestor@sigpro.test ha iniciado sesión en alumno01 y acaba de pulsar «Cerrar sesión» | escribe el correo gestor@sigpro.test y la contraseña incorrecta y pulsa «Entrar» | ya no ve «Sesión cerrada correctamente.» y ve «Correo o contraseña incorrectos» |
+      | gestor@sigpro.test ha iniciado sesión en alumno01 y acaba de pulsar «Cerrar sesión» | pulsa «¿Olvidaste la contraseña?» y vuelve con «Volver al inicio de sesión» | está de vuelta en /login y ya no ve «Sesión cerrada correctamente.» |
+      | nadie ha iniciado sesión | abre /login?tenant=alumno01 | ve el formulario «Iniciar sesión» y no ve «Sesión cerrada correctamente.» |
 ```
 
 ## Fuera de alcance

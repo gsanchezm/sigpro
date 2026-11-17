@@ -27,7 +27,7 @@ Característica: Sesión de la app móvil y su cierre
   Esquema del escenario: La sesión sigue al cerrar la app y volver a abrirla
     Dado que el tenant alumno01 está recién reiniciado y <correo> ha iniciado sesión en la app con alumno01 en «Tenant de trabajo» y está en /programs
     Cuando cierra la app y la vuelve a abrir
-    Entonces en menos de 5 segundos ve /programs sin volver a iniciar sesión
+    Entonces ve /programs sin volver a iniciar sesión
 
     Ejemplos:
       | correo |
@@ -38,14 +38,14 @@ Característica: Sesión de la app móvil y su cierre
     Dado que el tenant alumno01 está recién reiniciado y <correo> ha iniciado sesión en la app con alumno01 en «Tenant de trabajo»
     Y está en la página «Perfil»
     Cuando pulsa «Cerrar sesión»
-    Entonces en menos de 5 segundos llega a /login
+    Entonces llega a /login
     Y <despues>
 
     Ejemplos:
       | correo | despues |
-      | consultor@sigpro.test | al abrir /programs, en menos de 5 segundos llega a /login |
-      | gestor@sigpro.test | al cerrar la app y volver a abrirla, en menos de 5 segundos ve /login |
-      | auditor@sigpro.test | al abrir /nc, en menos de 5 segundos llega a /login |
+      | consultor@sigpro.test | al abrir /programs, llega a /login |
+      | gestor@sigpro.test | al cerrar la app y volver a abrirla, ve /login |
+      | auditor@sigpro.test | al abrir /nc, llega a /login |
 ```
 
 ## Fuera de alcance

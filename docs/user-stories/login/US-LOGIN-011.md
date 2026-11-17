@@ -34,7 +34,7 @@ Característica: Formulario de acceso en la app móvil
   Esquema del escenario: Las opciones del formulario llevan a su pantalla
     Dado que el tenant alumno01 está recién reiniciado y una persona sin sesión iniciada en /login, con alumno01 en «Tenant de trabajo», ha escrito el correo <correo>
     Cuando pulsa <opcion>
-    Entonces en menos de 5 segundos llega a <ruta> y ve el título <titulo>
+    Entonces llega a <ruta> y ve el título <titulo>
     Y <correo_destino>
 
     Ejemplos:
@@ -50,8 +50,8 @@ Característica: Formulario de acceso en la app móvil
 
     Ejemplos:
       | situacion | resultado |
-      | nadie ha iniciado sesión | en menos de 5 segundos ve el título «Iniciar sesión» con el formulario de acceso |
-      | gestor@sigpro.test ha iniciado sesión en alumno01 con Gestor1234! | en menos de 5 segundos llega a /programs sin ver el formulario |
+      | nadie ha iniciado sesión | ve el título «Iniciar sesión» con el formulario de acceso |
+      | gestor@sigpro.test ha iniciado sesión en alumno01 con Gestor1234! | llega a /programs sin ver el formulario |
 
   Esquema del escenario: El inicio de sesión ocurre en el tenant escrito
     Dado que los tenants alumno01 y alumno02 están recién reiniciados y una persona sin sesión iniciada en /login escribe <tenant> en «Tenant de trabajo»
@@ -60,15 +60,15 @@ Característica: Formulario de acceso en la app móvil
 
     Ejemplos:
       | tenant | correo | contraseña | resultado |
-      | alumno01 | alumno01@sigpro.lab | Alumno1234! | en menos de 5 segundos llega a /programs y la página «Perfil» muestra el tenant alumno01 |
-      | alumno01 | gestor@sigpro.test | Gestor1234! | en menos de 5 segundos llega a /programs y la página «Perfil» muestra el tenant alumno01 |
-      | alumno02 | gestor@sigpro.test | Gestor1234! | en menos de 5 segundos llega a /programs y la página «Perfil» muestra el tenant alumno02 |
-      | alumno02 | (cuenta recién solicitada en alumno01) | Abcdefghij1! | en menos de 5 segundos ve «Correo o contraseña incorrectos» y sigue sin sesión |
+      | alumno01 | alumno01@sigpro.lab | Alumno1234! | llega a /programs y la página «Perfil» muestra el tenant alumno01 |
+      | alumno01 | gestor@sigpro.test | Gestor1234! | llega a /programs y la página «Perfil» muestra el tenant alumno01 |
+      | alumno02 | gestor@sigpro.test | Gestor1234! | llega a /programs y la página «Perfil» muestra el tenant alumno02 |
+      | alumno02 | (cuenta recién solicitada en alumno01) | Abcdefghij1! | ve «Correo o contraseña incorrectos» y sigue sin sesión |
 
   Esquema del escenario: La app recuerda el último tenant usado
     Dado que el tenant <anterior> está recién reiniciado y en la app gestor@sigpro.test ha iniciado sesión con Gestor1234! y <anterior> en «Tenant de trabajo», y después ha pulsado «Cerrar sesión» en la página «Perfil»
     Cuando cierra la app y la vuelve a abrir en /login
-    Entonces en menos de 5 segundos desde que se abre, «Tenant de trabajo» contiene <anterior>
+    Entonces «Tenant de trabajo» contiene <anterior>
 
     Ejemplos:
       | anterior |
@@ -78,7 +78,7 @@ Característica: Formulario de acceso en la app móvil
   Esquema del escenario: El campo de tenant no se queda vacío
     Dado que el tenant alumno01 está recién reiniciado y una persona sin sesión iniciada en /login tiene <tenant> en «Tenant de trabajo»
     Cuando borra todo el contenido del campo
-    Entonces en menos de 1 segundo el campo muestra demo
+    Entonces el campo muestra demo
 
     Ejemplos:
       | tenant |
@@ -89,8 +89,8 @@ Característica: Formulario de acceso en la app móvil
     Dado que el tenant alumno01 está recién reiniciado y una persona sin sesión iniciada está en /login con alumno01 en «Tenant de trabajo»
     Cuando escribe el correo <correo> y la contraseña <contraseña>
     Y pulsa «Entrar»
-    Entonces en menos de 1 segundo, bajo el correo ve <aviso_correo>
-    Y en menos de 1 segundo, bajo la contraseña ve <aviso_contraseña>
+    Entonces bajo el correo ve <aviso_correo>
+    Y bajo la contraseña ve <aviso_contraseña>
     Y <envio>
 
     Ejemplos:
@@ -100,13 +100,13 @@ Característica: Formulario de acceso en la app móvil
       | no-es-un-correo | Gestor1234! | «Introduce un correo válido» | (ninguno) | no se envía nada |
       | ana@sigpro | Gestor1234! | «Introduce un correo válido» | (ninguno) | no se envía nada |
       | gestor@sigpro.test | (vacío) | (ninguno) | «Campo obligatorio» | no se envía nada |
-      | (correo sin cuenta) | x | (ninguno) | (ninguno) | se envía y en menos de 5 segundos ve «Correo o contraseña incorrectos» |
-      | gestor@sigpro.test | Gestor1234! | (ninguno) | (ninguno) | se envía y en menos de 5 segundos llega a /programs |
+      | (correo sin cuenta) | x | (ninguno) | (ninguno) | se envía y ve «Correo o contraseña incorrectos» |
+      | gestor@sigpro.test | Gestor1234! | (ninguno) | (ninguno) | se envía y llega a /programs |
 
   Esquema del escenario: Editar un campo borra los avisos de los campos
     Dado que el tenant alumno01 está recién reiniciado y una persona sin sesión iniciada en /login, con alumno01 en «Tenant de trabajo», ha pulsado «Entrar» con los dos campos vacíos y ve «Campo obligatorio» bajo el correo y bajo la contraseña
     Cuando escribe <texto> en el campo <campo>
-    Entonces en menos de 1 segundo ya no ve ningún aviso bajo los campos
+    Entonces ya no ve ningún aviso bajo los campos
 
     Ejemplos:
       | campo | texto |

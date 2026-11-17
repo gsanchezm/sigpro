@@ -24,10 +24,10 @@ Característica: Botón atrás de Android tras cerrar sesión
 
   Esquema del escenario: El botón atrás no recupera la sesión cerrada
     Dado que el tenant alumno01 está recién reiniciado y <correo> ha iniciado sesión en la app Android con alumno01 en «Tenant de trabajo» y ha recorrido <recorrido>
-    Y pulsa «Cerrar sesión» en la página «Perfil» y en menos de 5 segundos llega a /login
+    Y pulsa «Cerrar sesión» en la página «Perfil» y llega a /login
     Cuando pulsa el botón atrás del sistema <veces>
-    Entonces durante los 5 segundos siguientes no ve ninguna pantalla privada
-    Y al volver a abrir la app, en menos de 5 segundos ve el título «Iniciar sesión»
+    Entonces no ve ninguna pantalla privada
+    Y al volver a abrir la app, ve el título «Iniciar sesión»
 
     Ejemplos:
       | correo | recorrido | veces |
