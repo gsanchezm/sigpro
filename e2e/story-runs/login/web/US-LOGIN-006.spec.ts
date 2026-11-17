@@ -41,6 +41,7 @@ import {
   quoted,
   reachesPrograms,
   rememberBox,
+  requirePrepared,
   runSteps,
   signInThroughForm,
   signOutFromUserMenu,
@@ -48,6 +49,7 @@ import {
   ssoButton,
   strict,
   textOf,
+  trimmedEmailNote,
   valueOf,
   waitUntil,
   type Check,
@@ -195,7 +197,7 @@ const RESULTS: ReadonlyMap<string, (page: Page) => Promise<{ readonly ok: boolea
       const formSeen = await loginFormEverSeen(page);
       return {
         ok: arrived.reached && stays.held && !formSeen,
-        observed: `ruta ${pathOf(page)}${arrived.reached ? ` (a los ${arrived.elapsedMs} ms)` : ' (no llegó a /programs)'}; formulario de acceso pintado en algún momento: ${yesNo(formSeen)}`,
+        observed: `ruta ${pathOf(page)}${arrived.reached ? ` (a los ${arrived.elapsedMs} ms)` : ' (no llegó a /programs)'}${stays.held ? ', sigue en /programs (observado 2 s)' : `, dejó /programs a los ${stays.brokeAtMs ?? '?'} ms`}; formulario de acceso pintado en algún momento: ${yesNo(formSeen)}`,
         elapsedMs: arrived.elapsedMs,
       };
     },
@@ -207,8 +209,8 @@ const sessionOpensLogin = browserRow(async (row, { page }) => {
   const prepare = strict('situacion', SITUATIONS, cell(row, 'situacion'));
   const read = strict('resultado', RESULTS, cell(row, 'resultado'));
   const expected = `abre /login?tenant=alumno01: ${cell(row, 'resultado')}`;
-  const before = await prepare(page);
-  if (before.some((item) => !item.ok)) return conclude({ checks: [...before, check(false, expected, 'no se llegó a abrir /login: no se cumple lo que la historia da por hecho')] });
+  // Tener la sesión (o haberla cerrado) es PREPARACIÓN de la fila: si no se deja, la fila no se puede evaluar
+  const before = requirePrepared(row, await prepare(page));
   const failure = await runSteps([['abrir /login?tenant=alumno01', () => page.goto(LOGIN_URL, { timeout: CEILING_MS })]]);
   if (failure) return conclude({ checks: [...before, check(false, expected, failure)] });
   const reading = await read(page);
@@ -283,7 +285,7 @@ const validationBeforeSending = browserRow(async (row, { page, requests }) => {
   const final = await readNotices();
   const invalidNote = (name: string, want: string | undefined, invalid: string | undefined): readonly string[] =>
     want !== undefined && invalid !== 'true' ? [`la regla dice que el campo ${name} queda marcado como no válido y su estado de validez es ${invalid ?? 'ausente'}`] : want === undefined && invalid === 'true' ? [`el campo ${name} quedó marcado como no válido sin aviso esperado`] : [];
-  const typedNote = typedEmail !== email ? [`al escribir el correo «${email}» el navegador dejó en el campo «${typedEmail ?? 'no legible'}» (el campo es de tipo correo y recorta los espacios de los extremos)`] : [];
+  const typedNote = trimmedEmailNote(email, typedEmail);
   extra.push(
     check(final.email.text === wantEmail, expectedEmail, noticeText(final.email.text)),
     check(final.password.text === wantPassword, expectedPassword, noticeText(final.password.text)),
@@ -326,7 +328,8 @@ const editingClearsNotices = browserRow(async (row, { page }) => {
   });
   const before = await readNotices();
   const premiseCheck = check(premise.reached, 'Antes: ve «Campo obligatorio» bajo el correo y bajo la contraseña', `bajo el correo ${noticeText(before.email.text)}; bajo la contraseña ${noticeText(before.password.text)}`);
-  if (!premise.reached) return conclude({ checks: [premiseCheck, check(false, expected, 'no se llegó a escribir: no se cumple lo que la historia da por hecho')] });
+  // Los dos avisos tras «Entrar» con los campos vacíos son el «Dado» de esta fila (preparación); los evalúa el Esquema de validación
+  requirePrepared(row, [premiseCheck]);
   const typeFailure = await runSteps([[`escribir ${text}`, () => field(page).pressSequentially(text, ACTION)]]);
   if (typeFailure) return conclude({ checks: [premiseCheck, check(false, expected, typeFailure)] });
   const cleared = await waitUntil(async () => {

@@ -5,6 +5,8 @@ import { uniqueEmail } from '../../support/api';
 import { RESULTS_ROOT } from '../../support/evidence';
 import { WRONG_PASSWORD } from '../../support/prepare';
 import { outcome, type BrowserRowHandler, type ManifestRow, type Outcome } from '../../support/rows';
+// Los ids de prueba salen del fichero compartido (se amplía, nunca se renombra): un cambio de id no deja un sensor mudo
+import { ACCESO_DYNAMIC_TESTIDS, ACCESO_TESTIDS } from '../../../../packages/shared/src/testids';
 
 // Piezas comunes de las historias web de EP-LOGIN: observación sin excepciones, traducción de celdas por mapas de despacho
 // (una celda que ningún mapa reconoce LANZA: nunca se ignora ni se supone qué quiso decir la historia), acciones de la pantalla
@@ -43,7 +45,9 @@ export const safe = async <T>(read: () => Promise<T>, fallback: T): Promise<T> =
 
 export const isVisible = (target: Locator): Promise<boolean> => safe(() => target.first().isVisible(), false);
 export const isEnabled = (target: Locator): Promise<boolean> => safe(() => target.first().isEnabled({ timeout: 500 }), false);
-export const isChecked = (target: Locator): Promise<boolean> => safe(() => target.first().isChecked({ timeout: 500 }), false);
+/** Una lectura fallida cuenta como «no deshabilitado»: ante la duda, la condición NO se da por cumplida. */
+export const isDisabled = (target: Locator): Promise<boolean> => safe(() => target.first().isDisabled({ timeout: 500 }), false);
+export const isChecked =(target: Locator): Promise<boolean> => safe(() => target.first().isChecked({ timeout: 500 }), false);
 export const countOf = (target: Locator): Promise<number> => safe(() => target.count(), 0);
 export const valueOf = (target: Locator): Promise<string | undefined> => safe(() => target.first().inputValue({ timeout: 500 }), undefined);
 export const attrOf = (target: Locator, name: string): Promise<string | undefined> => safe(async () => (await target.first().getAttribute(name, { timeout: 500 })) ?? undefined, undefined);
@@ -183,9 +187,20 @@ export const passwordToggle = (page: Page): Locator => page.getByRole('button', 
 export const optionNamed = (page: Page, name: string): Locator => named(page, name);
 export const alertOf = (page: Page): Locator => page.getByRole('alert');
 export const successOverlay = (page: Page): Locator => page.getByRole('status').filter({ hasText: SUCCESS_MESSAGE });
-export const signedOutNotice = (page: Page): Locator => page.getByRole('status').filter({ hasText: 'Sesión cerrada correctamente.' });
 export const SIGNED_OUT_MESSAGE = 'Sesión cerrada correctamente.';
 export { SUCCESS_MESSAGE };
+
+/** Respaldo por id de prueba, solo donde la pantalla no ofrece otro rastro: el formulario no tiene nombre accesible y el tono «informativo» solo se ve en el id. */
+export const TESTID = {
+  loginForm: ACCESO_TESTIDS.LOGIN_FORM,
+  spinner: ACCESO_TESTIDS.SPINNER,
+  infoToast: ACCESO_DYNAMIC_TESTIDS.TOAST('info'),
+} as const;
+
+/** ¿Hay un aviso de estado cuyo mensaje (primera línea) es EXACTAMENTE `message`? (El filtro por subcadena solo localiza el aviso.) */
+export const statusShows = async (page: Page, message: string): Promise<boolean> => linesOf(await textOf(page.getByRole('status').filter({ hasText: message })))[0] === message;
+/** El aviso de sesión cerrada, con su texto exacto. */
+export const signedOutNoticeShown = (page: Page): Promise<boolean> => statusShows(page, SIGNED_OUT_MESSAGE);
 
 /** La pantalla «Programas»: su título es un encabezado en escritorio y el texto de la cabecera en el diseño responsive (390 px). */
 export const programsTitle = (page: Page): Locator => programsHeading(page).or(page.getByRole('banner').getByText('Programas', { exact: true }));
@@ -213,7 +228,7 @@ export const alertReading = async (page: Page): Promise<{ readonly message?: str
 // Sondas del navegador: preferencia de cookies, registro de peticiones, formulario visto alguna vez
 // ---------------------------------------------------------------------------------------------------------------------
 
-/** Fija SOLO la preferencia de cookies (no es una sesión): así el aviso no se interpone ni roba el foco. No escribe tenant, tema ni idioma. */
+/** Fija SOLO la preferencia de cookies (no es una sesión): así el aviso no aparece en /programs ni en /profile. No escribe tenant, tema ni idioma. */
 const fixCookiePreference = (): void => {
   try {
     localStorage.setItem('sigpro.cookies', 'accepted');
@@ -223,11 +238,11 @@ const fixCookiePreference = (): void => {
 };
 
 /** Anota en la propia página si el formulario de acceso llegó a pintarse en este documento (un destello no se ve en el estado final). */
-const recordLoginForm = (): void => {
+const recordLoginForm = (formTestId: string): void => {
   const holder = window as unknown as { __loginFormSeen?: boolean };
   holder.__loginFormSeen = false;
   const mark = (): void => {
-    if (document.querySelector('[data-testid="login-form"]')) holder.__loginFormSeen = true;
+    if (document.querySelector(`[data-testid="${formTestId}"]`)) holder.__loginFormSeen = true;
   };
   new MutationObserver(mark).observe(document, { childList: true, subtree: true });
   mark();
@@ -279,6 +294,24 @@ export interface Check {
 
 export const check = (ok: boolean, expected: string, observed: string): Check => ({ ok, expected, observed });
 
+/**
+ * Exige que la PREPARACIÓN de la fila haya dejado el estado de partida que la historia da por hecho (sesión iniciada, cuenta
+ * bloqueada o desactivada, N fallos previos…). Si no, lanza: la fila no se puede evaluar y queda como `error-de-prueba`, no como una
+ * discrepancia de la app. Solo si la premisa es justo lo que evalúa la fila se pasa como `check` normal. Devuelve las mismas
+ * premisas para mostrarlas en lo esperado y lo observado.
+ */
+export const requirePrepared = (row: ManifestRow, premises: readonly Check[]): readonly Check[] => {
+  const failed = premises.filter((item) => !item.ok);
+  if (failed.length === 0) return premises;
+  throw new Error(`La preparación de ${row.rowId} no dejó el estado de partida: ${failed.map((item) => `«${item.expected}»`).join('; ')} (${failed.map((item) => item.observed).join('; ')})`);
+};
+
+/** Nota cuando el campo de correo (tipo correo) recortó los espacios de los extremos al escribir: esa parte de la regla no la ejerce la app en la web. */
+export const trimmedEmailNote = (typed: string, kept: string | undefined): readonly string[] =>
+  kept === typed
+    ? []
+    : [`al escribir el correo «${typed}» el navegador dejó en el campo «${kept ?? 'no legible'}»: el campo es de tipo correo y recorta los espacios de los extremos, así que la regla de la app de ignorar los espacios del principio y del final no se ejercita en la web (la cumple el propio campo)`];
+
 export interface Conclusion {
   readonly checks: readonly Check[];
   /** Notas que no afectan al veredicto (tolerancias superadas, hechos de las Reglas que no son un paso de la fila…). */
@@ -307,7 +340,8 @@ export interface WebRun {
 
 export type WebHandler = (row: ManifestRow, run: WebRun) => Promise<Outcome>;
 
-const COOKIE_EVIDENCE = 'Contexto limpio por fila (almacenamiento vacío). El aviso de cookies no se pulsa: un script de inicio fija solo sigpro.cookies=accepted, para que no robe el foco ni tape el menú; no es una sesión. El tenant lo adopta la propia página de ?tenant=alumno01.';
+const COOKIE_EVIDENCE =
+  'Contexto limpio por fila (almacenamiento vacío). El aviso de cookies solo se monta en el armazón de las pantallas privadas, no en /login: un script de inicio fija solo sigpro.cookies=accepted para que no aparezca en /programs ni en /profile; no se pulsa nada y no es una sesión. El tenant lo adopta la propia página de ?tenant=alumno01.';
 
 const captureName = (rowId: string): string => `${rowId.replaceAll('/', '_')}.png`;
 
@@ -324,7 +358,7 @@ export const browserRow =
   (handler: WebHandler): BrowserRowHandler =>
   async (row, { page, context }) => {
     await context.addInitScript(fixCookiePreference);
-    await context.addInitScript(recordLoginForm);
+    await context.addInitScript(recordLoginForm, TESTID.loginForm);
     const requests = trackLoginRequests(context);
     const shots: { final?: Buffer } = {};
     const snapshot = async (target: Page = page): Promise<void> => {
@@ -406,8 +440,11 @@ export const awaitLoginResult = async (page: Page): Promise<LoginResult> => {
   const waited = await waitUntil(async () => {
     if (await isVisible(successOverlay(page))) {
       const text = await textOf(successOverlay(page));
+      const message = linesOf(text)[0];
+      // Sin texto legible no hay mensaje observado: se sigue esperando (nunca se rellena con el esperado)
+      if (message === undefined) return false;
       const detail = detailOf(text);
-      seen = { kind: 'redirecting', message: linesOf(text)[0] ?? SUCCESS_MESSAGE, ...(detail === undefined ? {} : { detail }) };
+      seen = { kind: 'redirecting', message, ...(detail === undefined ? {} : { detail }) };
       return true;
     }
     const alert = await alertReading(page);

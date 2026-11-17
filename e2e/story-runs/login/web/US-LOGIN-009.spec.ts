@@ -24,6 +24,7 @@ import {
   slowNote,
   ssoButton,
   strict,
+  TESTID,
   textOf,
   valueOf,
   waitUntil,
@@ -36,7 +37,7 @@ import {
 
 const MESSAGE = 'SSO no disponible en el prototipo';
 
-const infoToast = (page: Page) => page.getByTestId('toast-info');
+const infoToast = (page: Page) => page.getByTestId(TESTID.infoToast);
 const messageIn = (page: Page) => infoToast(page).getByText(MESSAGE, { exact: true });
 
 interface Written {
@@ -109,7 +110,7 @@ const autoCloses = browserRow(async (row, { page }) => {
   const closed = await watcher;
   return conclude({
     checks: [
-      check(true, `ve el aviso «${MESSAGE}»`, `aviso visible a los ${appeared.elapsedMs} ms de pulsar`),
+      check(appeared.reached, `ve el aviso «${MESSAGE}»`, `aviso visible a los ${appeared.elapsedMs} ms de pulsar`),
       check(visibleNow === expectVisible, `a los ${seconds} segundos de aparecer el aviso ${cell(row, 'estado')}`, `a los ${readAt} ms de verlo aparecer el aviso ${visibleNow ? 'sigue visible' : 'ya no está'}`),
     ],
     notes: [...slowNote('el aviso emergente', appeared.elapsedMs, REFERENCE_MS.toast), ...(closed.reached ? [] : [`el aviso no llegó a cerrarse en ${CEILING_MS} ms`])],

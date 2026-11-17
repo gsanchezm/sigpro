@@ -27,11 +27,12 @@ import {
   optionNamed,
   pathOf,
   pressEnter,
+  requirePrepared,
   runSteps,
   safe,
   signInThroughForm,
   signOutFromUserMenu,
-  signedOutNotice,
+  signedOutNoticeShown,
   slowNote,
   strict,
   waitUntil,
@@ -79,6 +80,8 @@ interface Moved {
   readonly target: Page;
   readonly failure?: string;
   readonly evidence?: Readonly<Record<string, unknown>>;
+  /** Interpretaciones que el manejador tuvo que elegir y que la fila debe declarar. */
+  readonly notes?: readonly string[];
 }
 
 interface Fixtures {
@@ -106,7 +109,12 @@ const ACTIONS: ReadonlyMap<string, (fixtures: Fixtures) => Promise<Moved>> = new
       const toProfile = await runSteps([['abrir /profile en la misma pestaña', () => page.goto('/profile', { timeout: CEILING_MS })]]);
       const inProfile = await waitUntil(async () => pathOf(page) === '/profile' && (await isVisible(page.getByRole('heading', { level: 1 }))));
       const failure = toProfile ?? (await runSteps([['volver a /programs', () => page.goto('/programs', { timeout: CEILING_MS })]]));
-      return { target: page, ...(failure === undefined ? {} : { failure }), evidence: { profileReached: inProfile.reached } };
+      return {
+        target: page,
+        ...(failure === undefined ? {} : { failure }),
+        evidence: { profileReached: inProfile.reached },
+        notes: ['«vuelve a /programs» es ambiguo entre el botón atrás del navegador y escribir la dirección: se probó solo escribir la dirección (/profile y después /programs); la variante del botón atrás no se probó'],
+      };
     },
   ],
 ]);
@@ -131,15 +139,15 @@ const boxDecidesScope = browserRow(async (row, { page, context, snapshot }) => {
   const read = strict('resultado', RESULTS, cell(row, 'resultado'));
   const expected = `${cell(row, 'accion')}: ${cell(row, 'resultado')}`;
   const session = await signInThroughForm(page, DEMO.gestor, remember);
-  const before = check(session.ok, `Antes: gestor@sigpro.test ha iniciado sesión con la casilla «Mantener la sesión en este equipo» ${cell(row, 'casilla')} y está en /programs`, session.observed);
-  if (!session.ok) return conclude({ checks: [before, check(false, expected, 'no se llegó a la acción: no se cumple lo que la historia da por hecho')] });
+  // Tener la sesión iniciada con la casilla de la fila es PREPARACIÓN: si no queda así, la fila no se puede evaluar
+  const [before] = requirePrepared(row, [check(session.ok, `Antes: gestor@sigpro.test ha iniciado sesión con la casilla «Mantener la sesión en este equipo» ${cell(row, 'casilla')} y está en /programs`, session.observed)]);
   const moved = await act({ page, context });
-  if (moved.failure) return conclude({ checks: [before, check(false, expected, moved.failure)] });
+  if (moved.failure) return conclude({ checks: [before, check(false, expected, moved.failure)], notes: moved.notes ?? [] });
   const reading = await read(moved.target);
   await snapshot(moved.target);
   return conclude({
     checks: [before, check(reading.ok, expected, reading.observed)],
-    notes: slowNote('la pantalla final', reading.elapsedMs, REFERENCE_MS.network),
+    notes: [...slowNote('la pantalla final', reading.elapsedMs, REFERENCE_MS.network), ...(moved.notes ?? [])],
     evidence: { elapsedMs: reading.elapsedMs, rememberBox: cell(row, 'casilla'), ...moved.evidence },
   });
 });
@@ -199,13 +207,13 @@ const signOutFromWhere = browserRow(async (row, { page, context, snapshot }) => 
   await page.setViewportSize(size);
   const session = await signInThroughForm(page, account);
   const moved = session.ok ? await goToScreen(page) : undefined;
-  const before = check(session.ok && moved === undefined, `Antes: ${account.email} ha iniciado sesión con la casilla marcada y está en ${cell(row, 'pantalla')} con una ventana de ${cell(row, 'ancho')}`, session.ok ? (moved ?? `en ${cell(row, 'pantalla')} (ruta ${pathOf(page)})`) : session.observed);
-  if (!before.ok) return conclude({ checks: [before, check(false, expected, 'no se llegó a pulsar: no se cumple lo que la historia da por hecho')] });
+  // Estar con la sesión iniciada en la pantalla y el ancho de la fila es PREPARACIÓN: si no queda así, la fila no se puede evaluar
+  const [before] = requirePrepared(row, [check(session.ok && moved === undefined, `Antes: ${account.email} ha iniciado sesión con la casilla marcada y está en ${cell(row, 'pantalla')} con una ventana de ${cell(row, 'ancho')}`, session.ok ? (moved ?? `en ${cell(row, 'pantalla')} (ruta ${pathOf(page)})`) : session.observed)]);
   const failure = await press(page);
   if (failure) return conclude({ checks: [before, check(false, expected, failure)] });
 
   const onLogin = await waitUntil(() => onLoginForm(page));
-  const notice = await waitUntil(() => isVisible(signedOutNotice(page)));
+  const notice = await waitUntil(() => signedOutNoticeShown(page));
   await snapshot();
   const sameTab = await programsLandsOnLogin(page, 'en esa pestaña');
   const opened: { tab?: Page } = {};
@@ -275,10 +283,10 @@ const ACTIONS_3: ReadonlyMap<string, (page: Page) => Promise<Done>> = new Map<st
   ],
 ]);
 
-/** El aviso de sesión cerrada, ¿sigue ausente durante un tiempo? («ya no ve» se observa 2 s, no se muestrea una vez.) */
-const noticeStaysAway = async (page: Page): Promise<Check> => {
-  const away = await holdsFor(async () => !(await isVisible(signedOutNotice(page))));
-  return check(away.held, `ya no ve «${SIGNED_OUT_MESSAGE}»`, away.held ? `el aviso de sesión cerrada no está (observado ${HOLD_MS / 1000} s)` : 'el aviso de sesión cerrada sigue visible');
+/** El aviso de sesión cerrada, ¿sigue ausente durante un tiempo? («ya no ve» / «no ve» se observa 2 s, no se muestrea una vez.) */
+const noticeStaysAway = async (page: Page, wording: 'ya no ve' | 'no ve'): Promise<Check> => {
+  const away = await holdsFor(async () => !(await signedOutNoticeShown(page)));
+  return check(away.held, `${wording} «${SIGNED_OUT_MESSAGE}»`, away.held ? `el aviso de sesión cerrada no está (observado ${HOLD_MS / 1000} s)` : 'el aviso de sesión cerrada sigue visible');
 };
 
 /** Lo que se lee tras la acción: las comprobaciones y el tiempo que tardó en llegarse al estado de la historia. */
@@ -287,53 +295,100 @@ interface Reading {
   readonly elapsedMs: number;
 }
 
-const NOTICES: ReadonlyMap<string, (page: Page, done: Done) => Promise<Reading>> = new Map<string, (page: Page, done: Done) => Promise<Reading>>([
+interface NoticeCase {
+  /**
+   * «Ya no ve» solo significa algo si antes se veía: se exige una lectura positiva previa del MISMO localizador (el aviso de sesión
+   * cerrada estaba visible antes de actuar). Es preparación de la fila: si no se ve, la fila no se puede evaluar.
+   */
+  readonly seenBefore: boolean;
+  /**
+   * «No ve» sin cierre de sesión previo no puede tener lectura positiva previa: tras observar, la fila inicia y cierra sesión y
+   * comprueba que el mismo localizador SÍ ve el aviso (control; va a la evidencia y a una nota, no al veredicto).
+   */
+  readonly locatorControl: boolean;
+  readonly read: (page: Page, done: Done) => Promise<Reading>;
+}
+
+const NOTICES: ReadonlyMap<string, NoticeCase> = new Map<string, NoticeCase>([
   [
     've «Sesión cerrada correctamente.»',
-    async (page) => {
-      const shown = await waitUntil(() => isVisible(signedOutNotice(page)));
-      return { checks: [check(shown.reached, `ve «${SIGNED_OUT_MESSAGE}»`, shown.reached ? `aviso visible (${shown.elapsedMs} ms)` : `no se vio el aviso en ${CEILING_MS} ms`)], elapsedMs: shown.elapsedMs };
+    {
+      seenBefore: false,
+      locatorControl: false,
+      read: async (page) => {
+        const shown = await waitUntil(() => signedOutNoticeShown(page));
+        return { checks: [check(shown.reached, `ve «${SIGNED_OUT_MESSAGE}»`, shown.reached ? `aviso visible (${shown.elapsedMs} ms)` : `no se vio el aviso en ${CEILING_MS} ms`)], elapsedMs: shown.elapsedMs };
+      },
     },
   ],
   [
     'ya no ve «Sesión cerrada correctamente.» y ve «Correo o contraseña incorrectos»',
-    async (page, done) => ({
-      checks: [await noticeStaysAway(page), check(done.login !== undefined && messageMatches(WRONG_NOTICE, done.login), `ve «${WRONG_NOTICE}»`, done.login ? describeResult(done.login, page) : 'no se envió el formulario')],
-      elapsedMs: done.login?.elapsedMs ?? 0,
-    }),
+    {
+      seenBefore: true,
+      locatorControl: false,
+      read: async (page, done) => ({
+        checks: [await noticeStaysAway(page, 'ya no ve'), check(done.login !== undefined && messageMatches(WRONG_NOTICE, done.login), `ve «${WRONG_NOTICE}»`, done.login ? describeResult(done.login, page) : 'no se envió el formulario')],
+        elapsedMs: done.login?.elapsedMs ?? 0,
+      }),
+    },
   ],
   [
     'está de vuelta en /login y ya no ve «Sesión cerrada correctamente.»',
-    async (page) => {
-      const back = await waitUntil(() => onLoginForm(page));
-      return { checks: [check(back.reached, 'está de vuelta en /login', `ruta ${pathOf(page)}, formulario «Iniciar sesión» visible: ${yesNo(back.reached)}`), await noticeStaysAway(page)], elapsedMs: back.elapsedMs };
+    {
+      seenBefore: true,
+      locatorControl: false,
+      read: async (page) => {
+        const back = await waitUntil(() => onLoginForm(page));
+        return { checks: [check(back.reached, 'está de vuelta en /login', `ruta ${pathOf(page)}, formulario «Iniciar sesión» visible: ${yesNo(back.reached)}`), await noticeStaysAway(page, 'ya no ve')], elapsedMs: back.elapsedMs };
+      },
     },
   ],
   [
     've el formulario «Iniciar sesión» y no ve «Sesión cerrada correctamente.»',
-    async (page) => {
-      const shown = await waitUntil(() => isVisible(loginHeading(page)));
-      return { checks: [check(shown.reached, 've el formulario «Iniciar sesión»', `formulario «Iniciar sesión» visible: ${yesNo(shown.reached)}`), await noticeStaysAway(page)], elapsedMs: shown.elapsedMs };
+    {
+      seenBefore: false,
+      locatorControl: true,
+      read: async (page) => {
+        const shown = await waitUntil(() => isVisible(loginHeading(page)));
+        return { checks: [check(shown.reached, 've el formulario «Iniciar sesión»', `formulario «Iniciar sesión» visible: ${yesNo(shown.reached)}`), await noticeStaysAway(page, 'no ve')], elapsedMs: shown.elapsedMs };
+      },
     },
   ],
 ]);
 
-const noticeOnlyAfterSignOut = browserRow(async (row, { page }) => {
+/** Control del localizador: tras un cierre de sesión de verdad, ese mismo localizador ve el aviso. */
+const controlNoticeLocator = async (page: Page): Promise<boolean> => {
+  const session = await signInThroughForm(page, DEMO.gestor);
+  const failure = session.ok ? await signOutFromUserMenu(page) : session.observed;
+  return failure === undefined && (await waitUntil(() => signedOutNoticeShown(page))).reached;
+};
+
+const noticeOnlyAfterSignOut = browserRow(async (row, { page, snapshot }) => {
   await resetTenants([TENANT_A]);
   const prepare = strict('situacion', SITUATIONS, cell(row, 'situacion'));
   const act = strict('accion', ACTIONS_3, cell(row, 'accion'));
-  const readNotice = strict('aviso', NOTICES, cell(row, 'aviso'));
+  const notice = strict('aviso', NOTICES, cell(row, 'aviso'));
   const expected = `${cell(row, 'accion')}: ${cell(row, 'aviso')}`;
-  const before = await prepare(page);
-  if (before.some((item) => !item.ok)) return conclude({ checks: [...before, check(false, expected, 'no se llegó a la acción: no se cumple lo que la historia da por hecho')] });
-  // «Nadie ha iniciado sesión» no tiene pantalla previa: la acción abre /login por sí misma o parte de una página en blanco
+  // Haber iniciado y cerrado sesión es PREPARACIÓN: si no queda así, la fila no se puede evaluar
+  const situation = await prepare(page);
+  const beforeNotice = notice.seenBefore ? await waitUntil(() => signedOutNoticeShown(page)) : undefined;
+  const before = requirePrepared(row, [
+    ...situation,
+    ...(beforeNotice === undefined ? [] : [check(beforeNotice.reached, `Antes: ve «${SIGNED_OUT_MESSAGE}»`, beforeNotice.reached ? `aviso visible antes de actuar (${beforeNotice.elapsedMs} ms)` : 'no se vio el aviso antes de actuar')]),
+  ]);
+  // «Nadie ha iniciado sesión» no tiene pantalla previa: la acción abre /login por sí misma
   const done = await act(page);
   if (done.failure) return conclude({ checks: [...before, check(false, expected, done.failure)] });
-  const reading = await readNotice(page, done);
+  const reading = await notice.read(page, done);
+  await snapshot();
+  const controlled = notice.locatorControl ? await controlNoticeLocator(page) : undefined;
   return conclude({
     checks: [...before, ...reading.checks],
-    notes: slowNote('llegar al estado final', reading.elapsedMs, REFERENCE_MS.network),
-    evidence: { elapsedMs: reading.elapsedMs, ...detailEvidence(done.login?.detail) },
+    notes: [
+      ...slowNote('llegar al estado final', reading.elapsedMs, REFERENCE_MS.network),
+      ...(controlled === false ? ['el control del localizador no vio el aviso tras un cierre de sesión real: el «no ve» de esta fila no es concluyente'] : []),
+    ],
+    evidence: { elapsedMs: reading.elapsedMs, ...(controlled === undefined ? {} : { noticeLocatorControl: controlled ? 'el mismo localizador ve el aviso tras un cierre de sesión real' : 'el control no vio el aviso' }), ...detailEvidence(done.login?.detail) },
   });
 });
 

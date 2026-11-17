@@ -22,6 +22,7 @@ import {
   fromSteps,
   hasNoSession,
   holdsFor,
+  isDisabled,
   isVisible,
   lengthOf,
   messageMatches,
@@ -33,12 +34,15 @@ import {
   pressEnter,
   quoted,
   reachesPrograms,
+  requirePrepared,
   runSteps,
   alertReading,
   alertOf,
   slowNote,
   sleep,
   strict,
+  TESTID,
+  trimmedEmailNote,
   valueOf,
   waitUntil,
   type Check,
@@ -99,19 +103,25 @@ const observeSubmission = async (page: Page, message: string, wording: 'aviso' |
   return { checks, notes, evidence, result };
 };
 
-const conclusion = (observed: Observed, before: readonly Check[] = [], history: readonly string[] = [], extraEvidence: Readonly<Record<string, unknown>> = {}) =>
+const conclusion = (observed: Observed, before: readonly Check[] = [], extraEvidence: Readonly<Record<string, unknown>> = {}, extraNotes: readonly string[] = []) =>
   conclude({
-    checks: [...before, ...observed.checks.map((item, index) => (index === 0 && history.length > 0 ? { ...item, observed: `${history.join('; ')}; ${item.observed}` } : item))],
-    notes: observed.notes,
+    checks: [...before, ...observed.checks],
+    notes: [...observed.notes, ...extraNotes],
     evidence: { ...observed.evidence, ...extraEvidence },
   });
 
 const attempt = async (page: Page, email: string, password: string): Promise<string | undefined> => (await openLogin(page)) ?? (await fillCredentials(page, email, password)) ?? (await pressEnter(page));
 
-/** Fallos previos por HTTP (después del reinicio), con el correo de la fila. Devuelve su descripción para el `observed`. */
-const priorFailures = async (email: string, count: number): Promise<string> => {
+/**
+ * Fallos previos por HTTP (después del reinicio), con el correo de la fila, y la premisa «acumula N intentos fallidos consecutivos»:
+ * cada intento previo se rechazó como un intento fallido. Los cuatro primeros son siempre 401 (con 4 la cuenta sigue activa); del 5.º
+ * en adelante vale 401 o 423, porque qué ocurre en el 5.º es justo lo que evalúan las filas del Esquema 5 y no se puede suponer aquí.
+ */
+const priorFailures = async (who: string, email: string, count: number): Promise<Check> => {
   const done = await failedLogins(TENANT_A, email, count);
-  return `Previos: ${count} fallos${count === 0 ? '' : ` (HTTP ${done.map((item) => item.status).join(', ')})`}`;
+  const codes = done.map((item) => item.status);
+  const ok = codes.every((code, index) => (index < 4 ? code === 401 : code === 401 || code === 423));
+  return check(ok, `Antes: ${who} acumula ${count} intentos fallidos consecutivos`, `Previos: ${count} fallos${count === 0 ? '' : ` (HTTP ${codes.join(', ')})`}`);
 };
 
 const countOfCell = (row: Parameters<BrowserRowHandler>[0], key: string): number => {
@@ -134,7 +144,7 @@ const activeAccountEnters = browserRow(async (row, { page, snapshot }) => {
   if (failure) return conclude({ checks: [check(false, `ve el mensaje «${MESSAGE_OK}»; ${PROGRAMS}`, failure)] });
   const typed = await valueOf(emailField(page));
   const observed = await observeSubmission(page, MESSAGE_OK, 'mensaje', { reachesPrograms: true }, snapshot);
-  return conclusion(observed, [], [], { emailFieldValue: typed });
+  return conclusion(observed, [], { emailFieldValue: typed }, trimmedEmailNote(email, typed));
 });
 
 // ---------------------------------------------------------------------------------------------------------------------
@@ -170,6 +180,19 @@ const DELAYS: ReadonlyMap<string, number> = new Map<string, number>([
   ['3 segundos', 3_000],
 ]);
 
+const PROCESSING = 'Procesando…';
+const SAMPLE_MS = 50;
+/** Margen tras el retraso inyectado para dar por perdida la liberación (si la petición nunca llega, el muestreo no es infinito). */
+const SAMPLING_GRACE_MS = 2_000;
+
+interface BusySample {
+  readonly atMs: number;
+  readonly busy: boolean;
+  readonly disabled: boolean;
+  readonly explained: boolean;
+  readonly spinner: boolean;
+}
+
 const busyWhileWaiting = browserRow(async (row, { page, requests }) => {
   await resetTenants([TENANT_A]);
   const delayMs = strict('espera', DELAYS, cell(row, 'espera'));
@@ -194,32 +217,54 @@ const busyWhileWaiting = browserRow(async (row, { page, requests }) => {
   const clickFailure = await pressEnter(page);
   if (clickFailure) return conclude({ checks: [check(false, `${expectedBusy}; ${expectedAfter}`, clickFailure)] });
 
-  const form = page.getByTestId('login-form');
-  const reading = { busy: undefined as string | undefined, disabled: false, title: undefined as string | undefined, spinner: false, beforeRelease: false, atMs: 0 };
-  await waitUntil(async () => {
-    reading.busy = await attrOf(form, 'aria-busy');
-    reading.disabled = !(await enterButton(page).first().isEnabled({ timeout: 500 }));
-    reading.title = await attrOf(enterButton(page), 'title');
-    reading.spinner = await isVisible(enterButton(page).getByTestId('spinner'));
-    reading.beforeRelease = gate.releasedAt === undefined;
-    reading.atMs = Math.round(performance.now() - clickedAt);
-    return (reading.busy === 'true' && reading.disabled && reading.title === 'Procesando…') || gate.releasedAt !== undefined;
-  });
-  const busyOk = reading.busy === 'true' && reading.disabled && reading.title === 'Procesando…' && reading.beforeRelease;
+  // «Durante la espera» es una condición MANTENIDA: se muestrea cada ~50 ms desde que se pulsa hasta que la prueba libera la
+  // respuesta retrasada, y el veredicto exige que TODAS las muestras cumplan las tres condiciones del paso. Una lectura que cruza
+  // la liberación no cuenta (ya no es «durante la espera»).
+  const form = page.getByTestId(TESTID.loginForm);
+  const submit = enterButton(page);
+  const samples: BusySample[] = [];
+  const sampleUntil = clickedAt + delayMs + SAMPLING_GRACE_MS;
+  while (gate.releasedAt === undefined && performance.now() < sampleUntil) {
+    const sample: BusySample = {
+      atMs: Math.round(performance.now() - clickedAt),
+      busy: (await attrOf(form, 'aria-busy')) === 'true',
+      disabled: await isDisabled(submit),
+      explained: (await attrOf(submit, 'title')) === PROCESSING,
+      spinner: await isVisible(submit.getByTestId(TESTID.spinner)),
+    };
+    if (gate.releasedAt === undefined) samples.push(sample);
+    await sleep(SAMPLE_MS);
+  }
+  const requestsAtRelease = requests.count();
+  const minSamples = Math.max(3, Math.floor(delayMs / 200));
+  const count = (pick: (sample: BusySample) => boolean): number => samples.filter(pick).length;
+  const everyMet = samples.length >= minSamples && samples.every((sample) => sample.busy && sample.disabled && sample.explained);
+  const releasedAfterMs = gate.releasedAt === undefined ? null : Math.round(gate.releasedAt - clickedAt);
   const result = await awaitLoginResult(page);
   const arrivedOk = messageMatches(MESSAGE_OK, result);
-  const releasedAfterMs = gate.releasedAt === undefined ? null : Math.round(gate.releasedAt - clickedAt);
   return conclude({
     checks: [
       check(
-        busyOk,
+        everyMet,
         expectedBusy,
-        `a los ${reading.atMs} ms de pulsar${reading.beforeRelease ? ', antes de liberar la respuesta' : ', DESPUÉS de liberar la respuesta'}: formulario ocupado ${reading.busy ?? 'sin dato'}, «Entrar» ${reading.disabled ? 'deshabilitado' : 'habilitado'}, explicación ${reading.title === undefined ? 'ninguna' : `«${reading.title}»`}`,
+        `${samples.length} muestras entre los ${samples[0]?.atMs ?? '?'} y los ${samples.at(-1)?.atMs ?? '?'} ms de pulsar, antes de liberar la respuesta (liberada a los ${releasedAfterMs ?? '?'} ms; se exigían al menos ${minSamples}): formulario ocupado en ${count((s) => s.busy)}/${samples.length}, «Entrar» deshabilitado en ${count((s) => s.disabled)}/${samples.length}, explicación «${PROCESSING}» en ${count((s) => s.explained)}/${samples.length}`,
       ),
       check(arrivedOk, expectedAfter, describeResult(result, page)),
     ],
     notes: slowNote('el mensaje tras la respuesta', result.elapsedMs, REFERENCE_MS.network),
-    evidence: { injectedDelayMs: delayMs, releasedAfterMs, busyObservedAtMs: reading.atMs, spinnerVisibleInButton: reading.spinner, elapsedMs: result.elapsedMs, loginRequestsSent: requests.count() },
+    evidence: {
+      injectedDelayMs: delayMs,
+      releasedAfterMs,
+      samples: samples.length,
+      samplesMeetingAllConditions: count((s) => s.busy && s.disabled && s.explained),
+      firstSampleAtMs: samples[0]?.atMs ?? null,
+      lastSampleAtMs: samples.at(-1)?.atMs ?? null,
+      observedWaitMs: samples.length === 0 ? 0 : (samples.at(-1)?.atMs ?? 0) - (samples[0]?.atMs ?? 0),
+      // Dato de las Reglas (indicador de carga) y del título del Esquema (no se puede volver a enviar): evidencia, no veredicto
+      spinnerVisibleInSamples: count((s) => s.spinner),
+      loginRequestsWhenReleased: requestsAtRelease,
+      elapsedMs: result.elapsedMs,
+    },
   });
 });
 
@@ -232,12 +277,12 @@ const wrongBelowFive = browserRow(async (row, { page, snapshot }) => {
   await resetTenants([TENANT_A]);
   const email = emailOf(cell(row, 'correo'));
   const password = passwordOf(cell(row, 'contraseña'));
-  const previous = await priorFailures(email, countOfCell(row, 'fallos_previos'));
+  const previous = requirePrepared(row, [await priorFailures(cell(row, 'correo'), email, countOfCell(row, 'fallos_previos'))]);
   const failure = await attempt(page, email, password);
   const message = 'Correo o contraseña incorrectos';
-  if (failure) return conclude({ checks: [check(false, `ve el aviso de error con el mensaje «${message}»`, `${previous}; ${failure}`)] });
+  if (failure) return conclude({ checks: [...previous, check(false, `ve el aviso de error con el mensaje «${message}»`, failure)] });
   const observed = await observeSubmission(page, message, 'aviso', { staysOnLogin: { email, password } }, snapshot);
-  return conclusion(observed, [], [previous]);
+  return conclusion(observed, previous);
 });
 
 /** Esquema 5: según los fallos previos, el aviso de credenciales incorrectas o el de cuenta bloqueada. */
@@ -246,11 +291,11 @@ const fifthFailureLocks = browserRow(async (row, { page, snapshot }) => {
   const email = emailOf(cell(row, 'correo'));
   const password = passwordOf(cell(row, 'contraseña'));
   const message = quoted(cell(row, 'mensaje'));
-  const previous = await priorFailures(email, countOfCell(row, 'fallos_previos'));
+  const previous = requirePrepared(row, [await priorFailures(cell(row, 'correo'), email, countOfCell(row, 'fallos_previos'))]);
   const failure = await attempt(page, email, password);
-  if (failure) return conclude({ checks: [check(false, `ve el mensaje «${message}»`, `${previous}; ${failure}`)] });
+  if (failure) return conclude({ checks: [...previous, check(false, `ve el mensaje «${message}»`, failure)] });
   const observed = await observeSubmission(page, message, 'mensaje', { staysOnLogin: { password } }, snapshot);
-  return conclusion(observed, [], [previous]);
+  return conclusion(observed, previous);
 });
 
 /** Esquema 6: con 3 o 4 fallos la cuenta sigue activa y la contraseña correcta entra. */
@@ -258,11 +303,11 @@ const belowFiveStillEnters = browserRow(async (row, { page, snapshot }) => {
   await resetTenants([TENANT_A]);
   const email = fromSteps(row, /^Dado que .*, (\S+@\S+) acumula/);
   const password = fromSteps(row, /escribe ese correo y la contraseña (\S+)$/);
-  const previous = await priorFailures(email, countOfCell(row, 'fallos_previos'));
+  const previous = requirePrepared(row, [await priorFailures(email, email, countOfCell(row, 'fallos_previos'))]);
   const failure = await attempt(page, email, password);
-  if (failure) return conclude({ checks: [check(false, `ve el mensaje «${MESSAGE_OK}»; ${PROGRAMS}`, `${previous}; ${failure}`)] });
+  if (failure) return conclude({ checks: [...previous, check(false, `ve el mensaje «${MESSAGE_OK}»; ${PROGRAMS}`, failure)] });
   const observed = await observeSubmission(page, MESSAGE_OK, 'mensaje', { reachesPrograms: true }, snapshot);
-  return conclusion(observed, [], [previous]);
+  return conclusion(observed, previous);
 });
 
 // ---------------------------------------------------------------------------------------------------------------------
@@ -281,11 +326,12 @@ const lockedAccount = browserRow(async (row, { page, snapshot }) => {
   await resetTenants([TENANT_A]);
   const email = fromSteps(row, /la cuenta (\S+@\S+) está bloqueada/);
   const password = passwordOf(cell(row, 'contraseña'));
-  const premise = await accountIs(`la cuenta ${email} está bloqueada`, email, 'locked', true);
+  // La cuenta bloqueada es PREPARACIÓN (estado del seed tras el reinicio): si no está bloqueada, la fila no se puede evaluar
+  const premise = requirePrepared(row, [await accountIs(`la cuenta ${email} está bloqueada`, email, 'locked', true)]);
   const failure = await attempt(page, email, password);
-  if (failure) return conclude({ checks: [premise, check(false, `ve el mensaje «${LOCKED_MESSAGE}»`, failure)] });
+  if (failure) return conclude({ checks: [...premise, check(false, `ve el mensaje «${LOCKED_MESSAGE}»`, failure)] });
   const observed = await observeSubmission(page, LOCKED_MESSAGE, 'mensaje', { staysOnLogin: { password } }, snapshot);
-  return conclusion(observed, [premise]);
+  return conclusion(observed, premise);
 });
 
 // ---------------------------------------------------------------------------------------------------------------------
@@ -315,34 +361,42 @@ interface Prepared {
   readonly premises: readonly Check[];
 }
 
-const ACCOUNT_STATES: ReadonlyMap<string, (page: Page, emailCell: string) => Promise<Prepared>> = new Map<string, (page: Page, emailCell: string) => Promise<Prepared>>([
+/** Las cuentas que citan los ejemplos del Esquema 8: dos del seed y la recién solicitada en la propia fila. */
+const REQUESTED = '(cuenta recién solicitada)';
+const ACCOUNTS: ReadonlyMap<string, string> = new Map<string, string>([
+  ['pendiente@sigpro.test', 'pendiente@sigpro.test'],
+  ['auditor@sigpro.test', 'auditor@sigpro.test'],
+  [REQUESTED, REQUESTED],
+]);
+
+const ACCOUNT_STATES: ReadonlyMap<string, (page: Page, account: string) => Promise<Prepared>> = new Map<string, (page: Page, account: string) => Promise<Prepared>>([
   [
     'pendiente de aprobación',
-    async (page, emailCell) => {
-      if (emailCell === '(cuenta recién solicitada)') {
+    async (page, account) => {
+      if (account === REQUESTED) {
         const requested = await requestAccountThroughForm(page);
         return { email: requested.email, premises: [requested.check, await accountIs(`${requested.email} está pendiente de aprobación`, requested.email, 'pending', true)] };
       }
-      return { email: emailCell, premises: [await accountIs(`la cuenta ${emailCell} está pendiente de aprobación`, emailCell, 'pending', true)] };
+      return { email: account, premises: [await accountIs(`la cuenta ${account} está pendiente de aprobación`, account, 'pending', true)] };
     },
   ],
   [
     'desactivada',
-    async (_page, emailCell) => {
-      const patch = await setAccountActive(TENANT_A, emailCell, false);
-      return { email: emailCell, premises: [check(patch.status === 200, `Antes: el administrador desactiva ${emailCell}`, `PATCH /api/admin/users respondió ${patch.status}`), await accountIs(`la cuenta ${emailCell} está desactivada`, emailCell, 'active', false)] };
+    async (_page, account) => {
+      const patch = await setAccountActive(TENANT_A, account, false);
+      return { email: account, premises: [check(patch.status === 200, `Antes: el administrador desactiva ${account}`, `PATCH /api/admin/users respondió ${patch.status}`), await accountIs(`la cuenta ${account} está desactivada`, account, 'active', false)] };
     },
   ],
   [
     'desactivada y vuelta a activar',
-    async (_page, emailCell) => {
-      const off = await setAccountActive(TENANT_A, emailCell, false);
-      const on = await setAccountActive(TENANT_A, emailCell, true);
+    async (_page, account) => {
+      const off = await setAccountActive(TENANT_A, account, false);
+      const on = await setAccountActive(TENANT_A, account, true);
       return {
-        email: emailCell,
+        email: account,
         premises: [
-          check(off.status === 200 && on.status === 200, `Antes: el administrador desactiva y vuelve a activar ${emailCell}`, `PATCH /api/admin/users respondió ${off.status} y después ${on.status}`),
-          await accountIs(`la cuenta ${emailCell} está activa`, emailCell, 'active', true),
+          check(off.status === 200 && on.status === 200, `Antes: el administrador desactiva y vuelve a activar ${account}`, `PATCH /api/admin/users respondió ${off.status} y después ${on.status}`),
+          await accountIs(`la cuenta ${account} está activa`, account, 'active', true),
         ],
       };
     },
@@ -352,13 +406,16 @@ const ACCOUNT_STATES: ReadonlyMap<string, (page: Page, emailCell: string) => Pro
 const pendingOrDisabled = browserRow(async (row, { page, snapshot }) => {
   await resetTenants([TENANT_A]);
   const message = quoted(cell(row, 'mensaje'));
-  const prepared = await strict('estado', ACCOUNT_STATES, cell(row, 'estado'))(page, cell(row, 'correo'));
+  // El correo es una cuenta del seed o la recién solicitada: cualquier otro texto lanza «celda sin interpretación»
+  const account = strict('correo', ACCOUNTS, cell(row, 'correo'));
+  const prepared = await strict('estado', ACCOUNT_STATES, cell(row, 'estado'))(page, account);
   const password = passwordOf(cell(row, 'contraseña'));
-  if (prepared.premises.some((item) => !item.ok)) return conclude({ checks: [...prepared.premises, check(false, `ve el mensaje «${message}»`, 'no se llegó a escribir: no se cumple lo que la historia da por hecho')] });
+  // Dejar la cuenta pendiente o desactivada es PREPARACIÓN: si no queda así, la fila no se puede evaluar
+  const premises = requirePrepared(row, prepared.premises);
   const failure = await attempt(page, prepared.email, password);
-  if (failure) return conclude({ checks: [...prepared.premises, check(false, `ve el mensaje «${message}»`, failure)] });
+  if (failure) return conclude({ checks: [...premises, check(false, `ve el mensaje «${message}»`, failure)] });
   const observed = await observeSubmission(page, message, 'mensaje', {}, snapshot);
-  return conclusion(observed, prepared.premises);
+  return conclusion(observed, premises);
 });
 
 // ---------------------------------------------------------------------------------------------------------------------
@@ -381,8 +438,8 @@ const noticeDisappears = browserRow(async (row, { page }) => {
   const failure = await attempt(page, email, password);
   if (failure) return conclude({ checks: [check(false, expected, failure)] });
   const shown = await waitUntil(async () => (await alertReading(page)).message === WRONG_NOTICE);
-  const premise = check(shown.reached, `Antes: ve el aviso «${WRONG_NOTICE}»`, shown.reached ? `aviso «${WRONG_NOTICE}»` : `no apareció el aviso (aviso visible: ${(await alertReading(page)).message ?? 'ninguno'})`);
-  if (!shown.reached) return conclude({ checks: [premise, check(false, expected, 'no se llegó a cambiar el campo: no se cumple lo que la historia da por hecho')] });
+  // El aviso visible antes de corregir es el «Dado» de esta fila (preparación); el rechazo lo evalúan los Esquemas 4 y 5
+  const [premise] = requirePrepared(row, [check(shown.reached, `Antes: ve el aviso «${WRONG_NOTICE}»`, shown.reached ? `aviso «${WRONG_NOTICE}»` : `no apareció el aviso (aviso visible: ${(await alertReading(page)).message ?? 'ninguno'})`)]);
   const changeFailure = await runSteps([['cambiar el contenido del campo', () => field(page).pressSequentially('x', ACTION)]]);
   if (changeFailure) return conclude({ checks: [premise, check(false, expected, changeFailure)] });
   const gone = await waitUntil(async () => !(await isVisible(alertOf(page))));
