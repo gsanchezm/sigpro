@@ -15,7 +15,9 @@ import {
   onLoginForm,
   onPrograms,
   pathOf,
+  recorderSeesForm,
   reachedAndHeld,
+  requirePrepared,
   reopenApp,
   sessionStored,
   signInThroughApp,
@@ -46,24 +48,28 @@ const sessionSurvivesReopening = mobileRow(async (row, { page, context, snapshot
   await resetTenants([TENANT_A]);
   const account = strict('correo', ACCOUNTS, cell(row, 'correo'));
   const expected = 'cierra la app y la vuelve a abrir: ve /programs sin volver a iniciar sesión';
+  // Haber iniciado sesión con el formulario de la app y estar en /programs es el «Dado» (preparación), igual que el control positivo
+  // del registrador: en el documento de /login el formulario SÍ se pintó, así que la sonda tiene que haberlo visto
   const session = await signInThroughApp(page, account);
-  const before = check(session.ok, `Antes: ${account.email} ha iniciado sesión en la app con alumno01 en «Tenant de trabajo» y está en /programs`, session.observed);
-  if (!session.ok) return conclude({ checks: [before, check(false, expected, 'no se llegó a cerrar la app: no se cumple lo que la historia da por hecho')] });
+  const recorder = await recorderSeesForm(page);
+  const premises = requirePrepared(row, [
+    check(session.ok, `Antes: ${account.email} ha iniciado sesión en la app con alumno01 en «Tenant de trabajo» y está en /programs`, session.observed),
+    check(recorder, 'Control: el registrador de «formulario pintado» vio el formulario al iniciar sesión', recorder ? 'lo vio' : 'no lo vio (la sonda está ciega)'),
+  ]);
   const storedBefore = await sessionStored(page);
-  // La app vuelve a abrirse por su ruta de arranque («/»): sin sesión llevaría a /login y con sesión a /programs
+  // La app vuelve a abrirse por su ruta de arranque («/»): sin sesión llevaría a /login y con sesión a /programs. Fontanería: si falla, lanza.
   const reopened = await reopenApp(context, page, '/');
-  if (reopened.failure) return withApproximation(conclude({ checks: [before, check(false, expected, reopened.failure)] }), REOPEN_APPROXIMATION);
-  const shown = await reachedAndHeld(() => onPrograms(reopened.page));
-  const formSeen = await loginFormEverSeen(reopened.page);
-  await snapshot(reopened.page);
+  const shown = await reachedAndHeld(() => onPrograms(reopened));
+  const formSeen = await loginFormEverSeen(reopened);
+  await snapshot(reopened);
   return withApproximation(
     conclude({
       checks: [
-        before,
+        ...premises,
         check(
           shown.reached && shown.held && !formSeen,
           expected,
-          `la app reabierta está en ${pathOf(reopened.page)}${shown.reached ? ` (a los ${shown.elapsedMs} ms)` : ' (no llegó a /programs)'}; formulario de acceso pintado en algún momento: ${yesNo(formSeen)}`,
+          `la app reabierta está en ${pathOf(reopened)}${shown.reached ? ` (a los ${shown.elapsedMs} ms)` : ' (no llegó a /programs)'}; formulario de acceso pintado en algún momento: ${yesNo(formSeen)}`,
         ),
       ],
       notes: slowNote('llegar a /programs al reabrir', shown.elapsedMs, REFERENCE_MS.network),
@@ -99,15 +105,15 @@ const AFTER: ReadonlyMap<string, After> = new Map<string, After>([
     {
       expected: 'al cerrar la app y volver a abrirla, ve /login',
       run: async (page, context, snapshot) => {
+        // Cerrar y volver a abrir la página es fontanería del arnés: si falla, lanza
         const reopened = await reopenApp(context, page, '/');
-        if (reopened.failure) return { check: check(false, 'al cerrar la app y volver a abrirla, ve /login', reopened.failure), approximation: REOPEN_APPROXIMATION };
-        const shown = await waitUntil(() => onLoginForm(reopened.page));
-        const stays = shown.reached ? await reachedAndHeld(() => onLoginForm(reopened.page)) : { held: false };
-        await snapshot(reopened.page);
+        const shown = await waitUntil(() => onLoginForm(reopened));
+        const stays = shown.reached ? await reachedAndHeld(() => onLoginForm(reopened)) : { held: false };
+        await snapshot(reopened);
         return {
-          check: check(shown.reached && stays.held, 'al cerrar la app y volver a abrirla, ve /login', `la app reabierta está en ${pathOf(reopened.page)}, título «Iniciar sesión» visible: ${yesNo(shown.reached)}${shown.reached ? ` (a los ${shown.elapsedMs} ms)` : ''}`),
+          check: check(shown.reached && stays.held, 'al cerrar la app y volver a abrirla, ve /login', `la app reabierta está en ${pathOf(reopened)}, título «Iniciar sesión» visible: ${yesNo(shown.reached)}${shown.reached ? ` (a los ${shown.elapsedMs} ms)` : ''}`),
           approximation: REOPEN_APPROXIMATION,
-          evidence: { elapsedMs: shown.elapsedMs, sessionStoredAfterReopening: (await sessionStored(reopened.page)) ?? null, reopenedAt: '/ (ruta de arranque de la app)' },
+          evidence: { elapsedMs: shown.elapsedMs, sessionStoredAfterReopening: (await sessionStored(reopened)) ?? null, reopenedAt: '/ (ruta de arranque de la app)' },
         };
       },
     },
@@ -128,13 +134,12 @@ const signOutDiscardsSession = mobileRow(async (row, { page, context, snapshot }
   await resetTenants([TENANT_A]);
   const account = strict('correo', ACCOUNTS, cell(row, 'correo'));
   const after = strict('despues', AFTER, cell(row, 'despues'));
-  const expected = `pulsa «Cerrar sesión» en la página «Perfil»: llega a /login; ${after.expected}`;
+  // Haber iniciado sesión con el formulario de la app y estar en la página «Perfil» es el «Dado» (preparación)
   const session = await signInThroughApp(page, account);
   const signedIn = check(session.ok, `Antes: ${account.email} ha iniciado sesión en la app con alumno01 en «Tenant de trabajo»`, session.observed);
-  if (!session.ok) return conclude({ checks: [signedIn, check(false, expected, 'no se llegó al perfil: no se cumple lo que la historia da por hecho')] });
-  const toProfile = await goToProfile(page);
+  const toProfile = session.ok ? await goToProfile(page) : 'no se abrió «Perfil»: no hubo sesión';
   const inProfile = check(toProfile === undefined, 'Antes: está en la página «Perfil»', toProfile ?? `en /profile (ruta ${pathOf(page)})`);
-  if (toProfile !== undefined) return conclude({ checks: [signedIn, inProfile, check(false, expected, 'no se llegó a pulsar «Cerrar sesión»: no se cumple lo que la historia da por hecho')] });
+  requirePrepared(row, [signedIn, inProfile]);
   const storedBefore = await sessionStored(page);
   const out = await signOutFromProfile(page);
   const arrived = out === undefined ? await waitUntil(() => onLoginForm(page)) : { reached: false, elapsedMs: 0 };

@@ -5,7 +5,9 @@ import { uniqueEmail, usersByEmail } from '../../support/api';
 import { RESULTS_ROOT } from '../../support/evidence';
 import { NEW_ACCOUNT_PASSWORD, type Credentials } from '../../support/prepare';
 import { type BrowserRowHandler, type ManifestRow, type Outcome } from '../../support/rows';
-import { ACTION, CEILING_MS, check, holdsFor, linesOf, pathOf, runSteps, safe, waitUntil, type Check } from '../web/common';
+import { ACTION, CEILING_MS, check, holdsFor, linesOf, pathOf, requirePrepared, runSteps, safe, waitUntil, type Check } from '../web/common';
+// Los ids de prueba salen del fichero compartido (se amplía, nunca se renombra): un cambio de id no deja un sensor mudo
+import { ACCESO_TESTIDS, PERFIL_TESTIDS } from '../../../../packages/shared/src/testids';
 
 // Piezas comunes de las historias móviles de EP-LOGIN (US-LOGIN-011 a 016). La app móvil se ejecuta AQUÍ como web de Expo
 // (390 × 844, táctil): NO es iOS ni Android nativo. De la web solo se reutilizan las piezas sin pantalla (esperas con techo,
@@ -15,7 +17,7 @@ import { ACTION, CEILING_MS, check, holdsFor, linesOf, pathOf, runSteps, safe, w
 // pestaña de Programas bajo /profile), así que todo localizador es de ROL (excluye lo oculto) y toda lectura es ESTRICTA: si hay
 // más de un elemento, la lectura falla en lugar de coger «el primero». «Estar en una pantalla» = ruta + un elemento propio de ella.
 
-export { cell, fromSteps, strict, quoted, noticeOf, emailOf, passwordOf, ACTION, CEILING_MS, HOLD_MS, REFERENCE_MS, check, conclude, holdsFor, lengthOf, linesOf, pathOf, runSteps, safe, slowNote, sleep, waitUntil } from '../web/common';
+export { cell, fromSteps, strict, quoted, noticeOf, emailOf, passwordOf, ACTION, CEILING_MS, HOLD_MS, REFERENCE_MS, check, conclude, holdsFor, lengthOf, linesOf, pathOf, requirePrepared, runSteps, safe, slowNote, sleep, waitUntil } from '../web/common';
 export type { Check } from '../web/common';
 
 export const TENANT = 'alumno01';
@@ -53,14 +55,24 @@ export const EMAIL_TRIM_NOTE =
 // Lecturas estrictas y sin excepciones
 // ---------------------------------------------------------------------------------------------------------------------
 
-/** Hay exactamente un elemento y se ve (si hay varios, la lectura es ambigua y NO se da por vista). */
-export const seen = (target: Locator): Promise<boolean> => safe(async () => (await target.count()) === 1 && (await target.isVisible()), false);
-export const countOf = (target: Locator): Promise<number> => safe(() => target.count(), 0);
+/**
+ * Hay exactamente un elemento y se ve. Si hay varios la lectura es ambigua y LANZA (no se coge «el primero»), y un fallo del propio
+ * navegador también lanza: «no hay» y «no se pudo leer» no se confunden. Dentro de una espera (`waitUntil`/`holdsFor`) la excepción cuenta
+ * como «aún no», y fuera de ella la fila queda como `error-de-prueba`.
+ */
+export const seen = async (target: Locator): Promise<boolean> => {
+  const found = await target.count();
+  if (found > 1) throw new Error(`lectura ambigua: ${found} elementos para ${String(target)}`);
+  return found === 1 && (await target.isVisible());
+};
+export const countOf = (target: Locator): Promise<number> => target.count();
 export const valueOf = (target: Locator): Promise<string | undefined> => safe(() => target.inputValue({ timeout: 500 }), undefined);
 export const attrOf = (target: Locator, name: string): Promise<string | undefined> => safe(async () => (await target.getAttribute(name, { timeout: 500 })) ?? undefined, undefined);
 export const textOf = (target: Locator): Promise<string | undefined> => safe(async () => (await target.innerText({ timeout: 500 })).trim(), undefined);
 export const isEnabled = (target: Locator): Promise<boolean> => safe(() => target.isEnabled({ timeout: 500 }), false);
-export const isChecked = (target: Locator): Promise<boolean> => safe(() => target.isChecked({ timeout: 500 }), false);
+/** Ante la duda (lectura fallida o más de un elemento), NO está deshabilitado: la condición no se da por cumplida. */
+export const isDisabled = (target: Locator): Promise<boolean> => safe(() => target.isDisabled({ timeout: 500 }), false);
+export const isChecked = (target: Locator): Promise<boolean> => target.isChecked({ timeout: 500 });
 
 export const yesNo = (value: boolean): string => (value ? 'sí' : 'no');
 
@@ -85,9 +97,9 @@ export const moreTab = (page: Page): Locator => page.getByRole('tab', { name: 'M
 export const profileLink = (page: Page): Locator => page.getByRole('link', { name: 'Perfil', exact: true });
 export const signOutButton = (page: Page): Locator => buttonNamed(page, 'Cerrar sesión');
 /** El valor del tenant en la página «Perfil» no tiene nombre accesible propio: se lee por su identificador de prueba (respaldo). */
-export const profileTenantValue = (page: Page): Locator => page.getByTestId('profile-tenant');
+export const profileTenantValue = (page: Page): Locator => page.getByTestId(PERFIL_TESTIDS.PROFILE_TENANT);
 /** Aviso de error del servidor. Los avisos de campo también son `role="alert"`, así que este se lee por su identificador de prueba (respaldo). */
-export const serverAlert = (page: Page): Locator => page.getByTestId('login-error');
+export const serverAlert = (page: Page): Locator => page.getByTestId(ACCESO_TESTIDS.LOGIN_ERROR);
 /** Aviso bajo un campo: el `role="alert"` que cuelga del mismo contenedor que el campo. */
 export const noticeUnder = (field: Locator): Locator => field.locator('xpath=..').getByRole('alert');
 
@@ -111,17 +123,20 @@ export const onProfile = async (page: Page): Promise<boolean> => pathOf(page) ==
 // ---------------------------------------------------------------------------------------------------------------------
 
 /** Anota en la propia página si el formulario de acceso llegó a pintarse en este documento (un destello no se ve en el estado final). */
-const recordLoginForm = (): void => {
+const recordLoginForm = (formTestId: string): void => {
   const holder = window as unknown as { __loginFormSeen?: boolean };
   holder.__loginFormSeen = false;
   const mark = (): void => {
-    if (document.querySelector('[data-testid="login-form"]')) holder.__loginFormSeen = true;
+    if (document.querySelector(`[data-testid="${formTestId}"]`)) holder.__loginFormSeen = true;
   };
   new MutationObserver(mark).observe(document, { childList: true, subtree: true });
   mark();
 };
 
 export const loginFormEverSeen = (page: Page): Promise<boolean> => safe(() => page.evaluate(() => (window as unknown as { __loginFormSeen?: boolean }).__loginFormSeen === true), true);
+
+/** Control positivo del registrador: en un documento donde el formulario SÍ se pintó, la sonda lo ha visto (si no, estaría ciega y su «no» no mediría nada). */
+export const recorderSeesForm = (page: Page): Promise<boolean> => safe(() => page.evaluate(() => (window as unknown as { __loginFormSeen?: boolean }).__loginFormSeen === true), false);
 
 /** Solo si hay sesión guardada o no (nunca su contenido: es un token). */
 export const sessionStored = (page: Page): Promise<boolean | undefined> => safe(() => page.evaluate(() => localStorage.getItem('sigpro.session') !== null), undefined);
@@ -174,7 +189,7 @@ export interface MobileRun {
 export type MobileHandler = (row: ManifestRow, run: MobileRun) => Promise<Outcome>;
 
 const PREPARATION_EVIDENCE =
-  'App móvil servida como web de Expo a 390 × 844 con táctil (NO es iOS ni Android nativo). Contexto limpio por fila (almacenamiento vacío). El tenant se escribe en el campo «Tenant de trabajo» (la app móvil no usa ?tenant=); las sesiones que pide la fila se inician con el formulario de la propia app, nunca sembradas en el almacenamiento.';
+  'App móvil servida como web de Expo a 390 × 844, con un contexto táctil pero con pulsaciones de RATÓN (click de Playwright), no toques de dedo (NO es iOS ni Android nativo). Contexto limpio por fila (almacenamiento vacío). El tenant se escribe en el campo «Tenant de trabajo» (la app móvil no usa ?tenant=); las sesiones que pide la fila se inician con el formulario de la propia app, nunca sembradas en el almacenamiento.';
 
 const captureName = (rowId: string): string => `${rowId.replaceAll('/', '_')}.png`;
 
@@ -190,7 +205,7 @@ const saveCapture = (rowId: string, image: Buffer): string => {
 export const mobileRow =
   (handler: MobileHandler): BrowserRowHandler =>
   async (row, { page, context }) => {
-    await context.addInitScript(recordLoginForm);
+    await context.addInitScript(recordLoginForm, ACCESO_TESTIDS.LOGIN_FORM);
     const requests = trackLoginRequests(context);
     const shots: { final?: Buffer } = {};
     const snapshot = async (target: Page = page): Promise<void> => {
@@ -286,25 +301,21 @@ export const signedInAndOut = async (page: Page, credentials: Credentials, tenan
   return [before, profile, check(out === undefined, 'Antes: pulsa «Cerrar sesión» y llega a /login', out ?? `en /login (ruta ${pathOf(page)})`)];
 };
 
-export interface Reopened {
-  readonly page: Page;
-  readonly failure?: string;
-}
-
-/** «Cierra la app y la vuelve a abrir»: cierra la página y abre otra en el mismo contexto (ver `REOPEN_APPROXIMATION`). */
-export const reopenApp = async (context: BrowserContext, page: Page, path: string): Promise<Reopened> => {
-  const opened: { tab?: Page } = {};
-  const failure = await runSteps([
-    ['cerrar la app (cerrar la página)', () => page.close()],
-    ['volver a abrir la app en una página nueva del mismo contexto', async () => void (opened.tab = await context.newPage())],
-    [`abrir ${path}`, async () => void (await (opened.tab ?? page).goto(path, { timeout: CEILING_MS }))],
-  ]);
-  return { page: opened.tab ?? page, ...(failure === undefined ? {} : { failure }) };
+/**
+ * «Cierra la app y la vuelve a abrir»: cierra la página y abre otra en el mismo contexto (ver `REOPEN_APPROXIMATION`). Cerrar, abrir la
+ * página y cargar la ruta son fontanería del arnés: si fallan, lanza (la fila queda como `error-de-prueba`, no como discrepancia de la app).
+ */
+export const reopenApp = async (context: BrowserContext, page: Page, path: string): Promise<Page> => {
+  await page.close();
+  const fresh = await context.newPage();
+  await fresh.goto(path, { timeout: CEILING_MS });
+  return fresh;
 };
 
 /** «Sin sesión», por comportamiento: abrir `path` en esta página acaba en /login y se queda ahí. Navega: va siempre el último paso de la fila. */
 export const landsOnLogin = async (page: Page, path: string, what = `abrir ${path} en esta página`): Promise<Check> => {
-  await safe(() => page.goto(path, { timeout: CEILING_MS }), undefined);
+  // La carga de la ruta es fontanería: si falla, lanza (con el fallo tragado, una página que ya estaba en /login daría «sin sesión» en vacío)
+  await page.goto(path, { timeout: CEILING_MS });
   await waitUntil(async () => (await onLoginForm(page)) || (await onPrograms(page)));
   const stays = await holdsFor(() => onLoginForm(page));
   return check(stays.held, `al ${what}, llega a /login`, stays.held ? `al ${what} acaba en /login (observado 2 s)` : `al ${what} acaba en ${pathOf(page)}`);
@@ -413,4 +424,12 @@ export const reachedAndHeld = async (condition: () => Promise<boolean>): Promise
   const waited = await waitUntil(condition);
   const stays = waited.reached ? await holdsFor(condition) : { held: false };
   return { reached: waited.reached, held: stays.held, elapsedMs: waited.elapsedMs };
+};
+
+/**
+ * Una acción de PREPARACIÓN (abrir /login, escribir el tenant, escribir un dato del «Dado»): si falla, lanza y la fila queda como
+ * `error-de-prueba`, no como discrepancia de la app. Solo lo que la fila evalúa (el «Cuando» y el «Entonces») puede discrepar.
+ */
+export const mustPrepare = (row: ManifestRow, what: string, failure: string | undefined): void => {
+  requirePrepared(row, [check(failure === undefined, `Antes: ${what}`, failure ?? 'hecho')]);
 };
