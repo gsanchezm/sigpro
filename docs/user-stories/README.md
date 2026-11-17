@@ -278,7 +278,7 @@ Las esperas no son requisitos de las historias.
 
 ## Detalle técnico visible: decisión de producto pendiente
 
-Hoy, en las pantallas de Acceso, el aviso de error muestra bajo el mensaje una **línea de detalle técnico** con la petición HTTP real (método, ruta y código de estado y, en el inicio de sesión incorrecto, el número de intento); la pantalla de redirección de la web muestra además el rol, y el aviso emergente de SSO muestra la suya. Es lo único que muestra hoy el número de intento. **No está decidido** si esa línea forma parte del producto, qué debe contener ni si el número de intento debe verse también en el propio mensaje.
+Hoy, en las pantallas de Acceso, el aviso de error muestra bajo el mensaje una **línea de detalle técnico** con la petición HTTP real (método, ruta y código de estado, con algún dato más según el caso, como el número de intento en el inicio de sesión incorrecto); la pantalla de redirección de la web muestra además el rol, y el aviso emergente de SSO muestra la suya. Es lo único que muestra hoy el número de intento. **No está decidido** si esa línea forma parte del producto, qué debe contener ni si el número de intento debe verse también en el propio mensaje.
 
 En las historias:
 
@@ -300,7 +300,8 @@ En las historias:
 
 ### Convenciones de los Esquemas
 
-- **Textos de la interfaz entre «…»**, en los pasos y en las celdas: títulos, etiquetas, botones y avisos (`pulsa «Entrar»`, `| «Correo o contraseña incorrectos» |`). Si un marcador recibe un texto de la interfaz, las comillas van en la celda, no alrededor del marcador.- **Los datos van tal cual**, sin comillas: correos, contraseñas, tenants, códigos, rutas, códigos HTTP y campos de la API (`gestor@sigpro.test`, `Gestor1234!`, `alumno01`, `/programs`, `423 account_locked`).
+- **Textos de la interfaz entre «…»**, en los pasos y en las celdas: títulos, etiquetas, botones y avisos (`pulsa «Entrar»`, `| «Correo o contraseña incorrectos» |`). Si un marcador recibe un texto de la interfaz, las comillas van en la celda, no alrededor del marcador.
+- **Los datos van tal cual**, sin comillas: correos, contraseñas, tenants, códigos, rutas, códigos HTTP y campos de la API (`gestor@sigpro.test`, `Gestor1234!`, `alumno01`, `/programs`, `423 account_locked`).
 - **Lo que no se puede escribir literalmente va entre paréntesis**: `(vacío)` para un campo o un cuerpo vacío, `(tres espacios)`, `(sin el campo)`, `(sin cabecera)`, `(ninguno)`. Gherkin recorta los espacios de las celdas, y una celda vacía no distingue «vacío» de «ausente».
 - **Datos que no se pueden repetir** (un correo sin cuenta o una solicitud de acceso) se escriben entre paréntesis y se definen en las Reglas: `(correo sin cuenta)` y `(cuenta recién solicitada)`, como en «Preparación del estado y aislamiento».
 - **El primer paso de cada Esquema empieza por «Dado que …»** y dice el tenant y el estado inicial.

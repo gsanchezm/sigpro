@@ -11,7 +11,7 @@ cubre: ["POST /api/auth/login"]
 
 ## Historia
 Como responsable de seguridad de un tenant, quiero que cada intento con credenciales incorrectas se cuente y que la cuenta se bloquee en el 5.º fallo consecutivo,
-para que nadie pueda probar contraseñas sin límite y para que la persona sepa cuántas veces ha fallado.
+para que nadie pueda probar contraseñas sin límite y para que el cliente conozca el número de intento fallido que la API ha contado.
 
 ## Reglas
 - Una contraseña incorrecta para una cuenta existente responde 401 con `code: "invalid_credentials"` y `attempts` igual al número de intentos fallidos consecutivos de esa cuenta, contando el actual.

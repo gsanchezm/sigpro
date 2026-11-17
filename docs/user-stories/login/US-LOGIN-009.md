@@ -47,7 +47,7 @@ Característica: Aviso de SSO no disponible en la web
 ```
 
 ## Decisiones pendientes
-- **Línea de detalle técnico visible.** Hoy el aviso emergente de SSO muestra, bajo el mensaje, una línea con la petición HTTP real (método, ruta y código de estado de la petición a `GET /api/auth/sso`). Está pendiente de decisión de producto si esa línea forma parte del producto y qué debe contener. Hasta que se decida, ningún ejemplo de esta historia la afirma ni la excluye, y las pruebas no deben depender de ella.
+- **Línea de detalle técnico visible.** Hoy el aviso emergente de SSO muestra, bajo el mensaje, una línea con la petición HTTP real (método, ruta y código de estado de la petición a `GET /api/auth/sso`, con algún dato más). Está pendiente de decisión de producto si esa línea forma parte del producto y qué debe contener. Hasta que se decida, ningún ejemplo de esta historia la afirma ni la excluye, y las pruebas no deben depender de ella.
 
 ## Fuera de alcance
 - El acceso con certificado digital o SSO como capacidad futura: historia `no-implementada` de la web en esta épica.

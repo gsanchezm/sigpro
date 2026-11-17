@@ -157,7 +157,7 @@ Característica: Inicio de sesión en la web
 ```
 
 ## Decisiones pendientes
-- **Línea de detalle técnico visible.** Hoy los avisos de Acceso muestran, bajo el mensaje, una línea con la petición HTTP real (método, ruta y código de estado; en el inicio de sesión incorrecto, también el número de intento; en la pantalla de redirección, el rol). Está pendiente de decisión de producto si esa línea forma parte del producto, qué debe contener y si el número de intento debe verse también en el propio mensaje. Hasta que se decida, ningún ejemplo de esta historia la afirma ni la excluye, y las pruebas no deben depender de ella.
+- **Línea de detalle técnico visible.** Hoy los avisos de Acceso muestran, bajo el mensaje, una línea con la petición HTTP real (método, ruta y código de estado, con algún dato más según el caso: en el inicio de sesión incorrecto, el número de intento; en la pantalla de redirección, el rol). Está pendiente de decisión de producto si esa línea forma parte del producto, qué debe contener y si el número de intento debe verse también en el propio mensaje. Hasta que se decida, ningún ejemplo de esta historia la afirma ni la excluye, y las pruebas no deben depender de ella.
 
 ## Fuera de alcance
 - El paso «Verificación en dos pasos»: épica del segundo factor (MFA).
