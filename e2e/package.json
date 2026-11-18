@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "e2e": "playwright test --project=desktop",
+    "e2e": "playwright test --project=desktop --project=hardened",
     "e2e:responsive": "playwright test --project=desktop --project=tablet --project=mobile --workers=2 tests/responsive",
     "screens": "playwright test --project=screens",
     "mobile": "playwright test -c playwright.mobile.config.ts --project=mobile",

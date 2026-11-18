@@ -92,6 +92,17 @@ jobs:
       - name: E2E de humo (app móvil)
         run: pnpm e2e:mobile
 
+      # Despliegue «cerrado» (VITE_LAB_PUBLIC=false): compila la web aparte y comprueba sobre los ARCHIVOS que no publica credenciales de
+      # demo, ni el zip del material, y que lleva robots.txt y noindex. Sin turbo (su caché restauraría un dist compilado con otras
+      # variables). Va al final: con la variable, zip-examples borra el zip que generó `pnpm build`.
+      - name: Comprobar el bundle de la web cerrada
+        run: |
+          cd apps/web
+          VITE_LAB_PUBLIC=false VITE_NOINDEX=true node scripts/zip-examples.mjs
+          VITE_LAB_PUBLIC=false VITE_NOINDEX=true pnpm exec vite build --outDir dist-closed
+          cd ../..
+          pnpm check:bundle apps/web/dist-closed --closed --noindex
+
       - name: Subir informe de Playwright
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v4
