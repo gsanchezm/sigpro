@@ -1,8 +1,8 @@
 # Despliegue de SIGPRO en Render
 
-Guía paso a paso para publicar SIGPRO (API, web, base de datos y reset nocturno) desde el `render.yaml` de la raíz del repositorio. Última revisión: 2026-11-06.
+Guía paso a paso para publicar SIGPRO (API, web, base de datos y reset nocturno) desde el `render.yaml` de la raíz del repositorio. Última revisión: 2026-11-18.
 
-> **Estado:** el `render.yaml` está escrito y validado en local (build de producción, `CI=true pnpm e2e` en verde), pero **no se ha desplegado nunca en Render**. Los puntos que más probablemente den guerra en el primer despliegue están en [Problemas frecuentes](#problemas-frecuentes).
+> **Estado (2026-11-18):** QA está desplegado en Render, en Oregon: `sigpro-api` (Web Service Node, plan `starter`), `sigpro-web` (sitio estático), `sigpro-reset` (cron Node) y `sigpro-db` (PostgreSQL 18, `basic-256mb`). Los cuatro son «Blueprint managed» sobre `main`: **un push que toque `render.yaml` se aplica solo a QA.** No hay servicios de Staging creados. Los pasos 1 a 8 son el recorrido de la primera vez; lo que se añadió después para endurecer el despliegue del curso está en [Endurecimiento del despliegue del curso](#endurecimiento-del-despliegue-del-curso).
 
 ## Qué se despliega
 
@@ -10,7 +10,7 @@ Guía paso a paso para publicar SIGPRO (API, web, base de datos y reset nocturno
 | --- | --- | --- | --- |
 | `sigpro-db` | PostgreSQL (`basic-256mb`) | Base de datos de todos los tenants | — |
 | `sigpro-api` | Web Service (Node 22, plan `starter`) | NestJS. Aplica migraciones al arrancar y siembra los tenants la primera vez | `DATABASE_URL`, `JWT_SECRET`, `ADMIN_KEY`, `CORS_ORIGIN`, `APP_ENV`, `SEED_*`, `DOCS_BASIC_AUTH` |
-| `sigpro-web` | Static Site | React + Vite compilado. Reescribe `/*` a `/index.html` para el router | `VITE_API_URL` (se fija **al compilar**) |
+| `sigpro-web` | Static Site | React + Vite compilado. Reescribe `/*` a `/index.html` para el router | `VITE_API_URL`, `VITE_NOINDEX` y `VITE_LAB_PUBLIC` (se fijan **al compilar**) |
 | `sigpro-reset` | Cron Job (`0 3 * * *`, hora UTC) | Reinicia el seed de todos los tenants cada noche | `API_URL`, `ADMIN_KEY` |
 
 Los servicios no usan el plan gratuito a propósito: un Web Service gratuito se duerme y el primer request tarda hasta un minuto, inaceptable en clase. La base y el servicio de API son de pago; consulta <https://render.com/pricing> antes de crear el Blueprint.
@@ -70,7 +70,7 @@ Otros valores que puedes cambiar ahora:
 
 - `SEED_STUDENT_TENANTS` (25 por defecto, máximo 100): número de tenants `alumnoNN` además de `demo`.
 - `APP_ENV`: `staging` muestra el panel de usuarios de prueba en la pantalla de acceso (lo que quiere el curso). Con `production` ese panel se oculta.
-- Región: el fichero no fija ninguna, así que Render usa la suya por defecto. Si necesitas la UE (el plan lo deja como pregunta abierta para Isdefe), añade `region: frankfurt` a la base y a la API y al cron. La API y la base **deben estar en la misma región** para usar la URL interna.
+- Región: `render.yaml` declara `region: oregon` en la base, la API y el cron (el sitio estático no admite `region`). Es lo que ya hay en QA: **la región no se puede cambiar una vez creado el recurso**, así que cambiar el valor del archivo no mueve nada (y un valor distinto del real haría fallar la sincronización). Si para una cohorte nueva necesitas la UE (el plan lo deja como pregunta abierta para Isdefe), pon `region: frankfurt` en la base, la API y el cron **antes de crearla**. La API y la base **deben estar en la misma región** para usar la URL interna.
 
 Haz commit y push de los cambios (`git commit -am "chore(deploy): cohort names in render.yaml" && git push`).
 
@@ -122,7 +122,7 @@ curl https://<api>.onrender.com/api/health
 # → {"status":"ok","uptime":...}
 
 # 2) El seed se aplicó y el entorno es el esperado
-curl https://<api>.onrender.com/api/config/tenants     # lista demo, alumno01…
+curl https://<api>.onrender.com/api/config/tenants     # lista demo, alumno01…  (con TENANT_SUFFIX_SEED o LAB_PUBLIC=false: 403 sin -H "x-admin-key: <ADMIN_KEY>")
 curl https://<api>.onrender.com/api/config             # "env":"staging"
 
 # 3) Login real (tenant demo)
@@ -147,7 +147,7 @@ curl -X POST "https://<api>.onrender.com/api/admin/reset?all=true" -H "x-admin-k
 
 O desde el dashboard: servicio `sigpro-isdefe-reset` → **Trigger Run**, y revisa sus logs (una línea `✔ tenant (N ms)` por tenant).
 
-Entrega a los alumnos: la URL de la web, `?tenant=alumnoNN` para cambiar de tenant (o el selector de `/lab`), y el usuario `alumnoNN@sigpro.lab` / `Alumno1234!`, que es administrador de su tenant.
+Entrega a los alumnos: la URL de la web, `?tenant=alumnoNN` para cambiar de tenant (o el selector de `/lab`), y el usuario `alumnoNN@sigpro.lab` / `Alumno1234!`, que es administrador de su tenant. Con los tenants no adivinables (ver más abajo) el id lleva sufijo (`alumno07-k4x9`), el usuario es `<tenant>@sigpro.lab`, no hay selector de tenants en `/lab` y la lista se reparte con `pnpm tenants:list`.
 
 ## 8. Operación
 
@@ -198,6 +198,157 @@ La fase 4 no cambia el modelo de datos ni añade variables a la API: no hay migr
 - **Esquema de base de datos:** `prisma migrate deploy` solo aplica migraciones hacia adelante y un rollback de código **no** las deshace. Si una migración nueva sale mal, corrígela con otra migración posterior.
 - **Datos:** restaura el seed con el reset global; no hace falta restaurar copias.
 
+## Endurecimiento del despliegue del curso
+
+Cool Testers e Isdefe piden endurecer los despliegues del curso. **Todo se activa por variables de entorno: sin ellas, la API y la web se comportan exactamente como en el entorno demo público de siempre** (los specs existentes de `e2e/` pasan sin editarse y `e2e/tests/hardening-defaults.spec.ts` lo comprueba de forma explícita).
+
+### Qué se aplica, dónde y cuándo
+
+| Capa | Qué | Cuándo se aplica |
+| --- | --- | --- |
+| `render.yaml` (archivo) | `region: oregon` y planes explícitos; cabecera `X-Robots-Tag` del sitio estático; `ROBOTS_NOINDEX` y `VITE_NOINDEX` | **Al fusionar en `main`**, solo a QA (Blueprint managed) |
+| Variables de la API (de **ejecución**) | Tenants con sufijo, laboratorio cerrado, correos ficticios | Al guardar la variable en el panel: Render redespliega la API |
+| Variable de la web (de **compilación**) | `VITE_LAB_PUBLIC` | Hay que reconstruir la web: **Manual Deploy → Clear build cache & deploy** (reiniciar no basta) |
+
+Un sitio estático no puede esconder nada que viaje en su JavaScript ni pedir sesión para servir un archivo. Por eso el cierre del laboratorio tiene **dos** variables con papeles distintos: `LAB_PUBLIC` (API, ejecución) decide qué datos sirve y a quién; `VITE_LAB_PUBLIC` (web, compilación) quita del JavaScript publicado los textos con credenciales de demo y no publica el zip del material. Hay que poner las dos.
+
+### Variables del endurecimiento
+
+| Variable | Servicio | Tipo | Por defecto | Qué hace |
+| --- | --- | --- | --- | --- |
+| `TENANT_SUFFIX_SEED` | API | ejecución, **secreto** | vacía (sin sufijos) | Semilla (≥ 16 caracteres) para que cada tenant de alumno lleve un sufijo estable: `alumno07-k4x9`. `demo` no lo lleva |
+| `TENANT_SUFFIX_LENGTH` | API | ejecución | `4` | Caracteres del sufijo, de 3 a 12 |
+| `LAB_PUBLIC` | API | ejecución | `true` | `false`: `/config/test-users` solo con sesión o `X-Admin-Key`; `/config` anuncia `testUsers: false`; `/config/tenants` exige `X-Admin-Key` |
+| `RESTRICT_EMAIL_DOMAINS` | API | ejecución | `false` | `true`: `/auth/register`, `/auth/forgot` y `/auth/resend` responden 422 a cualquier correo de otro dominio |
+| `ALLOWED_EMAIL_DOMAINS` | API | ejecución | `sigpro.test,example.com` | Dominios admitidos con lo anterior. Coincidencia **exacta**: `mail.example.com` no vale |
+| `ROBOTS_NOINDEX` | API | ejecución | `false` | `X-Robots-Tag: noindex, nofollow` en todas las respuestas y `/robots.txt` con `Disallow: /`. `render.yaml` lo pone a `true` |
+| `VITE_LAB_PUBLIC` | Web | **compilación** | `true` | `false`: `/lab` exige sesión; sin lista de tenants, sin la contraseña del alumno y sin el zip del material; los textos que citan el código MFA y los correos de prueba desaparecen del JavaScript |
+| `VITE_NOINDEX` | Web | **compilación** | `false` | `true`: genera `robots.txt` con `Disallow: /` y `<meta name="robots" content="noindex, nofollow">`. `render.yaml` lo pone a `true` |
+
+La semilla y las claves nunca se imprimen: si `TENANT_SUFFIX_SEED` es demasiado corta la API **no arranca** y el log dice qué variable falla, no su valor (revísalo en **Logs** tras guardar la variable).
+
+### Qué poner a mano en el panel (QA)
+
+Solo cuando decidas activar el endurecimiento; el archivo no lo hace por ti.
+
+| Servicio | Variable | Valor |
+| --- | --- | --- |
+| `sigpro-api` | `TENANT_SUFFIX_SEED` | Una cadena aleatoria y larga (`node -e "console.log(require('crypto').randomBytes(24).toString('base64url'))"`). **Guárdala en un gestor de contraseñas: si se pierde o cambia, todos los ids cambian.** |
+| `sigpro-api` | `TENANT_SUFFIX_LENGTH` | Opcional (4 por defecto). **Decídela antes de la primera activación**: cambiarla (o cambiar la semilla) después deja tenants huérfanos (ver [Tenants no adivinables](#tenants-no-adivinables)). `6` si te preocupa que se adivinen (ver [Riesgos que quedan](#riesgos-que-quedan)) |
+| `sigpro-api` | `LAB_PUBLIC` | `false` |
+| `sigpro-api` | `RESTRICT_EMAIL_DOMAINS` | `true` |
+| `sigpro-api` | `ALLOWED_EMAIL_DOMAINS` | Solo si quieres otros dominios distintos de `sigpro.test,example.com` |
+| `sigpro-web` | `VITE_LAB_PUBLIC` | `false`, y luego **Clear build cache & deploy** |
+
+El cron `sigpro-reset` no necesita ninguna variable nueva. **Staging**: las mismas, con otra `TENANT_SUFFIX_SEED`; además lo que Render pide al crear el Blueprint (ver [Crear Staging](#crear-staging)).
+
+### Orden seguro
+
+1. **Antes de fusionar:** comprueba en el panel que `JWT_SECRET` y `ADMIN_KEY` (en la API **y** en el cron) tienen valores propios. Si faltaran, la API usaría los de desarrollo, que son públicos (están en el repositorio). No hay que poner nada más antes: el código antiguo ignora las variables que no conoce.
+2. **Fusionar en `main`.** Render sincroniza el Blueprint (región y planes ya coinciden con los reales, cabeceras, `ROBOTS_NOINDEX` y `VITE_NOINDEX`; **no crea ni borra ningún servicio**) y, como `render.yaml` no fija `autoDeploy` ni `buildFilter`, es probable que API y web se reconstruyan con el código nuevo. Sin variables nuevas todo sigue igual que hoy, salvo que ya no se indexa.
+3. **Activar el endurecimiento de la API:** `TENANT_SUFFIX_SEED`, `LAB_PUBLIC=false`, `RESTRICT_EMAIL_DOMAINS=true`. Al guardar, Render redespliega la API y, con `SEED_ON_BOOT=true`, **crea los tenants nuevos al arrancar**.
+4. **Activar el de la web:** `VITE_LAB_PUBLIC=false` y *Clear build cache & deploy*.
+5. **Repartir los ids** (`pnpm tenants:list`) y **purgar los antiguos** (`pnpm tenants:purge-legacy`), como se explica abajo.
+6. **Comprobar** (ver [Comprobaciones](#comprobaciones)).
+
+### Tenants no adivinables
+
+El sufijo es la HMAC-SHA256 de la semilla y del id (`alumno07`) en base 36: **no se guarda en ningún sitio**, así que es el mismo tras un redeploy, un reseed, cada ejecución de `sigpro-reset` e incluso si se recrea la base (con la misma semilla). Los alumnos lo guardan en su `.env` el primer día y vale todo el curso. El usuario de cada alumno sigue derivándose del id: `alumno07-k4x9@sigpro.lab` (misma contraseña pública de siempre).
+
+Qué deja de ser público: `GET /api/config/tenants` responde 403 sin `X-Admin-Key` (una sesión de alumno tampoco basta), el selector de tenants de `/lab` desaparece, el log de arranque de la API solo dice cuántos tenants sembró y el log del cron imprime `alumno07-****`.
+
+**Imprimir la lista para repartirla** (no toca la base de datos; solo necesita la semilla y `SEED_STUDENT_TENANTS`, y usa el mismo algoritmo que la API):
+
+```bash
+# En local, con los mismos valores que la API de Render
+TENANT_SUFFIX_SEED='<la semilla>' SEED_STUDENT_TENANTS=25 pnpm tenants:list --web-url=https://<web>.onrender.com
+# En CSV, para pegarlo en una hoja de cálculo
+TENANT_SUFFIX_SEED='<la semilla>' SEED_STUDENT_TENANTS=25 pnpm tenants:list --csv --web-url=https://<web>.onrender.com > tenants.csv
+```
+
+También puede ejecutarse en la **Shell** del servicio `sigpro-api` (ahí las variables ya están definidas). Los comandos de este apartado funcionan de dos formas: `pnpm --filter api tenants:list` (usa `tsx`, una dependencia de desarrollo) o, **sin `tsx`**, con Node sobre lo que compila el build: `node apps/api/dist/seed/tenants-cli.js` y `node apps/api/dist/seed/purge-legacy-cli.js [--confirm]`, desde la raíz del repositorio. La segunda forma está comprobada en local; **ninguna de las dos se ha probado dentro de la Shell de Render**.
+
+**Aplicarlo a la base actual de QA sin recrearla.** Al activar la semilla, la API crea los tenants nuevos (`alumno01-xxxx…`) y **no toca los antiguos** (`alumno01…alumno25`): siguen en la base, siguen entrando con la contraseña pública y el reset nocturno ya no los reinicia (recorre solo la lista vigente). Hay que borrarlos de forma explícita; nunca se borran solos. En la Shell de `sigpro-api`:
+
+```bash
+pnpm --filter api tenants:purge-legacy             # simulación: lista lo que borraría
+pnpm --filter api tenants:purge-legacy --confirm   # los borra, con todos sus datos (irreversible; el seed es determinista)
+```
+
+El comando **se niega a borrar nada** si no hay `TENANT_SUFFIX_SEED` o si aún falta algún tenant nuevo en la base (arranca antes la API con la semilla), para no dejar a los alumnos sin entorno.
+
+> **Decide la semilla y la longitud ANTES de repartir los ids, y no las cambies después.** Si cambia `TENANT_SUFFIX_SEED` o `TENANT_SUFFIX_LENGTH`, la API crea otros tenants nuevos y los anteriores (`alumno07-k4x9`) **quedan en la base**: siguen siendo accesibles, el reset nocturno ya no los reinicia y `tenants:purge-legacy` no los toca, porque solo reconoce los `alumnoNN` sin sufijo. No hay un comando para eso (queda pendiente); habría que borrarlos a mano. Cambiar la semilla invalida además los ids que los alumnos ya guardaron en su `.env`.
+
+**Qué pasa con `alumno25`** (el tenant de validación del material): recibe un id nuevo como los demás (`alumno25-xxxx`) y el antiguo desaparece con la purga. Tras el cambio hay que actualizar donde se use: el `.env` del material (`SIGPRO_TENANT`, `SIGPRO_STUDENT`), los scripts de validación y cualquier URL con `?tenant=alumno25`. Si prefieres seguir validando con un id fijo, usa `demo`, que no cambia (es público y de solo lectura por convención).
+
+### Registro solo con correos ficticios
+
+Con `RESTRICT_EMAIL_DOMAINS=true`, `POST /api/auth/register`, `/api/auth/forgot` y `/api/auth/resend` responden **422** con `code: email_domain_not_allowed` y `errors: { email: 'emailDomain' }` a cualquier correo cuyo dominio no sea exactamente uno de los permitidos. La comprobación se hace **antes de leer o escribir nada** y la respuesta no repite la dirección, así que un correo real no llega a la base de datos, a la auditoría ni a los logs. La interfaz lo pinta junto al campo de correo: «En este entorno solo se admiten correos ficticios (por ejemplo, nombre@example.com).» `login` no se restringe.
+
+### `/lab` y credenciales de demo
+
+Con `LAB_PUBLIC=false` (API) y `VITE_LAB_PUBLIC=false` (web):
+
+- `/lab` sin sesión redirige a `/login`; la pantalla de acceso no muestra el panel de usuarios de prueba.
+- Con sesión, `/lab` sigue mostrando credenciales (que llegan de la API con el bearer), reinicio y caos; no muestra la lista de tenants, ni la línea con la contraseña del alumno, ni el enlace al zip del material.
+- El zip del material (`downloads/sigpro-examples.zip`, que lleva la guía con las credenciales) **no se genera y se borra el anterior**: lo recibe cada alumno del instructor.
+- Los textos que citan el código MFA y los correos de prueba (FAQ, ayuda, pista del registro) quedan neutros y **sus originales desaparecen del JavaScript**.
+
+Si solo se pone `LAB_PUBLIC=false` en la API y no se recompila la web, la API deja de servir credenciales y lista de tenants, pero el JavaScript publicado sigue llevando los textos: hacen falta las dos.
+
+### Sin indexar
+
+`render.yaml` aplica `X-Robots-Tag: noindex, nofollow` al sitio estático y la API lo añade a todas sus respuestas (también a Swagger y a los errores) y sirve `/robots.txt` con `Disallow: /`. La web genera además su propio `robots.txt` y la meta `robots` al compilar. Según la documentación de Render, la reescritura `/* → /index.html` no se aplica a una ruta en la que ya existe un archivo, de modo que `/robots.txt` se sirve tal cual; **no se ha comprobado contra un despliegue real**: tras el primer despliegue, abre `https://<web>.onrender.com/robots.txt`.
+
+### Comprobaciones
+
+```bash
+# Sin sesión debe dar 403 y con la clave, la lista
+curl -i https://<api>.onrender.com/api/config/tenants
+curl -i https://<api>.onrender.com/api/config/tenants -H "x-admin-key: <ADMIN_KEY>"
+# Anónimo: lista vacía
+curl https://<api>.onrender.com/api/config/test-users
+# 422 a un correo real
+curl -i -X POST https://<api>.onrender.com/api/auth/forgot -H "content-type: application/json" -d '{"email":"nombre@gmail.com"}'
+# Cabecera y robots
+curl -I https://<api>.onrender.com/api/health | grep -i x-robots-tag
+curl https://<web>.onrender.com/robots.txt
+```
+
+**Que lo oculto no viaja en la web publicada** se comprueba sobre los archivos, no sobre la página. Compila la web como lo hará Render y pasa el comprobador:
+
+```bash
+cd apps/web
+VITE_LAB_PUBLIC=false VITE_NOINDEX=true node scripts/zip-examples.mjs      # borra el zip anterior
+VITE_LAB_PUBLIC=false VITE_NOINDEX=true pnpm exec vite build --outDir dist-closed
+cd ../.. && pnpm check:bundle apps/web/dist-closed --closed --noindex
+```
+
+Busca en todos los archivos de `dist/` las contraseñas, los correos de demo y el código MFA **leídos del propio seed de la API** (si cambian, el comprobador los sigue), el correo del alumno y cualquier zip publicado. Sale con código 1 y dice qué archivo contiene qué. No lo ejecutes a través de `turbo`: la caché de Turborepo restauraría un `dist` compilado con otras variables.
+
+### Crear Staging
+
+Staging **no está en `render.yaml`**: añadir allí sus servicios los crearía (de pago) al fusionar. Va en `render.staging.yaml`, un segundo Blueprint:
+
+1. Render → **New +** → **Blueprint** → repositorio `sigpro`, rama `main`.
+2. En **Blueprint Path** escribe `render.staging.yaml` (por defecto lee `render.yaml`, que es el de QA: no lo dejes así).
+3. Render lista lo que va a crear: `sigpro-staging-db`, `sigpro-staging-api`, `sigpro-staging-web` y `sigpro-staging-reset`. Comprueba que son cuatro y que ninguno es de QA.
+4. Rellena lo que pide (`sync: false`): `JWT_SECRET` y `ADMIN_KEY` de la API, `DOCS_BASIC_AUTH` (puede ir vacío) y `ADMIN_KEY` del cron (**igual** que la de la API). No reutilices los valores de QA.
+5. **Apply.** Después, las variables de endurecimiento a mano, con otra `TENANT_SUFFIX_SEED`.
+
+**La región se fija en el archivo**, con `region: oregon` en la base, la API y el cron (la misma que QA), y **no se puede cambiar una vez creados**. Staging usa `APP_ENV=staging` y `PLANTED_BUGS=false`. Las URLs `sigpro-staging-*.onrender.com` son únicas en todo Render: si alguna está ocupada, copia la real en `CORS_ORIGIN`, `VITE_API_URL` y `API_URL` y redespliega la web.
+
+> **Decisión pendiente: `APP_ENV`.** QA ya declara `APP_ENV=staging` (`render.yaml`). Con Staging también en `staging`, `GET /api/config` no distingue un entorno de otro. No se ha cambiado QA a `qa` porque el material del curso lee ese valor («Entorno: staging»); ver `docs/DECISIONS.md`.
+
+### Riesgos que quedan
+
+- **Hay un oráculo de existencia de tenant:** el login responde 404 `tenant_not_found` si el tenant no existe y 401 si existe con otro correo (el registro igual). Sin límite de peticiones, un atacante puede probar sufijos. Con 4 caracteres hay 36⁴ ≈ 1,7 millones por cada `alumnoNN`; con 6, unos 2.200 millones. Si te preocupa, decide `TENANT_SUFFIX_LENGTH=6` **antes de la primera activación** (cambiarla después deja tenants huérfanos). No se han cambiado esos mensajes.
+- **El repositorio es público:** las credenciales de demo, `Alumno1234!` (la misma contraseña para el administrador de **todos** los tenants) y la guía están en GitHub. Ocultarlas de la web no las vuelve secretas: lo que protege a un tenant de alumno es que su id sea un secreto.
+- **`demo` sigue siendo público** (es el entorno demo): sus credenciales funcionan para cualquiera.
+- **`JWT_SECRET` y `ADMIN_KEY` por defecto** (`dev-only-change-me`, `dev-admin-key`) son públicos: si el panel no define los suyos, cualquiera puede firmar un JWT o llamar al reset global. Comprueba que están definidos.
+- **Logs de acceso de Render:** muestran las URLs que se piden, incluida la web con `?tenant=<id>`. Los ve quien tenga acceso al panel.
+- **Los alumnos ven su propio id** en la barra de direcciones y en su `.env`: si se lo pasan, comparten tenant.
+
 ## Problemas frecuentes
 
 | Síntoma | Causa probable | Qué hacer |
@@ -214,6 +365,13 @@ La fase 4 no cambia el modelo de datos ni añade variables a la API: no hay migr
 | No aparece el panel de usuarios de prueba | `APP_ENV=production` | Usa `staging` para el entorno del curso |
 | Tras desplegar sigues viendo la versión anterior de la web | La PWA tiene la versión antigua en caché | Recarga forzada (`Ctrl+Shift+R`) o borra los datos del sitio |
 | La URL de la API/web tiene un sufijo que no esperabas | El nombre del servicio estaba ocupado | Copia la URL real del dashboard y actualiza `CORS_ORIGIN`, `VITE_API_URL` y `API_URL`; después redespliega la web |
+| `Configuración de entorno inválida → TENANT_SUFFIX_SEED: debe tener al menos 16 caracteres` y la API no arranca | La semilla es demasiado corta | Pon una de 16 o más caracteres (o vacía, para desactivarla) |
+| Un alumno recibe 404 `tenant_not_found` tras activar los sufijos | Usa el id antiguo (`alumno07`) | Dale su id nuevo (`pnpm tenants:list`) |
+| `GET /api/config/tenants` responde 403 `admin_key_required` | `TENANT_SUFFIX_SEED` o `LAB_PUBLIC=false` activos: la lista exige clave | Añade `-H "x-admin-key: <ADMIN_KEY>"`; es lo esperado |
+| `/lab` redirige a `/login` | La web se compiló con `VITE_LAB_PUBLIC=false` | Es lo esperado: entra con una cuenta y abre `/lab` |
+| Pusiste `VITE_LAB_PUBLIC=false` y la web no cambia | Es una variable de compilación | **Manual Deploy → Clear build cache & deploy** |
+| Registrarse o recuperar la contraseña da «solo se admiten correos ficticios» | `RESTRICT_EMAIL_DOMAINS=true` | Usa un correo `@example.com` o `@sigpro.test` (o añade el dominio a `ALLOWED_EMAIL_DOMAINS`) |
+| `tenants:purge-legacy` dice «Faltan N tenant(s) nuevos» | La API aún no ha arrancado con la semilla | Redespliega la API con `TENANT_SUFFIX_SEED` y `SEED_ON_BOOT=true` y repite |
 
 ## Referencia de variables de la API
 
@@ -229,5 +387,7 @@ La fase 4 no cambia el modelo de datos ni añade variables a la API: no hay migr
 | `SEED_STUDENT_TENANTS` | `25` | Tenants `alumnoNN`, de 0 a 100 |
 | `DOCS_BASIC_AUTH` | `sync: false` | `usuario:contraseña` para `/api/docs`; vacío = sin protección |
 | `NODE_VERSION` | `22` | `pnpm@11` exige Node ≥ 22.13 (ver `docs/DECISIONS.md`) |
+| `ROBOTS_NOINDEX` | `'true'` | Cabecera `X-Robots-Tag: noindex, nofollow` en todas las respuestas y `/robots.txt` con Disallow total (por defecto del código: `false`) |
+| `TENANT_SUFFIX_SEED`, `TENANT_SUFFIX_LENGTH`, `LAB_PUBLIC`, `RESTRICT_EMAIL_DOMAINS`, `ALLOWED_EMAIL_DOMAINS` | no se declaran: **a mano en el panel** | Endurecimiento; ver [la tabla](#variables-del-endurecimiento) |
 
 Consulta también el [README](../README.md) para el arranque local y [`docs/STATUS.md`](STATUS.md) para el estado de la construcción.

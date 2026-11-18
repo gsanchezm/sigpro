@@ -4,6 +4,22 @@
 
 Leyenda: `[x]` hecho · `[~]` en curso · `[ ]` pendiente
 
+## Endurecimiento de los despliegues del curso (2026-11-18, rama `hardening/curso-deploy`, sin fusionar ni subir)
+
+Cool Testers e Isdefe piden endurecer los despliegues antes del lunes 23. Todo por variables de entorno y apagado por defecto. Decisiones en `docs/DECISIONS.md`; operación en `docs/DEPLOY-RENDER.md`.
+
+- [x] **Tenants no adivinables.** `TENANT_SUFFIX_SEED` / `TENANT_SUFFIX_LENGTH`; `pnpm tenants:list` (no toca la base) y `pnpm tenants:purge-legacy` (simulación por defecto). Ensayado de principio a fin en una base local desechable.
+- [x] **Correos ficticios.** `RESTRICT_EMAIL_DOMAINS` / `ALLOWED_EMAIL_DOMAINS`: 422 en register, forgot y resend, con mensaje en la interfaz.
+- [x] **Logs sin datos sensibles.** Errores de Prisma sin su mensaje; tenants fuera del log de arranque y del cron.
+- [x] **`/lab` y credenciales de demo.** `LAB_PUBLIC` (API) y `VITE_LAB_PUBLIC` (web); `pnpm check:bundle` demuestra que lo oculto no viaja en los archivos publicados.
+- [x] **Sin indexar.** `ROBOTS_NOINDEX`, `VITE_NOINDEX` y cabecera `X-Robots-Tag` del sitio estático.
+- [x] **`render.yaml` y `render.staging.yaml`.** Región y planes explícitos; Staging como segundo Blueprint. Validados contra el esquema oficial de Render.
+- [ ] **Aplicar en QA a mano** (nada se activa solo): variables del panel, orden y purga según `docs/DEPLOY-RENDER.md`.
+- [ ] **Crear Staging** desde `render.staging.yaml` (cuatro recursos de pago).
+- [ ] **Decidir `APP_ENV` de QA** (`staging` colisiona con Staging) y si `TENANT_SUFFIX_LENGTH` pasa a 6 (oráculo de existencia de tenant).
+- [ ] **Actualizar el material del curso** que usa `alumnoNN` o un `/lab` público (lista en el informe de esta tanda).
+- [ ] **Comprobar en un despliegue real** que `/robots.txt` se sirve antes que la reescritura `/* → /index.html` (según la documentación de Render sí; no verificado).
+
 ## Locators responsive (2026-11-12)
 
 Un solo corte de diseño a 1024 px y dos componentes por familia, con ids `<id de escritorio>-mobile`. Decisiones y correspondencia de ids en `docs/DECISIONS.md` («Locators responsive»); la tabla de las 10 familias está en `/lab` y en `docs/GUIA-ALUMNO.md` (sección 7). **Todo lo de esta sección está verificado en local y sin subir** (ver «Verificado» y «Cabos sueltos»).
