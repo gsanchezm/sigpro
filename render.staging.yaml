@@ -1,0 +1,113 @@
+# Blueprint de STAGING de SIGPRO: un SEGUNDO Blueprint, aparte de render.yaml (que gobierna QA).
+#
+# POR QUÉ UN ARCHIVO APARTE: render.yaml está sincronizado con los servicios vivos de QA. Si los servicios de Staging estuvieran en
+# él, fusionar el cambio los CREARÍA al instante (api, base y cron son de pago). Con este archivo los creas tú cuando quieras.
+#
+# CÓMO CREARLO (después de fusionar este archivo en main):
+#   1. Render → New + → Blueprint → elige el repositorio `sigpro`, rama `main`.
+#   2. En «Blueprint Path» escribe `render.staging.yaml` (por defecto Render lee `render.yaml`, que es el de QA: NO lo dejes así).
+#   3. Nombre del Blueprint: `sigpro-staging`. Render lista lo que va a crear (base, API, web y cron): comprueba que son cuatro y que
+#      NINGUNO es de QA.
+#   4. Rellena lo que pide (sync: false): JWT_SECRET y ADMIN_KEY de la API, DOCS_BASIC_AUTH (puede ir vacío) y ADMIN_KEY del cron, que
+#      debe ser IGUAL que la de la API. No reutilices los valores de QA.
+#   5. Apply. Después pon a mano las variables de endurecimiento (ver docs/DEPLOY-RENDER.md).
+#
+# REGIÓN: `region: oregon` en la base, la API y el cron (la misma que QA). Se fija AQUÍ, al crear, y no se puede cambiar después. La
+# base y la API tienen que estar en la misma región. El sitio estático no admite `region`.
+#
+# DIFERENCIAS CON QA: APP_ENV=staging, PLANTED_BUGS=false (la app «limpia»), nombres sigpro-staging-* y sus URLs. Las URLs
+# `sigpro-staging-*.onrender.com` son únicas en todo Render: si alguna está ocupada, Render añade un sufijo; copia la real del panel
+# en CORS_ORIGIN, VITE_API_URL y API_URL y redespliega la web.
+#
+# NOTA: QA declara también APP_ENV=staging (render.yaml). Con los dos iguales, `GET /api/config` no distingue un entorno de otro.
+# Es una decisión pendiente (docs/DECISIONS.md): no se cambia aquí ni en render.yaml sin avisar, porque el material del curso lee ese valor.
+
+databases:
+  - name: sigpro-staging-db
+    plan: basic-256mb
+    region: oregon
+    databaseName: sigpro
+    user: sigpro
+
+services:
+  # --- API (NestJS) -----------------------------------------------------------------------
+  - type: web
+    name: sigpro-staging-api
+    runtime: node
+    plan: starter
+    region: oregon
+    rootDir: .
+    buildCommand: corepack enable && pnpm install --frozen-lockfile && pnpm --filter api... build
+    startCommand: pnpm --filter api prisma:deploy && pnpm --filter api start:prod
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_VERSION
+        value: '22'
+      - key: APP_ENV
+        value: staging
+      - key: DATABASE_URL
+        fromDatabase:
+          name: sigpro-staging-db
+          property: connectionString
+      - key: JWT_SECRET
+        sync: false
+      - key: ADMIN_KEY
+        sync: false
+      - key: CORS_ORIGIN
+        value: https://sigpro-staging-web.onrender.com
+      - key: SEED_ON_BOOT
+        value: 'true'
+      - key: SEED_STUDENT_TENANTS
+        value: '25'
+      # Staging con la aplicación limpia: sin los defectos plantados del ejercicio de reporte
+      - key: PLANTED_BUGS
+        value: 'false'
+      - key: SIMULATOR_MS
+        value: '4000'
+      - key: DOCS_BASIC_AUTH
+        sync: false
+      - key: ROBOTS_NOINDEX
+        value: 'true'
+      # Endurecimiento (opcional, A MANO en el panel): TENANT_SUFFIX_SEED, TENANT_SUFFIX_LENGTH, LAB_PUBLIC, RESTRICT_EMAIL_DOMAINS,
+      # ALLOWED_EMAIL_DOMAINS. Mismos nombres y significado que en render.yaml; usa una TENANT_SUFFIX_SEED DISTINTA de la de QA.
+
+  # --- Web (React + Vite, sitio estático) --------------------------------------------------
+  - type: web
+    name: sigpro-staging-web
+    runtime: static
+    rootDir: .
+    buildCommand: corepack enable && pnpm install --frozen-lockfile && pnpm --filter web... build
+    staticPublishPath: apps/web/dist
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
+    headers:
+      - path: /*
+        name: X-Robots-Tag
+        value: noindex, nofollow
+    envVars:
+      - key: NODE_VERSION
+        value: '22'
+      - key: VITE_API_URL
+        value: https://sigpro-staging-api.onrender.com/api
+      - key: VITE_NOINDEX
+        value: 'true'
+      # Endurecimiento (opcional, A MANO y de COMPILACIÓN): VITE_LAB_PUBLIC=false, y después «Clear build cache & deploy».
+
+  # --- Reset nocturno de todos los tenants ---------------------------------------------------
+  - type: cron
+    name: sigpro-staging-reset
+    runtime: node
+    schedule: '0 3 * * *'
+    plan: starter
+    region: oregon
+    buildCommand: echo "sin dependencias que instalar"
+    startCommand: node scripts/reset-all.mjs
+    envVars:
+      - key: NODE_VERSION
+        value: '22'
+      - key: API_URL
+        value: https://sigpro-staging-api.onrender.com/api
+      - key: ADMIN_KEY
+        sync: false
