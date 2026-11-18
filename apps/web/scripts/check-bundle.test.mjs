@@ -90,7 +90,7 @@ describe('checkDist --noindex', () => {
   });
 
   it('falla sin robots.txt, con un robots.txt permisivo o sin la meta', () => {
-    expect(checkDist(makeDist({ 'index.html': META }), { noindex: true, seedSource: SEED })).toContain('robots.txt: no existe');
+    expect(checkDist(makeDist({ 'index.html': META }), { noindex: true, seedSource: SEED })).toEqual([expect.stringContaining('robots.txt: no existe')]);
     expect(checkDist(makeDist({ 'robots.txt': 'User-agent: *\nDisallow:\n', 'index.html': META }), { noindex: true, seedSource: SEED })[0]).toContain('Disallow: /');
     expect(checkDist(makeDist({ 'robots.txt': 'User-agent: *\nDisallow: /\n', 'index.html': '<html></html>' }), { noindex: true, seedSource: SEED })).toEqual([expect.stringContaining('meta name="robots"')]);
   });

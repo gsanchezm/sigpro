@@ -24,7 +24,7 @@ const NO_LITERAL_TEST_ID = {
 };
 
 export default tseslint.config(
-  { ignores: ['**/.expo/**', 'apps/mobile/metro.config.js', '**/dist/**', '**/node_modules/**', '**/.turbo/**', '**/coverage/**', '**/playwright-report/**', '**/test-results/**', 'docs/**', 'apps/api/prisma/migrations/**', '**/*.d.ts'] },
+  { ignores: ['**/.expo/**', 'apps/mobile/metro.config.js', '**/dist/**', '**/dist-*/**', '**/node_modules/**', '**/.turbo/**', '**/coverage/**', '**/playwright-report/**', '**/test-results/**', 'docs/**', 'apps/api/prisma/migrations/**', '**/*.d.ts'] },
   js.configs.recommended,
   ...tseslint.configs.recommended,
   {
