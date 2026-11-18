@@ -14,7 +14,9 @@
     "prisma:generate": "node scripts/generate-prisma.mjs",
     "prisma:migrate": "node scripts/run-with-env.mjs prisma migrate dev",
     "prisma:deploy": "node scripts/run-with-env.mjs prisma migrate deploy",
-    "seed": "node scripts/run-with-env.mjs tsx src/seed/cli.ts"
+    "seed": "node scripts/run-with-env.mjs tsx src/seed/cli.ts",
+    "tenants:list": "node scripts/run-with-env.mjs tsx src/seed/tenants-cli.ts",
+    "tenants:purge-legacy": "node scripts/run-with-env.mjs tsx src/seed/purge-legacy-cli.ts"
   },
   "dependencies": {
     "@nestjs/common": "11.2.8",

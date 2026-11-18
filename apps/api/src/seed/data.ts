@@ -18,6 +18,7 @@ import type {
 } from '@prisma/client';
 import { REQUIREMENT_TAGS, type Role } from '@sigpro/shared';
 import { evidencePng } from './png';
+import { studentTenantId, type TenantSuffixOptions } from './tenant-suffix';
 
 // Seed determinista: ninguna función usa Date.now() ni Math.random().
 // La misma entrada produce siempre las mismas filas (códigos PRG-001…, REQ-001…, TC-001…, NC-001…).
@@ -79,7 +80,14 @@ export const DEMO_USERS: readonly DemoUser[] = [
 
 export const STUDENT_PASSWORD = 'Alumno1234!';
 
-export const tenantIds = (students: number): readonly string[] => ['demo', ...range(students).map((n) => `alumno${pad(n, 2)}`)];
+/**
+ * `demo` + un tenant por alumno. Sin `suffix` son `alumno01…`; con `TENANT_SUFFIX_SEED`, `alumno01-k4x9…` (el sufijo es
+ * estable: ver `tenant-suffix.ts`). `demo` nunca lleva sufijo: es el entorno público.
+ */
+export const tenantIds = (students: number, suffix?: TenantSuffixOptions): readonly string[] => [
+  'demo',
+  ...range(students).map((n) => studentTenantId(`alumno${pad(n, 2)}`, suffix)),
+];
 
 const buildUsers = (tenantId: string, hash: (plain: string) => string): readonly User[] => {
   const demo: readonly User[] = DEMO_USERS.map((u) => ({
