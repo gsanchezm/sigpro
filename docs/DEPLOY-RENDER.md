@@ -70,7 +70,7 @@ Otros valores que puedes cambiar ahora:
 
 - `SEED_STUDENT_TENANTS` (25 por defecto, máximo 100): número de tenants `alumnoNN` además de `demo`.
 - `APP_ENV`: `staging` muestra el panel de usuarios de prueba en la pantalla de acceso (lo que quiere el curso). Con `production` ese panel se oculta.
-- Región: `render.yaml` declara `region: oregon` en la base, la API y el cron (el sitio estático no admite `region`). Es lo que ya hay en QA: **la región no se puede cambiar una vez creado el recurso**, así que cambiar el valor del archivo no mueve nada (y un valor distinto del real haría fallar la sincronización). Si para una cohorte nueva necesitas la UE (el plan lo deja como pregunta abierta para Isdefe), pon `region: frankfurt` en la base, la API y el cron **antes de crearla**. La API y la base **deben estar en la misma región** para usar la URL interna.
+- Región: `render.yaml` declara `region: oregon` en la base, la API y el cron (el sitio estático no admite `region`). Es lo que ya hay en QA: **la región no se puede cambiar una vez creado el recurso**, así que cambiar el valor del archivo no mueve nada. **No se ha comprobado qué hace la sincronización si el valor escrito no coincide con la región real**: confirma en el panel que es Oregon antes de fusionar. Si para una cohorte nueva necesitas la UE (el plan lo deja como pregunta abierta para Isdefe), pon `region: frankfurt` en la base, la API y el cron **antes de crearla**. La API y la base **deben estar en la misma región** para usar la URL interna.
 
 Haz commit y push de los cambios (`git commit -am "chore(deploy): cohort names in render.yaml" && git push`).
 
