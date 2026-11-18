@@ -6,8 +6,10 @@
 #  - `region: oregon` y los planes están escritos EXPLÍCITOS en los recursos que ya existen. La región no se puede cambiar una vez
 #    creado el recurso: aquí solo se deja constancia (lo que aparece es lo que ya hay en el panel). El sitio estático no admite
 #    `region` ni `plan` (lo prohíbe el esquema del Blueprint). El plan del cron no se declara: Render conserva el que tiene.
-#  - Las medidas de endurecimiento del despliegue NO se declaran aquí con `value:`, porque un `value:` pisa lo que haya en el panel
-#    y se aplicaría a QA al fusionar. Se activan a mano en el panel y están documentadas en docs/DEPLOY-RENDER.md.
+#  - Las medidas de endurecimiento NO se activan desde este archivo: un `value:` pisa lo que haya en el panel y se aplicaría a QA al
+#    fusionar. Se activan a mano en el panel (docs/DEPLOY-RENDER.md). Dos valores sí se FIJAN aquí, porque no hacen nada mientras
+#    la semilla de tenants y la restricción de correos estén apagadas, y deben ser iguales en QA y en Staging: TENANT_SUFFIX_LENGTH y
+#    ALLOWED_EMAIL_DOMAINS.
 #  - Un Staging NO va en este archivo: añadir servicios aquí los CREARÍA (de pago) al sincronizar. Va en `render.staging.yaml`, que
 #    se aplica como un segundo Blueprint.
 
@@ -32,8 +34,10 @@ services:
     envVars:
       - key: NODE_VERSION
         value: '22'
+      # QA = `qa`; Staging = `staging` (render.staging.yaml). Es lo que devuelve `GET /api/config` (campo `env`) y lo que imprime la
+      # pantalla de acceso. Hasta ahora QA declaraba `staging`: al fusionar, ese valor pasa a `qa`.
       - key: APP_ENV
-        value: staging
+        value: qa
       - key: DATABASE_URL
         fromDatabase:
           name: sigpro-db
@@ -61,12 +65,20 @@ services:
       # Es lo único de la tanda de endurecimiento que se aplica solo al fusionar: no cambia nada de lo que ven los alumnos.
       - key: ROBOTS_NOINDEX
         value: 'true'
-      # ---- Endurecimiento (opcional; se pone A MANO en el panel → Environment; todas son de ejecución: basta redesplegar la API) ----
-      #   TENANT_SUFFIX_SEED      semilla SECRETA (≥ 16 caracteres): los tenants pasan a ser alumno07-k4x9. Vacía = como hoy
-      #   TENANT_SUFFIX_LENGTH    longitud del sufijo, de 3 a 12 (4 por defecto)
+      # ---- Endurecimiento: valores FIJOS (sin efecto mientras no actives la semilla y la restricción de correos) ----
+      #   Longitud del sufijo de los tenants: 6 caracteres (alumno07-k4x9ab). Se decidió ANTES de activar nada: cambiarla (o cambiar la
+      #   semilla) después deja tenants huérfanos. Sin TENANT_SUFFIX_SEED no tiene ningún efecto. Igual en render.staging.yaml.
+      - key: TENANT_SUFFIX_LENGTH
+        value: '6'
+      #   Dominios que admite la restricción de correos: los que usa el propio seed (alumnos <tenant>@sigpro.lab, demo @sigpro.test) y
+      #   example.com. Sin RESTRICT_EMAIL_DOMAINS=true no tiene ningún efecto. Igual en render.staging.yaml.
+      - key: ALLOWED_EMAIL_DOMAINS
+        value: 'sigpro.lab,sigpro.test,example.com'
+      # ---- Endurecimiento: se activa A MANO en el panel → Environment (de ejecución: basta redesplegar la API) ----
+      #   TENANT_SUFFIX_SEED      semilla SECRETA (≥ 16 caracteres): los tenants pasan a ser alumno07-k4x9ab. Vacía = como hoy.
+      #                           La MISMA en QA y en Staging: así cada alumno tiene un solo id en los dos entornos
       #   LAB_PUBLIC              `false`: las credenciales de demo y la lista de tenants exigen sesión o X-Admin-Key
-      #   RESTRICT_EMAIL_DOMAINS  `true`: register / forgot / resend solo admiten correos ficticios (422 al resto)
-      #   ALLOWED_EMAIL_DOMAINS   dominios admitidos con lo anterior (por defecto: sigpro.test,example.com)
+      #   RESTRICT_EMAIL_DOMAINS  `true`: register / forgot / resend solo admiten correos de ALLOWED_EMAIL_DOMAINS (422 al resto)
 
   # --- Web (React + Vite, sitio estático) --------------------------------------------------
   - type: web

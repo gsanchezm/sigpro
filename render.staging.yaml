@@ -19,8 +19,10 @@
 # `sigpro-staging-*.onrender.com` son únicas en todo Render: si alguna está ocupada, Render añade un sufijo; copia la real del panel
 # en CORS_ORIGIN, VITE_API_URL y API_URL y redespliega la web.
 #
-# NOTA: QA declara también APP_ENV=staging (render.yaml). Con los dos iguales, `GET /api/config` no distingue un entorno de otro.
-# Es una decisión pendiente (docs/DECISIONS.md): no se cambia aquí ni en render.yaml sin avisar, porque el material del curso lee ese valor.
+# IDENTIDAD DE ENTORNO: QA declara APP_ENV=qa (render.yaml) y Staging, APP_ENV=staging: `GET /api/config` (campo `env`) los distingue.
+#
+# TENANTS: la semilla de sufijos (TENANT_SUFFIX_SEED, a mano) es LA MISMA que la de QA, y la longitud (6) y los dominios de correo
+# están declarados igual en los dos archivos: así cada alumno tiene UN solo id (alumno07-k4x9ab) en QA y en Staging.
 
 databases:
   - name: sigpro-staging-db
@@ -68,8 +70,13 @@ services:
         sync: false
       - key: ROBOTS_NOINDEX
         value: 'true'
-      # Endurecimiento (opcional, A MANO en el panel): TENANT_SUFFIX_SEED, TENANT_SUFFIX_LENGTH, LAB_PUBLIC, RESTRICT_EMAIL_DOMAINS,
-      # ALLOWED_EMAIL_DOMAINS. Mismos nombres y significado que en render.yaml; usa una TENANT_SUFFIX_SEED DISTINTA de la de QA.
+      # Endurecimiento: valores FIJOS, iguales que en render.yaml y sin efecto mientras no actives la semilla ni la restricción de correos
+      - key: TENANT_SUFFIX_LENGTH
+        value: '6'
+      - key: ALLOWED_EMAIL_DOMAINS
+        value: 'sigpro.lab,sigpro.test,example.com'
+      # Endurecimiento: se activa A MANO en el panel: TENANT_SUFFIX_SEED (LA MISMA que en QA), LAB_PUBLIC=false y RESTRICT_EMAIL_DOMAINS=true.
+      # Mismos nombres y significado que en render.yaml (docs/DEPLOY-RENDER.md).
 
   # --- Web (React + Vite, sitio estático) --------------------------------------------------
   - type: web

@@ -14,7 +14,9 @@ const qa = read('render.yaml');
 const staging = read('render.staging.yaml');
 
 /** Medidas de endurecimiento que se activan A MANO en el panel: con `value:` en un Blueprint se aplicarían solas y pisarían el panel. */
-const HAND_SWITCHES = ['TENANT_SUFFIX_SEED', 'TENANT_SUFFIX_LENGTH', 'LAB_PUBLIC', 'RESTRICT_EMAIL_DOMAINS', 'ALLOWED_EMAIL_DOMAINS', 'VITE_LAB_PUBLIC'];
+const HAND_SWITCHES = ['TENANT_SUFFIX_SEED', 'LAB_PUBLIC', 'RESTRICT_EMAIL_DOMAINS', 'VITE_LAB_PUBLIC'];
+/** Valores que sí se FIJAN en los blueprints (iguales en QA y Staging; sin efecto mientras la semilla y la restricción estén apagadas). */
+const FIXED_VALUES = { TENANT_SUFFIX_LENGTH: '6', ALLOWED_EMAIL_DOMAINS: 'sigpro.lab,sigpro.test,example.com' };
 /** Secretos: nunca con valor en el repositorio. */
 const SECRETS = ['JWT_SECRET', 'ADMIN_KEY', 'DOCS_BASIC_AUTH', 'TENANT_SUFFIX_SEED'];
 
@@ -52,6 +54,14 @@ describe.each([
     }
   });
 
+  it('la longitud del sufijo y los dominios de correo se FIJAN en la API, con el mismo valor en QA y en Staging', () => {
+    for (const [key, value] of Object.entries(FIXED_VALUES)) {
+      expect(env(resources[names.api], key), `${names.api}.${key}`).toEqual({ key, value });
+      // Solo la API los lee: ningún otro servicio los declara
+      for (const service of document.services.filter((item) => item.name !== names.api)) expect(env(service, key), `${service.name}.${key}`).toBeUndefined();
+    }
+  });
+
   it('los secretos son sync: false y no llevan valor', () => {
     for (const service of document.services) {
       for (const variable of envVars(service).filter((item) => SECRETS.includes(item.key))) {
@@ -83,8 +93,8 @@ describe('render.yaml (QA): lo que ya existe no cambia', () => {
     expect(resources['sigpro-reset'].schedule).toBe('0 3 * * *');
   });
 
-  it('APP_ENV y PLANTED_BUGS de QA conservan sus valores (el material del curso los lee)', () => {
-    expect(env(resources['sigpro-api'], 'APP_ENV')?.value).toBe('staging');
+  it('QA declara APP_ENV=qa (antes staging) y conserva PLANTED_BUGS=true (el material del curso los lee de /api/config)', () => {
+    expect(env(resources['sigpro-api'], 'APP_ENV')?.value).toBe('qa');
     expect(env(resources['sigpro-api'], 'PLANTED_BUGS')?.value).toBe('true');
   });
 
@@ -100,6 +110,10 @@ describe('render.staging.yaml (Staging)', () => {
     expect(env(resources['sigpro-staging-api'], 'APP_ENV')?.value).toBe('staging');
     expect(env(resources['sigpro-staging-api'], 'PLANTED_BUGS')?.value).toBe('false');
     expect(resources['sigpro-staging-db'].region).toBe(byName(qa)['sigpro-db'].region);
+  });
+
+  it('QA y Staging NO comparten APP_ENV: /api/config los distingue', () => {
+    expect(env(byName(qa)['sigpro-api'], 'APP_ENV')?.value).not.toBe(env(resources['sigpro-staging-api'], 'APP_ENV')?.value);
   });
 
   it('sus URLs apuntan a Staging y no a QA (CORS_ORIGIN, VITE_API_URL, API_URL)', () => {
