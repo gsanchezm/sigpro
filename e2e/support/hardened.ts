@@ -23,7 +23,7 @@ export const listTenants = async (request: APIRequestContext): Promise<readonly 
   return (await response.json()) as TenantRow[];
 };
 
-/** Ids de los tenants de alumno con sufijo (`alumno01-k4x9`): `demo` no cuenta. */
+/** Ids de los tenants de alumno con sufijo (`alumno01-k4x9ab`): `demo` no cuenta. */
 export const studentTenants = async (request: APIRequestContext): Promise<readonly string[]> =>
   (await listTenants(request)).map((tenant) => tenant.id).filter((id) => id.startsWith('alumno'));
 

@@ -56,16 +56,16 @@ const child = spawn('pnpm', ['--filter', 'api', 'start'], {
     JWT_SECRET: 'e2e-endurecido-jwt-secret',
     ADMIN_KEY: 'e2e-endurecido-admin-key',
     CORS_ORIGIN: `http://localhost:${WEB_PORT}`,
-    APP_ENV: 'staging',
+    APP_ENV: 'qa', // como QA en Render (render.yaml)
     SEED_ON_BOOT: 'true',
     SEED_STUDENT_TENANTS: '2',
     SIMULATOR_MS: '0',
     // Las medidas de endurecimiento
     TENANT_SUFFIX_SEED: 'e2e-semilla-endurecida-0123456789',
-    TENANT_SUFFIX_LENGTH: '4',
+    TENANT_SUFFIX_LENGTH: '6', // la longitud que declaran render.yaml y render.staging.yaml
     LAB_PUBLIC: 'false',
     RESTRICT_EMAIL_DOMAINS: 'true',
-    ALLOWED_EMAIL_DOMAINS: 'sigpro.test,example.com',
+    // ALLOWED_EMAIL_DOMAINS no se fija: se ejercita la lista POR DEFECTO de la API (sigpro.lab, sigpro.test, example.com)
     ROBOTS_NOINDEX: 'true',
   },
 });

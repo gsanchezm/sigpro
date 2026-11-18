@@ -1,7 +1,7 @@
 import { expect, test, type APIRequestContext } from '@playwright/test';
 import { HARDENED_API, loginStudent, studentTenants } from '../../support/hardened';
 
-// Despliegue endurecido · registro solo con correos ficticios (RESTRICT_EMAIL_DOMAINS + ALLOWED_EMAIL_DOMAINS=sigpro.test,example.com).
+// Despliegue endurecido · registro solo con correos ficticios (RESTRICT_EMAIL_DOMAINS + la lista por defecto: sigpro.lab, sigpro.test, example.com).
 // Un correo real debe rechazarse ANTES de tocar nada: ni base de datos, ni auditoría, ni logs (estos últimos, en logs.spec.ts).
 
 test.describe.configure({ mode: 'serial' });
@@ -37,7 +37,7 @@ test.describe('422 a un correo real', () => {
   });
 
   test('un dominio que solo se le parece también se rechaza', async ({ request }) => {
-    for (const email of ['ana@mail.example.com', 'ana@example.com.evil.net', 'ana@sigpro.lab']) {
+    for (const email of ['ana@mail.example.com', 'ana@example.com.evil.net', 'ana@mail.sigpro.lab', 'ana@sigpro.lab.evil.net']) {
       expect((await post(request, '/auth/register', registerBody(email))).status(), email).toBe(422);
     }
   });
@@ -72,5 +72,15 @@ test.describe('los dominios ficticios siguen funcionando', () => {
 
   test('register con sigpro.test también', async ({ request }) => {
     expect((await post(request, '/auth/register', registerBody(`nuevo.${Date.now()}@sigpro.test`))).status()).toBe(201);
+  });
+
+  // El administrador de cada tenant de alumno es <tenant>@sigpro.lab: sin este dominio en la lista, «olvidé mi contraseña» fallaría
+  // justo con los usuarios que siembra la propia API, y los tests de `examples/` que registran correos @sigpro.lab (s02) darían 422.
+  test('sigpro.lab (los usuarios de alumno que siembra la API) está admitido: forgot y resend dan 202 y register 201', async ({ request }) => {
+    for (const email of [`${tenant}@sigpro.lab`, `bloqueo-${Date.now()}@sigpro.lab`]) {
+      expect((await post(request, '/auth/forgot', { email })).status(), `forgot ${email}`).toBe(202);
+      expect((await post(request, '/auth/resend', { email })).status(), `resend ${email}`).toBe(202);
+    }
+    expect((await post(request, '/auth/register', registerBody(`bloqueo-${Date.now()}@sigpro.lab`))).status()).toBe(201);
   });
 });

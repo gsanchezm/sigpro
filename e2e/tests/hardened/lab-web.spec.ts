@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { STUDENT_PASSWORD, studentTenants } from '../../support/hardened';
+import { HARDENED_API, STUDENT_PASSWORD, loginStudent, studentTenants } from '../../support/hardened';
 
 // Despliegue endurecido · la web «cerrada» (VITE_LAB_PUBLIC=false) contra la API endurecida:
 //  - /lab exige sesión; la pantalla de acceso no enseña los usuarios de prueba;
@@ -66,6 +66,37 @@ test.describe('con sesión', () => {
     await expect(page.getByTestId('lab-student-user')).toHaveCount(0);
     await expect(page.getByTestId('lab-download-examples')).toHaveCount(0);
     await expect(page.locator('body')).not.toContainText(STUDENT_PASSWORD);
+  });
+
+  // Lo que usa el curso (módulos 6, 7, 9 y 12): el alumno entra en SU tenant y desde /lab provoca caos y reinicia. Cerrar /lab no puede
+  // quitarle eso, así que se comprueba con acciones reales y no solo con que los botones estén habilitados.
+  test('el modo caos y el reinicio funcionan con la sesión del alumno y solo afectan a su tenant', async ({ page, request }) => {
+    const [, other = ''] = await studentTenants(request);
+    const chaosOf = async (id: string) => ((await (await request.get(`${HARDENED_API}/config`, { headers: { 'x-tenant': id } })).json()) as { chaos: { flakyLabels: boolean } }).chaos;
+
+    await signIn(page);
+    await page.goto('/lab');
+    await expect(page.getByTestId('lab-xpath-table')).toBeVisible(); // los contraejemplos de locators siguen ahí, con sesión
+
+    await page.getByTestId('lab-chaos-flaky').check();
+    await page.getByTestId('lab-chaos-apply').click();
+    await expect(page.getByTestId('toast-ok').first()).toBeVisible();
+    expect(await chaosOf(tenant), 'caos del tenant del alumno').toMatchObject({ flakyLabels: true });
+    expect(await chaosOf(other), 'caos del otro tenant').toMatchObject({ flakyLabels: false });
+
+    await page.getByTestId('lab-chaos-off').click();
+    await expect.poll(async () => (await chaosOf(tenant)).flakyLabels).toBe(false);
+
+    page.once('dialog', (dialog) => void dialog.accept()); // el reinicio pide confirmación con un diálogo nativo
+    await page.getByTestId('lab-reset').click();
+    await expect(page.getByTestId('toast-ok').filter({ hasText: tenant })).toBeVisible();
+  });
+
+  test('con la sesión del alumno, reiniciar TODOS los tenants sigue exigiendo X-Admin-Key (403)', async ({ request }) => {
+    const { accessToken } = await loginStudent(request, tenant);
+    const response = await request.post(`${HARDENED_API}/admin/reset?all=true`, { headers: { Authorization: `Bearer ${accessToken}`, 'x-tenant': tenant } });
+    expect(response.status()).toBe(403);
+    expect(await response.json()).toMatchObject({ code: 'admin_key_required' });
   });
 
   test('la web no pide nunca la lista de tenants', async ({ page }) => {

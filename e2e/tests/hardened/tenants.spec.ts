@@ -28,7 +28,7 @@ test.describe('lista de tenants', () => {
     expect(ids).toContain('demo');
     const students = ids.filter((id) => id.startsWith('alumno'));
     expect(students).toHaveLength(2);
-    expect(students.every((id) => /^alumno0[12]-[0-9a-z]{4}$/.test(id))).toBe(true);
+    expect(students.every((id) => /^alumno0[12]-[0-9a-z]{6}$/.test(id))).toBe(true);
     expect(ids.filter((id) => /^alumno\d{2}$/.test(id))).toEqual([]);
   });
 });
