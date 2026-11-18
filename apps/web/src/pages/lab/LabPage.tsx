@@ -41,7 +41,7 @@ const FAQ_KEYS = [
   ['faqQ8', 'faqA8'],
 ] as const;
 
-/** Un usuario `<tenant>@sigpro.lab` por tenant de alumno (`alumno07` o, con sufijos, `alumno07-k4x9`); para `demo` u otros, la plantilla. */
+/** Un usuario `<tenant>@sigpro.lab` por tenant de alumno (`alumno07` o, con sufijos, `alumno07-k4x9ab`); para `demo` u otros, la plantilla. */
 const studentEmail = (tenant: string): string => (/^alumno\d+(-[a-z0-9]+)?$/.test(tenant) ? `${tenant}@sigpro.lab` : 'alumnoNN@sigpro.lab');
 
 /** Página /lab: credenciales de demo, tenants, reset, modo caos, contraejemplos y FAQ. Pública (sirve también antes de iniciar sesión). */

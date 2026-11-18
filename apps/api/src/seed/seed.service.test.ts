@@ -31,8 +31,8 @@ describe('SeedService.tenants', () => {
 
   it('con semilla llevan sufijo, y es el mismo que calcula el comando tenants:list', () => {
     const service = new SeedService(fakePrisma([]).prisma, envWith({ TENANT_SUFFIX_SEED: SEED }));
-    expect(service.tenants).toEqual(tenantIds(3, { seed: SEED, length: 4 }));
-    expect(service.tenants.slice(1).every((id) => /^alumno\d{2}-[0-9a-z]{4}$/.test(id))).toBe(true);
+    expect(service.tenants).toEqual(tenantIds(3, { seed: SEED, length: 6 }));
+    expect(service.tenants.slice(1).every((id) => /^alumno\d{2}-[0-9a-z]{6}$/.test(id))).toBe(true);
   });
 });
 
@@ -57,7 +57,7 @@ describe('log de arranque', () => {
 });
 
 describe('purga de tenants antiguos', () => {
-  const current = tenantIds(3, { seed: SEED, length: 4 });
+  const current = tenantIds(3, { seed: SEED, length: 6 });
   const withSeed = { TENANT_SUFFIX_SEED: SEED };
 
   it('detecta solo los alumnoNN sin sufijo que no están en la lista vigente', async () => {

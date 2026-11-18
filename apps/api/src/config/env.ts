@@ -30,18 +30,24 @@ export const envSchema = z.object({
 
   // --- Endurecimiento de los despliegues del curso -------------------------------------------------------------------
   // Todo es opcional: sin estas variables la API se comporta como siempre (entorno demo público). Ver docs/DEPLOY-RENDER.md.
-  /** Semilla SECRETA para que los tenants de alumno lleven un sufijo estable (`alumno07-k4x9`). Vacía = sin sufijos. */
+  /** Semilla SECRETA para que los tenants de alumno lleven un sufijo estable (`alumno07-k4x9ab`). Vacía = sin sufijos. */
   TENANT_SUFFIX_SEED: z
     .string()
     .default('')
     .refine((value) => value === '' || value.length >= MIN_SEED_LENGTH, `debe tener al menos ${MIN_SEED_LENGTH} caracteres (o estar vacía)`),
-  TENANT_SUFFIX_LENGTH: z.coerce.number().int().min(MIN_SUFFIX_LENGTH).max(MAX_SUFFIX_LENGTH).default(4),
+  // 6 caracteres (≈ 2.200 millones de sufijos por alumno): es la longitud de los despliegues del curso (render.yaml y render.staging.yaml la
+  // declaran igual). Sin semilla no tiene ningún efecto. Cambiarla DESPUÉS de repartir los ids deja tenants huérfanos (docs/DEPLOY-RENDER.md).
+  TENANT_SUFFIX_LENGTH: z.coerce.number().int().min(MIN_SUFFIX_LENGTH).max(MAX_SUFFIX_LENGTH).default(6),
   /** `false`: las credenciales de demo y la lista de tenants solo se sirven con sesión o con `X-Admin-Key`. */
   LAB_PUBLIC: bool,
   /** `true`: /auth/register, /auth/forgot y /auth/resend rechazan con 422 los correos de otros dominios. */
   RESTRICT_EMAIL_DOMAINS: boolOff,
-  /** Dominios ficticios admitidos cuando `RESTRICT_EMAIL_DOMAINS=true` (coincidencia exacta, separados por comas). */
-  ALLOWED_EMAIL_DOMAINS: z.string().default('sigpro.test,example.com'),
+  /**
+   * Dominios ficticios admitidos cuando `RESTRICT_EMAIL_DOMAINS=true` (coincidencia exacta, separados por comas). Por defecto, los que usa
+   * el propio seed: `sigpro.lab` (el administrador de cada tenant de alumno, `<tenant>@sigpro.lab`), `sigpro.test` (los usuarios de demo)
+   * y `example.com` (reservado por la RFC 2606 para ejemplos).
+   */
+  ALLOWED_EMAIL_DOMAINS: z.string().default('sigpro.lab,sigpro.test,example.com'),
   /** `true`: añade `X-Robots-Tag: noindex, nofollow` a todas las respuestas de la API. */
   ROBOTS_NOINDEX: boolOff,
 });

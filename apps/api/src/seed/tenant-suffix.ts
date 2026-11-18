@@ -8,7 +8,7 @@ import { createHmac } from 'node:crypto';
  * sitio. Sin semilla no hay sufijo y todo queda como siempre (`alumno07`).
  */
 
-/** Base 36 en minúsculas: se lee bien en una URL (`?tenant=`) y dentro de un correo (`alumno07-k4x9@sigpro.lab`). */
+/** Base 36 en minúsculas: se lee bien en una URL (`?tenant=`) y dentro de un correo (`alumno07-k4x9ab@sigpro.lab`). */
 const ALPHABET = '0123456789abcdefghijklmnopqrstuvwxyz';
 
 export const MIN_SUFFIX_LENGTH = 3;
@@ -26,7 +26,7 @@ export interface TenantSuffixOptions {
 export const tenantSuffix = (seed: string, baseId: string, length: number): string =>
   Array.from(createHmac('sha256', seed).update(baseId).digest().subarray(0, length), (byte) => ALPHABET[byte % ALPHABET.length]).join('');
 
-/** `alumno07` → `alumno07-k4x9` con semilla; el mismo id sin ella. */
+/** `alumno07` → `alumno07-k4x9ab` con semilla; el mismo id sin ella. */
 export const studentTenantId = (baseId: string, options?: TenantSuffixOptions): string =>
   options && options.seed !== '' ? `${baseId}-${tenantSuffix(options.seed, baseId, options.length)}` : baseId;
 

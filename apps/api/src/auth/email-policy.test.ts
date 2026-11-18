@@ -1,9 +1,12 @@
 import { ApiException } from '../common/errors';
 import { describe, expect, it } from 'vitest';
+import { loadEnv } from '../config/env';
 import { assertEmailAllowed, emailDomain, isEmailAllowed } from './email-policy';
 
-const open = { RESTRICT_EMAIL_DOMAINS: false, ALLOWED_EMAIL_DOMAINS: 'sigpro.test,example.com' } as const;
-const closed = { RESTRICT_EMAIL_DOMAINS: true, ALLOWED_EMAIL_DOMAINS: 'sigpro.test,example.com' } as const;
+// La lista «cerrada» es la de por defecto de la API (la de los despliegues del curso), no una copia escrita aquí
+const DEFAULT_DOMAINS = loadEnv({ DATABASE_URL: 'postgresql://x' }).ALLOWED_EMAIL_DOMAINS;
+const open = { RESTRICT_EMAIL_DOMAINS: false, ALLOWED_EMAIL_DOMAINS: DEFAULT_DOMAINS } as const;
+const closed = { RESTRICT_EMAIL_DOMAINS: true, ALLOWED_EMAIL_DOMAINS: DEFAULT_DOMAINS } as const;
 
 describe('emailDomain', () => {
   it('toma lo que sigue a la última arroba, en minúsculas', () => {
@@ -25,13 +28,15 @@ describe('isEmailAllowed', () => {
     expect(isEmailAllowed('lo-que-sea', open)).toBe(true);
   });
 
-  it('con RESTRICT_EMAIL_DOMAINS admite sigpro.test y example.com por defecto', () => {
+  it('con RESTRICT_EMAIL_DOMAINS admite sigpro.lab, sigpro.test y example.com por defecto', () => {
     expect(isEmailAllowed('nuevo@sigpro.test', closed)).toBe(true);
     expect(isEmailAllowed('NUEVO@Example.com', closed)).toBe(true);
+    // El administrador de cada tenant de alumno es <tenant>@sigpro.lab: «olvidé mi contraseña» tiene que funcionar con él
+    expect(isEmailAllowed('alumno07-k4x9ab@sigpro.lab', closed)).toBe(true);
   });
 
   it('rechaza cualquier otro dominio, incluidos los que se le parecen', () => {
-    for (const email of ['persona@gmail.com', 'a@mail.example.com', 'a@example.com.evil.net', 'a@xexample.com', 'a@example.co', 'a@sigpro.lab', 'a@example.com.', 'sin-arroba']) {
+    for (const email of ['persona@gmail.com', 'a@mail.example.com', 'a@example.com.evil.net', 'a@xexample.com', 'a@example.co', 'a@sigpro.lab.evil.net', 'a@mail.sigpro.lab', 'a@sigpro.labs', 'a@example.com.', 'sin-arroba']) {
       expect(isEmailAllowed(email, closed), email).toBe(false);
     }
   });

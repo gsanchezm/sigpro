@@ -8,11 +8,15 @@ describe('endurecimiento: sin variables todo sigue como antes', () => {
 
   it('los valores por defecto no activan ninguna medida', () => {
     expect(env.TENANT_SUFFIX_SEED).toBe('');
-    expect(env.TENANT_SUFFIX_LENGTH).toBe(4);
     expect(env.LAB_PUBLIC).toBe(true);
     expect(env.RESTRICT_EMAIL_DOMAINS).toBe(false);
     expect(env.ROBOTS_NOINDEX).toBe(false);
-    expect(env.ALLOWED_EMAIL_DOMAINS).toBe('sigpro.test,example.com');
+  });
+
+  it('los defaults de longitud y de dominios son los de los despliegues del curso (los blueprints los declaran igual)', () => {
+    expect(env.TENANT_SUFFIX_LENGTH).toBe(6);
+    // Los tres dominios que usa el propio seed: alumnos (<tenant>@sigpro.lab), demo (@sigpro.test) y el reservado para ejemplos
+    expect([...allowedEmailDomains(env)].sort()).toEqual(['example.com', 'sigpro.lab', 'sigpro.test']);
   });
 
   it('sin semilla no hay opciones de sufijo, la lista de tenants es pública y los usuarios de prueba se muestran', () => {
@@ -26,6 +30,20 @@ describe('endurecimiento: sin variables todo sigue como antes', () => {
     expect(env.APP_ENV).toBe('dev');
     expect(env.SEED_STUDENT_TENANTS).toBe(25);
     expect(env.PLANTED_BUGS).toBe(true);
+  });
+});
+
+describe('APP_ENV', () => {
+  // QA declara APP_ENV=qa y Staging, staging: el esquema acepta cualquier texto y solo `production` cambia el comportamiento
+  it.each(['qa', 'staging', 'dev'])('%s se acepta y se trata como entorno de pruebas (usuarios de prueba disponibles)', (name) => {
+    const env = loadEnv({ ...base, APP_ENV: name });
+    expect(env.APP_ENV).toBe(name);
+    expect(hasTestUsers(env)).toBe(true);
+    expect(showsTestUsers(env)).toBe(true);
+  });
+
+  it('production no ofrece usuarios de prueba a nadie', () => {
+    expect(hasTestUsers(loadEnv({ ...base, APP_ENV: 'production' }))).toBe(false);
   });
 });
 

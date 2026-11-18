@@ -81,7 +81,7 @@ export const DEMO_USERS: readonly DemoUser[] = [
 export const STUDENT_PASSWORD = 'Alumno1234!';
 
 /**
- * `demo` + un tenant por alumno. Sin `suffix` son `alumno01…`; con `TENANT_SUFFIX_SEED`, `alumno01-k4x9…` (el sufijo es
+ * `demo` + un tenant por alumno. Sin `suffix` son `alumno01…`; con `TENANT_SUFFIX_SEED`, `alumno01-k4x9ab…` (el sufijo es
  * estable: ver `tenant-suffix.ts`). `demo` nunca lleva sufijo: es el entorno público.
  */
 export const tenantIds = (students: number, suffix?: TenantSuffixOptions): readonly string[] => [
