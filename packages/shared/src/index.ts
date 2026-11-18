@@ -1,4 +1,5 @@
 export * from './domain';
+export * from './lab-public';
 export * from './permissions';
 export * from './password';
 export * from './schemas';

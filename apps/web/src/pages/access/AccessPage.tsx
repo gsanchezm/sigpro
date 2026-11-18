@@ -14,7 +14,7 @@ import {
 } from '@sigpro/shared';
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { toAuthError, type AuthErrorView } from '../../lib/errors';
+import { isEmailDomainError, toAuthError, type AuthErrorView } from '../../lib/errors';
 import { useAuth } from '../../state/auth';
 import { useI18n } from '../../state/i18n';
 import { useToast } from '../../state/toast';
@@ -129,7 +129,8 @@ export const AccessPage = ({ routeView }: { routeView: RouteView }) => {
     return () => clearTimeout(timer);
   }, [redirecting, signIn, navigate]);
 
-  const fail = (error: unknown) => setServerError(toAuthError(error, t));
+  // El 422 de «solo correos ficticios» se pinta junto al campo de correo (registro y «olvidé mi contraseña»), sin repetir la dirección
+  const fail = (error: unknown) => (isEmailDomainError(error) ? setErrors({ email: 'emailDomain' }) : setServerError(toAuthError(error, t)));
 
   const fieldErrors = Object.fromEntries(Object.entries(errors).map(([field, key]) => [field, t('acceso', key as 'required')]));
 

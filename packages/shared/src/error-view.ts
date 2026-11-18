@@ -12,6 +12,7 @@ const AUTH_TITLE_KEY: ReadonlyMap<string, AccesoKey> = new Map<string, AccesoKey
   ['pending_approval', 'e403'],
   ['account_disabled', 'e403'],
   ['email_exists', 'e409'],
+  ['email_domain_not_allowed', 'emailDomain'],
   ['invalid_mfa', 'eMfa'],
 ]);
 
@@ -20,12 +21,19 @@ const TRACE_SUFFIX: ReadonlyMap<string, (body: ApiErrorBody) => string> = new Ma
   ['invalid_credentials', (body) => ` · attempts=${body.attempts ?? 0}`],
   ['pending_approval', () => ' · reason=pending_approval'],
   ['email_exists', () => ' · field=email'],
+  ['email_domain_not_allowed', () => ' · field=email'],
 ]);
 
 export interface AuthErrorView {
   readonly title: string;
   readonly trace: string;
 }
+
+/**
+ * ¿Es el 422 de los despliegues del curso que solo admiten correos ficticios (`RESTRICT_EMAIL_DOMAINS`)? Las pantallas de
+ * Acceso lo pintan junto al campo de correo con la clave `emailDomain`, que no repite la dirección escrita.
+ */
+export const isEmailDomainError = (error: unknown): boolean => error instanceof ApiError && error.body.code === 'email_domain_not_allowed';
 
 /** Error de las pantallas de Acceso: título traducido + traza HTTP en mono. */
 export const toAuthError = (error: unknown, t: Translator): AuthErrorView => {

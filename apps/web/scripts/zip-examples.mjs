@@ -4,7 +4,7 @@
 //   - lleva la guía del alumno si existe;
 //   - deja fuera lo que no se comparte: node_modules, sesiones guardadas (.auth), informes, `.env` y las líneas base de capturas
 //     (dependen del sistema operativo: cada alumno genera las suyas).
-import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { createZip } from './zip.mjs';
@@ -58,12 +58,20 @@ export const buildExamplesEntries = (repoRoot) => {
 const main = () => {
   const here = dirname(fileURLToPath(import.meta.url));
   const repoRoot = resolve(here, '..', '..', '..');
+  const output = resolve(here, '..', 'public', 'downloads', 'sigpro-examples.zip');
+  // Laboratorio cerrado (`VITE_LAB_PUBLIC=false` al compilar): un sitio estático no puede pedir sesión para servir un archivo, y este
+  // zip lleva la guía del alumno (con las credenciales de demo). No se genera y se BORRA el de una compilación anterior: `public/` se
+  // copia entero a `dist/`, así que un zip viejo se publicaría igualmente.
+  if (process.env.VITE_LAB_PUBLIC === 'false') {
+    rmSync(output, { force: true });
+    console.log('[zip-examples] laboratorio cerrado (VITE_LAB_PUBLIC=false): no se genera el zip y se elimina el anterior');
+    return;
+  }
   const entries = buildExamplesEntries(repoRoot);
   if (entries.length === 0) {
     console.warn('[zip-examples] no hay carpeta examples/: no se genera el zip (el enlace de /lab dará 404)');
     return;
   }
-  const output = resolve(here, '..', 'public', 'downloads', 'sigpro-examples.zip');
   mkdirSync(dirname(output), { recursive: true });
   const zip = createZip(entries);
   writeFileSync(output, zip);
