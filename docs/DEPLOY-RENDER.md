@@ -229,7 +229,7 @@ La semilla y las claves nunca se imprimen: si `TENANT_SUFFIX_SEED` es demasiado 
 
 ### Qué poner a mano en el panel (QA)
 
-Solo cuando decidas activar el endurecimiento; el archivo no lo hace por ti. **Son cuatro variables en la API y una en la web** (la longitud del sufijo y los dominios de correo ya van fijos en el archivo):
+Solo cuando decidas activar el endurecimiento; el archivo no lo hace por ti. **Son tres variables en la API y una en la web** (la longitud del sufijo y los dominios de correo ya van fijos en el archivo):
 
 | Servicio | Variable | Valor |
 | --- | --- | --- |
@@ -240,7 +240,7 @@ Solo cuando decidas activar el endurecimiento; el archivo no lo hace por ti. **S
 
 No pongas a mano `TENANT_SUFFIX_LENGTH` ni `ALLOWED_EMAIL_DOMAINS`: un valor del archivo **pisa** lo que haya en el panel en cada sincronización. La longitud, además, **no se cambia después de repartir los ids** (ver [Tenants no adivinables](#tenants-no-adivinables)).
 
-El cron `sigpro-reset` no necesita ninguna variable nueva. **Staging**: las mismas cuatro, con **la misma** `TENANT_SUFFIX_SEED` que QA; además lo que Render pide al crear el Blueprint (ver [Crear Staging](#crear-staging)).
+El cron `sigpro-reset` no necesita ninguna variable nueva. **Staging**: las mismas, con **la misma** `TENANT_SUFFIX_SEED` que QA; además lo que Render pide al crear el Blueprint (ver [Crear Staging](#crear-staging)).
 
 > **Lo que implica compartir la semilla:** quien conozca el id de un alumno en QA conoce también el suyo en Staging (y al revés). Es lo que se ha decidido a cambio de un solo id por alumno. La contraseña de los tenants es pública, así que el id sigue siendo lo único que protege los datos.
 
