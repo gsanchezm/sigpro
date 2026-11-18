@@ -84,11 +84,11 @@ El instructor mantiene un entorno compartido (cada alumno trabaja en su propio *
 
 **Tu tenant y tu usuario** son el mismo identificador: `alumnoNN` (por ejemplo `alumno07`). Tu usuario personal es `alumno07@sigpro.lab` con contraseña `Alumno1234!`; es administrador de tu tenant y no tiene segundo paso (MFA).
 
-> **Si el instructor usa un entorno endurecido** (el del curso de Cool Testers e Isdefe), tu tenant lleva un sufijo que solo conoces tú: `alumno07-k4x9`. Es el mismo en todas las sesiones y **es un secreto: no lo compartas ni lo subas a un repositorio**. Tu usuario es `alumno07-k4x9@sigpro.lab` (misma contraseña) y, como siempre, tu tenant y tu usuario son el mismo identificador: pon `SIGPRO_STUDENT=alumno07-k4x9` en tu `.env` y todo lo demás de esta guía funciona igual. Además, en ese entorno:
+> **Si el instructor usa un entorno endurecido** (el del curso de Cool Testers e Isdefe), tu tenant lleva un sufijo que solo conoces tú: `alumno07-k4x9ab`. Es el mismo en todas las sesiones y **es un secreto: no lo compartas ni lo subas a un repositorio**. Tu usuario es `alumno07-k4x9ab@sigpro.lab` (misma contraseña) y, como siempre, tu tenant y tu usuario son el mismo identificador: pon `SIGPRO_STUDENT=alumno07-k4x9ab` en tu `.env` y todo lo demás de esta guía funciona igual. Además, en ese entorno:
 >
 > - **`/lab` pide que inicies sesión** y no ofrece el selector de tenants, la línea con tu contraseña ni la descarga del zip: el proyecto de ejemplo te lo da el instructor.
 > - **La pantalla de acceso no muestra los usuarios de prueba.** Están en `/lab` una vez dentro, y el código MFA del administrador de demo, en la tabla de usuarios de prueba de esta guía.
-> - **«Solicitar acceso», «¿Olvidaste la contraseña?» y el reenvío solo aceptan correos ficticios** (`@example.com` o `@sigpro.test`). Un correo real recibe un 422 con el mensaje «En este entorno solo se admiten correos ficticios»; no se guarda en ningún sitio.
+> - **«Solicitar acceso», «¿Olvidaste la contraseña?» y el reenvío solo aceptan correos ficticios** (`@example.com`, `@sigpro.test` o `@sigpro.lab`). Un correo real recibe un 422 con el mensaje «En este entorno solo se admiten correos ficticios»; no se guarda en ningún sitio.
 > - **Nada se indexa:** el entorno no aparece en buscadores.
 
 ### Con el proyecto de ejemplo (`examples/`)
