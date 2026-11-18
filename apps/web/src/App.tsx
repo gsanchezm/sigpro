@@ -1,3 +1,4 @@
+import { LAB_PUBLIC } from '@sigpro/shared';
 import type { ReactNode } from 'react';
 import { BrowserRouter, Navigate, Outlet, Route, Routes } from 'react-router-dom';
 import { AppShell } from './layout/AppShell';
@@ -52,17 +53,21 @@ const PublicOnly = ({ children }: { children: ReactNode }) => {
   return status === 'authenticated' ? <Navigate to="/programs" replace /> : <>{children}</>;
 };
 
-/** /lab es pública: con sesión se ve dentro del shell; sin sesión, con una cabecera mínima. */
+/**
+ * /lab es pública: con sesión se ve dentro del shell; sin sesión, con una cabecera mínima.
+ * Compilada con `VITE_LAB_PUBLIC=false` (laboratorio cerrado) exige sesión: sin ella vuelve a Acceso, y `PublicLab` desaparece del bundle.
+ */
 const LabRoute = () => {
   const { status } = useAuth();
   if (status === 'loading') return <Splash />;
-  return status === 'authenticated' ? (
-    <AppShell>
-      <LabPage />
-    </AppShell>
-  ) : (
-    <PublicLab />
-  );
+  if (status === 'authenticated') {
+    return (
+      <AppShell>
+        <LabPage />
+      </AppShell>
+    );
+  }
+  return LAB_PUBLIC ? <PublicLab /> : <Navigate to="/login" replace />;
 };
 
 export const App = () => (

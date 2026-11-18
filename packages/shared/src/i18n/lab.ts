@@ -1,4 +1,5 @@
 // Textos de la página /lab (credenciales de demo, reset, caos, contraejemplos y FAQ).
+import { LAB_PUBLIC } from '../lab-public';
 
 export const labEs = {
   title: 'Laboratorio',
@@ -11,7 +12,7 @@ export const labEs = {
   colPassword: 'Contraseña',
   colRole: 'Rol',
   colNote: 'Notas',
-  noteMfa: 'MFA: 123456',
+  noteMfa: LAB_PUBLIC ? 'MFA: 123456' : 'MFA: código fijo del curso',
   noteLocked: 'Cuenta bloqueada (423)',
   notePending: 'Pendiente de aprobación (403)',
   noteNone: '—',
@@ -107,9 +108,11 @@ export const labEs = {
   courseMaterialIncludes3: 'El workflow de GitHub Actions: suite por tenant, sharding en 2 e informe HTML',
   downloadExamples: 'Descargar sigpro-examples.zip',
   faqQ4: '¿Qué código MFA uso?',
-  faqA4: 'El admin (admin@sigpro.test) pide un segundo paso: 123456. Es fijo en todos los tenants.',
+  faqA4: LAB_PUBLIC ? 'El admin (admin@sigpro.test) pide un segundo paso: 123456. Es fijo en todos los tenants.' : 'El admin pide un segundo paso (MFA) con un código fijo en todos los tenants. Lo tienes en la guía del curso.',
   faqQ5: '¿Por qué mi cuenta aparece bloqueada?',
-  faqA5: 'Cinco contraseñas incorrectas seguidas bloquean la cuenta (423). Reiniciar los datos del tenant la desbloquea. bloqueado@sigpro.test nace bloqueada a propósito.',
+  faqA5: LAB_PUBLIC
+    ? 'Cinco contraseñas incorrectas seguidas bloquean la cuenta (423). Reiniciar los datos del tenant la desbloquea. bloqueado@sigpro.test nace bloqueada a propósito.'
+    : 'Cinco contraseñas incorrectas seguidas bloquean la cuenta (423). Reiniciar los datos del tenant la desbloquea. Hay una cuenta de demo que nace bloqueada a propósito.',
   faqQ6: '¿Cómo apunto mi suite a este entorno?',
   faqA6: 'Con las variables SIGPRO_STUDENT, SIGPRO_WEB_URL y SIGPRO_API_URL del proyecto de ejemplo (archivo .env). Hay más detalle en la guía del alumno que va dentro del zip.',
   faqQ7: '¿Qué hace el modo caos?',
@@ -151,7 +154,7 @@ export const labEn: typeof labEs = {
   colPassword: 'Password',
   colRole: 'Role',
   colNote: 'Notes',
-  noteMfa: 'MFA: 123456',
+  noteMfa: LAB_PUBLIC ? 'MFA: 123456' : 'MFA: fixed course code',
   noteLocked: 'Locked account (423)',
   notePending: 'Pending approval (403)',
   noteNone: '—',
@@ -247,9 +250,11 @@ export const labEn: typeof labEs = {
   courseMaterialIncludes3: 'The GitHub Actions workflow: suite per tenant, 2-way sharding and HTML report',
   downloadExamples: 'Download sigpro-examples.zip',
   faqQ4: 'Which MFA code do I use?',
-  faqA4: 'The admin (admin@sigpro.test) asks for a second step: 123456. It is fixed in every tenant.',
+  faqA4: LAB_PUBLIC ? 'The admin (admin@sigpro.test) asks for a second step: 123456. It is fixed in every tenant.' : 'The admin asks for a second step (MFA) with a fixed code in every tenant. It is in the course guide.',
   faqQ5: 'Why is my account locked?',
-  faqA5: 'Five wrong passwords in a row lock the account (423). Resetting the tenant data unlocks it. bloqueado@sigpro.test is born locked on purpose.',
+  faqA5: LAB_PUBLIC
+    ? 'Five wrong passwords in a row lock the account (423). Resetting the tenant data unlocks it. bloqueado@sigpro.test is born locked on purpose.'
+    : 'Five wrong passwords in a row lock the account (423). Resetting the tenant data unlocks it. One demo account is born locked on purpose.',
   faqQ6: 'How do I point my suite at this environment?',
   faqA6: 'With the SIGPRO_STUDENT, SIGPRO_WEB_URL and SIGPRO_API_URL variables of the example project (.env file). More detail in the student guide inside the zip.',
   faqQ7: 'What does chaos mode do?',

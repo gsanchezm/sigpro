@@ -1,11 +1,13 @@
-import { Body, Controller, Get, Headers, HttpCode, Post } from '@nestjs/common';
+import { Body, Controller, Get, Headers, HttpCode, Inject, Post } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { forgotSchema, loginSchema, mfaSchema, registerSchema, TENANT_HEADER, type ForgotInput, type LoginInput, type MfaInput, type RegisterInput } from '@sigpro/shared';
 import { z } from 'zod';
 import { CurrentUser, Public, type AuthUser } from '../common/auth.types';
 import { fail } from '../common/errors';
 import { ZodApiBody, ZodPipe } from '../common/zod.pipe';
+import { ENV, type Env } from '../config/env';
 import { AuthService } from './auth.service';
+import { assertEmailAllowed } from './email-policy';
 
 const refreshSchema = z.object({ refreshToken: z.string().min(1) });
 const resendSchema = z.object({ email: z.string().min(1) });
@@ -14,7 +16,10 @@ const logoutSchema = z.object({ refreshToken: z.string().nullable().optional() }
 @ApiTags('auth')
 @Controller('auth')
 export class AuthController {
-  constructor(private readonly auth: AuthService) {}
+  constructor(
+    private readonly auth: AuthService,
+    @Inject(ENV) private readonly env: Env,
+  ) {}
 
   @Public()
   @Post('login')
@@ -36,27 +41,33 @@ export class AuthController {
 
   @Public()
   @Post('register')
-  @ApiOperation({ summary: 'Solicita acceso. El usuario queda pendiente de aprobación. 409 si el correo ya existe.' })
+  @ApiOperation({
+    summary: 'Solicita acceso. El usuario queda pendiente de aprobación. 409 si el correo ya existe. 422 si el despliegue solo admite correos ficticios (`RESTRICT_EMAIL_DOMAINS`) y el dominio no está permitido.',
+  })
   @ZodApiBody(registerSchema)
   register(@Body(new ZodPipe(registerSchema)) body: RegisterInput, @Headers(TENANT_HEADER) tenant: string | undefined) {
+    // Antes de leer o escribir nada: ningún correo real llega a la base de datos, a la auditoría ni a los logs
+    assertEmailAllowed(body.email, this.env);
     return this.auth.register(body, tenant);
   }
 
   @Public()
   @Post('forgot')
   @HttpCode(202)
-  @ApiOperation({ summary: 'Recuperar contraseña. Responde 202 siempre, exista o no el correo.' })
+  @ApiOperation({ summary: 'Recuperar contraseña. Responde 202 siempre, exista o no el correo. 422 si el dominio no está permitido (`RESTRICT_EMAIL_DOMAINS`).' })
   @ZodApiBody(forgotSchema)
-  forgot(@Body(new ZodPipe(forgotSchema)) _body: ForgotInput): Record<string, never> {
+  forgot(@Body(new ZodPipe(forgotSchema)) body: ForgotInput): Record<string, never> {
+    assertEmailAllowed(body.email, this.env);
     return {};
   }
 
   @Public()
   @Post('resend')
   @HttpCode(202)
-  @ApiOperation({ summary: 'Reenvía el correo de verificación.' })
+  @ApiOperation({ summary: 'Reenvía el correo de verificación. 422 si el dominio no está permitido (`RESTRICT_EMAIL_DOMAINS`).' })
   @ZodApiBody(resendSchema)
-  resend(@Body(new ZodPipe(resendSchema)) _body: z.infer<typeof resendSchema>): Record<string, never> {
+  resend(@Body(new ZodPipe(resendSchema)) body: z.infer<typeof resendSchema>): Record<string, never> {
+    assertEmailAllowed(body.email, this.env);
     return {};
   }
 

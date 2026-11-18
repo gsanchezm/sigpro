@@ -1,6 +1,7 @@
 import {
   ApiError,
   LAB_DYNAMIC_TESTIDS,
+  LAB_PUBLIC,
   LAB_TESTIDS,
   RESPONSIVE_FAMILIES,
   can,
@@ -40,8 +41,8 @@ const FAQ_KEYS = [
   ['faqQ8', 'faqA8'],
 ] as const;
 
-/** Un usuario `alumnoNN@sigpro.lab` por tenant de alumno; para `demo` u otros se muestra la plantilla. */
-const studentEmail = (tenant: string): string => (/^alumno\d+$/.test(tenant) ? `${tenant}@sigpro.lab` : 'alumnoNN@sigpro.lab');
+/** Un usuario `<tenant>@sigpro.lab` por tenant de alumno (`alumno07` o, con sufijos, `alumno07-k4x9ab`); para `demo` u otros, la plantilla. */
+const studentEmail = (tenant: string): string => (/^alumno\d+(-[a-z0-9]+)?$/.test(tenant) ? `${tenant}@sigpro.lab` : 'alumnoNN@sigpro.lab');
 
 /** Página /lab: credenciales de demo, tenants, reset, modo caos, contraejemplos y FAQ. Pública (sirve también antes de iniciar sesión). */
 export const LabPage = () => {
@@ -65,8 +66,10 @@ export const LabPage = () => {
 
   useEffect(() => {
     let alive = true;
-    publicApi.config.tenants().then((list) => alive && setTenants(list), () => undefined);
-    publicApi.config.testUsers().then((list) => alive && setTestUsers(list), () => alive && setTestUsers([]));
+    // Laboratorio cerrado: la lista de tenants solo la sirve la API con X-Admin-Key (nunca a un alumno), así que ni se pide
+    if (LAB_PUBLIC) publicApi.config.tenants().then((list) => alive && setTenants(list), () => undefined);
+    // Las credenciales de demo se piden con la sesión: el cliente autenticado envía el bearer; el público, no
+    (LAB_PUBLIC ? publicApi : api).config.testUsers().then((list) => alive && setTestUsers(list), () => alive && setTestUsers([]));
     publicApi.health().then(
       () => alive && setHealth('ok'),
       () => alive && setHealth('down'),
@@ -74,7 +77,7 @@ export const LabPage = () => {
     return () => {
       alive = false;
     };
-  }, [publicApi]);
+  }, [publicApi, api]);
 
   useEffect(() => {
     if (!isAdmin) return;
@@ -186,13 +189,18 @@ export const LabPage = () => {
             </tbody>
           </table>
         </div>
-        <p data-testid={LAB_TESTIDS.LAB_STUDENT_USER} className="m-0 flex flex-col gap-0.5">
-          <span className="font-mono text-[12px]">{t('lab', 'studentUser', { email: studentEmail(getTenant()), password: 'Alumno1234!' })}</span>
-          <span className={hint}>{t('lab', 'studentUserHint')}</span>
-        </p>
+        {/* La contraseña del alumno es un literal del código: con el laboratorio cerrado esta línea (y el literal) no viajan en el bundle */}
+        {LAB_PUBLIC ? (
+          <p data-testid={LAB_TESTIDS.LAB_STUDENT_USER} className="m-0 flex flex-col gap-0.5">
+            <span className="font-mono text-[12px]">{t('lab', 'studentUser', { email: studentEmail(getTenant()), password: 'Alumno1234!' })}</span>
+            <span className={hint}>{t('lab', 'studentUserHint')}</span>
+          </p>
+        ) : null}
       </section>
 
       <div className="grid grid-cols-[repeat(auto-fit,minmax(320px,1fr))] gap-5">
+        {/* Con el laboratorio cerrado no hay lista de tenants: sus nombres son el secreto de cada alumno */}
+        {LAB_PUBLIC ? (
         <section aria-labelledby="lab-tenants-title" className="card flex flex-col gap-3 p-4">
           <div>
             <h2 id="lab-tenants-title" className={sectionTitle}>
@@ -216,6 +224,7 @@ export const LabPage = () => {
             {t('lab', 'tenantUse')}
           </button>
         </section>
+        ) : null}
 
         <section aria-labelledby="lab-reset-title" className="card flex flex-col gap-3 p-4">
           <div>
@@ -405,6 +414,8 @@ export const LabPage = () => {
         </div>
       </section>
 
+      {/* El zip del material lleva la guía (con las credenciales de demo) y un sitio estático no puede pedir sesión: con el laboratorio cerrado no se publica */}
+      {LAB_PUBLIC ? (
       <section aria-labelledby="lab-material-title" data-testid={LAB_TESTIDS.LAB_COURSE_MATERIAL} className="card flex flex-col gap-3 p-4">
         <div>
           <h2 id="lab-material-title" className={sectionTitle}>
@@ -421,6 +432,7 @@ export const LabPage = () => {
           {t('lab', 'downloadExamples')}
         </a>
       </section>
+      ) : null}
 
       <section aria-labelledby="lab-responsive-title" data-testid={LAB_TESTIDS.LAB_RESPONSIVE} className="card flex flex-col gap-3 p-4">
         <div>

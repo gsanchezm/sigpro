@@ -1,10 +1,11 @@
 import { Inject, Injectable, Logger, Optional, type OnApplicationBootstrap } from '@nestjs/common';
 import type { ChaosConfig, ResetResponse } from '@sigpro/shared';
 import { hashSync } from 'bcryptjs';
-import { ENV, type Env } from '../config/env';
+import { ENV, tenantSuffixOptions, type Env } from '../config/env';
 import { MissionEventsService } from '../mission/mission-events.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { SEED_VERSION, buildTenantSeed, tenantIds } from './data';
+import { isLegacyStudentTenant } from './tenant-suffix';
 
 const BCRYPT_COST = 10;
 
@@ -16,7 +17,7 @@ export class SeedService implements OnApplicationBootstrap {
 
   constructor(
     private readonly prisma: PrismaService,
-    @Inject(ENV) private readonly env: Pick<Env, 'SEED_ON_BOOT' | 'SEED_STUDENT_TENANTS'>,
+    @Inject(ENV) private readonly env: Pick<Env, 'SEED_ON_BOOT' | 'SEED_STUDENT_TENANTS' | 'TENANT_SUFFIX_SEED' | 'TENANT_SUFFIX_LENGTH'>,
     // Opcional: el CLI `pnpm seed` crea el servicio sin Nest y no tiene eventos en memoria que limpiar
     @Optional() private readonly events?: MissionEventsService,
   ) {}
@@ -30,7 +31,37 @@ export class SeedService implements OnApplicationBootstrap {
   };
 
   get tenants(): readonly string[] {
-    return tenantIds(this.env.SEED_STUDENT_TENANTS);
+    return tenantIds(this.env.SEED_STUDENT_TENANTS, tenantSuffixOptions(this.env));
+  }
+
+  /**
+   * Tenants de alumno SIN sufijo (`alumno07`) que siguen en la base tras activar `TENANT_SUFFIX_SEED`. El seed de arranque y
+   * `resetAll` solo recorren la lista generada: estos quedarían sin reiniciar y accesibles con la contraseña pública.
+   */
+  async legacyTenants(): Promise<readonly string[]> {
+    const wanted = new Set(this.tenants);
+    const rows = await this.prisma.tenant.findMany({ select: { id: true }, orderBy: { id: 'asc' } });
+    return rows.map((row) => row.id).filter((id) => isLegacyStudentTenant(id) && !wanted.has(id));
+  }
+
+  /** Tenants de la lista vigente que todavía no existen en la base (la API aún no ha arrancado con la semilla nueva). */
+  async missingTenants(): Promise<readonly string[]> {
+    const present = new Set((await this.prisma.tenant.findMany({ select: { id: true } })).map((row) => row.id));
+    return this.tenants.filter((id) => !present.has(id));
+  }
+
+  /**
+   * Borra (con todos sus datos, en cascada) los tenants antiguos de `legacyTenants()`. Es irreversible y NUNCA se ejecuta al
+   * arrancar: solo la llama el comando `tenants:purge-legacy`, que pide confirmación. Sin semilla no hay nada que purgar, y
+   * no borra nada mientras falte algún tenant nuevo (dejaría a los alumnos sin entorno).
+   */
+  async purgeLegacyTenants(): Promise<readonly string[]> {
+    if (!tenantSuffixOptions(this.env)) throw new Error('TENANT_SUFFIX_SEED no está definida: sin sufijos, los tenants alumnoNN son los vigentes y no hay nada que purgar.');
+    const missing = await this.missingTenants();
+    if (missing.length > 0) throw new Error(`Faltan ${missing.length} tenant(s) nuevos en la base: arranca antes la API con TENANT_SUFFIX_SEED y SEED_ON_BOOT=true. No se ha borrado nada.`);
+    const legacy = await this.legacyTenants();
+    if (legacy.length > 0) await this.prisma.tenant.deleteMany({ where: { id: { in: [...legacy] } } });
+    return legacy;
   }
 
   /**
@@ -42,7 +73,9 @@ export class SeedService implements OnApplicationBootstrap {
     const existing = new Map((await this.prisma.tenant.findMany({ select: { id: true, seedVersion: true } })).map((t) => [t.id, t.seedVersion]));
     const pending = this.tenants.filter((id) => (existing.get(id) ?? 0) < SEED_VERSION);
     for (const id of pending) await this.applyTenant(id);
-    if (pending.length > 0) this.logger.log(`Seed v${SEED_VERSION} aplicado a ${pending.length} tenant(s): ${pending.join(', ')}`);
+    // Con sufijos los ids son un secreto: el log (lo lee quien tenga acceso al panel de Render) lleva solo el recuento
+    const names = tenantSuffixOptions(this.env) ? '' : `: ${pending.join(', ')}`;
+    if (pending.length > 0) this.logger.log(`Seed v${SEED_VERSION} aplicado a ${pending.length} tenant(s)${names}`);
   }
 
   /** Restaura el seed del tenant en una sola transacción; conserva su configuración de caos. */

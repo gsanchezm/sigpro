@@ -2,6 +2,7 @@ import { Catch, HttpException, Logger, type ArgumentsHost, type ExceptionFilter 
 import { HTTP_STATUS_TEXT, type ApiErrorBody } from '@sigpro/shared';
 import { randomBytes } from 'node:crypto';
 import type { Response } from 'express';
+import { describeError } from './log-safe';
 
 /** `7f3a-c21d`: identificador de traza que la UI muestra junto al error. */
 const newTraceId = (): string => {
@@ -22,7 +23,8 @@ export class AllExceptionsFilter implements ExceptionFilter {
     const raw = exception instanceof HttpException ? exception.getResponse() : undefined;
     const base: Partial<ApiErrorBody> = isBody(raw) ? raw : { message: typeof raw === 'string' ? raw : undefined };
 
-    if (status >= 500 && !(exception instanceof HttpException)) this.logger.error(exception instanceof Error ? exception.stack : String(exception));
+    // `describeError` no repite el mensaje de los errores de Prisma (llevan la llamada con sus argumentos: correo, hash…)
+    if (status >= 500 && !(exception instanceof HttpException)) this.logger.error(describeError(exception));
 
     const body: ApiErrorBody = {
       ...base,

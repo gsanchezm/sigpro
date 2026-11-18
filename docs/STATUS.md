@@ -4,6 +4,24 @@
 
 Leyenda: `[x]` hecho · `[~]` en curso · `[ ]` pendiente
 
+## Endurecimiento de los despliegues del curso (2026-11-18, rama `hardening/curso-deploy`, con PR contra `main` y sin fusionar)
+
+Cool Testers e Isdefe piden endurecer los despliegues antes del lunes 23. Todo por variables de entorno y apagado por defecto. Decisiones en `docs/DECISIONS.md`; operación en `docs/DEPLOY-RENDER.md`.
+
+- [x] **Tenants no adivinables.** `TENANT_SUFFIX_SEED` (la misma en QA y Staging) y longitud 6 fija en los dos blueprints; `pnpm tenants:list` (no toca la base) y `pnpm tenants:purge-legacy` (simulación por defecto). Ensayado de principio a fin en una base local desechable.
+- [x] **Correos ficticios.** `RESTRICT_EMAIL_DOMAINS` y `ALLOWED_EMAIL_DOMAINS` (`sigpro.lab`, `sigpro.test`, `example.com`): 422 en register, forgot y resend, con mensaje en la interfaz. Los tests `s02` y `s10` de `examples/` pasan contra una pila restringida.
+- [x] **Logs sin datos sensibles.** Errores de Prisma sin su mensaje; tenants fuera del log de arranque y del cron.
+- [x] **`/lab` y credenciales de demo.** `LAB_PUBLIC` (API) y `VITE_LAB_PUBLIC` (web); `pnpm check:bundle` demuestra que lo oculto no viaja en los archivos publicados.
+- [x] **Sin indexar.** `ROBOTS_NOINDEX`, `VITE_NOINDEX` y cabecera `X-Robots-Tag` del sitio estático.
+- [x] **`render.yaml` y `render.staging.yaml`.** Región y planes explícitos; Staging como segundo Blueprint. Validados contra el esquema oficial de Render.
+- [ ] **Aplicar en QA a mano** (nada se activa solo): variables del panel, orden y purga según `docs/DEPLOY-RENDER.md`.
+- [ ] **Crear Staging** desde `render.staging.yaml` (cuatro recursos de pago).
+- [x] **Decisiones cerradas:** `APP_ENV` QA = `qa` y Staging = `staging`; longitud del sufijo 6; semilla compartida; el oráculo de existencia de tenant se queda como está.
+- [x] **`pnpm verify:hardening`** (`--expect=noindex|full`, solo lectura) y `pnpm check:bundle <url>`: ensayados en local en los dos modos, con controles negativos.
+- [x] **`students-e2e.yml` sin el id del tenant** en el grupo de concurrencia, los artefactos, los jobs y el resumen (no ejecutado: llama a Render).
+- [ ] **Actualizar el material del curso** que usa `alumnoNN` o un `/lab` público (lista en el informe de esta tanda).
+- [ ] **Comprobar en un despliegue real** (con `pnpm verify:hardening` contra Render) que `/robots.txt` se sirve antes que la reescritura `/* → /index.html` y que las cabeceras del sitio estático llegan (según la documentación de Render sí; no verificado).
+
 ## Locators responsive (2026-11-12)
 
 Un solo corte de diseño a 1024 px y dos componentes por familia, con ids `<id de escritorio>-mobile`. Decisiones y correspondencia de ids en `docs/DECISIONS.md` («Locators responsive»); la tabla de las 10 familias está en `/lab` y en `docs/GUIA-ALUMNO.md` (sección 7). **Todo lo de esta sección está verificado en local y sin subir** (ver «Verificado» y «Cabos sueltos»).

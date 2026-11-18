@@ -4,7 +4,7 @@
 #   1. prepare  → despierta la API de Render, restaura el seed del tenant del alumno y apaga el modo caos.
 #                 Va ANTES de los shards: si cada shard reiniciara el tenant, uno borraría los datos del otro a mitad de ejecución.
 #   2. e2e      → corre la suite partida en 2 shards (`--shard=1/2` y `2/2`), cada uno en su job; guarda un informe «blob».
-#   3. report   → une los blobs de los 2 shards en UN informe HTML y lo publica como artefacto `playwright-report-<tenant>`.
+#   3. report   → une los blobs de los 2 shards en UN informe HTML y lo publica como artefacto `playwright-report-<n>` (n = posición del tenant en la lista).
 #
 # Parámetros (Actions → Run workflow):
 #   tenants  → uno o varios tenants separados por comas (`alumno01` o `alumno01,alumno02`). Cada uno es el tenant (`x-tenant`)
@@ -12,6 +12,13 @@
 #   web_url / api_url → entorno contra el que corre la suite (por defecto, el del curso en Render).
 #   visual   → skip (por defecto: solo el proyecto `chromium`, sin los tests `@visual`), compare (también el proyecto `visual`,
 #              que compara capturas con las líneas base del repositorio) o update (regenera las líneas base).
+#
+# EL ID DEL TENANT NO ES UN NOMBRE PÚBLICO: en un despliegue con sufijos (alumno07-k4x9ab) es lo que protege los datos del alumno, y los
+# repositorios de los alumnos pueden ser públicos. Por eso el id NO se usa en el grupo de concurrencia, ni en el nombre de los artefactos,
+# ni en el nombre de los jobs, ni en el resumen: se usa la posición del tenant en la lista (n = 1, 2…). Además cada job lo enmascara
+# en sus logs (`::add-mask::`). Lo que este archivo NO puede ocultar: el valor que se escribe en «Run workflow» (GitHub muestra los
+# parámetros de la ejecución), la cabecera del paso «Plan» y lo que lleve DENTRO el informe HTML (URLs y trazas de Playwright). En un
+# repositorio público, no compartas el informe descargado, o ejecuta la suite en local.
 #
 # Para usarlo como plantilla en tu repositorio:
 #   - copia este archivo a `.github/workflows/` y el contenido de `examples/` donde prefieras;
@@ -44,9 +51,12 @@ on:
   #   branches: [main]
   # pull_request:
 
-# Dos ejecuciones sobre el mismo tenant se pisarían los datos: se encolan en vez de correr a la vez
+# Dos ejecuciones sobre el mismo tenant se pisarían los datos: se encolan en vez de correr a la vez. El grupo es el ACTOR (quien lanza la
+# ejecución) y no el tenant, para no escribir el id en un nombre visible: dos ejecuciones de la misma persona se encolan aunque sean de
+# tenants distintos, y dos personas que apunten al MISMO tenant no se encolan entre sí (cada alumno trabaja en el suyo). Ojo: GitHub
+# conserva una ejecución en curso y UNA pendiente por grupo; una tercera cancela a la pendiente.
 concurrency:
-  group: students-e2e-${{ inputs.tenants || vars.SIGPRO_STUDENT || 'alumno01' }}
+  group: students-e2e-${{ github.actor }}
   cancel-in-progress: false
 
 env:
@@ -64,27 +74,33 @@ jobs:
     outputs:
       tenants: ${{ steps.tenants.outputs.list }}
     steps:
-      # «alumno01, alumno02» → ["alumno01","alumno02"] para la matriz; se descartan espacios y vacíos
+      # «alumno01, alumno02» → [{"n":1,"tenant":"alumno01"},{"n":2,"tenant":"alumno02"}] para la matriz: se descartan espacios y vacíos,
+      # y «n» es el número con el que se nombran jobs y artefactos en lugar del id del tenant
+      # (NO se enmascara aquí: GitHub descarta las salidas de un job que contienen un valor enmascarado)
       - id: tenants
         env:
           TENANTS: ${{ inputs.tenants || vars.SIGPRO_STUDENT || 'alumno01' }}
-        run: echo "list=$(jq -cR 'split(",") | map(gsub("\\s"; "")) | map(select(length > 0))' <<< "$TENANTS")" >> "$GITHUB_OUTPUT"
+        run: |
+          echo "list=$(jq -cR 'split(",") | map(gsub("\\s"; "")) | map(select(length > 0)) | to_entries | map({n: (.key + 1), tenant: .value})' <<< "$TENANTS")" >> "$GITHUB_OUTPUT"
 
   prepare:
-    name: Preparar ${{ matrix.tenant }}
+    name: Preparar tenant ${{ matrix.entry.n }}
     needs: plan
     runs-on: ubuntu-latest
     timeout-minutes: 10
     strategy:
       fail-fast: false
       matrix:
-        tenant: ${{ fromJSON(needs.plan.outputs.tenants) }}
+        entry: ${{ fromJSON(needs.plan.outputs.tenants) }}
     env:
-      SIGPRO_STUDENT: ${{ matrix.tenant }}
+      SIGPRO_STUDENT: ${{ matrix.entry.tenant }}
     defaults:
       run:
         working-directory: ${{ env.PROJECT_DIR }}
     steps:
+      # El id del tenant no debe salir en los logs de este job (ver la cabecera del archivo)
+      - name: Enmascarar el id del tenant
+        run: echo "::add-mask::$SIGPRO_STUDENT"
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
@@ -102,21 +118,23 @@ jobs:
         run: npm run reset
 
   e2e:
-    name: ${{ matrix.tenant }} · shard ${{ matrix.shard }}/2
+    name: Tenant ${{ matrix.entry.n }} · shard ${{ matrix.shard }}/2
     needs: [plan, prepare]
     runs-on: ubuntu-latest
     timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
-        tenant: ${{ fromJSON(needs.plan.outputs.tenants) }}
+        entry: ${{ fromJSON(needs.plan.outputs.tenants) }}
         shard: [1, 2]
     env:
-      SIGPRO_STUDENT: ${{ matrix.tenant }}
+      SIGPRO_STUDENT: ${{ matrix.entry.tenant }}
     defaults:
       run:
         working-directory: ${{ env.PROJECT_DIR }}
     steps:
+      - name: Enmascarar el id del tenant
+        run: echo "::add-mask::$SIGPRO_STUDENT"
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
@@ -144,7 +162,7 @@ jobs:
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v4
         with:
-          name: blob-report-${{ matrix.tenant }}-${{ matrix.shard }}
+          name: blob-report-${{ matrix.entry.n }}-${{ matrix.shard }}
           path: ${{ env.PROJECT_DIR }}/blob-report
           retention-days: 1
 
@@ -153,13 +171,13 @@ jobs:
         if: ${{ !cancelled() && inputs.visual == 'update' }}
         uses: actions/upload-artifact@v4
         with:
-          name: snapshots-${{ matrix.tenant }}-${{ matrix.shard }}
+          name: snapshots-${{ matrix.entry.n }}-${{ matrix.shard }}
           path: ${{ env.PROJECT_DIR }}/tests/**/*-snapshots/
           if-no-files-found: warn
           retention-days: 7
 
   report:
-    name: Informe HTML · ${{ matrix.tenant }}
+    name: Informe HTML · tenant ${{ matrix.entry.n }}
     needs: [plan, e2e]
     # Aunque falle algún test, el informe es justo lo que quieres ver (pero no si ni siquiera llegaron a correr)
     if: ${{ !cancelled() && needs.e2e.result != 'skipped' }}
@@ -168,7 +186,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        tenant: ${{ fromJSON(needs.plan.outputs.tenants) }}
+        entry: ${{ fromJSON(needs.plan.outputs.tenants) }}
     defaults:
       run:
         working-directory: ${{ env.PROJECT_DIR }}
@@ -183,7 +201,7 @@ jobs:
 
       - uses: actions/download-artifact@v4
         with:
-          pattern: blob-report-${{ matrix.tenant }}-*
+          pattern: blob-report-${{ matrix.entry.n }}-*
           path: ${{ env.PROJECT_DIR }}/all-blob-reports
           merge-multiple: true
 
@@ -193,14 +211,14 @@ jobs:
       - name: Publicar el informe HTML
         uses: actions/upload-artifact@v4
         with:
-          name: playwright-report-${{ matrix.tenant }}
+          name: playwright-report-${{ matrix.entry.n }}
           path: ${{ env.PROJECT_DIR }}/playwright-report
           retention-days: 14
 
       - name: Resumen
         run: |
           {
-            echo "### Suite de ${{ matrix.tenant }}"
-            echo "Contra \`$SIGPRO_WEB_URL\`. El informe HTML está en los artefactos de esta ejecución: \`playwright-report-${{ matrix.tenant }}\`."
+            echo "### Suite del tenant ${{ matrix.entry.n }}"
+            echo "Contra \`$SIGPRO_WEB_URL\`. El informe HTML está en los artefactos de esta ejecución: \`playwright-report-${{ matrix.entry.n }}\`."
             echo "Para verlo: descárgalo, descomprímelo y ejecuta \`npx playwright show-report <carpeta>\`."
           } >> "$GITHUB_STEP_SUMMARY"

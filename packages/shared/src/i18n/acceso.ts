@@ -1,4 +1,5 @@
 // Generado desde los prototipos del handoff (docs/design-handoff). Textos finales; ES es el idioma por defecto.
+import { LAB_PUBLIC } from '../lab-public';
 
 export const accesoEs = {
   language: 'Idioma',
@@ -21,7 +22,7 @@ export const accesoEs = {
   mfaTitle: 'Verificación en dos pasos',
   mfaHint: 'Introduce el código de 6 dígitos de tu aplicación de autenticación para',
   mfaCode: 'Código de verificación',
-  mfaDemo: 'Prototipo: el código válido es 123456.',
+  mfaDemo: LAB_PUBLIC ? 'Prototipo: el código válido es 123456.' : 'Introduce el código de verificación de 6 dígitos.',
   verify: 'Verificar',
   backToLogin: 'Volver al inicio de sesión',
   forgotTitle: 'Recuperar contraseña',
@@ -43,7 +44,7 @@ export const accesoEs = {
   terms3: 'y la',
   terms4: 'política de privacidad',
   registerBtn: 'Enviar solicitud',
-  registerServerHint: 'Validación servidor: un correo ya registrado (p. ej. admin@sigpro.test) devuelve 409.',
+  registerServerHint: LAB_PUBLIC ? 'Validación servidor: un correo ya registrado (p. ej. admin@sigpro.test) devuelve 409.' : 'Validación servidor: un correo ya registrado devuelve 409.',
   verifyTitle: 'Solicitud enviada',
   verifyText: 'Hemos enviado un correo de verificación a',
   status: 'Estado',
@@ -72,6 +73,8 @@ export const accesoEs = {
   e423: 'Cuenta bloqueada tras varios intentos fallidos. Contacta con un administrador.',
   e403: 'Cuenta pendiente de aprobación. Revisa tu correo.',
   e409: 'Ya existe una cuenta con ese correo.',
+  // 422 de /auth/register, /auth/forgot y /auth/resend en los despliegues del curso (RESTRICT_EMAIL_DOMAINS): no repite la dirección
+  emailDomain: 'En este entorno solo se admiten correos ficticios (por ejemplo, nombre@example.com).',
   eMfa: 'Código incorrecto o caducado',
   redirecting: 'Sesión iniciada. Redirigiendo a Programas…',
   resent: 'Correo reenviado',
@@ -104,7 +107,7 @@ export const accesoEn: typeof accesoEs = {
   mfaTitle: 'Two-step verification',
   mfaHint: 'Enter the 6-digit code from your authenticator app for',
   mfaCode: 'Verification code',
-  mfaDemo: 'Prototype: the valid code is 123456.',
+  mfaDemo: LAB_PUBLIC ? 'Prototype: the valid code is 123456.' : 'Enter the 6-digit verification code.',
   verify: 'Verify',
   backToLogin: 'Back to sign in',
   forgotTitle: 'Reset password',
@@ -126,7 +129,7 @@ export const accesoEn: typeof accesoEs = {
   terms3: 'and the',
   terms4: 'privacy policy',
   registerBtn: 'Submit request',
-  registerServerHint: 'Server validation: an existing email (e.g. admin@sigpro.test) returns 409.',
+  registerServerHint: LAB_PUBLIC ? 'Server validation: an existing email (e.g. admin@sigpro.test) returns 409.' : 'Server validation: an existing email returns 409.',
   verifyTitle: 'Request submitted',
   verifyText: 'We sent a verification email to',
   status: 'Status',
@@ -155,6 +158,7 @@ export const accesoEn: typeof accesoEs = {
   e423: 'Account locked after several failed attempts. Contact an administrator.',
   e403: 'Account pending approval. Check your email.',
   e409: 'An account with that email already exists.',
+  emailDomain: 'This environment only accepts fictitious emails (for example, name@example.com).',
   eMfa: 'Incorrect or expired code',
   redirecting: 'Signed in. Redirecting to Programs…',
   resent: 'Email resent',

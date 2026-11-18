@@ -1,10 +1,22 @@
 # Blueprint de Render para SIGPRO. Un entorno por cohorte (sigpro-isdefe, sigpro-demo): al crear el Blueprint
 # Render pide JWT_SECRET y ADMIN_KEY (sync: false) para que no queden en el repositorio.
 # Ajusta los nombres de servicio y las URLs de CORS_ORIGIN / VITE_API_URL / API_URL a tu cohorte.
+#
+# REGLAS DE ESTE ARCHIVO (los servicios de QA son «Blueprint managed» sobre main: un push que lo toque se aplica solo):
+#  - `region: oregon` y los planes están escritos EXPLÍCITOS en los recursos que ya existen. La región no se puede cambiar una vez
+#    creado el recurso: aquí solo se deja constancia (lo que aparece es lo que ya hay en el panel). El sitio estático no admite
+#    `region` ni `plan` (lo prohíbe el esquema del Blueprint). El plan del cron no se declara: Render conserva el que tiene.
+#  - Las medidas de endurecimiento NO se activan desde este archivo: un `value:` pisa lo que haya en el panel y se aplicaría a QA al
+#    fusionar. Se activan a mano en el panel (docs/DEPLOY-RENDER.md). Dos valores sí se FIJAN aquí, porque no hacen nada mientras
+#    la semilla de tenants y la restricción de correos estén apagadas, y deben ser iguales en QA y en Staging: TENANT_SUFFIX_LENGTH y
+#    ALLOWED_EMAIL_DOMAINS.
+#  - Un Staging NO va en este archivo: añadir servicios aquí los CREARÍA (de pago) al sincronizar. Va en `render.staging.yaml`, que
+#    se aplica como un segundo Blueprint.
 
 databases:
   - name: sigpro-db
     plan: basic-256mb
+    region: oregon
     databaseName: sigpro
     user: sigpro
 
@@ -14,6 +26,7 @@ services:
     name: sigpro-api
     runtime: node
     plan: starter # el plan free se duerme y el primer request tarda hasta un minuto: inaceptable en clase
+    region: oregon # la API y la base deben estar en la misma región (conexión por la red privada)
     rootDir: .
     buildCommand: corepack enable && pnpm install --frozen-lockfile && pnpm --filter api... build
     startCommand: pnpm --filter api prisma:deploy && pnpm --filter api start:prod
@@ -21,8 +34,10 @@ services:
     envVars:
       - key: NODE_VERSION
         value: '22'
+      # QA = `qa`; Staging = `staging` (render.staging.yaml). Es lo que devuelve `GET /api/config` (campo `env`) y lo que imprime la
+      # pantalla de acceso. Hasta ahora QA declaraba `staging`: al fusionar, ese valor pasa a `qa`.
       - key: APP_ENV
-        value: staging
+        value: qa
       - key: DATABASE_URL
         fromDatabase:
           name: sigpro-db
@@ -46,6 +61,24 @@ services:
       # Opcional: basic auth para /api/docs en el entorno del curso ("usuario:contraseña")
       - key: DOCS_BASIC_AUTH
         sync: false
+      # Sin indexar: cabecera `X-Robots-Tag: noindex, nofollow` en todas las respuestas y /robots.txt con Disallow total.
+      # Es lo único de la tanda de endurecimiento que se aplica solo al fusionar: no cambia nada de lo que ven los alumnos.
+      - key: ROBOTS_NOINDEX
+        value: 'true'
+      # ---- Endurecimiento: valores FIJOS (sin efecto mientras no actives la semilla y la restricción de correos) ----
+      #   Longitud del sufijo de los tenants: 6 caracteres (alumno07-k4x9ab). Se decidió ANTES de activar nada: cambiarla (o cambiar la
+      #   semilla) después deja tenants huérfanos. Sin TENANT_SUFFIX_SEED no tiene ningún efecto. Igual en render.staging.yaml.
+      - key: TENANT_SUFFIX_LENGTH
+        value: '6'
+      #   Dominios que admite la restricción de correos: los que usa el propio seed (alumnos <tenant>@sigpro.lab, demo @sigpro.test) y
+      #   example.com. Sin RESTRICT_EMAIL_DOMAINS=true no tiene ningún efecto. Igual en render.staging.yaml.
+      - key: ALLOWED_EMAIL_DOMAINS
+        value: 'sigpro.lab,sigpro.test,example.com'
+      # ---- Endurecimiento: se activa A MANO en el panel → Environment (de ejecución: basta redesplegar la API) ----
+      #   TENANT_SUFFIX_SEED      semilla SECRETA (≥ 16 caracteres): los tenants pasan a ser alumno07-k4x9ab. Vacía = como hoy.
+      #                           La MISMA en QA y en Staging: así cada alumno tiene un solo id en los dos entornos
+      #   LAB_PUBLIC              `false`: las credenciales de demo y la lista de tenants exigen sesión o X-Admin-Key
+      #   RESTRICT_EMAIL_DOMAINS  `true`: register / forgot / resend solo admiten correos de ALLOWED_EMAIL_DOMAINS (422 al resto)
 
   # --- Web (React + Vite, sitio estático) --------------------------------------------------
   - type: web
@@ -58,17 +91,30 @@ services:
       - type: rewrite
         source: /*
         destination: /index.html
+    # Sin indexar también en las cabeceras del sitio estático. Según la documentación de Render, la reescritura anterior no se
+    # aplica a una ruta en la que ya existe un archivo, así que el /robots.txt que genera la compilación (VITE_NOINDEX) se sirve tal cual.
+    headers:
+      - path: /*
+        name: X-Robots-Tag
+        value: noindex, nofollow
     envVars:
       - key: NODE_VERSION
         value: '22'
       - key: VITE_API_URL
         value: https://sigpro-api.onrender.com/api
+      # Sin indexar (COMPILACIÓN): genera robots.txt con Disallow total y <meta name="robots" content="noindex, nofollow">
+      - key: VITE_NOINDEX
+        value: 'true'
+      # ---- Endurecimiento (opcional; A MANO en el panel; son de COMPILACIÓN: después, Manual Deploy → «Clear build cache & deploy») ----
+      #   VITE_LAB_PUBLIC         `false`: /lab exige sesión; sin credenciales de demo, sin lista de tenants y sin el zip del material
+      #                           dentro del JavaScript y de los archivos publicados (se comprueba con `pnpm check:bundle`)
 
   # --- Reset nocturno de todos los tenants ---------------------------------------------------
   - type: cron
     name: sigpro-reset
     runtime: node
     schedule: '0 3 * * *'
+    region: oregon
     buildCommand: echo "sin dependencias que instalar"
     startCommand: node scripts/reset-all.mjs
     envVars:

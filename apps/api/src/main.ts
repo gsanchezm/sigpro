@@ -5,6 +5,7 @@ import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { ADMIN_KEY_HEADER, TENANT_HEADER } from '@sigpro/shared';
 import { AppModule } from './app.module';
 import { docsBasicAuth } from './common/docs-auth';
+import { ROBOTS_TXT, noindexHeader } from './common/noindex';
 import { API_VERSION } from './config/config.controller';
 import { loadEnv, type Env } from './config/env';
 
@@ -29,6 +30,11 @@ const bootstrap = async (): Promise<void> => {
   const env = loadEnv();
   const app = await NestFactory.create(AppModule, { bufferLogs: false });
   app.setGlobalPrefix('api');
+  // Despliegues del curso sin indexar (`ROBOTS_NOINDEX=true`): cabecera en todas las respuestas y robots.txt en la raíz de la API
+  if (env.ROBOTS_NOINDEX) {
+    app.use(noindexHeader);
+    app.getHttpAdapter().get('/robots.txt', (_request: unknown, response: { type: (value: string) => { send: (body: string) => void } }) => response.type('text/plain').send(ROBOTS_TXT));
+  }
   app.enableCors({
     origin: env.CORS_ORIGIN.split(',').map((origin) => origin.trim()),
     allowedHeaders: ['Content-Type', 'Authorization', TENANT_HEADER, ADMIN_KEY_HEADER],

@@ -1,4 +1,5 @@
 // Páginas públicas: términos, privacidad y ayuda. Contenido ficticio del laboratorio.
+import { LAB_PUBLIC } from '../lab-public';
 
 export const legalEs = {
   back: 'Volver',
@@ -23,7 +24,9 @@ export const legalEs = {
   helpTitle: 'Ayuda',
   helpIntro: 'Resumen rápido para empezar a practicar con SIGPRO.',
   help1Title: 'Acceso',
-  help1Body: 'Usa los usuarios de prueba de la pantalla de acceso o de /lab. El administrador (admin@sigpro.test) pide el código MFA 123456.',
+  help1Body: LAB_PUBLIC
+    ? 'Usa los usuarios de prueba de la pantalla de acceso o de /lab. El administrador (admin@sigpro.test) pide el código MFA 123456.'
+    : 'Usa los usuarios de prueba de /lab, a la que se entra con sesión. El administrador pide un código MFA: está en la guía del curso.',
   help2Title: 'Tu tenant',
   help2Body: 'Cada alumno trabaja en su propio tenant (alumno01…). Los datos de los demás no se ven ni se modifican.',
   help3Title: 'Atajos de teclado',
@@ -58,7 +61,9 @@ export const legalEn: typeof legalEs = {
   helpTitle: 'Help',
   helpIntro: 'Quick summary to start practising with SIGPRO.',
   help1Title: 'Sign in',
-  help1Body: 'Use the test users on the sign-in screen or on /lab. The administrator (admin@sigpro.test) asks for the MFA code 123456.',
+  help1Body: LAB_PUBLIC
+    ? 'Use the test users on the sign-in screen or on /lab. The administrator (admin@sigpro.test) asks for the MFA code 123456.'
+    : 'Use the test users on /lab, which you reach after signing in. The administrator asks for an MFA code: it is in the course guide.',
   help2Title: 'Your tenant',
   help2Body: 'Each student works in their own tenant (alumno01…). Other students’ data is neither visible nor editable.',
   help3Title: 'Keyboard shortcuts',
