@@ -5,7 +5,7 @@ epica: EP-HITOS
 titulo: "[API] Crear un hito con nombre y fecha límite en un programa"
 etiquetas: [api]
 relacionadas: [US-HITOS-001, US-HITOS-007, US-HITOS-011]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["POST /api/programs/:code/milestones"]
 permisos: [milestone.edit]
 ---

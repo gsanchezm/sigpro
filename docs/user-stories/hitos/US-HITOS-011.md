@@ -5,7 +5,7 @@ epica: EP-HITOS
 titulo: "[Móvil] Crear un hito y editar su nombre o su fecha en una hoja"
 etiquetas: [movil]
 relacionadas: [US-HITOS-002, US-HITOS-003, US-HITOS-007]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["/programs/:code"]
 permisos: [milestone.edit]
 ---

@@ -5,7 +5,7 @@ epica: EP-HITOS
 titulo: "[Web] Crear un hito en el diálogo «Nuevo hito» y editar su nombre o su fecha en la tabla"
 etiquetas: [web]
 relacionadas: [US-HITOS-002, US-HITOS-003, US-HITOS-011]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["/programs/:code"]
 permisos: [milestone.edit]
 ---

@@ -5,7 +5,7 @@ epica: EP-HITOS
 titulo: "[Web] Borrar un hito desde su menú con confirmación"
 etiquetas: [web]
 relacionadas: [US-HITOS-005, US-HITOS-006, US-HITOS-012]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["/programs/:code"]
 permisos: [milestone.delete]
 ---

@@ -5,7 +5,7 @@ epica: EP-HITOS
 titulo: "[Móvil] Ver los hitos en tarjetas: estado, avance, permisos y estados de carga, vacío y error"
 etiquetas: [movil]
 relacionadas: [US-HITOS-001, US-HITOS-006, US-PROG-DETALLE-005]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["/programs/:code"]
 permisos: [milestone.edit, milestone.delete]
 ---

@@ -5,7 +5,7 @@ epica: EP-HITOS
 titulo: "[Web] Mover el avance de un hito con el deslizador"
 etiquetas: [web]
 relacionadas: [US-HITOS-004, US-HITOS-006, US-HITOS-012]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["/programs/:code"]
 permisos: [milestone.edit]
 ---

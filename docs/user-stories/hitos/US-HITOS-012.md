@@ -5,7 +5,7 @@ epica: EP-HITOS
 titulo: "[Móvil] Mover el avance de un hito de 5 en 5 y borrarlo con confirmación"
 etiquetas: [movil]
 relacionadas: [US-HITOS-004, US-HITOS-005, US-HITOS-008, US-HITOS-009]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["/programs/:code"]
 permisos: [milestone.edit, milestone.delete]
 ---

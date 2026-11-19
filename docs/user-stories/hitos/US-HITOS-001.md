@@ -5,7 +5,7 @@ epica: EP-HITOS
 titulo: "[API] Listar los hitos de un programa por fecha límite"
 etiquetas: [api]
 relacionadas: [US-HITOS-006, US-HITOS-010, US-PROG-DETALLE-001]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["GET /api/programs/:code/milestones"]
 ---
 

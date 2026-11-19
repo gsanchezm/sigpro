@@ -5,7 +5,7 @@ epica: EP-HITOS
 titulo: "[API] Editar el nombre y la fecha límite de un hito"
 etiquetas: [api]
 relacionadas: [US-HITOS-001, US-HITOS-007, US-HITOS-011]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["PATCH /api/milestones/:id"]
 permisos: [milestone.edit]
 ---

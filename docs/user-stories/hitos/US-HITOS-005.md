@@ -5,7 +5,7 @@ epica: EP-HITOS
 titulo: "[API] Eliminar un hito del programa"
 etiquetas: [api]
 relacionadas: [US-HITOS-001, US-HITOS-009, US-HITOS-012]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["DELETE /api/milestones/:id"]
 permisos: [milestone.delete]
 ---

@@ -5,7 +5,7 @@ epica: EP-HITOS
 titulo: "[API] Registrar el avance de un hito: con el 100 % queda cumplido"
 etiquetas: [api]
 relacionadas: [US-HITOS-001, US-HITOS-008, US-HITOS-012, US-PROG-LISTA-001]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["PATCH /api/milestones/:id"]
 permisos: [milestone.edit]
 ---

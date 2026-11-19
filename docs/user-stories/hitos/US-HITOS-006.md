@@ -5,7 +5,7 @@ epica: EP-HITOS
 titulo: "[Web] Ver la pestaña «Hitos»: tabla, recuento, estados y permisos de cada rol"
 etiquetas: [web]
 relacionadas: [US-HITOS-001, US-HITOS-010, US-PROG-DETALLE-002]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["/programs/:code"]
 permisos: [milestone.edit, milestone.delete]
 ---
