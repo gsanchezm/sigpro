@@ -162,7 +162,8 @@ const runRow = (page: Page, index: number): Promise<{ readonly visibleId: string
         .evaluate(
           (row: Element) => ({
             // Código visible de la ejecución: el texto de la primera celda (su primer bloque), no el data-testid
-            visibleId: row.querySelector('td')?.querySelector('div')?.textContent?.trim() ?? null,
+            // Primer token «RUN-NNN» del texto visible de la primera celda (innerText; si no existe, textContent)
+            visibleId: /^\s*(RUN-\d{3})/.exec(((cellNode: Element | null) => (cellNode === null ? '' : (cellNode as HTMLElement).innerText || (cellNode.textContent ?? '')))(row.querySelector('td')))?.[1] ?? null,
             cells: Array.from(row.querySelectorAll('td')).map((cellNode) => (cellNode.textContent ?? '').trim()),
             thumbs: row.querySelectorAll('td')[3]?.querySelectorAll('[data-testid^="evidence-thumb-"]').length ?? 0,
           }),

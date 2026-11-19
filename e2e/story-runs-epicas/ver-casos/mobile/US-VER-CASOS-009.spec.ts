@@ -191,6 +191,7 @@ interface RunCard {
   readonly leaves: readonly string[];
   readonly thumbs: number;
   readonly badge: string | null;
+  readonly text: string;
 }
 
 /** Tarjetas del historial, en orden: hojas de texto (incluido el código visible), miniaturas de evidencia y badge del resultado. */
@@ -200,6 +201,8 @@ const runCards = (page: Page): Promise<readonly RunCard[] | undefined> =>
       runsOf(page).evaluate(
         (root: Element) =>
           Array.from(root.querySelectorAll('[role="listitem"]')).map((item) => ({
+            // Texto visible de la tarjeta (innerText; si no existe, textContent): de ahí sale el código de la ejecución
+            text: (item as HTMLElement).innerText || (item.textContent ?? ''),
             leaves: Array.from(item.querySelectorAll('*'))
               .filter((node) => node.children.length === 0)
               .map((node) => (node.textContent ?? '').trim())
@@ -224,7 +227,7 @@ const runHistory: BrowserRowHandler = async (row, { page }) => {
   if (opening) return preparationFailedWeb(expected, opening);
   const card = (await runCards(page))?.[position];
   // Código visible de la ejecución: su texto dentro de la tarjeta (RunsHistory.tsx:38), no el aria-label
-  const visibleId = card?.leaves.find((leaf) => /^RUN-d{3}$/.test(leaf));
+  const visibleId = /^\s*(RUN-\d{3})/.exec(card?.text ?? '')?.[1];
   const dateLeaf = card?.leaves.find((leaf) => DATE_TOKEN.test(leaf));
   const date = dateLeaf === undefined ? undefined : DATE_TOKEN.exec(dateLeaf)?.[0];
   const label = card?.badge ?? undefined;
