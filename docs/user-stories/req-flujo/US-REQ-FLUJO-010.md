@@ -5,7 +5,7 @@ epica: EP-REQ-FLUJO
 titulo: "[Móvil] Mostrar en la hoja del requisito los botones de transición y sus motivos"
 etiquetas: [movil]
 relacionadas: [US-REQ-FLUJO-006, US-REQ-FLUJO-011, US-REQ-FLUJO-012, US-REQ-ARBOL-010]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["/programs/:code/requirements"]
 permisos: [requirement.approve, requirement.verify, requirement.validate]
 ---

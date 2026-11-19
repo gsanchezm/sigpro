@@ -5,7 +5,7 @@ epica: EP-REQ-FLUJO
 titulo: "[Web] Confirmar o cancelar el cambio de estado en un diálogo y ver el aviso de éxito"
 etiquetas: [web]
 relacionadas: [US-REQ-FLUJO-006, US-REQ-FLUJO-008, US-REQ-FLUJO-009, US-REQ-ARBOL-005]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["/programs/:code/requirements"]
 ---
 

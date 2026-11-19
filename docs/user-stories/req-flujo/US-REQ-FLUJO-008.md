@@ -5,7 +5,7 @@ epica: EP-REQ-FLUJO
 titulo: "[Web] Mostrar el error del servidor dentro del diálogo sin cambiar el estado"
 etiquetas: [web]
 relacionadas: [US-REQ-FLUJO-006, US-REQ-FLUJO-007, US-REQ-FLUJO-002]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["/programs/:code/requirements"]
 ---
 

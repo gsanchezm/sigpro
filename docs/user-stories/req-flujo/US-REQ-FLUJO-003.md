@@ -5,7 +5,7 @@ epica: EP-REQ-FLUJO
 titulo: "[API] Rechazar con 403 forbidden un paso válido que el rol no puede dar"
 etiquetas: [api]
 relacionadas: [US-REQ-FLUJO-001, US-REQ-FLUJO-002, US-REQ-FLUJO-004, US-REQ-FLUJO-005]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["POST /api/requirements/:code/transition"]
 permisos: [requirement.approve, requirement.verify, requirement.validate]
 ---

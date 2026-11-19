@@ -5,7 +5,7 @@ epica: EP-REQ-FLUJO
 titulo: "[API] Registrar cada paso aceptado en la auditoría y dejar intacto el resto del requisito"
 etiquetas: [api]
 relacionadas: [US-REQ-FLUJO-001, US-REQ-FLUJO-004]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["POST /api/requirements/:code/transition"]
 ---
 

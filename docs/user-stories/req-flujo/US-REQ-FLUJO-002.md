@@ -5,7 +5,7 @@ epica: EP-REQ-FLUJO
 titulo: "[API] Rechazar con 409 invalid_transition un paso que la máquina de estados no tiene"
 etiquetas: [api]
 relacionadas: [US-REQ-FLUJO-001, US-REQ-FLUJO-003, US-REQ-FLUJO-004]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["POST /api/requirements/:code/transition"]
 ---
 

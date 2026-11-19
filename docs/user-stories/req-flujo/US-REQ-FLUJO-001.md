@@ -5,7 +5,7 @@ epica: EP-REQ-FLUJO
 titulo: "[API] Dar un paso válido de la máquina de estados con el rol que lo puede dar"
 etiquetas: [api]
 relacionadas: [US-REQ-FLUJO-002, US-REQ-FLUJO-003, US-REQ-FLUJO-004, US-REQ-FLUJO-005, US-REQ-FLUJO-006, US-REQ-EDICION-003]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["POST /api/requirements/:code/transition"]
 permisos: [requirement.approve, requirement.verify, requirement.validate]
 ---

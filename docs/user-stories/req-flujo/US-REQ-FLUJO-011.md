@@ -5,7 +5,7 @@ epica: EP-REQ-FLUJO
 titulo: "[Móvil] Confirmar, cancelar o ver el error del cambio de estado en la hoja"
 etiquetas: [movil]
 relacionadas: [US-REQ-FLUJO-007, US-REQ-FLUJO-008, US-REQ-FLUJO-010, US-REQ-FLUJO-012]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["/programs/:code/requirements"]
 ---
 

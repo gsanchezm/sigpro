@@ -5,7 +5,7 @@ epica: EP-REQ-FLUJO
 titulo: "[Web] Leer el estado con su nombre y el flujo de aprobación en sus cuatro pasos"
 etiquetas: [web]
 relacionadas: [US-REQ-FLUJO-006, US-REQ-FLUJO-007]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["/programs/:code/requirements"]
 ---
 

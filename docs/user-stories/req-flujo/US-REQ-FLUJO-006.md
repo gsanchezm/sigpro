@@ -5,7 +5,7 @@ epica: EP-REQ-FLUJO
 titulo: "[Web] Mostrar en el paso actual los botones de transición, habilitados o con su motivo"
 etiquetas: [web]
 relacionadas: [US-REQ-FLUJO-001, US-REQ-FLUJO-007, US-REQ-FLUJO-009, US-REQ-ARBOL-005]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["/programs/:code/requirements"]
 permisos: [requirement.approve, requirement.verify, requirement.validate]
 ---

@@ -5,7 +5,7 @@ epica: EP-REQ-FLUJO
 titulo: "[API] Responder 401, 422 o 404 sin cambiar el estado, en el orden de las comprobaciones"
 etiquetas: [api]
 relacionadas: [US-REQ-FLUJO-001, US-REQ-FLUJO-002, US-REQ-FLUJO-003]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["POST /api/requirements/:code/transition"]
 ---
 
