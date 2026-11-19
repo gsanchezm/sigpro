@@ -5,7 +5,7 @@ epica: EP-PROG-ALTA
 titulo: "[API] Listar las personas que pueden ser responsables"
 etiquetas: [api]
 relacionadas: [US-PROG-ALTA-009]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["GET /api/users/owners"]
 ---
 

@@ -5,7 +5,7 @@ epica: EP-PROG-ALTA
 titulo: "[API] Rechazar el alta con un motivo por cada dato no válido"
 etiquetas: [api]
 relacionadas: [US-PROG-ALTA-001, US-PROG-ALTA-007, US-PROG-ALTA-012]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["POST /api/programs"]
 ---
 

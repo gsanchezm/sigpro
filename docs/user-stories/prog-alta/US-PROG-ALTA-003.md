@@ -5,7 +5,7 @@ epica: EP-PROG-ALTA
 titulo: "[API] Editar un programa enviando solo los campos que cambian"
 etiquetas: [api]
 relacionadas: [US-PROG-ALTA-004, US-PROG-ALTA-005, US-PROG-ALTA-010, US-PROG-ALTA-013]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["PATCH /api/programs/:code"]
 permisos: [program.edit]
 ---

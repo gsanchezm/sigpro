@@ -5,7 +5,7 @@ epica: EP-PROG-ALTA
 titulo: "[API] Validar la edición: nombre, propietario, fechas y cuerpo vacío"
 etiquetas: [api]
 relacionadas: [US-PROG-ALTA-003, US-PROG-ALTA-011, US-PROG-ALTA-013]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["PATCH /api/programs/:code"]
 ---
 

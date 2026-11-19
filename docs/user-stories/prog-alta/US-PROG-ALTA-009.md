@@ -5,7 +5,7 @@ epica: EP-PROG-ALTA
 titulo: "[Web] Elegir el responsable con búsqueda en el asistente"
 etiquetas: [web]
 relacionadas: [US-PROG-ALTA-006, US-PROG-ALTA-007]
-verificacion: codigo
+verificacion: ejecutada
 ---
 
 ## Historia

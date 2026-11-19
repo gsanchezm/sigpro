@@ -5,7 +5,7 @@ epica: EP-PROG-ALTA
 titulo: "[Web] Abrir el asistente de alta y validar sus dos primeros pasos"
 etiquetas: [web]
 relacionadas: [US-PROG-ALTA-002, US-PROG-ALTA-008, US-PROG-ALTA-009]
-verificacion: codigo
+verificacion: ejecutada
 permisos: [program.create]
 ---
 

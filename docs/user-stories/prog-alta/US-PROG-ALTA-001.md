@@ -5,7 +5,7 @@ epica: EP-PROG-ALTA
 titulo: "[API] Crear un programa con los datos del alta"
 etiquetas: [api]
 relacionadas: [US-PROG-ALTA-002, US-PROG-ALTA-005, US-PROG-ALTA-008, US-PROG-ALTA-012]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["POST /api/programs"]
 permisos: [program.create]
 ---

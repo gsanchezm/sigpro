@@ -5,7 +5,7 @@ epica: EP-PROG-ALTA
 titulo: "[Web] Revisar, crear o cancelar el alta desde el asistente"
 etiquetas: [web]
 relacionadas: [US-PROG-ALTA-001, US-PROG-ALTA-007, US-PROG-ALTA-012, US-PROG-ALTA-014]
-verificacion: codigo
+verificacion: ejecutada
 permisos: [program.create]
 ---
 

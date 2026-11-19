@@ -5,7 +5,7 @@ epica: EP-PROG-ALTA
 titulo: "[Móvil] Editar un programa y guardar o cerrar la edición"
 etiquetas: [movil]
 relacionadas: [US-PROG-ALTA-003, US-PROG-ALTA-010, US-PROG-ALTA-011, US-PROG-ALTA-012]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["/programs/:code/edit"]
 permisos: [program.edit]
 ---

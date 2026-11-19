@@ -5,7 +5,7 @@ epica: EP-PROG-ALTA
 titulo: "[Móvil] Crear un programa con el asistente en una hoja"
 etiquetas: [movil]
 relacionadas: [US-PROG-ALTA-002, US-PROG-ALTA-008, US-PROG-ALTA-013, US-PROG-ALTA-014]
-verificacion: codigo
+verificacion: ejecutada
 permisos: [program.create]
 ---
 

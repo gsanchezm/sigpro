@@ -5,7 +5,7 @@ epica: EP-PROG-ALTA
 titulo: "[Web] Avisos y accesos de la edición de un programa"
 etiquetas: [web]
 relacionadas: [US-PROG-ALTA-004, US-PROG-ALTA-010, US-PROG-ALTA-013]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["/programs/:code/edit"]
 permisos: [program.edit]
 ---

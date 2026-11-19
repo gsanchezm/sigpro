@@ -5,7 +5,7 @@ epica: EP-PROG-ALTA
 titulo: "[Web] Editar un programa y guardar o cerrar la edición"
 etiquetas: [web]
 relacionadas: [US-PROG-ALTA-003, US-PROG-ALTA-011, US-PROG-ALTA-013]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["/programs/:code/edit"]
 permisos: [program.edit]
 ---

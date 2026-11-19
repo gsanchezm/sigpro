@@ -5,7 +5,7 @@ epica: EP-PROG-ALTA
 titulo: "[API] Permisos de alta y edición por rol"
 etiquetas: [api]
 relacionadas: [US-PROG-ALTA-001, US-PROG-ALTA-003]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["POST /api/programs", "PATCH /api/programs/:code"]
 permisos: [program.create, program.edit]
 ---
