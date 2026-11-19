@@ -111,7 +111,9 @@ const cancelsWithoutDeleting: BrowserRowHandler = async (row, { page }) => {
 const confirmsDelete: BrowserRowHandler = async (row, { page }) => {
   await resetTenants([TENANT_A]);
   const aviso = quoted(cell(row, 'aviso'));
-  const expected = `el diálogo se cierra; aviso de éxito «${aviso}»; recuento «${cell(row, 'recuento')}»; PRG-001 fuera de la lista`;
+  // La celda trae las comillas angulares («1–10 de 23»): el recuento de la pantalla no las lleva
+  const recuento = quoted(cell(row, 'recuento'));
+  const expected = `el diálogo se cierra; aviso de éxito «${aviso}»; recuento «${recuento}»; PRG-001 fuera de la lista`;
   const prepared = await signIn(page, DESKTOP, 'admin');
   if (prepared !== undefined) return preparationFailedWeb(expected, prepared);
   const opened = await openDialog(page, expected, inOrder(openRowActions('PRG-001'), pressAction(DESKTOP, 'PRG-001', 'Eliminar')));
@@ -122,7 +124,7 @@ const confirmsDelete: BrowserRowHandler = async (row, { page }) => {
   if (confirmed !== undefined) return actionFailed(expected, confirmed);
   const closed = await waitUntil(async () => !(await isVisible(deleteDialog(page))));
   const toast = await toastShown(page, 'ok', aviso);
-  const count = await waitUntil(async () => (await recountText(page)) === cell(row, 'recuento'));
+  const count = await waitUntil(async () => (await recountText(page)) === recuento);
   const observed = await recountText(page);
   const shown = await listedCodes(page, DESKTOP);
   const firstAt = await firstToastAt(page, 'ok', aviso);
@@ -130,7 +132,7 @@ const confirmsDelete: BrowserRowHandler = async (row, { page }) => {
     [
       check(closed.reached, 'el diálogo se cierra', closed.reached ? 'el diálogo se cierra' : 'el diálogo sigue abierto'),
       check(toast.seen, `aviso de éxito «${aviso}»`, `avisos de éxito: ${toast.observed}`),
-      check(count.reached, `el recuento dice «${cell(row, 'recuento')}»`, `el recuento dice «${observed ?? '(sin recuento)'}»`),
+      check(count.reached, `el recuento dice «${recuento}»`, `el recuento dice «${observed ?? '(sin recuento)'}»`),
       check(!shown.includes('PRG-001'), 'PRG-001 ya no está en la lista', shown.includes('PRG-001') ? 'PRG-001 sigue en la lista' : 'PRG-001 ya no está en la lista'),
     ],
     timingOf(clickAt, firstAt, deletedAt()),

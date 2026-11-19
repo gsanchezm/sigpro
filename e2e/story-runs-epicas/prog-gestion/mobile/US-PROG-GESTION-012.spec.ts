@@ -20,6 +20,7 @@ import {
   signIn,
   stubShareSheet,
   toggleSelectMode,
+  notesOf,
   visibleStateCheck,
 } from './common';
 
@@ -140,10 +141,10 @@ const unavailableWithoutRows: BrowserRowHandler = async (row, { page }) => {
   const empty = await waitUntil(async () => (await emptyBlock(page).count()) > 0);
   if (!empty.reached) return actionFailed(expected, { message: 'no se ve el bloque «Sin programas»', note: 'La lista con ese filtro no muestra el bloque vacío.' });
   const disabled = await waitUntil(async () => (await isDisabledControl(exportButton(page))) === true);
-  return conclude([
-    check(disabled.reached, 'el botón «Exportar CSV» deshabilitado', 'el botón «Exportar CSV» no está deshabilitado'),
-    await visibleStateCheck(exportButton(page), reasonOf(page, 'export'), { enabled: false, reason: 'No hay programas para exportar' }, '«Exportar CSV»'),
-  ]);
+  const state = await visibleStateCheck(exportButton(page), reasonOf(page, 'export'), { enabled: false, reason: 'No hay programas para exportar' }, '«Exportar CSV»');
+  const disabledCheck = check(disabled.reached, 'el botón «Exportar CSV» deshabilitado', 'el botón «Exportar CSV» no está deshabilitado');
+  const note = notesOf([state]);
+  return conclude([disabledCheck, state], note === undefined ? {} : { note });
 };
 
 defineBrowserRows({

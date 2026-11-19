@@ -2,7 +2,7 @@ import type { Locator, Page } from '@playwright/test';
 import { MOVIL_PROGRAMS_DYNAMIC_TESTIDS, MOVIL_PROGRAMS_TESTIDS, MOVIL_TESTIDS, PROGRAMAS_TESTIDS } from '../../../../packages/shared/src/testids';
 import { TENANT_A, DEMO } from '../../../story-runs/support/prepare';
 import { ACTION, CEILING_MS, isVisible, runSteps, safe, textOf, waitUntil, type Step } from '../../support/browser';
-import { check, type Check } from '../../support/checks';
+import type { Check } from '../../support/checks';
 import type { BrowserRowHandler } from '../../core/framework';
 import { type AccountName, MFA_CODE, TOAST_KEY, armToasts, codesOf, interact, recordToasts, tokensOf, type WebAction } from '../web/common';
 
@@ -93,37 +93,91 @@ export const cardCodes = async (page: Page): Promise<readonly string[]> => {
   return names.filter((name) => /^PRG-\d{3}$/.test(name));
 };
 
-/** Texto de un elemento solo si se ve de verdad: ni él ni sus ancestros con `hidden`, `display:none` o `visibility:hidden`. */
+/** Plazo corto de cada lectura de la pantalla móvil: una lectura no puede colgar la fila. */
+export const READ_MS = 2_000;
+
+/** Texto de un elemento solo si se ve de verdad (ni él ni sus ancestros con `hidden`, `display:none` o `visibility:hidden`). Plazo corto. */
 export const visibleTextOf = (target: Locator): Promise<string | undefined> =>
   safe(
     () =>
-      target.first().evaluate((element) => {
-        let node: Element | null = element;
-        while (node !== null) {
-          const style = getComputedStyle(node);
-          if (node.hasAttribute('hidden') || style.display === 'none' || style.visibility === 'hidden') return undefined;
-          node = node.parentElement;
-        }
-        return (element as HTMLElement).innerText.trim();
-      }),
+      target.first().evaluate(
+        (element) => {
+          let node: Element | null = element;
+          while (node !== null) {
+            const style = getComputedStyle(node);
+            if (node.hasAttribute('hidden') || style.display === 'none' || style.visibility === 'hidden') return undefined;
+            node = node.parentElement;
+          }
+          return (element as HTMLElement).innerText.trim();
+        },
+        undefined,
+        { timeout: READ_MS },
+      ),
     undefined,
   );
 
-/** Un botón deshabilitado (propiedad `disabled` o `aria-disabled`). Una lectura fallida no cuenta como deshabilitado. */
+/** Atributo que la app expone como motivo del botón (`aria-description`, `data-reason` o `title`) cuando no hay texto visible. Plazo corto. */
+export const reasonAttributeOf = (target: Locator): Promise<{ readonly name: string; readonly value: string } | undefined> =>
+  safe(
+    () =>
+      target.first().evaluate(
+        (element) => {
+          for (const name of ['aria-description', 'data-reason', 'title']) {
+            const value = element.getAttribute(name);
+            if (value !== null && value !== '') return { name, value };
+          }
+          return undefined;
+        },
+        undefined,
+        { timeout: READ_MS },
+      ),
+    undefined,
+  );
+
+/** Un botón deshabilitado (propiedad `disabled` o `aria-disabled`). Una lectura que no llega en el plazo queda sin leer (`undefined`), nunca cuenta como deshabilitado. */
 export const isDisabledControl = (target: Locator): Promise<boolean | undefined> =>
   safe(
     () =>
-      target.first().evaluate((element) => (element as HTMLButtonElement).disabled === true || element.getAttribute('aria-disabled') === 'true' || element.closest('[aria-disabled="true"]') !== null),
+      target.first().evaluate(
+        (element) => (element as HTMLButtonElement).disabled === true || element.getAttribute('aria-disabled') === 'true' || element.closest('[aria-disabled="true"]') !== null,
+        undefined,
+        { timeout: READ_MS },
+      ),
     undefined,
   );
 
-/** Estado de una acción visible en la pantalla móvil: habilitada o deshabilitada con su motivo como texto visible. */
-export const visibleStateCheck = async (target: Locator, reasonTarget: Locator, expected: { readonly enabled: boolean; readonly reason?: string }, label: string): Promise<Check> => {
+/** Comprobación de una acción visible: con su nota cuando el motivo solo sale de un atributo. */
+export interface VisibleCheck extends Check {
+  /** Qué atributo dio el motivo cuando no hay texto visible: en ese caso la fila no se da por cumplida. */
+  readonly note?: string;
+}
+
+/** Notas de un conjunto de comprobaciones, en una frase (o `undefined` si no hay ninguna). */
+export const notesOf = (checks: readonly VisibleCheck[]): string | undefined => {
+  const notes = checks.map((entry) => entry.note).filter((note): note is string => note !== undefined);
+  return notes.length === 0 ? undefined : notes.join(' ');
+};
+
+/** Una acción visible: habilitada, o deshabilitada con su motivo como TEXTO VISIBLE. Cada lectura tiene plazo corto. */
+export const visibleStateCheck = async (target: Locator, reasonTarget: Locator, expected: { readonly enabled: boolean; readonly reason?: string }, label: string): Promise<VisibleCheck> => {
+  await waitUntil(async () => (await isDisabledControl(target)) !== undefined, READ_MS);
   const disabled = await isDisabledControl(target);
-  const reason = (await visibleTextOf(reasonTarget)) ?? '(sin motivo visible)';
-  const observed = disabled === undefined ? '(sin leer)' : disabled ? `deshabilitado${reason === '(sin motivo visible)' ? '' : `, con el texto «${reason}»`}` : 'habilitado';
-  const ok = expected.enabled ? disabled === false : disabled === true && (expected.reason === undefined || reason === expected.reason);
-  return check(ok, expected.enabled ? `${label} habilitado` : `${label} deshabilitado${expected.reason ? `, con el texto «${expected.reason}»` : ''}`, `${label} ${observed}`);
+  const visible = await visibleTextOf(reasonTarget);
+  const attribute = disabled === true && visible === undefined ? await reasonAttributeOf(target) : undefined;
+  const observed =
+    disabled === undefined
+      ? 'sin leer (el control no aparece en el plazo)'
+      : disabled
+        ? `deshabilitado, con el motivo «${visible ?? attribute?.value ?? '(sin motivo)'}» ${visible !== undefined ? 'como texto visible' : attribute === undefined ? 'sin texto visible' : `solo en ${attribute.name}`}`
+        : 'habilitado';
+  const ok = expected.enabled ? disabled === false : disabled === true && visible === expected.reason;
+  const note = attribute === undefined ? undefined : `el motivo «${attribute.value}» sale del atributo ${attribute.name}, no de texto visible: la fila no se da por cumplida`;
+  return {
+    ok,
+    expected: expected.enabled ? `${label} habilitado` : `${label} deshabilitado, con el texto visible «${expected.reason ?? ''}»`,
+    observed: `${label} ${observed}`,
+    ...(note === undefined ? {} : { note }),
+  };
 };
 
 // --- Sesión, espera y acciones ----------------------------------------------------------------------------------------------

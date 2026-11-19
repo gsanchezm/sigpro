@@ -36,7 +36,7 @@ const headerState = (page: Page): Promise<string> =>
       headerCheckbox(page).evaluate((element) => {
         const box = element as HTMLInputElement;
         return box.indeterminate ? 'parcial' : box.checked ? 'marcada' : 'desmarcada';
-      }),
+      }, undefined, { timeout: 2_000 }),
     '(sin leer)',
   );
 

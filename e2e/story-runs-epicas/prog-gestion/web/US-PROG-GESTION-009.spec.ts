@@ -75,7 +75,7 @@ const downloadsFiltered: BrowserRowHandler = async (row, { page }) => {
   const filtered = await filter.act(page);
   if (filtered !== undefined) return actionFailed(expected, filtered);
   // La lista debe haberse releído con los filtros antes de exportar (recuento de la historia)
-  const listed = await waitUntil(async () => (await recountText(page)) === recountFor(Number(filas)) && (await safe(() => exportButton(page).isEnabled(), false)));
+  const listed = await waitUntil(async () => (await recountText(page)) === recountFor(Number(filas)) && (await safe(() => exportButton(page).isEnabled({ timeout: 500 }), false)));
   if (!listed.reached) return actionFailed(expected, { message: 'la lista no se asienta con los filtros aplicados', note: 'El recuento no llega al de los programas que cumplen los filtros.' });
   const clickAt = Date.now();
   let file: { readonly name: string; readonly text: string };

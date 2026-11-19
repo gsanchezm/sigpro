@@ -23,6 +23,7 @@ import {
   stateOfCard,
   tapCard,
   toggleSelectMode,
+  notesOf,
   visibleStateCheck,
 } from './common';
 
@@ -223,10 +224,10 @@ const barRoles: BrowserRowHandler = async (row, { page }) => {
   const tick = await checkCard('PRG-002', true)(page);
   if (tick !== undefined) return actionFailed(expected, tick);
   await waitUntil(() => isVisible(bulkBar(page)));
-  return conclude([
-    await visibleStateCheck(bulkBar(page).getByRole('button', { name: 'Archivar', exact: true }), reasonOf(page, 'bulk-archive'), parseVisible(cell(row, 'archivar')), '«Archivar»'),
-    await visibleStateCheck(bulkBar(page).getByRole('button', { name: 'Eliminar', exact: true }), reasonOf(page, 'bulk-delete'), parseVisible(cell(row, 'eliminar')), '«Eliminar»'),
-  ]);
+  const archiveCheck = await visibleStateCheck(bulkBar(page).getByRole('button', { name: 'Archivar', exact: true }), reasonOf(page, 'bulk-archive'), parseVisible(cell(row, 'archivar')), '«Archivar»');
+  const removeCheck = await visibleStateCheck(bulkBar(page).getByRole('button', { name: 'Eliminar', exact: true }), reasonOf(page, 'bulk-delete'), parseVisible(cell(row, 'eliminar')), '«Eliminar»');
+  const note = notesOf([archiveCheck, removeCheck]);
+  return conclude([archiveCheck, removeCheck], note === undefined ? {} : { note });
 };
 
 defineBrowserRows({

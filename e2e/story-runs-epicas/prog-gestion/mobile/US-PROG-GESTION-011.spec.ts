@@ -17,6 +17,8 @@ import {
   reasonOf,
   signIn,
   stateOfCard,
+  notesOf,
+  type VisibleCheck,
   visibleStateCheck,
 } from './common';
 
@@ -41,13 +43,14 @@ const cardRoles: BrowserRowHandler = async (row, { page }) => {
   if (prepared !== undefined) return preparationFailedWeb(expected, prepared);
   const opened = await openCardMenu('PRG-001')(page);
   if (opened !== undefined) return actionFailed(expected, opened);
-  const results: Check[] = [];
+  const results: VisibleCheck[] = [];
   for (const column of ['editar', 'duplicar', 'archivar', 'eliminar']) {
     const item = strict('acción', ITEMS, column);
     const target = actionSheet(page, 'PRG-001').getByRole('button', { name: item.name, exact: true });
     results.push(await visibleStateCheck(target, reasonOf(page, item.key), parseVisible(cell(row, column)), `«${item.name}»`));
   }
-  return conclude(results);
+  const note = notesOf(results);
+  return conclude(results, note === undefined ? {} : { note });
 };
 
 // --- Esquema 2: archivar y duplicar desde la tarjeta actúan sin confirmación y avisan del resultado ----------------------------

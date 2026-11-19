@@ -89,7 +89,9 @@ const deleteSelection: BrowserRowHandler = async (row, { page }) => {
   await resetTenants([TENANT_A]);
   const marked = strict('marcados', MARKED, cell(row, 'marcados'));
   const aviso = quoted(cell(row, 'aviso'));
-  const expected = `aviso de éxito «${aviso}»; recuento «${cell(row, 'recuento')}»; ${marked.join(', ')} ya no están en la lista`;
+  // La celda trae las comillas angulares («1–10 de 23»): el recuento de la pantalla no las lleva
+  const recuento = quoted(cell(row, 'recuento'));
+  const expected = `aviso de éxito «${aviso}»; recuento «${recuento}»; ${marked.join(', ')} ya no están en la lista`;
   const prepared = await signIn(page, DESKTOP, 'admin');
   if (prepared !== undefined) return preparationFailedWeb(expected, prepared);
   const selected = await markAll(marked)(page);
@@ -103,7 +105,7 @@ const deleteSelection: BrowserRowHandler = async (row, { page }) => {
   const confirmed = await dialogButton('Eliminar')(page);
   if (confirmed !== undefined) return actionFailed(expected, confirmed);
   const toast = await toastShown(page, 'ok', aviso);
-  const count = await waitUntil(async () => (await recountText(page)) === cell(row, 'recuento'));
+  const count = await waitUntil(async () => (await recountText(page)) === recuento);
   const observed = await recountText(page);
   const shown = await listedCodes(page, DESKTOP);
   const stillListed = marked.filter((code) => shown.includes(code));
@@ -111,7 +113,7 @@ const deleteSelection: BrowserRowHandler = async (row, { page }) => {
   return conclude(
     [
       check(toast.seen, `aviso de éxito «${aviso}»`, `avisos de éxito: ${toast.observed}`),
-      check(count.reached, `el recuento dice «${cell(row, 'recuento')}»`, `el recuento dice «${observed ?? '(sin recuento)'}»`),
+      check(count.reached, `el recuento dice «${recuento}»`, `el recuento dice «${observed ?? '(sin recuento)'}»`),
       check(stillListed.length === 0, `${marked.join(', ')} ya no están en la lista`, stillListed.length === 0 ? `${marked.join(', ')} ya no están en la lista` : `siguen en la lista: ${stillListed.join(', ')}`),
     ],
     timingOf(clickAt, firstAt, deletedAt()),

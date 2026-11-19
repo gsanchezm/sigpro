@@ -143,7 +143,7 @@ const describeFailure = async (target: Locator, label: string, error: unknown): 
   const present = (await safe(() => target.count(), 0)) > 0;
   const message = `no se pudo ${label}: ${lines.slice(0, 3).join(' · ')}${intercept === undefined ? '' : ` · ${intercept}`}`;
   if (!present) return { message, note: 'La historia nombra un elemento que la pantalla no ofrece (no existe con ese nombre).' };
-  const probe = await safe<Hit | undefined>(() => target.first().evaluate(hitAtCenter), undefined);
+  const probe = await safe<Hit | undefined>(() => target.first().evaluate(hitAtCenter, undefined, { timeout: 2_000 }), undefined);
   if (probe === undefined) return { message: `${message} · recibe el clic: (no se pudo leer)`, note: 'el elemento existe pero no se pudo comprobar qué lo tapa' };
   const note = probe.inside
     ? 'el elemento existe y recibe el clic en su centro, pero la acción no se completó (ver el mensaje de Playwright)'
