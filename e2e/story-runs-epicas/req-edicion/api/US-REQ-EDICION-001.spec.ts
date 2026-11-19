@@ -1,7 +1,7 @@
 import { field } from '../../../story-runs/support/api';
 import { defineApiRows, type ApiRowHandler } from '../../core/framework';
 import { cell, check, preparationFailed, strict, type Check } from '../../support/checks';
-import { ACCOUNT_OF, TENANT_A, TENANT_B, act, codeCell, expectChecks, loginAs, resetTenants, snapshotOf, unchangedCheck, verdict, type Expect } from './common';
+import { ACCOUNT_OF, TENANT_A, TENANT_B, act, codeCell, expectChecks, loginAs, resetTenants, snapshotOf, unchangedCheck, verdict, auditCount, auditDelta, type Expect } from './common';
 
 // US-REQ-EDICION-001 — Dar de alta un requisito en borrador (API). Preparación de cada fila: reinicio de alumno01 (y de alumno02 en el
 // Esquema 3) y, según la fila, inicio de sesión de la cuenta de la celda. Todas las peticiones llevan el tenant de su token.
@@ -27,8 +27,11 @@ const createsAtEnd: ApiRowHandler = async (row) => {
   const expected = `respuesta ${cell(row, 'respuesta')}`;
   if (session.token === undefined) return preparationFailed(expected, `${cell(row, 'cuenta')} inicia sesión en alumno01 y recibe accessToken`, session.last);
   const expect = strict('respuesta', RESPUESTA_E1, cell(row, 'respuesta'));
+  const auditBefore = await auditCount('REQ-041', 'requirement.created');
   const result = await act('POST', '/requirements', session.token, { programCode: codeCell(cell(row, 'programa')), parentCode: parentCell(cell(row, 'padre')), title: 'Requisito de prueba' });
-  return verdict(expectChecks(expect, result));
+  const auditAfter = await auditCount('REQ-041', 'requirement.created');
+  // Un alta correcta deja un evento requirement.created con el código nuevo
+  return verdict([...expectChecks(expect, result), auditDelta(auditBefore, auditAfter, result.status === 201 ? 1 : 0, 'requirement.created de REQ-041')]);
 };
 
 // --- Esquema 2: el alta no se crea si el programa no existe o el padre es de otro programa ---------------------------------
@@ -49,6 +52,7 @@ const createsNothing: ApiRowHandler = async (row) => {
   if (session.token === undefined) return preparationFailed(expected, 'gestor@sigpro.test inicia sesión en alumno01 y recibe accessToken', session.last);
   const before = await snapshotOf(session.token, 'PRG-001');
   const expect = strict('respuesta', RESPUESTA_E2, cell(row, 'respuesta'));
+  const auditBefore = await auditCount('REQ-041', 'requirement.created');
   const result = await act('POST', '/requirements', session.token, { programCode: codeCell(cell(row, 'programa')), parentCode: parentCell(cell(row, 'padre')), title: 'Requisito de prueba' });
   const checks: Check[] = expectChecks(expect, result);
   // «Porque» de la celda: el padre que se cita pertenece al programa que se dice
@@ -61,6 +65,9 @@ const createsNothing: ApiRowHandler = async (row) => {
   // El alta fallida no deja requisitos nuevos: el programa de referencia no cambia y el código siguiente sigue libre
   const after = await snapshotOf(session.token, 'PRG-001');
   checks.push(unchangedCheck(before, after, 'la lista de PRG-001'));
+  // Un alta rechazada no deja evento de auditoría
+  const auditAfter = await auditCount('REQ-041', 'requirement.created');
+  checks.push(auditDelta(auditBefore, auditAfter, 0, 'requirement.created de REQ-041'));
   const created = await act('GET', '/requirements/REQ-041', session.token);
   checks.push(check(created.status === 404, 'REQ-041 no existe', `REQ-041 responde ${created.status}`));
   return verdict(checks);

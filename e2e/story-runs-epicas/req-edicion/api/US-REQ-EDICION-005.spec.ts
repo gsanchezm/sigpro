@@ -1,7 +1,7 @@
 import { field } from '../../../story-runs/support/api';
 import { defineApiRows, type ApiRowHandler, type Outcome } from '../../core/framework';
-import { cell, check, preparationFailed, strict, type Check } from '../../support/checks';
-import { ACCOUNT_OF, TENANT_A, act, codeCell, expectChecks, itemsOf, loginAs, resetTenants, snapshotOf, unchangedCheck, verdict, type Expect } from './common';
+import { cell, check, errorsOf, preparationFailed, strict, type Check } from '../../support/checks';
+import { ACCOUNT_OF, TENANT_A, act, codeCell, expectChecks, itemsOf, loginAs, resetTenants, snapshotOf, unchangedCheck, verdict, auditCount, auditDelta, type Expect } from './common';
 
 // US-REQ-EDICION-005 — Reordenar un requisito entre sus hermanos (API). Preparación de cada fila: reinicio de alumno01 y token de
 // gestor@sigpro.test. Las posiciones que da la historia se comprueban sobre la lista del programa que devuelve la API.
@@ -58,9 +58,12 @@ const reorders: ApiRowHandler = async (row) => {
   const expectedOrder = strict('orden', ORDEN_OF, cell(row, 'orden'));
   const beforeItems = itemsOf(await act('GET', '/programs/PRG-001/requirements', token));
   const parentBefore = beforeItems?.find((item) => field(item, 'code') === code);
+  const auditBefore = await auditCount(code, 'requirement.moved');
   const result = await act('POST', `/requirements/${code}/move`, token, { targetCode: targetOf(cell(row, 'destino')), placement: strict('colocacion', PLACEMENT_OF, cell(row, 'colocacion')) });
   const items = itemsOf(result);
   const checks: Check[] = expectChecks({ status: 200 }, result);
+  // Un movimiento correcto deja un evento requirement.moved
+  checks.push(auditDelta(auditBefore, await auditCount(code, 'requirement.moved'), 1, `requirement.moved de ${code}`));
   const program = field(result.body, 'program');
   checks.push(check(field(program, 'code') === 'PRG-001', 'program PRG-001', `program ${String(field(program, 'code') ?? '(sin leer)')}`));
   if (items === undefined || parentBefore === undefined || beforeItems === undefined) return verdict([...checks, check(false, 'lista legible antes y después', 'lista no legible')]);
@@ -124,18 +127,22 @@ const rejectsWithoutMoving: ApiRowHandler = async (row) => {
   if (typeof token !== 'string') return token;
   const expect = strict('respuesta', RESPUESTA_E2, cell(row, 'respuesta'));
   const before = await snapshotOf(token, 'PRG-001');
+  const auditBefore = await auditCount(code, 'requirement.moved');
   const result = await act('POST', `/requirements/${code}/move`, token, { targetCode: targetOf(cell(row, 'destino')), placement: strict('colocacion', PLACEMENT_OF, cell(row, 'colocacion')) });
   const checks: Check[] = expectChecks(expect, result);
   if (expect.rationale !== undefined) {
     const read = await act('GET', `/requirements/${expect.rationale.code}`, token);
-    const observed = field(read.body, expect.rationale.field) ?? null;
+    // Lectura estricta: sin 200 no hay valor que comparar (un campo ausente no es «null»)
+    const observed = read.status === 200 ? field(read.body, expect.rationale.field) : undefined;
     const wanted = expect.rationale.value;
     const text = expect.rationale.field === 'programCode' ? `${expect.rationale.code} es de ${String(wanted)}` : `${expect.rationale.code} tiene padre ${String(wanted)}`;
     checks.push(check(observed === wanted, text, `${expect.rationale.code} ${expect.rationale.field} ${String(observed)}`));
   }
   const after = await snapshotOf(token, 'PRG-001');
   checks.push(unchangedCheck(before, after, 'la lista de PRG-001'));
-  const note = expect.required === true && checks.some((entry) => !entry.ok) ? REQUIRED_NOTE : undefined;
+  // Una petición rechazada no deja evento de auditoría
+  checks.push(auditDelta(auditBefore, await auditCount(code, 'requirement.moved'), 0, `requirement.moved de ${code}`));
+  const note = expect.required === true && errorsOf(result).targetCode !== 'required' ? REQUIRED_NOTE : undefined;
   return verdict(checks, note);
 };
 

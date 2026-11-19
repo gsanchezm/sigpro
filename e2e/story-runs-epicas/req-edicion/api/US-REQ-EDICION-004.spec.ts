@@ -1,7 +1,7 @@
 import { field } from '../../../story-runs/support/api';
 import { defineApiRows, type ApiRowHandler, type Outcome } from '../../core/framework';
 import { cell, check, preparationFailed, strict, type Check } from '../../support/checks';
-import { ACCOUNT_OF, TENANT_A, act, codeCell, codesOf, expectChecks, itemsOf, loginAs, positionsOf, resetTenants, snapshotOf, unchangedCheck, verdict } from './common';
+import { ACCOUNT_OF, TENANT_A, act, codeCell, codesOf, expectChecks, itemsOf, loginAs, positionsOf, resetTenants, snapshotOf, unchangedCheck, verdict, auditCount, auditDelta } from './common';
 
 // US-REQ-EDICION-004 — Borrar un requisito con sus descendientes y sus enlaces (API). Preparación de cada fila: reinicio de alumno01 y
 // token de gestor@sigpro.test. Las listas de códigos de las celdas se leen con `codesOf`, que valida cada código y LANZA si no lo es.
@@ -39,8 +39,14 @@ const deletesSubtree: ApiRowHandler = async (row) => {
   const token = await gestorToken(expected);
   if (typeof token !== 'string') return token;
   const beforeItems = itemsOf(await act('GET', '/programs/PRG-001/requirements', token));
+  const auditBefore = await auditCount(code, 'requirement.deleted');
   const result = await act('DELETE', `/requirements/${code}`, token);
+  const auditAfter = await auditCount(code, 'requirement.deleted');
   const checks: Check[] = expectChecks({ status: 204 }, result);
+  // Un borrado correcto deja un evento requirement.deleted del código borrado
+  checks.push(auditDelta(auditBefore, auditAfter, 1, `requirement.deleted de ${code}`));
+  // La historia dice «el programa PRG-001 tiene 14 requisitos» como punto de partida
+  checks.push(check(beforeItems?.length === 14, 'PRG-001 tiene 14 requisitos antes del borrado', `PRG-001 tiene ${beforeItems?.length ?? '(sin leer)'} requisitos antes del borrado`));
   for (const gone of deleted) checks.push(await existsCheck(token, gone, false));
   for (const stay of kept) checks.push(await existsCheck(token, stay, true));
   const afterItems = itemsOf(await act('GET', '/programs/PRG-001/requirements', token));

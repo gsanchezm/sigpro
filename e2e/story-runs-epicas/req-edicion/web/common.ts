@@ -161,7 +161,8 @@ export const titleButtonOf = (page: Page, code: string): Locator => page.getByTe
 /** Diálogo «Nuevo requisito». */
 export const newDialog = (page: Page): Locator => page.getByRole('dialog', { name: 'Nuevo requisito', exact: true }).or(page.getByTestId(REQUISITOS_TESTIDS.REQUIREMENT_NEW_DIALOG));
 /** Botón «Nuevo requisito» de la cabecera de la lista. */
-export const newButton = (page: Page): Locator => page.getByRole('button', { name: 'Nuevo requisito' }).or(page.getByTestId(REQUISITOS_TESTIDS.REQUIREMENTS_NEW));
+/** Nombre accesible del botón es «+ Nuevo requisito» (el «+» es texto; la «N» de atajo va oculta): se compara el nombre entero. */
+export const newButton = (page: Page): Locator => page.getByRole('button', { name: /^\+ ?Nuevo requisito$/ }).or(page.getByTestId(REQUISITOS_TESTIDS.REQUIREMENTS_NEW));
 /** Panel de detalle del requisito abierto. */
 export const detailPanel = (page: Page): Locator => page.getByTestId(REQUISITOS_TESTIDS.REQUIREMENT_DETAIL);
 
@@ -264,3 +265,102 @@ export const readText = (target: Locator): Promise<string | undefined> => textOf
 
 /** Comprobación de que una ventana de observación no ve nada: se usa con `holdsFor` sobre una condición. */
 export const absentFor = async (condition: () => Promise<boolean>): Promise<boolean> => (await holdsFor(async () => !(await condition()))).held;
+
+// --- Lecturas acotadas: insignia del panel, ausencia y presencia comprobadas, orden de la UI y arrastre medido ------------
+
+/** Insignia de estado del PANEL abierto (la del árbol no cuenta). */
+export const panelBadge = (page: Page): Locator => detailPanel(page).getByTestId(REQUISITOS_TESTIDS.REQUIREMENT_STATE_BADGE);
+
+/** Ausencia comprobada: 0 coincidencias. Un error de lectura NO cuenta como ausencia (queda «no cumplido»). */
+export const isAbsent = async (target: Locator): Promise<boolean> => (await safe(() => target.count(), -1)) === 0;
+
+/** Presencia comprobada: la primera coincidencia es visible. Un error de lectura NO cuenta como presencia. */
+export const isShown = (target: Locator): Promise<boolean> => safe(() => target.first().isVisible({ timeout: 500 }), false);
+
+/** Fila de la UI en orden de pantalla: código (del nombre accesible), nivel (`aria-level`). */
+export interface UiRow {
+  readonly code: string;
+  readonly level: number;
+}
+
+/** Filas `treeitem` o `listitem` de un ámbito, tal como están en el DOM (orden de pantalla). Se lee en el navegador. */
+export const uiRowsIn = (scope: Locator, role: 'treeitem' | 'listitem'): Promise<readonly UiRow[]> =>
+  safe(
+    () =>
+      scope.getByRole(role).evaluateAll((nodes) =>
+        nodes.map((node) => ({
+          code: (node.getAttribute('aria-label') ?? '').split(' ')[0] ?? '',
+          level: Number(node.getAttribute('aria-level') ?? '0'),
+        })),
+      ),
+    [],
+  );
+
+/** Raíces en orden de pantalla (nivel 1). */
+export const uiRootsOf = (rows: readonly UiRow[]): readonly string[] => rows.filter((row) => row.level === 1).map((row) => row.code);
+
+/** Hijos directos de `parent` en orden de pantalla: los que siguen a su fila con un nivel más, hasta la siguiente fila de su nivel o menor. */
+export const uiChildrenOf = (rows: readonly UiRow[], parent: string): readonly string[] => {
+  const index = rows.findIndex((row) => row.code === parent);
+  if (index < 0) return [];
+  const start = rows[index];
+  if (start === undefined) return [];
+  const children: string[] = [];
+  for (const row of rows.slice(index + 1)) {
+    if (row.level <= start.level) break;
+    if (row.level === start.level + 1) children.push(row.code);
+  }
+  return children;
+};
+
+/** Registra en la página los inicios de arrastre reales del navegador (`dragstart`). Se arma antes del gesto. */
+export const armDragLog = async (page: Page): Promise<void> => {
+  await page.evaluate(() => {
+    const registry = window as unknown as Record<string, unknown>;
+    registry.__sigproDragStarts = [];
+    document.addEventListener('dragstart', (event) => {
+      const origin = (event.target as Element | null)?.closest('[data-testid^="requirement-row-"]');
+      (registry.__sigproDragStarts as string[]).push(origin?.getAttribute('data-testid') ?? '(ninguno)');
+    });
+  });
+};
+
+/** Inicios de arrastre registrados desde `armDragLog` (ids de prueba de las filas de origen). */
+export const dragStarts = (page: Page): Promise<readonly string[]> =>
+  safe(() => page.evaluate(() => ((window as unknown as Record<string, unknown>).__sigproDragStarts as string[] | undefined) ?? []), []);
+
+/** Resultado de un gesto de arrastre: si el navegador arrancó el arrastre sobre el origen, qué marca tenía el destino con el puntero encima y si el punto es de la fila destino. */
+export interface DragOutcome {
+  readonly started: boolean;
+  readonly dropOnTarget: string;
+  readonly pointerOnTarget: boolean;
+}
+
+/**
+ * Arrastra la fila `from` sobre la fila `to` (soltando a `zone` de su altura: 0 arriba, 1 abajo) con el puntero en 10 pasos desde el asa.
+ * Devuelve lo medido, o el diagnóstico si el gesto del puntero falla.
+ */
+export const performDrag = async (page: Page, from: string, to: string, zone: number): Promise<DragOutcome | Blocked> => {
+  const handle = page.getByTestId(REQUISITOS_DYNAMIC_TESTIDS.REQUIREMENT_HANDLE(from));
+  const target = page.getByTestId(REQUISITOS_DYNAMIC_TESTIDS.REQUIREMENT_ROW(to));
+  try {
+    await handle.scrollIntoViewIfNeeded({ timeout: 2_000 });
+    await target.scrollIntoViewIfNeeded({ timeout: 2_000 });
+    const origin = await handle.boundingBox({ timeout: 2_000 });
+    const destination = await target.boundingBox({ timeout: 2_000 });
+    if (origin === null || destination === null) return { message: `no se pudo medir el asa de ${from} o la fila ${to}`, note: 'el asa de arrastre o la fila destino no tienen caja visible' };
+    const start = [origin.x + origin.width / 2, origin.y + origin.height / 2] as const;
+    const end = [destination.x + destination.width / 2, destination.y + destination.height * zone] as const;
+    await page.mouse.move(start[0], start[1]);
+    await page.mouse.down();
+    await page.mouse.move(end[0], end[1], { steps: 10 });
+    const dropOnTarget = (await target.getAttribute('data-drop', { timeout: 1_000 })) ?? '(ninguno)';
+    const pointerOnTarget = await target.evaluate((node, point) => node.contains(document.elementFromPoint(point[0], point[1])), end, { timeout: 2_000 });
+    await page.mouse.up();
+    const started = (await dragStarts(page)).includes(`requirement-row-${from}`);
+    return { started, dropOnTarget, pointerOnTarget };
+  } catch (error) {
+    await page.mouse.up().catch(() => undefined);
+    return { message: `no se pudo arrastrar ${from} sobre ${to}: ${String(error).split('\n')[0] ?? 'error'}`, note: 'el gesto del puntero falló en el arnés' };
+  }
+};

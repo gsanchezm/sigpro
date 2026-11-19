@@ -1,6 +1,6 @@
 import { defineApiRows, type ApiRowHandler, type Outcome } from '../../core/framework';
 import { cell, check, preparationFailed, strict, type Check } from '../../support/checks';
-import { ACCOUNT_OF, TENANT_A, act, codeCell, expectChecks, loginAs, resetTenants, snapshotOf, unchangedCheck, verdict, type Expect } from './common';
+import { ACCOUNT_OF, TENANT_A, act, auditCount, auditDelta, auditItems, codeCell, expectChecks, loginAs, resetTenants, snapshotOf, unchangedCheck, verdict, type Expect } from './common';
 import { field } from '../../../story-runs/support/api';
 
 // US-REQ-EDICION-003 — Editar un requisito y devolverlo a borrador al cambiar el texto (API). Preparación de cada fila: reinicio de
@@ -68,8 +68,22 @@ const editFieldsValidated: ApiRowHandler = async (row) => {
   const initial = await stateOf(token, 'REQ-001');
   if (initial !== 'approved') return preparationFailed(expected, `REQ-001 tiene state approved (la lectura da ${String(initial)})`, await act('GET', '/requirements/REQ-001', token));
   const body = strict('cuerpo', BODY_OF, cell(row, 'cuerpo'));
+  const expect = strict('respuesta', RESPUESTA_E1, cell(row, 'respuesta'));
+  const auditBefore = await auditCount('REQ-001', 'requirement.updated');
   const result = await act('PATCH', '/requirements/REQ-001', token, body);
-  return verdict(expectChecks(strict('respuesta', RESPUESTA_E1, cell(row, 'respuesta')), result));
+  const auditAfter = await auditCount('REQ-001', 'requirement.updated');
+  const checks: Check[] = expectChecks(expect, result);
+  // Un 200 deja un evento requirement.updated; un 422 no deja evento
+  checks.push(auditDelta(auditBefore, auditAfter, result.status === 200 ? 1 : 0, 'requirement.updated de REQ-001'));
+  // Un 200 queda persistido: se vuelve a leer el requisito
+  if (result.status === 200) {
+    const stored = await act('GET', '/requirements/REQ-001', token);
+    for (const [key, value] of Object.entries(expect.fields ?? {})) {
+      const saved = field(stored.body, key);
+      checks.push(check(JSON.stringify(saved) === JSON.stringify(value), `guardado ${key} ${JSON.stringify(value)}`, `guardado ${key} ${JSON.stringify(saved ?? null)}`));
+    }
+  }
+  return verdict(checks);
 };
 
 // --- Esquema 2: cambiar el texto devuelve el requisito a borrador y cambiar otros campos no -------------------------------
@@ -83,11 +97,20 @@ const changeReverts: ApiRowHandler = async (row) => {
   const final = strict('estado_final', STATE_OF, cell(row, 'estado_final'));
   const before = await stateOf(token, code);
   if (before !== initial) return preparationFailed(expected, `${code} tiene state ${initial} (la lectura da ${String(before)})`, await act('GET', `/requirements/${code}`, token));
+  const auditBefore = await auditCount(code, 'requirement.updated');
   const result = await act('PATCH', `/requirements/${code}`, token, strict('cuerpo', CHANGE_OF, cell(row, 'cuerpo')));
+  const auditAfter = await auditCount(code, 'requirement.updated');
+  // Al devolver a borrador, el evento indica el estado anterior en revertedFrom
+  const reverted = initial !== 'draft' && final === 'draft' ? await auditItems(code, 'requirement.updated') : undefined;
   const checks: Check[] = expectChecks({ status: 200, fields: { state: final } }, result);
   // La respuesta debe coincidir con lo que la API guarda: se vuelve a leer el requisito
   const stored = await stateOf(token, code);
   checks.push(check(stored === final, `${code} guarda state ${final}`, `${code} guarda state ${String(stored)}`));
+  checks.push(auditDelta(auditBefore, auditAfter, 1, `requirement.updated de ${code}`));
+  if (reverted !== undefined) {
+    const hit = reverted.some((item) => field(field(item, 'diff') ?? {}, 'revertedFrom') === initial);
+    checks.push(check(hit, `la auditoría indica revertedFrom ${initial}`, hit ? `la auditoría indica revertedFrom ${initial}` : `ningún evento de ${code} indica revertedFrom ${initial}`));
+  }
   return verdict(checks);
 };
 

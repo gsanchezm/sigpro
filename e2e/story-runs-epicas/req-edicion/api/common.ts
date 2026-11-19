@@ -1,6 +1,6 @@
 import { call, errorCode, field, type ApiResult } from '../../../story-runs/support/api';
 import { DEMO, TENANT_A, TENANT_B, startSession, type Credentials } from '../../../story-runs/support/prepare';
-import { check, conclude, errorsOf, type Check } from '../../support/checks';
+import { check, conclude, errorsOf, strict, type Check } from '../../support/checks';
 import type { Outcome } from '../../core/framework';
 
 // Piezas comunes de las filas de API de EP-REQ-EDICION: cuentas con su sesión (las de alumno01 y las de alumno02), peticiones con su
@@ -81,7 +81,10 @@ export interface Expect {
   readonly errors?: Readonly<Record<string, string>>;
   /** Si se da, `errors` no puede traer ninguna clave aparte de las de `errors`. */
   readonly onlyErrors?: boolean;
-  /** Campo que debe traer un motivo no vacío (el texto no se compara). Acepta la clave exacta o «campo.índice». */
+  /**
+   * Campo que debe traer un motivo no vacío (el texto del motivo no se compara). Acepta CUALQUIER motivo: la clave exacta del campo
+   * o «campo.N» (zod da «tags.0» al fallar un elemento de la lista). Un motivo vacío o ausente no cumple.
+   */
   readonly motiveFor?: string;
 }
 
@@ -139,3 +142,27 @@ export const codeCell = (text: string): string => {
 
 /** Lista de códigos de una celda («REQ-001, REQ-002 y REQ-003»): cada código pasa por `codeCell`. */
 export const codesOf = (text: string): readonly string[] => text.split(/, | y /).map(codeCell);
+
+// --- Auditoría: eventos de una acción sobre un código (lectura con el administrador de alumno01) ----------------------------
+
+/** Eventos de la acción sobre el código, leídos de GET /api/audit con el administrador de alumno01. `undefined` si no se pueden leer. */
+export const auditItems = async (code: string, action: string): Promise<readonly Record<string, unknown>[] | undefined> => {
+  const session = await loginAs(strict('cuenta', ACCOUNT_OF, 'alumno01@sigpro.lab'));
+  if (session.token === undefined) return undefined;
+  const listed = await call('GET', '/audit', { tenant: TENANT_A, token: session.token, query: `q=${code}&limit=100` });
+  if (listed.status !== 200) return undefined;
+  const items = field(listed.body, 'items');
+  const list: unknown[] = Array.isArray(items) ? items : Array.isArray(listed.body) ? listed.body : [];
+  return list.filter((item): item is Record<string, unknown> => typeof item === 'object' && item !== null && field(item, 'action') === action && field(item, 'entityId') === code);
+};
+
+/** Número de eventos de la acción sobre el código (`undefined` si no se pueden leer). */
+export const auditCount = async (code: string, action: string): Promise<number | undefined> => (await auditItems(code, action))?.length;
+
+/** La auditoría de la acción crece exactamente en `delta` entre dos lecturas (ambas legibles). */
+export const auditDelta = (before: number | undefined, after: number | undefined, delta: number, label: string): Check =>
+  check(
+    before !== undefined && after !== undefined && after - before === delta,
+    `${label}: la auditoría crece en ${delta}`,
+    before === undefined || after === undefined ? `${label}: auditoría no legible` : `${label}: la auditoría crece en ${after - before}`,
+  );

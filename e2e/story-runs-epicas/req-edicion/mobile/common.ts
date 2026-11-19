@@ -1,16 +1,18 @@
 import type { Locator, Page } from '@playwright/test';
 import { DEMO, TENANT_A, type Credentials } from '../../../story-runs/support/prepare';
-import { REQUISITOS_TESTIDS } from '../../../../packages/shared/src/testids';
+import { MOVIL_REQUIREMENTS_DYNAMIC_TESTIDS, MOVIL_REQUIREMENTS_TESTIDS, REQUISITOS_DYNAMIC_TESTIDS, REQUISITOS_TESTIDS } from '../../../../packages/shared/src/testids';
 import { ACTION, CEILING_MS, runSteps, safe, waitUntil, type Step } from '../../support/browser';
 import { check, preparationFailedWeb, sleep, type Check } from '../../support/checks';
 import { outcome, type BrowserRowHandler, type Outcome } from '../../core/framework';
-import { armToasts, interact, recordToasts, TOAST_KEY, type AccountName, type WebAction } from '../web/common';
+import { armToasts, interact, recordToasts, TOAST_KEY, type WebAction } from '../web/common';
 
 // Piezas comunes de las filas de la app móvil de EP-REQ-EDICION, servida como web de Expo (390 × 844). NO es iOS ni Android nativo:
-// las filas que dependen del sistema nativo devuelven notExecutable. Los localizadores son de rol y de nombre (la app usa `role` y
-// `aria-label`); el motivo de un botón deshabilitado va en su `aria-description` (no en `title`). Toda acción pasa por `interact`.
+// las filas que dependen del sistema nativo devuelven notExecutable. Los localizadores son de rol y de nombre o de id de prueba de la
+// propia fila/elemento. Expo web NO emite `aria-description`: el motivo de un botón deshabilitado sale en `data-reason` (Button.tsx) y
+// como texto visible junto al control, que se lee SOLO dentro del elemento de su motivo (`requirement-action-reason-*`).
 
-export const EXPO_NOTE = 'El veredicto vale para Expo web (390 × 844): no se ha comprobado en iOS ni en Android nativo.';
+export const EXPO_NOTE =
+  'El veredicto vale para Expo web (390 × 844): no se ha comprobado en iOS ni en Android nativo. Decisión: la explicación de un botón deshabilitado se lee como texto visible junto al control, dentro de su elemento de motivo; Expo web no emite aria-description, y el motivo medido queda en data-reason (Button.tsx).';
 export const VIEWPORT = { width: 390, height: 844 } as const;
 export const LOGIN_PATH = '/login';
 export const TENANT_TEXT = 'Tenant de trabajo';
@@ -68,11 +70,11 @@ export const prepareMobile = async (page: Page, credentials: Credentials, expect
   return failure === undefined ? undefined : preparationFailedWeb(expected, failure);
 };
 
-// --- Localizadores --------------------------------------------------------------------------------------------------------------
+// --- Localizadores --------------------------------------------------------------------------------------------------------
 
 export const tree = (page: Page): Locator => page.getByRole('list', { name: 'Árbol de requisitos', exact: true }).or(page.getByTestId(REQUISITOS_TESTIDS.REQUIREMENTS_TREE));
-/** Tarjeta de un requisito en el árbol (`role="listitem"`, nombre «REQ-… título»). */
-export const cardOf = (page: Page, code: string): Locator => page.getByRole('listitem', { name: `${code} ` }).or(page.getByTestId(REQUISITOS_TESTIDS.REQUIREMENTS_TREE));
+/** Fila de un requisito en el árbol: solo su propio testid (el contenedor de la lista siempre está visible y no prueba nada). */
+export const cardOf = (page: Page, code: string): Locator => page.getByTestId(REQUISITOS_DYNAMIC_TESTIDS.REQUIREMENT_ROW(code));
 /** Botón que abre la hoja de un requisito («Abrir detalle de REQ-…»). */
 export const openSheetButton = (page: Page, code: string): Locator => page.getByRole('button', { name: `Abrir detalle de ${code}`, exact: true });
 /** Botón «Nuevo requisito» de la lista. */
@@ -89,25 +91,45 @@ export const sheetButton = (page: Page, name: string): Locator => sheet(page).ge
 /** Abre la hoja de un requisito tocando su botón de detalle. */
 export const openSheet = (code: string): WebAction => (page) => interact(openSheetButton(page, code), `abrir la hoja de ${code}`, (element) => element.click(ACTION));
 
-/** Pulsa un botón por su nombre exacto en la página (o en el diálogo indicado). */
-export const pressButton = (locate: (page: Page) => Locator, name: string): WebAction => (page) => interact(locate(page).getByRole('button', { name, exact: true }), `pulsar «${name}»`, (element) => element.click(ACTION));
+// --- Estados y motivos -------------------------------------------------------------------------------------------------------
 
-// --- Estados y motivos (la app móvil los expone en aria-disabled y aria-description) ----------------------------------------
+/** Elemento del motivo visible de una acción de la hoja («edit», «move», «delete», «save»). */
+export const reasonOf = (page: Page, action: 'edit' | 'move' | 'delete' | 'save'): Locator => page.getByTestId(MOVIL_REQUIREMENTS_DYNAMIC_TESTIDS.ACTION_REASON(action));
 
-/** Estado de un botón móvil: `aria-disabled` y, si está deshabilitado, su motivo (`aria-description`). */
-export const mobileStateCheck = async (target: Locator, expected: 'habilitado' | 'deshabilitado', reason?: string): Promise<Check> => {
+/** Elemento del motivo del botón «Nuevo requisito» de la lista. */
+export const newReasonOf = (page: Page): Locator => page.getByTestId(MOVIL_REQUIREMENTS_TESTIDS.NEW_REASON);
+
+/**
+ * Estado de un botón móvil. Se mide `aria-disabled` y `data-reason` (Button.tsx). Si se da `reasonOf`, el motivo visible se lee SOLO
+ * dentro de ese elemento (nunca a nivel de página). Expo web no emite `aria-description`: la explicación se lee como texto visible.
+ */
+export const mobileStateCheck = async (target: Locator, expected: 'habilitado' | 'deshabilitado', reason?: string, reasonElement?: Locator): Promise<Check> => {
   const disabled = (await safe(() => target.first().getAttribute('aria-disabled', { timeout: 500 }), null)) === 'true';
-  const described = (await safe(() => target.first().getAttribute('aria-description', { timeout: 500 }), null)) ?? '(sin explicación)';
+  const dataReason = (await safe(() => target.first().getAttribute('data-reason', { timeout: 500 }), null)) ?? undefined;
+  const visibleReason = reasonElement === undefined ? undefined : await safe(() => reasonElement.first().innerText({ timeout: 1_000 }), undefined);
   const state = disabled ? 'deshabilitado' : 'habilitado';
-  const explained = reason === undefined || described === reason;
-  return check(state === expected && explained, `${expected}${reason === undefined ? '' : ` con la explicación «${reason}»`}`, `${state}${disabled ? ` con la explicación «${described}»` : ''}`);
+  const reasonOk = reason === undefined || (dataReason === reason && (reasonElement === undefined || visibleReason?.trim() === reason));
+  const detail = disabled ? ` con data-reason «${dataReason ?? '(sin motivo)'}»${reasonElement === undefined ? '' : ` y texto visible «${visibleReason ?? '(no visible)'}»`}` : '';
+  return check(state === expected && reasonOk, `${expected}${reason === undefined ? '' : ` con la explicación «${reason}»`}`, `${state}${detail}`);
 };
 
-/** Un texto visible (coincidencia exacta de elemento) en la página. */
-export const textVisible = async (page: Page, text: string): Promise<boolean> => safe(() => page.getByText(text, { exact: true }).first().isVisible({ timeout: 1_000 }), false);
+/** Cuenta los POST /api/requirements que la página envía desde que se llama (un alta enviada o no). */
+export const countCreates = (page: Page): (() => number) => {
+  let total = 0;
+  page.on('request', (request) => {
+    if (request.method() === 'POST' && new URL(request.url()).pathname.endsWith('/requirements')) total += 1;
+  });
+  return () => total;
+};
 
-/** Espera (con techo) a que un texto exacto aparezca; devuelve si apareció. */
-export const waitText = async (page: Page, text: string): Promise<boolean> => (await waitUntil(() => textVisible(page, text))).reached;
+// --- Textos y resultados ----------------------------------------------------------------------------------------------------
+
+/** Un texto visible (coincidencia exacta de elemento) en la página o dentro del ámbito dado. */
+export const textVisible = async (page: Page, text: string, scope?: Locator): Promise<boolean> =>
+  safe(() => (scope ?? page).getByText(text, { exact: true }).first().isVisible({ timeout: 1_000 }), false);
+
+/** Espera (con techo) a que un texto exacto aparezca en el ámbito; devuelve si apareció. */
+export const waitText = async (page: Page, text: string, scope?: Locator): Promise<boolean> => (await waitUntil(() => textVisible(page, text, scope))).reached;
 
 /** Resultado de una fila móvil con sus comprobaciones. */
 export const outcomeOf = (checks: readonly Check[], note?: string): Outcome =>
@@ -120,10 +142,3 @@ export const outcomeOf = (checks: readonly Check[], note?: string): Outcome =>
 
 /** Espera corta de asentamiento (la reacción local de la app es de ~1 s). */
 export const settleMobile = (): Promise<void> => sleep(SETTLE_MS);
-
-/** Acción nula que no hace nada (para ordenar pasos opcionales). */
-export const noop: WebAction = async () => undefined;
-
-/** Mismas acciones de la web, reutilizadas para la app móvil (`interact` no depende del diseño). */
-export { interact, armToasts, recordToasts, TOAST_KEY };
-export type { AccountName, WebAction };

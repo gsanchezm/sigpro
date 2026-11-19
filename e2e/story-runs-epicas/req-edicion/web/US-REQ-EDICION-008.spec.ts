@@ -5,7 +5,7 @@ import { cell, check, preparationFailedWeb, strict, sleep, type Check } from '..
 import { field } from '../../../story-runs/support/api';
 import { ACCOUNT_OF, TENANT_A, act, loginAs, resetTenants, verdict } from '../api/common';
 import { REQUISITOS_TESTIDS } from '../../../../packages/shared/src/testids';
-import { ACCOUNT_BY_EMAIL, actionFailed, detailPanel, inOrder, interact, menuItem, newButton, newDialog, noOkToast, onWeb, openRequirements, rowMenuOf, signIn, stateCheck, toastShown, type AccountName, type WebAction } from './common';
+import { ACCOUNT_BY_EMAIL, actionFailed, detailPanel, isAbsent, isShown, panelBadge, inOrder, interact, menuItem, newButton, newDialog, noOkToast, onWeb, openRequirements, rowMenuOf, signIn, stateCheck, toastShown, type AccountName, type WebAction } from './common';
 
 // US-REQ-EDICION-008 — Dar de alta un requisito desde «Nuevo requisito» (web, escritorio 1440 px). Preparación de cada fila: reinicio
 // de alumno01, inicio de sesión de la cuenta de la fila en /login?tenant=alumno01 y apertura de /programs/PRG-001/requirements.
@@ -95,7 +95,9 @@ const createsValid: BrowserRowHandler = async (row, { page }) => {
   const blocked = await inOrder(openDialog, typeTitle('Requisito de prueba'), chooseIn('Requisito padre', parent.option), chooseIn('Prioridad', priority.option), dialogButton('Crear requisito'))(page);
   if (blocked !== undefined) return actionFailed(expected, blocked);
   const toast = await toastShown(page, 'ok', 'Requisito creado', 'REQ-041 se añadió al árbol');
-  const badge = await safe(() => page.getByTestId(REQUISITOS_TESTIDS.REQUIREMENT_STATE_BADGE).innerText({ timeout: 2_000 }), undefined);
+  // La insignia se lee del PANEL abierto: la del árbol también muestra el estado de cada fila
+  const panelReady = await safe(() => detailPanel(page).waitFor({ timeout: 10_000 }).then(() => true), false);
+  const badge = panelReady ? await safe(() => panelBadge(page).innerText({ timeout: 2_000 }), undefined) : undefined;
   const detail = await safe(() => detailPanel(page).innerText({ timeout: 2_000 }), '');
   // Persistencia: el requisito creado se lee por la API (lo que la pantalla muestra no basta)
   const stored = await storedRequirement('REQ-041');
@@ -123,7 +125,7 @@ const rejectsTitle: BrowserRowHandler = async (row, { page }) => {
   const endedAt = Date.now();
   const shown = await waitUntil(async () => (await safe(() => TITLE_ERROR(page).innerText({ timeout: 500 }), '')).trim() === notice);
   const observedNotice = (await safe(() => TITLE_ERROR(page).innerText({ timeout: 500 }), '')).trim();
-  const dialogOpen = await safe(() => newDialog(page).isVisible(), false);
+  const dialogOpen = await isShown(newDialog(page));
   const quiet = await noOkToast(page, endedAt);
   const checks: Check[] = [
     check(shown.reached, `bajo «Título» el aviso «${notice}»`, `bajo «Título» ${observedNotice === '' ? '(ningún aviso)' : `«${observedNotice}»`}`),
@@ -199,7 +201,7 @@ const cancelCreatesNothing: BrowserRowHandler = async (row, { page }) => {
   const blocked = await inOrder(openDialog, typeTitle('Requisito de prueba'), dialogButton('Cancelar'))(page);
   if (blocked !== undefined) return actionFailed(expected, blocked);
   const endedAt = Date.now();
-  const closed = await waitUntil(async () => !(await safe(() => newDialog(page).isVisible(), false)));
+  const closed = await waitUntil(() => isAbsent(newDialog(page)));
   const quiet = await noOkToast(page, endedAt);
   const stored = await storedRequirement('REQ-041');
   return verdict([
@@ -222,8 +224,8 @@ const onlyCreatorsOpen: BrowserRowHandler = async (row, { page }) => {
     // La tecla N tampoco abre el diálogo a un rol sin permiso de alta
     await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
     await page.keyboard.press('n');
-    await sleep(500);
-    const open = await safe(() => newDialog(page).isVisible(), false);
+    await sleep(1_000);
+    const open = !(await isAbsent(newDialog(page)));
     checks.push(check(!open, 'la tecla N no abre el diálogo', open ? 'la tecla N abre el diálogo' : 'la tecla N no abre el diálogo'));
   }
   return verdict(checks);

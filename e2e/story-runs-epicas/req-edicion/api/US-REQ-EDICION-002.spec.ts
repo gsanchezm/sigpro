@@ -1,6 +1,7 @@
 import { defineApiRows, type ApiRowHandler, type Outcome } from '../../core/framework';
-import { cell, preparationFailed, strict } from '../../support/checks';
-import { ACCOUNT_OF, TENANT_A, act, codeCell, expectChecks, loginAs, resetTenants, verdict, type Expect } from './common';
+import { cell, check, preparationFailed, strict, type Check } from '../../support/checks';
+import type { ApiResult } from '../../../story-runs/support/api';
+import { ACCOUNT_OF, TENANT_A, act, auditCount, auditDelta, codeCell, expectChecks, loginAs, resetTenants, verdict, type Expect } from './common';
 
 // US-REQ-EDICION-002 — Rechazar un alta con sus motivos (API). Preparación de cada fila: reinicio de alumno01 y token de
 // gestor@sigpro.test. Cada celda se traduce con un mapa estricto; «(sin el campo)» es que la clave no se envía.
@@ -53,6 +54,19 @@ const REQUIRED_NOTE = 'la historia pide la clave «required»; la API devuelve e
 /** Alta con el token dado (gestor en alumno01). */
 const create = (token: string, body: Record<string, unknown>) => act('POST', '/requirements', token, body);
 
+/**
+ * Alta con su evento de auditoría: un alta correcta suma un requirement.created de REQ-041; una rechazada no suma evento y no consume
+ * código (REQ-041 sigue sin existir).
+ */
+const createAudited = async (token: string, body: Record<string, unknown>): Promise<{ readonly result: ApiResult; readonly checks: Check[] }> => {
+  const before = await auditCount('REQ-041', 'requirement.created');
+  const result = await create(token, body);
+  const after = await auditCount('REQ-041', 'requirement.created');
+  const checks: Check[] = [auditDelta(before, after, result.status === 201 ? 1 : 0, 'requirement.created de REQ-041')];
+  if (result.status !== 201) checks.push(check((await act('GET', '/requirements/REQ-041', token)).status === 404, 'REQ-041 no existe (el alta rechazada no consume código)', 'REQ-041 responde ' + String((await act('GET', '/requirements/REQ-041', token)).status)));
+  return { result, checks };
+};
+
 /** Inicia sesión como gestor en alumno01 tras reiniciarlo. Devuelve el token, o el resultado de la preparación fallida. */
 const gestorToken = async (expected: string): Promise<string | Outcome> => {
   await resetTenants([TENANT_A]);
@@ -74,8 +88,8 @@ const titleChecked: ApiRowHandler = async (row) => {
   const token = await gestorToken(expected);
   if (typeof token !== 'string') return token;
   const title = strict('título', TITLE_OF, cell(row, 'titulo'));
-  const result = await create(token, { programCode: 'PRG-001', title });
-  return verdict(expectChecks(strict('respuesta', RESPUESTA_E1, cell(row, 'respuesta')), result));
+  const created = await createAudited(token, { programCode: 'PRG-001', title });
+  return verdict([...expectChecks(strict('respuesta', RESPUESTA_E1, cell(row, 'respuesta')), created.result), ...created.checks]);
 };
 
 // --- Esquema 2: un campo obligatorio que falta devuelve el motivo required ------------------------------------------------------
@@ -91,8 +105,8 @@ const requiredField: ApiRowHandler = async (row) => {
   if (typeof token !== 'string') return token;
   const programa = strict('programa', PROGRAM_OF, cell(row, 'programa'));
   const title = strict('título', TITLE_OF, cell(row, 'titulo'));
-  const result = await create(token, { programCode: programa === undefined ? undefined : codeCell(programa), title });
-  const checks = expectChecks(strict('respuesta', RESPUESTA_E2, cell(row, 'respuesta')), result);
+  const created = await createAudited(token, { programCode: programa === undefined ? undefined : codeCell(programa), title });
+  const checks = [...expectChecks(strict('respuesta', RESPUESTA_E2, cell(row, 'respuesta')), created.result), ...created.checks];
   return verdict(checks, checks.some((entry) => !entry.ok) ? REQUIRED_NOTE : undefined);
 };
 
@@ -116,8 +130,8 @@ const optionalFields: ApiRowHandler = async (row) => {
   const priority = strict('prioridad', PRIORITY_OF, cell(row, 'prioridad'));
   const tags = strict('etiquetas', TAGS_OF, cell(row, 'etiquetas'));
   const description = strict('descripción', DESCRIPTION_OF, cell(row, 'descripcion'));
-  const result = await create(token, { programCode: 'PRG-001', title: 'Requisito de prueba', priority, tags, description });
-  return verdict(expectChecks(strict('respuesta', RESPUESTA_E3, cell(row, 'respuesta')), result));
+  const created = await createAudited(token, { programCode: 'PRG-001', title: 'Requisito de prueba', priority, tags, description });
+  return verdict([...expectChecks(strict('respuesta', RESPUESTA_E3, cell(row, 'respuesta')), created.result), ...created.checks]);
 };
 
 defineApiRows({

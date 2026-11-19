@@ -5,7 +5,7 @@ import { cell, check, preparationFailedWeb, strict } from '../../support/checks'
 import { field } from '../../../story-runs/support/api';
 import { ACCOUNT_OF, TENANT_A, act, codeCell, itemsOf, loginAs, resetTenants, verdict } from '../api/common';
 import { REQUISITOS_TESTIDS } from '../../../../packages/shared/src/testids';
-import { ACCOUNT_BY_EMAIL, actionFailed, interact, inOrder, menuItem, onWeb, openRequirements, rowMenuOf, rowOf, signIn, stateCheck, toastShown, type AccountName, type WebAction } from './common';
+import { ACCOUNT_BY_EMAIL, actionFailed, interact, inOrder, menuItem, onWeb, openRequirements, rowMenuOf, rowOf, signIn, stateCheck, toastShown, tree, uiRowsIn, type AccountName, type WebAction } from './common';
 
 // US-REQ-EDICION-011 — Eliminar un requisito con su confirmación (web, escritorio 1440 px). Preparación de cada fila: reinicio de
 // alumno01, inicio de sesión en /login?tenant=alumno01 y apertura de /programs/PRG-001/requirements. Estado del seed: REQ-004 no tiene
@@ -107,13 +107,16 @@ const deletesSubtree: BrowserRowHandler = async (row, { page }) => {
   const blocked = await inOrder(chooseDelete(code), confirmButton('Eliminar'))(page);
   if (blocked !== undefined) return actionFailed(expected, blocked);
   const toast = await toastShown(page, 'ok', 'Requisito eliminado', notice);
-  const gone = await Promise.all(subtree.map((entry) => safe(() => rowOf(page, entry).isVisible({ timeout: 500 }), true)));
+  // Se espera a que la lista esté cargada: sin filas no se puede afirmar que algo desapareció
+  const loaded = await waitUntil(async () => (await uiRowsIn(tree(page), 'treeitem')).length > 0);
+  const onScreen = await uiRowsIn(tree(page), 'treeitem');
+  const gone = subtree.map((entry) => onScreen.length > 0 && !onScreen.some((row) => row.code === entry));
   const after = await programCodes();
   const apiGone = await Promise.all(subtree.map((entry) => existsStatus(entry)));
   const rest = (before ?? []).filter((entry) => !subtree.includes(entry));
   return verdict([
     check(toast.seen, `aviso «Requisito eliminado» con «${notice}»`, `aviso ${toast.observed}`),
-    check(gone.every((visible) => visible === false), `ya no aparecen ${subtree.join(', ')}`, gone.every((visible) => visible === false) ? `ya no aparecen ${subtree.join(', ')}` : 'siguen apareciendo en el árbol'),
+    check(loaded.reached && gone.every(Boolean), `ya no aparecen ${subtree.join(', ')}`, !loaded.reached ? 'la lista no se cargó' : gone.every(Boolean) ? `ya no aparecen ${subtree.join(', ')}` : `siguen en el árbol: ${subtree.filter((_, i) => !gone[i]).join(', ')}`),
     check(apiGone.every((status) => status === 404), `la API responde 404 para ${subtree.join(', ')}`, `la API responde ${apiGone.map((status) => String(status ?? '(sin leer)')).join(', ')}`),
     check(after !== undefined && JSON.stringify(after) === JSON.stringify(rest), `el resto de PRG-001 sigue (${rest.length} requisitos)`, after === undefined ? 'lista no legible' : `PRG-001 tiene ${after.length} requisitos`),
   ]);

@@ -1,18 +1,20 @@
 import type { Locator, Page } from '@playwright/test';
 import { defineBrowserRows, type BrowserRowHandler } from '../../core/framework';
-import { ACTION, quoted, safe } from '../../support/browser';
-import { cell, check, strict, type Check } from '../../support/checks';
+import { ACTION, safe, textOf } from '../../support/browser';
+import { cell, check, strict } from '../../support/checks';
 import { field } from '../../../story-runs/support/api';
 import { ACCOUNT_OF, TENANT_A, act, loginAs, resetTenants, verdict } from '../api/common';
 import { REQUISITOS_DYNAMIC_TESTIDS, REQUISITOS_TESTIDS } from '../../../../packages/shared/src/testids';
 import { interact, noOkToast, toastShown, type WebAction } from '../web/common';
-import { ACCOUNT_CREDENTIALS, mobileStateCheck, newButton, newDialog, onExpoWeb, outcomeOf, prepareMobile, textVisible, waitText } from './common';
+import { ACCOUNT_CREDENTIALS, countCreates, mobileStateCheck, newButton, newDialog, newReasonOf, onExpoWeb, outcomeOf, prepareMobile, sheet, waitText } from './common';
 
 // US-REQ-EDICION-012 — Dar de alta un requisito desde la lista (app móvil, Expo web 390 px). Preparación de cada fila: reinicio de
 // alumno01, la app en /login con alumno01 en «Tenant de trabajo», inicio de sesión de la cuenta y llegada a /programs/PRG-001/requirements.
+// Las lecturas van acotadas: la insignia y la etiqueta a la HOJA abierta; el aviso del título, al diálogo; el motivo, a su elemento.
 
 const TITLE = (page: Page): Locator => newDialog(page).getByRole('textbox', { name: 'Título', exact: true });
 const DESCRIPTION = (page: Page): Locator => newDialog(page).getByRole('textbox', { name: 'Descripción', exact: true });
+const TITLE_ERROR = (page: Page): Locator => newDialog(page).getByTestId(REQUISITOS_TESTIDS.REQUIREMENT_NEW_TITLE_ERROR);
 
 /** Abre el diálogo «Nuevo requisito» desde la lista. */
 const openNew: WebAction = (page) => interact(newButton(page), 'pulsar «Nuevo requisito»', (element) => element.click(ACTION));
@@ -53,6 +55,12 @@ const TITLE_OF: ReadonlyMap<string, string> = new Map([
   ['(121 letras a)', 'a'.repeat(121)],
 ]);
 
+/** Aviso de título que la celda cita, y su texto exacto. */
+const NOTICE_OF: ReadonlyMap<string, string> = new Map([
+  ['«El título debe tener al menos 3 caracteres»', 'El título debe tener al menos 3 caracteres'],
+  ['«El título admite hasta 120 caracteres»', 'El título admite hasta 120 caracteres'],
+]);
+
 /** Cuenta de la fila de «Nuevo requisito» (solo las dos que aparecen en la historia). */
 const OPEN_ACCOUNT_OF: ReadonlyMap<string, typeof ACCOUNT_CREDENTIALS.gestor> = new Map([
   ['gestor@sigpro.test', ACCOUNT_CREDENTIALS.gestor],
@@ -80,7 +88,7 @@ const runAll = async (page: Page, steps: readonly WebAction[], expected: string)
   return undefined;
 };
 
-// --- Esquema 1: un alta válida nace en borrador con el padre y la prioridad elegidos ------------------------------------------
+// --- Esquema 1: un alta válida nace en borrador con el padre y la prioridad elegidos ------------------------------------
 
 const createsValid: BrowserRowHandler = async (row, { page }) => {
   await resetTenants([TENANT_A]);
@@ -92,20 +100,21 @@ const createsValid: BrowserRowHandler = async (row, { page }) => {
   const blocked = await runAll(page, [openNew, typeTitle('Requisito de prueba'), choose('Requisito padre', parent.option), choose('Prioridad', priority.option), submit], expected);
   if (blocked !== undefined) return blocked;
   const toast = await toastShown(page, 'ok', 'Requisito creado', 'REQ-041 se añadió al árbol');
-  const badge = await safe(() => page.getByTestId(REQUISITOS_TESTIDS.REQUIREMENT_STATE_BADGE).innerText({ timeout: 2_000 }), undefined);
+  // La insignia se lee de la HOJA abierta de REQ-041 (la de la lista repite el estado de cada fila)
+  const badge = await safe(() => sheet(page).getByTestId(REQUISITOS_TESTIDS.REQUIREMENT_STATE_BADGE).innerText({ timeout: 2_000 }), undefined);
   const stored = await storedRequirement();
   return verdict([
     check(toast.seen, '«Requisito creado» con «REQ-041 se añadió al árbol»', `aviso ${toast.observed}`),
-    check(badge?.trim() === 'Borrador', 'el detalle de REQ-041 muestra «Borrador»', `el detalle muestra «${badge ?? '(sin leer)'}»`),
+    check(badge?.trim() === 'Borrador', 'la hoja de REQ-041 muestra «Borrador»', `la hoja muestra «${badge ?? '(sin leer)'}»`),
     check(stored?.status === 200 && (field(stored.body, 'parentCode') ?? null) === parent.parentCode && field(stored.body, 'priority') === priority.value, `REQ-041 guardado con padre ${parent.parentCode ?? 'null'} y prioridad ${priority.value}`, `REQ-041 guardado con padre ${stored === undefined ? '(sin leer)' : String(field(stored.body, 'parentCode') ?? null)} y prioridad ${stored === undefined ? '(sin leer)' : String(field(stored.body, 'priority'))}`),
   ]);
 };
 
-// --- Esquema 2: la etiqueta y la descripción se guardan con el requisito nuevo -----------------------------------------------
+// --- Esquema 2: la etiqueta y la descripción se guardan con el requisito nuevo ----------------------------------------
 
 const savesTagAndDescription: BrowserRowHandler = async (row, { page }) => {
   await resetTenants([TENANT_A]);
-  const expected = `aviso «Requisito creado» con «REQ-041 se añadió al árbol»; el detalle de REQ-041 muestra la etiqueta ${cell(row, 'etiqueta')}`;
+  const expected = `aviso «Requisito creado» con «REQ-041 se añadió al árbol»; la hoja de REQ-041 muestra la etiqueta ${cell(row, 'etiqueta')}`;
   const failure = await prepareMobile(page, ACCOUNT_CREDENTIALS.gestor, expected);
   if (failure !== undefined) return failure;
   const value = strict('etiqueta', TAG_OF, cell(row, 'etiqueta'));
@@ -113,40 +122,44 @@ const savesTagAndDescription: BrowserRowHandler = async (row, { page }) => {
   const blocked = await runAll(page, [openNew, typeTitle('Requisito de prueba'), tag(value), typeDescription(description), submit], expected);
   if (blocked !== undefined) return blocked;
   const toast = await toastShown(page, 'ok', 'Requisito creado', 'REQ-041 se añadió al árbol');
-  const shownTag = await textVisible(page, 'Ciberseguridad');
+  // La etiqueta se lee de la HOJA abierta, no de la lista
+  const shownTag = (await safe(() => textOf(sheet(page).getByTestId(REQUISITOS_TESTIDS.REQUIREMENT_TAGS)), undefined)) === 'Ciberseguridad';
   const stored = await storedRequirement();
   const tags = field(stored?.body ?? null, 'tags');
   const bare = String(field(stored?.body ?? null, 'description') ?? '').replace(/^<p>([\s\S]*)<\/p>$/, '$1');
   return verdict([
     check(toast.seen, '«Requisito creado» con «REQ-041 se añadió al árbol»', `aviso ${toast.observed}`),
-    check(shownTag, 'el detalle de REQ-041 muestra la etiqueta «Ciberseguridad»', shownTag ? 'el detalle muestra la etiqueta «Ciberseguridad»' : 'el detalle no muestra «Ciberseguridad»'),
+    check(shownTag, 'la hoja de REQ-041 muestra la etiqueta «Ciberseguridad»', shownTag ? 'la hoja muestra la etiqueta «Ciberseguridad»' : 'la hoja no muestra «Ciberseguridad»'),
     check(Array.isArray(tags) && tags.includes(value), `REQ-041 guardado con la etiqueta ${value}`, `REQ-041 guardado con etiquetas ${JSON.stringify(tags ?? null)}`),
     check(bare === description, `REQ-041 guardado con la descripción «${description}»`, `REQ-041 guardado con la descripción «${bare}»`),
   ]);
 };
 
-// --- Esquema 3: un título no válido muestra su aviso bajo el campo y no se envía ---------------------------------------------
+// --- Esquema 3: un título no válido muestra su aviso bajo el campo y no se envía ---------------------------------------
 
 const rejectsTitle: BrowserRowHandler = async (row, { page }) => {
   await resetTenants([TENANT_A]);
-  const notice = quoted(cell(row, 'aviso'));
-  const expected = `bajo «Título» el aviso «${notice}»; el diálogo sigue abierto; no aparece «Requisito creado»`;
+  const notice = strict('aviso', NOTICE_OF, cell(row, 'aviso'));
+  const expected = `bajo «Título» el aviso «${notice}»; el diálogo sigue abierto; no aparece «Requisito creado»; no se envía ninguna alta`;
   const failure = await prepareMobile(page, ACCOUNT_CREDENTIALS.gestor, expected);
   if (failure !== undefined) return failure;
   const title = strict('título', TITLE_OF, cell(row, 'titulo'));
+  const creates = countCreates(page);
   const blocked = await runAll(page, [openNew, typeTitle(title), submit], expected);
   if (blocked !== undefined) return blocked;
-  const shown = await waitText(page, notice);
+  // El aviso va bajo el campo «Título» del diálogo (no en cualquier parte de la página)
+  const shown = await waitText(page, notice, TITLE_ERROR(page));
   const dialogOpen = await safe(() => newDialog(page).isVisible(), false);
   const quiet = await noOkToast(page, Date.now());
   return verdict([
-    check(shown, `bajo «Título» el aviso «${notice}»`, shown ? `bajo «Título» el aviso «${notice}»` : `no aparece «${notice}»`),
+    check(shown, `bajo «Título» el aviso «${notice}»`, shown ? `bajo «Título» el aviso «${notice}»` : `bajo «Título» no aparece «${notice}»`),
     check(dialogOpen, 'el diálogo sigue abierto', dialogOpen ? 'el diálogo sigue abierto' : 'el diálogo se cerró'),
     check(quiet.held, 'no aparece «Requisito creado»', quiet.held ? 'no aparece «Requisito creado»' : `aparece ${quiet.seen}`),
+    check(creates() === 0, 'no se envía ninguna alta', `se envían ${creates()} altas`),
   ]);
 };
 
-// --- Esquema 4: solo los roles con permiso de alta pueden abrir el diálogo ---------------------------------------------------
+// --- Esquema 4: solo los roles con permiso de alta pueden abrir el diálogo ---------------------------------------------
 
 const onlyCreatorsOpen: BrowserRowHandler = async (row, { page }) => {
   await resetTenants([TENANT_A]);
@@ -155,13 +168,8 @@ const onlyCreatorsOpen: BrowserRowHandler = async (row, { page }) => {
   const expected = want.enabled ? '«Nuevo requisito» está habilitado' : `«Nuevo requisito» está deshabilitado y debajo se lee «${want.reason ?? ''}»`;
   const failure = await prepareMobile(page, credentials, expected);
   if (failure !== undefined) return failure;
-  const state = await mobileStateCheck(newButton(page), want.enabled ? 'habilitado' : 'deshabilitado', want.reason);
-  const checks: Check[] = [state];
-  if (want.reason !== undefined) {
-    const shown = await textVisible(page, want.reason);
-    checks.push(check(shown, `debajo se lee «${want.reason}»`, shown ? `debajo se lee «${want.reason}»` : `no se lee «${want.reason}»`));
-  }
-  return verdict(checks);
+  // El motivo se lee solo dentro de su elemento («requirements-new-reason»), no a nivel de página
+  return verdict([await mobileStateCheck(newButton(page), want.enabled ? 'habilitado' : 'deshabilitado', want.reason, newReasonOf(page))]);
 };
 
 defineBrowserRows({
