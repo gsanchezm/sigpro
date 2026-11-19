@@ -76,6 +76,8 @@ const flowAdvance: BrowserRowHandler = async (row, { page }) => {
     const wanted = wantedStatus.get(step.state) ?? '(sin celda)';
     const read: StepRead | undefined = flow.find((entry) => entry.state === step.state);
     const status = check(read?.status === wanted, `${step.name} ${cell(row, step.column)}`, `${step.name} ${phraseOf(read?.status)}`);
+    // El nombre que muestra la app para el paso (texto propio de .flow-name), comparado exacto con el de la historia.
+    const named = check(read?.name === step.name, `el paso ${step.number} se llama ${step.name}`, `el paso ${step.number} se llama «${read?.name ?? '(no legible)'}»`);
     // La historia pide ✓ en el punto del paso hecho, en lugar de su número: el indicador debe ser exactamente ✓.
     const indicator =
       wanted === 'done'
@@ -87,7 +89,7 @@ const flowAdvance: BrowserRowHandler = async (row, { page }) => {
             ),
           ]
         : [];
-    return [status, ...indicator];
+    return [named, status, ...indicator];
   });
 
   return verdictWeb([

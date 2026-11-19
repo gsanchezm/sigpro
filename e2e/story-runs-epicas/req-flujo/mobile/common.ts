@@ -5,12 +5,12 @@ import { ACTION, CEILING_MS, isVisible, runSteps, safe, waitUntil, type Step } f
 import { sleep, type Check } from '../../support/checks';
 import type { Outcome } from '../../core/framework';
 import { verdictOf } from '../api/common';
-import { attrOf, norm, press, QUIET_MS, recordToasts, STATE_LABEL, TARGET_OF_BUTTON, textOf, toastLog, TOAST_KEY, type ToastEntry } from '../web/common';
+import { attrOf, buttonsOf, norm, press, QUIET_MS, recordToasts, STATE_LABEL, TARGET_OF_BUTTON, textOf, TOAST_KEY } from '../web/common';
 
 // Piezas comunes de las filas de la app móvil de EP-REQ-FLUJO. La app se ejecuta como web de Expo a 390 × 844: NO es iOS ni Android nativo.
 // Los localizadores son de rol (botones con nombre accesible, diálogos por su id de prueba) y, donde la app no tiene nombre accesible, de su id.
 // La deshabilitación se lee del atributo `aria-disabled` (el botón de Expo web no lleva la propiedad `disabled`); el motivo, del texto visible
-// debajo del botón. Toda acción va en `runSteps` y toda lectura tiene plazo corto.
+// debajo del botón. Toda acción va en `press`/`runSteps` y toda lectura tiene plazo corto.
 
 /** Salvedad de plataforma: el veredicto de una fila móvil vale para Expo web, no para iOS ni Android nativo. */
 export const EXPO_NOTE =
@@ -80,31 +80,55 @@ export const openSheet = async (page: Page, code: string): Promise<string | unde
 
 // --- Lecturas (localizadores de la pantalla móvil) ----------------------------------------------------------------------------------------
 
-/** Paso del flujo de la hoja: estado de la línea (`data-status`) y botones de transición del paso. */
+/** Nombres de los cuatro pasos tal como los muestra la app (texto propio de cada paso). */
+export const FLOW_NAMES: readonly string[] = ['Redacción', 'Aprobación', 'Verificación', 'Validación'];
+
+/** Paso del flujo de la hoja: nombre (texto propio exacto), línea de estado (`data-status`) y botones de transición (todos y visibles). */
 export interface MobileStep {
   readonly state: string;
+  readonly name: string | undefined;
   readonly status: string | undefined;
   readonly buttons: readonly string[] | undefined;
+  readonly visibleButtons: readonly string[] | undefined;
 }
 
-/** Los cuatro pasos del flujo dentro de la hoja. */
-export const readFlowMobile = (page: Page): Promise<readonly MobileStep[]> =>
-  Promise.all(
-    ['draft', 'approved', 'verified', 'validated'].map(async (state): Promise<MobileStep> => {
-      const step = page.getByTestId(REQUISITOS_DYNAMIC_TESTIDS.REQUIREMENT_FLOW_STEP(state));
-      return { state, status: await attrOf(step, 'data-status'), buttons: await buttonNamesIn(step) };
-    }),
-  );
-
-const buttonNamesIn = async (scope: Locator): Promise<readonly string[] | undefined> => {
+/** Textos propios de los elementos de un ámbito (solo los nodos de texto directos de cada elemento). */
+const ownTextsIn = async (scope: Locator): Promise<readonly string[] | undefined> => {
   try {
-    return (await scope.getByRole('button').allInnerTexts()).map((text) => norm(text) ?? '');
+    return await scope.locator('*').evaluateAll((elements) =>
+      elements
+        .map((element) =>
+          Array.from(element.childNodes)
+            .filter((node) => node.nodeType === Node.TEXT_NODE)
+            .map((node) => node.textContent ?? '')
+            .join('')
+            .trim(),
+        )
+        .filter((text) => text !== ''),
+    );
   } catch {
     return undefined;
   }
 };
 
-/** Número de transiciones del flujo en la hoja (el contenedor de botones solo existe en el paso actual). */
+/** Los cuatro pasos del flujo dentro de la hoja. El nombre es el texto propio del paso que coincide con uno de los cuatro nombres. */
+export const readFlowMobile = (page: Page): Promise<readonly MobileStep[]> =>
+  Promise.all(
+    ['draft', 'approved', 'verified', 'validated'].map(async (state): Promise<MobileStep> => {
+      const step = page.getByTestId(REQUISITOS_DYNAMIC_TESTIDS.REQUIREMENT_FLOW_STEP(state));
+      const texts = await ownTextsIn(step);
+      const buttons = await buttonsOf(step, '[role="button"]');
+      return {
+        state,
+        name: texts?.find((text) => FLOW_NAMES.includes(text)),
+        status: (await attrOf(step, 'data-status')) ?? undefined,
+        buttons: buttons?.all,
+        visibleButtons: buttons?.visible,
+      };
+    }),
+  );
+
+/** Número de transiciones del flujo en la hoja (el contenedor de botones solo existe en el paso actual; -1 si no se puede leer). */
 export const transitionContainers = (page: Page): Promise<number> => safe(() => page.getByTestId(REQUISITOS_TESTIDS.REQUIREMENT_TRANSITIONS).count(), -1);
 
 /** Botón de transición del paso actual por su nombre exacto. */
@@ -122,25 +146,50 @@ export const disabledMobile = (target: Locator): Promise<boolean | undefined> =>
     undefined,
   );
 
-/** Motivo visible debajo de un botón de transición: `undefined` si no hay ninguno, el texto si hay uno, `null` si hay varios (ambiguo). */
-export const reasonOfButton = async (page: Page, to: string): Promise<string | undefined | null> => {
+/**
+ * Motivo debajo de un botón de transición, con todos sus casos: `ninguno` (no hay elemento), `visible` (texto que se ve), `oculto` (el
+ * elemento existe pero no se ve), `varios` (ambiguo) y `no-legible` (la lectura falló).
+ */
+export type ReasonReading =
+  | { readonly kind: 'ninguno' }
+  | { readonly kind: 'visible'; readonly text: string }
+  | { readonly kind: 'oculto' }
+  | { readonly kind: 'varios' }
+  | { readonly kind: 'no-legible' };
+
+export const reasonOfButton = async (page: Page, to: string): Promise<ReasonReading> => {
   const target = page.getByTestId(MOVIL_REQUIREMENTS_DYNAMIC_TESTIDS.TRANSITION_REASON(to));
   const found = await safe(() => target.count(), -1);
-  if (found === 0) return undefined;
-  if (found !== 1) return null;
-  return norm(await textOf(target));
+  if (found === 0) return { kind: 'ninguno' };
+  if (found !== 1) return found > 1 ? { kind: 'varios' } : { kind: 'no-legible' };
+  const visible = await isVisible(target);
+  const text = norm(await textOf(target));
+  if (!visible) return { kind: 'oculto' };
+  return text === undefined ? { kind: 'no-legible' } : { kind: 'visible', text };
 };
+
+/** Rótulo de cada caso de la lectura del motivo, para lo observado (mapa de despacho, sin ramas en cadena). */
+const REASON_LABEL: ReadonlyMap<ReasonReading['kind'], string> = new Map<ReasonReading['kind'], string>([
+  ['ninguno', '(ninguno)'],
+  ['oculto', '(motivo presente pero oculto)'],
+  ['varios', '(varios motivos)'],
+  ['no-legible', '(no legible)'],
+]);
+
+/** Descripción de la lectura del motivo, para lo observado. */
+export const describeReason = (reading: ReasonReading): string => (reading.kind === 'visible' ? `«${reading.text}»` : (REASON_LABEL.get(reading.kind) ?? '(no legible)'));
 
 /** Badge de estado dentro de la hoja: texto visible y `data-state`. */
 export const sheetState = async (page: Page): Promise<{ readonly label: string | undefined; readonly state: string | undefined }> => ({
   label: norm(await textOf(sheetOf(page).getByTestId(REQUISITOS_TESTIDS.REQUIREMENT_STATE_BADGE))),
-  state: await attrOf(sheetOf(page).getByTestId(REQUISITOS_TESTIDS.REQUIREMENT_STATE_BADGE), 'data-state'),
+  state: (await attrOf(sheetOf(page).getByTestId(REQUISITOS_TESTIDS.REQUIREMENT_STATE_BADGE), 'data-state')) ?? undefined,
 });
 
 // --- Confirmación (la misma en la hoja: `role="dialog"` con el id de la confirmación) ----------------------------------------------------
 
 export const confirmOf = (page: Page): Locator => page.getByTestId(REQUISITOS_TESTIDS.REQUIREMENT_TRANSITION_DIALOG);
-export const confirmErrorOf = (page: Page): Locator => page.getByTestId(`${REQUISITOS_TESTIDS.REQUIREMENT_TRANSITION_DIALOG}-error`);
+/** El error de la confirmación, acotado a la propia confirmación (no a un error de otra parte de la pantalla). */
+export const confirmErrorOf = (page: Page): Locator => confirmOf(page).getByTestId(`${REQUISITOS_TESTIDS.REQUIREMENT_TRANSITION_DIALOG}-error`);
 
 /** Título y texto de la confirmación, contados dentro de ella (exactos). */
 export const confirmShows = async (page: Page, requirementCode: string, from: string, to: string): Promise<{ readonly title: number; readonly body: number }> => ({
@@ -157,7 +206,7 @@ export const confirmActions = async (page: Page): Promise<{ readonly cancel: num
 /** Estado al que lleva un botón (su texto en la interfaz). */
 export const targetLabelOfButton = (buttonName: string): string => STATE_LABEL.get(TARGET_OF_BUTTON.get(buttonName) ?? '') ?? '(desconocido)';
 
-/** Pulsa un botón de la confirmación (dentro de ella). */
+/** Pulsa un botón de la confirmación (dentro de ella), con diagnóstico si el clic no se completa. */
 export const pressConfirm = (page: Page, name: 'Confirmar' | 'Cancelar'): Promise<string | undefined> =>
   press(confirmOf(page).getByRole('button', { name, exact: true }), `pulsar «${name}» en la confirmación`);
 
@@ -167,9 +216,6 @@ export const openConfirm = async (page: Page, buttonName: string): Promise<{ rea
   if (failure !== undefined) return { failure, shown: false };
   return { shown: (await waitUntil(() => isVisible(confirmOf(page)))).reached };
 };
-
-/** Un aviso de éxito registrado desde la última «armada» (lectura del registro, no de la pantalla). */
-export const okToastSeen = async (page: Page, title: string): Promise<boolean> => (await toastLog(page)).some((entry: ToastEntry) => entry.tone === 'ok' && entry.title === title);
 
 /** Pausa de la ventana de observación (mayor que la vida del aviso) antes de afirmar que NO aparece. */
 export const quietMobile = (): Promise<void> => sleep(QUIET_MS);

@@ -17,8 +17,8 @@ export const COOKIE_NOTE = 'La prueba fija la preferencia de cookies (sigpro.coo
 export const LOGIN_URL = `/login?tenant=${TENANT_A}`;
 /** Ventana de observación para afirmar que un aviso NO aparece: mayor que sus 3 s de vida (TOAST_MS). */
 export const QUIET_MS = 4_000;
-/** Tolerancia de la prueba para el cierre del aviso (la historia fija 3 s; se añade 1 s de reacción). */
-export const TOAST_TOLERANCE_MS = 1_000;
+/** Tolerancia de la prueba para el cierre del aviso (la historia fija 3 s; se admite medio segundo de reacción, el error medido es de 20 a 60 ms). */
+export const TOAST_TOLERANCE_MS = 500;
 
 /** Estado del requisito → texto de la interfaz. */
 export const STATE_LABEL: ReadonlyMap<string, string> = new Map<string, string>([
@@ -103,9 +103,20 @@ export interface ToastEntry {
   readonly at: number;
 }
 
-/** Avisos registrados desde la última «armada». */
-export const toastLog = (page: Page): Promise<readonly ToastEntry[]> =>
-  safe(() => page.evaluate((key: string) => ((window as unknown as Record<string, unknown>)[key] as ToastEntry[] | undefined) ?? [], TOAST_KEY), []);
+/**
+ * Avisos registrados desde la última «armada». `undefined` si el registro no se puede leer: no es lo mismo que «ningún aviso», y quien lo usa
+ * no cuenta el aviso como ausente ni como presente.
+ */
+export const toastLog = async (page: Page): Promise<readonly ToastEntry[] | undefined> => {
+  try {
+    return await page.evaluate((key: string) => ((window as unknown as Record<string, unknown>)[key] as ToastEntry[] | undefined) ?? [], TOAST_KEY);
+  } catch {
+    return undefined;
+  }
+};
+
+/** El aviso de éxito con ese cuerpo, dentro de la zona de avisos de la pantalla (lectura de la presencia, no del registro). */
+const okToastOf = (page: Page, body: string): Locator => page.getByTestId(ACCESO_DYNAMIC_TESTIDS.TOAST('ok')).getByText(body, { exact: true });
 
 /** Vacía el registro justo antes de la acción que se prueba. */
 export const armToasts = (page: Page): Promise<void> =>
@@ -122,18 +133,23 @@ export const armToasts = (page: Page): Promise<void> =>
 export const describeToasts = (log: readonly ToastEntry[]): string =>
   log.length === 0 ? 'ningún aviso' : log.map((entry) => `${entry.tone} «${entry.title}» / «${entry.body}»`).join(' | ');
 
-/** ¿Hay un aviso de éxito con ese título y cuerpo? Espera con techo; devuelve lo que se registró. */
+/**
+ * ¿Hay un aviso de éxito con ese título y cuerpo, registrado Y visible en pantalla? Espera con techo. El registro dice que se insertó; la
+ * visibilidad dice que el usuario lo ve. Si el registro no se puede leer, no se cuenta como presente.
+ */
 export const waitOkToast = async (page: Page, title: string, body: string): Promise<{ readonly found: boolean; readonly observed: string; readonly at?: number }> => {
-  const matches = (entries: readonly ToastEntry[]): ToastEntry | undefined => entries.find((entry) => entry.tone === 'ok' && entry.title === title && entry.body === body);
-  const waited = await waitUntil(async () => matches(await toastLog(page)) !== undefined);
+  const matches = (entries: readonly ToastEntry[] | undefined): ToastEntry | undefined => entries?.find((entry) => entry.tone === 'ok' && entry.title === title && entry.body === body);
+  const waited = await waitUntil(async () => matches(await toastLog(page)) !== undefined && (await isVisible(okToastOf(page, body))));
   const log = await toastLog(page);
   const hit = matches(log);
-  return { found: waited.reached, observed: describeToasts(log), ...(hit === undefined ? {} : { at: hit.at }) };
+  const visible = hit !== undefined && (await isVisible(okToastOf(page, body)));
+  const observed = log === undefined ? 'registro de avisos no legible' : describeToasts(log);
+  return { found: waited.reached && visible, observed: `${observed}; ${visible ? 'visible en pantalla' : 'no visible en pantalla'}`, ...(hit === undefined ? {} : { at: hit.at }) };
 };
 
-/** Tras aparecer, el aviso debe cerrarse solo (3 s de vida): se mide hasta que desaparece el elemento. `undefined` si no se cierra. */
-export const toastLifeMs = async (page: Page, appearedAt: number): Promise<number | undefined> => {
-  const closed = await waitUntil(async () => (await safe(() => page.getByTestId(ACCESO_DYNAMIC_TESTIDS.TOAST('ok')).count(), 1)) === 0, 6_000);
+/** Tras aparecer, el aviso debe cerrarse solo (3 s de vida): se mide hasta que desaparece ESE aviso (por su cuerpo). `undefined` si no se cierra. */
+export const toastLifeMs = async (page: Page, appearedAt: number, body: string): Promise<number | undefined> => {
+  const closed = await waitUntil(async () => (await safe(() => okToastOf(page, body).count(), 1)) === 0, 6_000);
   return closed.reached ? Date.now() - appearedAt : undefined;
 };
 
@@ -196,9 +212,44 @@ export const openDetail = (page: Page, programCode: string, code: string): Promi
 /** Texto visible de un elemento (o `undefined` si no se puede leer en el plazo). */
 export const textOf = (target: Locator): Promise<string | undefined> => safe(async () => (await target.first().innerText({ timeout: 2000 })).trim(), undefined);
 
-/** Atributo de un elemento (`null` o ausente → `undefined`; lectura fallida → `undefined`). */
-export const attrOf = (target: Locator, name: string): Promise<string | undefined> =>
-  safe(async () => (await target.first().getAttribute(name, { timeout: 2000 })) ?? undefined, undefined);
+/**
+ * Atributo de un elemento, distinguiendo tres casos: `null` = el atributo no existe; `undefined` = la lectura falló (no es legible); el texto =
+ * su valor. Quien compara no puede tomar «no existe» por «no se pudo leer».
+ */
+export const attrOf = (target: Locator, name: string): Promise<string | null | undefined> => safe(() => target.first().getAttribute(name, { timeout: 2000 }), undefined);
+
+/** Texto propio de un elemento: solo sus nodos de texto directos (sin los textos de sus hijos, como el «sr-only» del paso). */
+export const ownTextOf = (target: Locator): Promise<string | undefined> =>
+  safe(
+    () =>
+      target.first().evaluate(
+        (element) =>
+          Array.from(element.childNodes)
+            .filter((node) => node.nodeType === Node.TEXT_NODE)
+            .map((node) => node.textContent ?? '')
+            .join('')
+            .trim(),
+        undefined,
+        { timeout: 2000 },
+      ),
+    undefined,
+  );
+
+/** Botones dentro de un ámbito (por defecto `button`; en móvil, los `[role="button"]`): nombre de todos, también de los ocultos, y de los visibles de verdad. */
+export const buttonsOf = async (scope: Locator, selector: string = 'button'): Promise<{ readonly all: readonly string[]; readonly visible: readonly string[] } | undefined> => {
+  try {
+    const items = await scope.locator(selector).evaluateAll((elements) =>
+      elements.map((element) => {
+        const style = getComputedStyle(element);
+        const box = element.getBoundingClientRect();
+        return { text: (element.textContent ?? '').trim(), visible: style.display !== 'none' && style.visibility !== 'hidden' && box.width > 0 && box.height > 0 };
+      }),
+    );
+    return { all: items.map((item) => norm(item.text) ?? ''), visible: items.filter((item) => item.visible).map((item) => norm(item.text) ?? '') };
+  } catch {
+    return undefined;
+  }
+};
 
 /** Deshabilitado por propiedad (`disabled`); `undefined` si no se puede leer. */
 export const disabledOf = (target: Locator): Promise<boolean | undefined> => safe(() => target.first().isDisabled({ timeout: 2000 }), undefined);
@@ -218,7 +269,7 @@ export const detailOf = (page: Page): Locator => page.getByTestId(REQUISITOS_TES
 /** Estado mostrado por el detalle abierto: texto visible y `data-state` del badge del detalle. */
 export const detailState = async (page: Page): Promise<{ readonly label: string | undefined; readonly state: string | undefined }> => ({
   label: norm(await textOf(detailOf(page).getByTestId(REQUISITOS_TESTIDS.REQUIREMENT_STATE_BADGE))),
-  state: await attrOf(detailOf(page).getByTestId(REQUISITOS_TESTIDS.REQUIREMENT_STATE_BADGE), 'data-state'),
+  state: (await attrOf(detailOf(page).getByTestId(REQUISITOS_TESTIDS.REQUIREMENT_STATE_BADGE), 'data-state')) ?? undefined,
 });
 
 /** Estado mostrado por la fila del requisito en el árbol (texto visible del badge de la fila). */
@@ -230,23 +281,31 @@ export const flowOf = (page: Page): Locator => page.getByTestId(REQUISITOS_TESTI
 /** Paso del flujo por su estado. */
 export const stepOf = (page: Page, state: string): Locator => page.getByTestId(REQUISITOS_DYNAMIC_TESTIDS.REQUIREMENT_FLOW_STEP(state));
 
-/** Un paso del flujo leído: estado de la línea (`data-status`), texto del indicador (✓ o número) y botones de transición. */
+/**
+ * Un paso del flujo leído: su nombre (texto propio de `.flow-name`), la línea de estado (`data-status`), el indicador (`.flow-dot`: ✓ o
+ * número), y los botones dentro del paso: `buttons` son todos (también ocultos) y `visibleButtons` los visibles de verdad.
+ */
 export interface StepRead {
   readonly state: string;
+  readonly name: string | undefined;
   readonly status: string | undefined;
   readonly dot: string | undefined;
   readonly buttons: readonly string[] | undefined;
+  readonly visibleButtons: readonly string[] | undefined;
 }
 
 export const readFlow = (page: Page): Promise<readonly StepRead[]> =>
   Promise.all(
     FLOW_STATES.map(async (state): Promise<StepRead> => {
       const step = stepOf(page, state);
+      const buttons = await buttonsOf(step);
       return {
         state,
-        status: await attrOf(step, 'data-status'),
-        dot: norm(await textOf(step.locator('[aria-hidden="true"]').first())),
-        buttons: await textsOf(step.getByRole('button')),
+        name: await ownTextOf(step.locator('.flow-name')),
+        status: (await attrOf(step, 'data-status')) ?? undefined,
+        dot: norm(await textOf(step.locator('.flow-dot'))),
+        buttons: buttons?.all,
+        visibleButtons: buttons?.visible,
       };
     }),
   );

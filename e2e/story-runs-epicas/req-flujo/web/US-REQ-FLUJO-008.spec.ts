@@ -3,7 +3,7 @@ import { isVisible, waitUntil } from '../../support/browser';
 import { cell, check, preparationFailed, strict } from '../../support/checks';
 import { defineBrowserRows, type BrowserRowHandler } from '../../core/framework';
 import { adminToken, stateOf, transition } from '../api/common';
-import { ACCOUNT_CELLS, BUTTON_CELLS, COOKIE_NOTE, STATE_CELLS, STATE_LABEL, armToasts, dialogOf, detailState, openDetail, openDialog, prepareWeb, press, serverStateOf, toastLog, verdictWeb, webPrepFailed } from './common';
+import { ACCOUNT_CELLS, BUTTON_CELLS, COOKIE_NOTE, STATE_CELLS, STATE_LABEL, armToasts, dialogOf, detailState, openDetail, openDialog, prepareWeb, press, quietWindow, serverStateOf, toastLog, verdictWeb, webPrepFailed } from './common';
 
 // US-REQ-FLUJO-008 — Un paso que el servidor rechaza deja el diálogo abierto con un aviso de error y el estado sin cambiar (web). El caso se
 // produce cuando el detalle muestra un estado que el servidor ya no tiene: otra cuenta (alumno01, por la API) cambia el requisito después de
@@ -52,15 +52,18 @@ const serverRejects: BrowserRowHandler = async (row, { page }) => {
   if (confirmFailure !== undefined) return verdictWeb([check(false, expected, confirmFailure)]);
 
   const alert = await waitUntil(() => isVisible(dialogOf(page).getByRole('alert')));
+  // Tras ver el error se espera la ventana de observación: un «Estado actualizado» tardío tendría tiempo de aparecer.
+  await quietWindow();
   const stillOpen = await isVisible(dialogOf(page));
-  const okShown = (await toastLog(page)).some((entry) => entry.tone === 'ok' && entry.title === OK_TITLE);
+  const toasts = await toastLog(page);
+  const okShown = toasts === undefined ? undefined : toasts.some((entry) => entry.tone === 'ok' && entry.title === OK_TITLE);
   const server = await serverStateOf(requirementCode);
 
   return verdictWeb(
     [
       check(alert.reached, 'aparece dentro del diálogo un aviso de error', alert.reached ? 'aparece dentro del diálogo un aviso de error' : 'no aparece un aviso de error en el diálogo'),
       check(stillOpen, 'el diálogo sigue abierto', stillOpen ? 'el diálogo sigue abierto' : 'el diálogo se cierra'),
-      check(!okShown, `no aparece el aviso «${OK_TITLE}»`, okShown ? `aparece el aviso «${OK_TITLE}»` : `ningún aviso «${OK_TITLE}»`),
+      check(okShown === false, `no aparece el aviso «${OK_TITLE}»`, okShown === undefined ? 'el registro de avisos no se puede leer' : okShown ? `aparece el aviso «${OK_TITLE}»` : `ningún aviso «${OK_TITLE}» tras la ventana de observación`),
       check(server === serverState, `la API devuelve ${serverState}`, `la API devuelve ${server ?? '(sin estado)'}`),
     ],
     `${COOKIE_NOTE} Decisión pendiente: la línea de detalle técnico bajo el aviso no se compara (la historia no la fija); el veredicto no depende de ella.`,

@@ -1,9 +1,14 @@
-import type { Page } from '@playwright/test';
+import type { Locator, Page } from '@playwright/test';
 import { TENANT_A } from '../../../story-runs/support/prepare';
-import { isVisible, runSteps, waitUntil } from '../../support/browser';
+import { isVisible, runSteps, safe, waitUntil } from '../../support/browser';
 import { cell, check, sleep, strict } from '../../support/checks';
 import { defineBrowserRows, type BrowserRowHandler } from '../../core/framework';
-import { ACCOUNT_CELLS, BUTTON_CELLS, COOKIE_NOTE, QUIET_MS, STATE_CELLS, STATE_LABEL, TARGET_OF_BUTTON, TOAST_TOLERANCE_MS, armToasts, attrOf, detailState, dialogActions, dialogOf, disabledOf, eqCheck, openDetail, openDialog, prepareWeb, press, quietWindow, readFlow, rowLabel, serverStateOf, toastLifeMs, toastLog, verdictWeb, waitOkToast, webPrepFailed } from './common';
+import { ACCOUNT_CELLS, BUTTON_CELLS, COOKIE_NOTE, QUIET_MS, STATE_CELLS, STATE_LABEL, TARGET_OF_BUTTON, TOAST_TOLERANCE_MS, armToasts, detailState, dialogActions, dialogOf, eqCheck, openDetail, openDialog, prepareWeb, press, quietWindow, readFlow, rowLabel, serverStateOf, toastLifeMs, toastLog, verdictWeb, waitOkToast, webPrepFailed } from './common';
+
+/** Lectura de un botón en una sola consulta al elemento: deshabilitado y título salen del mismo instante. */
+type ButtonReading = { readonly disabled: boolean; readonly title: string | null };
+const readButton = (target: Locator): Promise<ButtonReading | undefined> =>
+  safe(() => target.first().evaluate((element) => ({ disabled: (element as HTMLButtonElement).disabled, title: element.getAttribute('title') }), undefined, { timeout: 2000 }), undefined);
 
 // US-REQ-FLUJO-007 — Diálogo de confirmación del cambio de estado (web). «Cancelar» cierra el diálogo y no cambia nada; «Confirmar» pide el paso,
 // muestra «Estado actualizado» (3 s) y deja el detalle y la fila del árbol con el estado nuevo; mientras espera la respuesta, «Confirmar» está
@@ -78,7 +83,8 @@ const cancelKeepsState: BrowserRowHandler = async (row, { page }) => {
   await quietWindow();
 
   const after = await detailState(page);
-  const okShown = (await toastLog(page)).some((entry) => entry.tone === 'ok' && entry.title === OK_TITLE);
+  const toasts = await toastLog(page);
+  const okShown = toasts === undefined ? undefined : toasts.some((entry) => entry.tone === 'ok' && entry.title === OK_TITLE);
   const server = await serverStateOf(requirementCode);
 
   return verdictWeb([
@@ -87,7 +93,7 @@ const cancelKeepsState: BrowserRowHandler = async (row, { page }) => {
     check(actions.cancel === 1 && actions.confirm === 1, 'el diálogo tiene «Cancelar» y «Confirmar»', `«Cancelar»: ${actions.cancel} y «Confirmar»: ${actions.confirm} en el diálogo`),
     check(closed.reached, 'el diálogo se cierra', closed.reached ? 'el diálogo se cierra' : 'el diálogo sigue abierto'),
     eqCheck('el detalle sigue mostrando', after.label, expectedLabel),
-    check(!okShown, `no aparece el aviso «${OK_TITLE}»`, okShown ? `aparece el aviso «${OK_TITLE}»` : `ningún aviso «${OK_TITLE}» tras ${QUIET_MS / 1000} s de observación`),
+    check(okShown === false, `no aparece el aviso «${OK_TITLE}»`, okShown === undefined ? 'el registro de avisos no se puede leer' : okShown ? `aparece el aviso «${OK_TITLE}»` : `ningún aviso «${OK_TITLE}» tras ${QUIET_MS / 1000} s de observación`),
     check(server === expectedState, `la API sigue en ${expectedState}`, `la API devuelve ${server ?? '(sin estado)'}`),
   ], `${COOKIE_NOTE} Ventana de observación de ${QUIET_MS / 1000} s (mayor que los 3 s del aviso).`);
 };
@@ -118,7 +124,7 @@ const confirmApplies: BrowserRowHandler = async (row, { page }) => {
   const confirmFailure = await press(dialogOf(page).getByRole('button', { name: 'Confirmar', exact: true }), 'pulsar «Confirmar» en el diálogo');
   if (confirmFailure !== undefined) return verdictWeb([check(false, expected, confirmFailure)]);
   const toast = await waitOkToast(page, OK_TITLE, toastBody);
-  const life = toast.at === undefined ? undefined : await toastLifeMs(page, toast.at);
+  const life = toast.at === undefined ? undefined : await toastLifeMs(page, toast.at, toastBody);
   const closed = await waitUntil(async () => !(await isVisible(dialogOf(page))));
   const detailNew = await waitUntil(async () => (await detailState(page)).label === STATE_LABEL.get(newState));
   const rowNew = await waitUntil(async () => (await rowLabel(page, requirementCode)) === STATE_LABEL.get(newState));
@@ -136,7 +142,7 @@ const confirmApplies: BrowserRowHandler = async (row, { page }) => {
       check(toast.found, `ve «${OK_TITLE}» con «${toastBody}»`, toast.observed),
       check(
         life !== undefined && Math.abs(life - TOAST_MS) <= TOAST_TOLERANCE_MS,
-        `el aviso se cierra solo a los ${TOAST_MS / 1000} s (tolerancia de 1 s)`,
+        `el aviso se cierra solo a los ${TOAST_MS / 1000} s (tolerancia de 0,5 s)`,
         life === undefined ? 'el aviso no se cierra en el plazo de observación' : `el aviso se cierra a los ${life} ms desde que aparece`,
       ),
       check(closed.reached, 'la confirmación se cierra', closed.reached ? 'la confirmación se cierra' : 'la confirmación sigue abierta'),
@@ -145,7 +151,7 @@ const confirmApplies: BrowserRowHandler = async (row, { page }) => {
       check(flowCurrent.length === 1 && flowCurrent[0] === newState, `el flujo pasa al paso de ${cell(row, 'nuevo')}`, `el paso actual del flujo es ${flowCurrent.length === 1 ? (STATE_LABEL.get(flowCurrent[0] ?? '') ?? flowCurrent[0]) : '(ninguno o varios)'}`),
       check(server === newState && detailNew.reached, `la API devuelve ${newState}`, `la API devuelve ${server ?? '(sin estado)'}`),
     ],
-    `${COOKIE_NOTE} El aviso se mide desde su aparición hasta que desaparece; la tolerancia de la prueba es de 1 s sobre los 3 s del producto.`,
+    `${COOKIE_NOTE} El aviso se mide desde su aparición hasta que desaparece; la tolerancia de la prueba es de 0,5 s sobre los 3 s del producto.`,
   );
 };
 
@@ -186,15 +192,19 @@ const busyWhileWaiting: BrowserRowHandler = async (row, { page }) => {
   const confirmFailure = await press(confirmButton, 'pulsar «Confirmar» en el diálogo');
   if (confirmFailure !== undefined) return verdictWeb([check(false, expected, confirmFailure)]);
 
-  const busy = await waitUntil(async () => (await disabledOf(confirmButton)) === true, 5_000);
-  const busyTitle = await attrOf(confirmButton, 'title');
+  // Lectura atómica: el estado deshabilitado y el título salen de la misma consulta; se guarda la última que se cumplió.
+  const busyRead: { current?: ButtonReading } = {};
+  const busy = await waitUntil(async () => {
+    busyRead.current = await readButton(confirmButton);
+    return busyRead.current !== undefined && busyRead.current.disabled && busyRead.current.title === 'Procesando…';
+  }, 5_000);
   const beforeRelease = !released;
   const toast = await waitOkToast(page, OK_TITLE, 'REQ-017 → Aprobado');
   const persisted = await serverStateOf('REQ-017');
 
   return verdictWeb([
-    check(busy.reached, '«Confirmar» está deshabilitado mientras espera', busy.reached ? '«Confirmar» está deshabilitado mientras espera' : '«Confirmar» no se deshabilita mientras espera'),
-    check(busyTitle === 'Procesando…', 'con la explicación «Procesando…»', `con la explicación «${busyTitle ?? '(ninguna)'}»`),
+    check(busy.reached && busyRead.current?.disabled === true, '«Confirmar» está deshabilitado mientras espera', busy.reached ? '«Confirmar» está deshabilitado mientras espera' : '«Confirmar» no se deshabilita mientras espera'),
+    check(busyRead.current?.title === 'Procesando…', 'con la explicación «Procesando…»', `con la explicación «${busyRead.current?.title ?? '(ninguna)'}»`),
     check(beforeRelease, 'la lectura se hace antes de que llegue la respuesta', beforeRelease ? 'la lectura se hace antes de que llegue la respuesta' : 'la respuesta ya había llegado'),
     check(hits === 1, 'se envía una sola petición de transición', `se envían ${hits} peticiones de transición`),
     check(toast.found, `al llegar la respuesta aparece «${OK_TITLE}» con «REQ-017 → Aprobado»`, toast.observed),

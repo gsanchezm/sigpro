@@ -16,14 +16,6 @@ const STEP_CELLS: ReadonlyMap<string, string> = new Map<string, string>([
   ['Validación', 'validated'],
 ]);
 
-/** Nombre del paso según su estado (para observar en qué paso está el requisito). */
-const STEP_NAME: ReadonlyMap<string, string> = new Map<string, string>([
-  ['draft', 'Redacción'],
-  ['approved', 'Aprobación'],
-  ['verified', 'Verificación'],
-  ['validated', 'Validación'],
-]);
-
 /** Lista de botones de la celda «botones», en el orden en que los muestra el paso. */
 const BUTTON_LIST_CELLS: ReadonlyMap<string, readonly string[]> = new Map<string, readonly string[]>([
   ['«Aprobar»', ['Aprobar']],
@@ -93,9 +85,10 @@ const currentStepButtons: BrowserRowHandler = async (row, { page }) => {
     check(
       onCurrent?.state === expectedStep,
       `el paso actual es ${cell(row, 'paso')}`,
-      `el paso actual es ${onCurrent === undefined ? `(${current.length} pasos actuales)` : (STEP_NAME.get(onCurrent.state) ?? onCurrent.state)}`,
+      `el paso actual es ${onCurrent === undefined ? `(${current.length} pasos actuales)` : (onCurrent.name ?? '(nombre no legible)')}`,
     ),
-    check(sameNames(onCurrent?.buttons, buttonNames), `contiene los botones ${cell(row, 'botones')}`, `contiene los botones ${listOf(onCurrent?.buttons)}`),
+    check(onCurrent?.name === cell(row, 'paso'), `el nombre del paso actual en la interfaz es ${cell(row, 'paso')}`, `el nombre del paso actual en la interfaz es «${onCurrent?.name ?? '(no legible)'}»`),
+    check(sameNames(onCurrent?.visibleButtons, buttonNames), `contiene los botones ${cell(row, 'botones')}`, `contiene los botones ${listOf(onCurrent?.visibleButtons)}`),
     check(!unreadable && otherButtons === 0, 'ningún otro paso contiene botones de transición', unreadable ? 'botones de otro paso no legibles' : `otros pasos con botones: ${otherButtons}`),
     check(readable === flow.length, 'los cuatro pasos del flujo son legibles', `pasos legibles: ${readable} de ${flow.length}`),
   ]);
@@ -122,7 +115,9 @@ const enabledOrDenied: BrowserRowHandler = async (row, { page }) => {
     return verdictWeb([check(false, `aparece el botón ${buttonName} en el paso actual`, found === 0 ? `no aparece el botón ${buttonName} en el paso actual` : `aparecen ${found} botones ${buttonName}`)]);
   }
   const disabled = await disabledOf(button);
-  const title = await attrOf(button, 'title');
+  // `title` ausente (null) significa «sin explicación»; una lectura fallida (undefined) no cuenta como ausente.
+  const titleRead = await attrOf(button, 'title');
+  const explanationRead = titleRead === undefined ? '(no legible)' : titleRead === null ? '(ninguna)' : titleRead;
 
   return verdictWeb(
     [
@@ -131,7 +126,11 @@ const enabledOrDenied: BrowserRowHandler = async (row, { page }) => {
         `el botón ${buttonName} ${enabled ? 'está habilitado' : 'está deshabilitado'}`,
         disabled === undefined ? `el botón ${buttonName} no se puede leer` : `el botón ${buttonName} ${disabled ? 'está deshabilitado' : 'está habilitado'}`,
       ),
-      check(title === explanation, `explicación ${explanation ?? '(ninguna)'}`, `explicación ${title ?? '(ninguna)'}`),
+      check(
+        titleRead !== undefined && (explanation === undefined ? titleRead === null : titleRead === explanation),
+        `explicación ${explanation ?? '(ninguna)'}`,
+        `explicación ${explanationRead}`,
+      ),
     ],
     `${COOKIE_NOTE} La explicación se lee del atributo title del botón: el tooltip nativo no es observable en pantalla.`,
   );

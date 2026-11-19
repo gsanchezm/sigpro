@@ -32,6 +32,8 @@ import {
 // US-REQ-FLUJO-005 — Auditoría y efectos de un paso. Cada paso aceptado escribe un evento `requirement.state_changed` con el autor; un paso
 // rechazado no escribe nada; un paso cambia solo el estado; el paso solo afecta al tenant del token. Preparación: reinicio de alumno01 (y de
 // alumno02 en el Esquema 4), inicio de sesión de las cuentas de la fila; la auditoría se lee con el token de alumno01 (rol admin).
+// El seed trae eventos gemelos del mismo cambio (mismo autor y mismo paso), así que el evento nuevo se reconoce por tres cosas a la vez: el total
+// sube en exactamente uno, la hora del evento cae dentro de la petición del paso y el evento es el que la historia nombra.
 
 /** Autor del evento: el nombre de la cuenta del seed (`Alumno 01` es el de alumno01@sigpro.lab). */
 const AUTHOR_CELLS: ReadonlyMap<string, string> = new Map<string, string>([
@@ -48,10 +50,11 @@ const BODY_CELLS: ReadonlyMap<string, unknown> = new Map<string, unknown>([
 
 const recordOf = (value: unknown): Record<string, unknown> => (typeof value === 'object' && value !== null ? (value as Record<string, unknown>) : {});
 
-/** El evento guarda la hora del paso: un instante legible (`at`). */
-const hasTime = (event: unknown): boolean => {
+/** El evento lleva la hora del servidor dentro de la ventana de la petición (entre su inicio y su fin, en ms desde la época). */
+const inWindow = (event: unknown, startedAt: number, endedAt: number): boolean => {
   const at = field(event, 'at');
-  return typeof at === 'string' && !Number.isNaN(Date.parse(at));
+  const time = typeof at === 'string' ? Date.parse(at) : Number.NaN;
+  return !Number.isNaN(time) && time >= startedAt && time <= endedAt;
 };
 
 /** Esquema 1: un paso aceptado deja en la auditoría el evento con el cambio y su autor. */
@@ -72,11 +75,14 @@ const auditedStep: ApiRowHandler = async (row) => {
   if (stateOf(before) !== fromState) return premiseFailed(expected, `lectura de ${requirementCode} tras el reinicio: estado ${describeState(stateOf(before))} en lugar de ${fromState}`, before);
   const baseline = await readAudit(TENANT_A, admin);
 
+  const startedAt = Date.now();
   const result = await transition(requirementCode, TENANT_A, actor.token, { to: toState });
+  const endedAt = Date.now();
   const view = await readAudit(TENANT_A, admin);
   const event = latestEventFor(view, requirementCode);
   const diff = recordOf(field(event, 'diff'));
-  const isNew = event !== undefined && !(baseline?.ids ?? []).includes(String(field(event, 'id')));
+  const gained = baseline !== undefined && view !== undefined ? view.total - baseline.total : undefined;
+  const eventAt = field(event, 'at');
 
   return verdictOf([
     check(result.status === 200, 'respuesta 200', `respuesta ${result.status}`),
@@ -91,9 +97,13 @@ const auditedStep: ApiRowHandler = async (row) => {
       `entidad ${String(field(event, 'entity'))} con identificador ${String(field(event, 'entityId'))}`,
     ),
     check(diff.from === fromState && diff.to === toState, `cambio de ${fromState} a ${toState}`, `cambio de ${String(diff.from)} a ${String(diff.to)}`),
-    check(isNew, 'el evento es nuevo (no estaba antes del paso)', isNew ? 'el evento es nuevo' : 'el evento ya estaba antes del paso o no existe'),
+    check(gained === 1, 'la auditoría gana exactamente un evento (total + 1)', gained === undefined ? 'auditoría no legible antes o después del paso' : `la auditoría gana ${gained} eventos`),
+    check(
+      inWindow(event, startedAt, endedAt),
+      'la hora del evento cae dentro de la petición del paso',
+      typeof eventAt === 'string' ? `hora del evento ${eventAt} (petición entre ${new Date(startedAt).toISOString()} y ${new Date(endedAt).toISOString()})` : 'el evento no trae hora',
+    ),
     check(field(event, 'actorName') === author, `autor ${author}`, `autor ${String(field(event, 'actorName') ?? '(sin autor)')}`),
-    check(hasTime(event), 'la hora del paso queda en el evento', hasTime(event) ? 'la hora del paso queda en el evento' : 'el evento no trae hora válida'),
   ]);
 };
 
@@ -118,17 +128,18 @@ const rejectedStep: ApiRowHandler = async (row) => {
   return verdictOf([...responseChecks(result, expectation, cell(row, 'respuesta')), sameAudit(baseline, after)]);
 };
 
-/** Esquema 3: un paso cambia solo el estado; el gestor lee el requisito antes y compara después. */
+/** Esquema 3: un paso cambia solo el estado; la cuenta de la fila lee el requisito antes y compara después. */
 const onlyState: ApiRowHandler = async (row) => {
   const requirementCode = strict('requisito', REQUIREMENT_CELLS, cell(row, 'requisito'));
   const fromState = strict('desde', STATE_CELLS, cell(row, 'desde'));
   const toState = strict('hasta', STATE_CELLS, cell(row, 'hasta'));
+  const account = strict('cuenta', ACCOUNT_CELLS, cell(row, 'cuenta'));
   const expected = `responde 200 y todos los campos de ${requirementCode} son iguales a la lectura anterior salvo state; el estado pasa de ${fromState} a ${toState}`;
 
   await resetTenants([TENANT_A]);
   const admin = await adminToken(TENANT_A);
-  const actor = await loginAs(DEMO.gestor, TENANT_A);
-  if (actor.token === undefined) return premiseFailed(expected, 'inicio de sesión de gestor@sigpro.test en alumno01', actor.result);
+  const actor = await loginAs(account, TENANT_A);
+  if (actor.token === undefined) return premiseFailed(expected, `inicio de sesión de ${account.email} en alumno01`, actor.result);
   const before = await readRequirement(TENANT_A, actor.token, requirementCode);
   if (stateOf(before) !== fromState) return premiseFailed(expected, `lectura de ${requirementCode} tras el reinicio: estado ${describeState(stateOf(before))} en lugar de ${fromState}`, before);
 
@@ -142,7 +153,7 @@ const onlyState: ApiRowHandler = async (row) => {
   ]);
 };
 
-/** Esquema 4: el paso solo afecta al tenant del token que lo envía; el otro tenant conserva el estado. */
+/** Esquema 4: el paso solo afecta al tenant del token que lo envía; el otro tenant conserva el estado, leído con la sesión de su gestor. */
 const tenantScope: ApiRowHandler = async (row) => {
   const tenant = strict('tenant', TENANT_CELLS, cell(row, 'tenant'));
   const other = strict('otro', TENANT_CELLS, cell(row, 'otro'));
@@ -151,14 +162,13 @@ const tenantScope: ApiRowHandler = async (row) => {
   await resetTenants([TENANT_A, TENANT_B]);
   const gestorA: SessionOf = await loginAs(DEMO.gestor, TENANT_A);
   const gestorB: SessionOf = await loginAs(DEMO.gestor, TENANT_B);
-  const sessions: ReadonlyMap<string, SessionOf> = new Map([
-    [TENANT_A, gestorA],
-    [TENANT_B, gestorB],
-  ]);
-  const sessionOfTenant = sessions.get(tenant);
-  if (gestorA.token === undefined || gestorB.token === undefined || sessionOfTenant?.token === undefined) {
+  if (gestorA.token === undefined || gestorB.token === undefined) {
     return premiseFailed(expected, 'inicio de sesión de gestor@sigpro.test en alumno01 y en alumno02', gestorA.token === undefined ? gestorA.result : gestorB.result);
   }
+  const tokens: ReadonlyMap<string, string> = new Map<string, string>([
+    [TENANT_A, gestorA.token],
+    [TENANT_B, gestorB.token],
+  ]);
   const adminA = await adminToken(TENANT_A);
   const adminB = await adminToken(TENANT_B);
   const beforeA = await readRequirement(TENANT_A, adminA, 'REQ-017');
@@ -167,9 +177,10 @@ const tenantScope: ApiRowHandler = async (row) => {
     return premiseFailed(expected, `lectura de REQ-017 tras el reinicio: alumno01 en ${describeState(stateOf(beforeA))} y alumno02 en ${describeState(stateOf(beforeB))}`, beforeA);
   }
 
-  const result = await transition('REQ-017', tenant, sessionOfTenant.token, { to: 'approved' });
-  const afterOwn = await readRequirement(tenant, await adminToken(tenant), 'REQ-017');
-  const afterOther = await readRequirement(other, await adminToken(other), 'REQ-017');
+  const ownToken = tokens.get(tenant) ?? '';
+  const result = await transition('REQ-017', tenant, ownToken, { to: 'approved' });
+  const afterOwn = await readRequirement(tenant, ownToken, 'REQ-017');
+  const afterOther = await readRequirement(other, tokens.get(other) ?? '', 'REQ-017');
 
   return verdictOf([
     check(result.status === 200, 'respuesta 200', `respuesta ${result.status}`),

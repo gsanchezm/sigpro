@@ -65,7 +65,7 @@ const confirmApplies: BrowserRowHandler = async (row, { page }) => {
   const confirmFailure = await pressConfirm(page, 'Confirmar');
   if (confirmFailure !== undefined) return verdictMobile([check(false, expected, confirmFailure)]);
   const toast = await waitOkToast(page, OK_TITLE, toastBody);
-  const life = toast.at === undefined ? undefined : await toastLifeMs(page, toast.at);
+  const life = toast.at === undefined ? undefined : await toastLifeMs(page, toast.at, toastBody);
   const closed = await waitUntil(async () => !(await isVisible(confirmOf(page))));
   const sheetNew = await waitUntil(async () => (await sheetState(page)).label === STATE_LABEL.get(newState));
   const sheetAfter = await sheetState(page);
@@ -78,7 +78,7 @@ const confirmApplies: BrowserRowHandler = async (row, { page }) => {
     check(toast.found, `ve «${OK_TITLE}» con «${toastBody}»`, toast.observed),
     check(
       life !== undefined && Math.abs(life - 3_000) <= TOAST_TOLERANCE_MS,
-      'el aviso se cierra solo a los 3 s (tolerancia de 1 s)',
+      'el aviso se cierra solo a los 3 s (tolerancia de 0,5 s)',
       life === undefined ? 'el aviso no se cierra en el plazo de observación' : `el aviso se cierra a los ${life} ms desde que aparece`,
     ),
     check(closed.reached, 'la confirmación se cierra', closed.reached ? 'la confirmación se cierra' : 'la confirmación sigue abierta'),
@@ -112,7 +112,8 @@ const cancelKeepsState: BrowserRowHandler = async (row, { page }) => {
   const closed = await waitUntil(async () => !(await isVisible(confirmOf(page))));
   await quietMobile();
   const sheetAfter = await sheetState(page);
-  const okShown = (await toastLog(page)).some((entry: ToastEntry) => entry.tone === 'ok' && entry.title === OK_TITLE);
+  const toasts = await toastLog(page);
+  const okShown = toasts === undefined ? undefined : toasts.some((entry: ToastEntry) => entry.tone === 'ok' && entry.title === OK_TITLE);
   const server = await serverStateOf(requirementCode);
 
   return verdictMobile([
@@ -121,7 +122,7 @@ const cancelKeepsState: BrowserRowHandler = async (row, { page }) => {
     check(actions.cancel === 1 && actions.confirm === 1, 'la confirmación tiene «Cancelar» y «Confirmar»', `«Cancelar»: ${actions.cancel} y «Confirmar»: ${actions.confirm} en la confirmación`),
     check(closed.reached, 'la confirmación se cierra', closed.reached ? 'la confirmación se cierra' : 'la confirmación sigue abierta'),
     check(sheetAfter.label === expectedLabel, `la hoja sigue mostrando ${expectedLabel}`, `la hoja muestra ${sheetAfter.label ?? '(no legible)'}`),
-    check(!okShown, `no aparece el aviso «${OK_TITLE}»`, okShown ? `aparece el aviso «${OK_TITLE}»` : `ningún aviso «${OK_TITLE}» tras la ventana de observación`),
+    check(okShown === false, `no aparece el aviso «${OK_TITLE}»`, okShown === undefined ? 'el registro de avisos no se puede leer' : okShown ? `aparece el aviso «${OK_TITLE}»` : `ningún aviso «${OK_TITLE}» tras la ventana de observación`),
     check(server === expectedState, `la API sigue en ${expectedState}`, `la API devuelve ${server ?? '(sin estado)'}`),
   ]);
 };
@@ -154,14 +155,17 @@ const serverRejects: BrowserRowHandler = async (row, { page }) => {
   if (confirmFailure !== undefined) return verdictMobile([check(false, expected, confirmFailure)]);
 
   const errorShown = await waitUntil(() => isVisible(confirmErrorOf(page)));
+  // Tras ver el error se espera la ventana de observación: un «Estado actualizado» tardío tendría tiempo de aparecer.
+  await quietMobile();
   const stillOpen = await isVisible(confirmOf(page));
-  const okShown = (await toastLog(page)).some((entry: ToastEntry) => entry.tone === 'ok' && entry.title === OK_TITLE);
+  const toasts = await toastLog(page);
+  const okShown = toasts === undefined ? undefined : toasts.some((entry: ToastEntry) => entry.tone === 'ok' && entry.title === OK_TITLE);
   const server = await serverStateOf(requirementCode);
 
   return verdictMobile([
     check(errorShown.reached, 'aparece dentro de la confirmación un aviso de error', errorShown.reached ? 'aparece dentro de la confirmación un aviso de error' : 'no aparece un aviso de error en la confirmación'),
     check(stillOpen, 'la confirmación sigue abierta', stillOpen ? 'la confirmación sigue abierta' : 'la confirmación se cierra'),
-    check(!okShown, `no aparece el aviso «${OK_TITLE}»`, okShown ? `aparece el aviso «${OK_TITLE}»` : `ningún aviso «${OK_TITLE}»`),
+    check(okShown === false, `no aparece el aviso «${OK_TITLE}»`, okShown === undefined ? 'el registro de avisos no se puede leer' : okShown ? `aparece el aviso «${OK_TITLE}»` : `ningún aviso «${OK_TITLE}» tras la ventana de observación`),
     check(server === serverState, `la API devuelve ${serverState}`, `la API devuelve ${server ?? '(sin estado)'}`),
   ]);
 };

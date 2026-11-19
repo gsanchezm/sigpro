@@ -2,7 +2,7 @@ import { TENANT_A } from '../../../story-runs/support/prepare';
 import { cell, check, strict } from '../../support/checks';
 import { defineBrowserRows, type BrowserRowHandler } from '../../core/framework';
 import { ACCOUNT_CELLS, BUTTON_CELLS, TARGET_OF_BUTTON, webPrepFailed } from '../web/common';
-import { disabledMobile, openRequirements, openSheet, prepareMobile, readFlowMobile, reasonOfButton, transitionButtonM, transitionContainers, verdictMobile, type MobileStep } from './common';
+import { describeReason, disabledMobile, openRequirements, openSheet, prepareMobile, readFlowMobile, reasonOfButton, transitionButtonM, transitionContainers, verdictMobile, type MobileStep } from './common';
 
 // US-REQ-FLUJO-010 — Botones de transición en la hoja del requisito (app móvil en Expo web, 390 px). Solo el paso actual contiene botones; un
 // botón que el rol no puede pulsar queda deshabilitado y su motivo va como texto visible debajo. Preparación de cada fila: reinicio de alumno01,
@@ -14,14 +14,6 @@ const STEP_CELLS: ReadonlyMap<string, string> = new Map<string, string>([
   ['Aprobación', 'approved'],
   ['Verificación', 'verified'],
   ['Validación', 'validated'],
-]);
-
-/** Nombre del paso según su estado (para observar en qué paso está el requisito). */
-const STEP_NAME: ReadonlyMap<string, string> = new Map<string, string>([
-  ['draft', 'Redacción'],
-  ['approved', 'Aprobación'],
-  ['verified', 'Verificación'],
-  ['validated', 'Validación'],
 ]);
 
 /** Lista de botones de la celda «botones», en el orden en que los muestra el paso. */
@@ -83,16 +75,18 @@ const currentStepButtonsMobile: BrowserRowHandler = async (row, { page }) => {
   const readableSteps = flow.filter((step) => step.status !== undefined).length;
   const onCurrent = current.length === 1 ? current[0] : undefined;
   const others = flow.filter((step) => step.state !== expectedStep);
+  const otherUnreadable = others.some((step) => step.buttons === undefined);
   const otherButtons = others.reduce<number>((total, step) => total + (step.buttons?.length ?? 0), 0);
 
   return verdictMobile([
     check(
       onCurrent?.state === expectedStep,
       `el paso actual es ${cell(row, 'paso')}`,
-      `el paso actual es ${onCurrent === undefined ? `(${current.length} pasos actuales)` : (STEP_NAME.get(onCurrent.state) ?? onCurrent.state)}`,
+      `el paso actual es ${onCurrent === undefined ? `(${current.length} pasos actuales)` : (onCurrent.name ?? '(nombre no legible)')}`,
     ),
-    check(sameNames(onCurrent?.buttons, buttonNames), `contiene los botones ${cell(row, 'botones')}`, `contiene los botones ${listOf(onCurrent?.buttons)}`),
-    check(otherButtons === 0 && containers === 1, 'ningún otro paso contiene botones de transición', `botones fuera del paso actual: ${otherButtons}; contenedores de botones: ${containers}`),
+    check(onCurrent?.name === cell(row, 'paso'), `el nombre del paso actual en la interfaz es ${cell(row, 'paso')}`, `el nombre del paso actual en la interfaz es «${onCurrent?.name ?? '(no legible)'}»`),
+    check(sameNames(onCurrent?.visibleButtons, buttonNames), `contiene los botones ${cell(row, 'botones')}`, `contiene los botones ${listOf(onCurrent?.visibleButtons)}`),
+    check(!otherUnreadable && otherButtons === 0 && containers === 1, 'ningún otro paso contiene botones de transición', otherUnreadable ? 'botones de otro paso no legibles' : `botones fuera del paso actual: ${otherButtons}; contenedores de botones: ${containers}`),
     check(readableSteps === flow.length, 'los cuatro pasos del flujo son legibles', `pasos legibles: ${readableSteps} de ${flow.length}`),
   ]);
 };
@@ -118,8 +112,8 @@ const enabledOrDeniedMobile: BrowserRowHandler = async (row, { page }) => {
   const found = await button.count();
   if (found !== 1) return verdictMobile([check(false, `aparece el botón ${buttonName} en el paso actual`, found === 0 ? `no aparece el botón ${buttonName} en el paso actual` : `aparecen ${found} botones ${buttonName}`)]);
   const disabled = await disabledMobile(button);
-  const reason = await reasonOfButton(page, TARGET_OF_BUTTON.get(buttonName) ?? '');
-  const reasonText = reason === null ? '(varios motivos)' : (reason ?? '(ninguno)');
+  const reading = await reasonOfButton(page, TARGET_OF_BUTTON.get(buttonName) ?? '');
+  const reasonOk = expectedReason === undefined ? reading.kind === 'ninguno' : reading.kind === 'visible' && reading.text === expectedReason;
 
   return verdictMobile([
     check(
@@ -127,7 +121,7 @@ const enabledOrDeniedMobile: BrowserRowHandler = async (row, { page }) => {
       `el botón ${buttonName} ${enabled ? 'está habilitado' : 'está deshabilitado'}`,
       disabled === undefined ? `el botón ${buttonName} no se puede leer` : `el botón ${buttonName} ${disabled ? 'está deshabilitado' : 'está habilitado'}`,
     ),
-    check(reason === expectedReason, `motivo visible ${expectedReason ?? '(ninguno)'}`, `motivo visible ${reasonText}`),
+    check(reasonOk, `motivo visible ${expectedReason ?? '(ninguno)'}`, `motivo visible ${describeReason(reading)}`),
   ]);
 };
 

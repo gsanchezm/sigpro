@@ -1,7 +1,7 @@
 import { call } from '../../../story-runs/support/api';
 import { cell, check, strict } from '../../support/checks';
 import { defineApiRows, type ApiRowHandler } from '../../core/framework';
-import { ACCOUNT_CELLS, ALUMNO01, EXPECTATION_CELLS, TENANT_A, adminToken, compareRequirements, describeState, loginAs, premiseFailed, readRequirement, resetTenants, responseChecks, stateOf, transition, unchangedCheck, verdictOf, type Expectation } from './common';
+import { ACCOUNT_CELLS, ALUMNO01, EXPECTATION_CELLS, REQUIREMENT_CELLS, TENANT_A, adminToken, compareRequirements, describeState, loginAs, premiseFailed, readRequirement, resetTenants, responseChecks, stateOf, transition, unchangedCheck, verdictOf, type Expectation } from './common';
 
 // US-REQ-FLUJO-004 — Errores de la petición (422, 404 y 401) sin cambio de estado, en el orden 401 → 422 → 404. Cuerpos y cabeceras se toman
 // literalmente de las celdas (un «(vacío)» es sin cuerpo; «(sin cabecera Authorization)» es sin token).
@@ -22,9 +22,6 @@ const HEADER_CELLS: ReadonlyMap<string, string | undefined> = new Map<string, st
   ['(sin cabecera Authorization)', undefined],
   ['Authorization con Bearer seguido de (texto que no es un token)', 'no-es-un-token'],
 ]);
-
-/** Requisitos que no existen en el tenant: se comprueba antes de cada fila con una lectura real (404). */
-const REQUIREMENT_ABSENT = 'REQ-041';
 
 /** Esquema 1: cuerpo sin un estado válido. 422 validation_failed con badState en `to`; el requisito sigue en draft. */
 const badBody: ApiRowHandler = async (row) => {
@@ -54,16 +51,17 @@ const unknownRequirement: ApiRowHandler = async (row) => {
   const account = strict('cuenta', ACCOUNT_CELLS, cell(row, 'cuenta'));
   const requestBody = strict('cuerpo', BODY_CELLS, cell(row, 'cuerpo'));
   const expectation: Expectation = strict('respuesta', EXPECTATION_CELLS, cell(row, 'respuesta'));
-  const expected = `REQ-041 no existe y responde ${cell(row, 'respuesta')}`;
+  const requirementCode = strict('requisito', REQUIREMENT_CELLS, cell(row, 'requisito'));
+  const expected = `${requirementCode} no existe y responde ${cell(row, 'respuesta')}`;
 
   await resetTenants([TENANT_A]);
   const admin = await adminToken(TENANT_A);
   const actor = await loginAs(account, TENANT_A);
   if (actor.token === undefined) return premiseFailed(expected, `inicio de sesión de ${account.email} en alumno01`, actor.result);
-  const absent = await call('GET', `/requirements/${REQUIREMENT_ABSENT}`, { tenant: TENANT_A, token: admin });
-  if (absent.status !== 404) return premiseFailed(expected, 'lectura de REQ-041 tras el reinicio (debe responder 404)', absent);
+  const absent = await call('GET', `/requirements/${requirementCode}`, { tenant: TENANT_A, token: admin });
+  if (absent.status !== 404) return premiseFailed(expected, `lectura de ${requirementCode} tras el reinicio (debe responder 404)`, absent);
 
-  const result = await transition(REQUIREMENT_ABSENT, TENANT_A, actor.token, requestBody);
+  const result = await transition(requirementCode, TENANT_A, actor.token, requestBody);
   return verdictOf(responseChecks(result, expectation, cell(row, 'respuesta')));
 };
 
