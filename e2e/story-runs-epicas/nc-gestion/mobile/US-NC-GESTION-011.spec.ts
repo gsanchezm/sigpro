@@ -268,10 +268,28 @@ const assignPerson: BrowserRowHandler = async (row: ManifestRow, { page }) => {
   evidence.valorTrasFillVacio = await readValue(search);
   const typed = await interact(search, `teclear «${person.search}» carácter a carácter`, (element) => element.pressSequentially(person.search, { delay: 60, timeout: CEILING_MS }));
   if (typed !== undefined) return { ...actionFailed(expected, typed), evidence };
+  // Esperar (techo 2 s) a que el campo tenga el texto tecleado: una tecla perdida se ve aquí
+  const settled = await waitUntil(async () => (await readValue(search)) === person.search, 2_000);
   const typedValue = await readValue(search);
   evidence.valorTrasTeclear = typedValue;
+  evidence.esperaHastaTextoTecleado = { alcanzado: settled.reached, ms: settled.elapsedMs };
   evidence.codigosTrasTeclear = codepointsOf(typedValue);
   evidence.codigosEsperados = codepointsOf(person.search);
+  if (typedValue !== person.search) {
+    // Si el foco estaba en el campo, las teclas llegaron al campo y se perdieron o alteraron: hallazgo de la app.
+    // Si el foco no estaba en el campo (artefacto del arnés), la fila no se ejecuta.
+    const focusInField = (evidence.focoTrasTocar as { readonly label?: string | null } | undefined)?.label === 'Buscar persona';
+    if (!focusInField) {
+      return { ...notExecutable(expected, `el foco no estaba en el campo «Buscar persona» al teclear (foco tras tocar: ${JSON.stringify(evidence.focoTrasTocar)}); el arnés no puede afirmar nada de la app. Ver evidencia.`), evidence };
+    }
+    return {
+      ...verdictWeb(
+        [check(false, `el campo de búsqueda contiene «${person.search}» tras teclear`, `el campo contiene «${typedValue ?? '(sin leer)'}» (puntos Unicode: ${(codepointsOf(typedValue) ?? []).join(' ')})`)],
+        `Hallazgo: la app pierde o altera teclas al teclear «${person.search}» a 60 ms por tecla (el campo no tiene el texto tecleado tras 2 s de espera). Ver evidencia (valores, puntos Unicode, foco).`,
+      ),
+      evidence,
+    };
+  }
   const shownChoice = await choice.first().waitFor({ state: 'visible', timeout: 5_000 }).then(
     () => true,
     () => false,
@@ -301,12 +319,6 @@ const assignPerson: BrowserRowHandler = async (row: ManifestRow, { page }) => {
     if (typedValue !== undefined && typedValue.includes('Andrés Molina')) {
       return {
         ...verdictWeb([check(false, `«${persona}» en la lista tras teclear «${person.search}»`, `la lista no la muestra; el campo de búsqueda conserva «${typedValue}»`)], 'Hallazgo con teclado real: el campo de búsqueda conserva el nombre de la persona asignada al teclear; con inserción directa (fill) la lista sí se muestra (ver evidencia).'),
-        evidence,
-      };
-    }
-    if (typedValue !== person.search) {
-      return {
-        ...notExecutable(expected, `el teclado del arnés no llega al campo de búsqueda como se escribe (tras teclear: «${String(typedValue)}»; esperado «${person.search}»); el arnés no puede afirmar nada de la app. Ver evidencia.`),
         evidence,
       };
     }
