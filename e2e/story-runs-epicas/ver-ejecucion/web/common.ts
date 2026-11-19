@@ -1,8 +1,9 @@
 import type { Download, Locator, Page } from '@playwright/test';
+import { readFile } from 'node:fs/promises';
 import { DEMO, TENANT_A, type Credentials } from '../../../story-runs/support/prepare';
 import { VERIFICACION_DYNAMIC_TESTIDS, VERIFICACION_TESTIDS } from '../../../../packages/shared/src/testids';
 import { ACTION, CEILING_MS, attrOf, isVisible, runSteps, safe, textOf, waitUntil, type Step } from '../../support/browser';
-import { sleep } from '../../support/checks';
+import { check, preparationFailedWeb, sleep, type Check } from '../../support/checks';
 import { outcome, type BrowserRowHandler, type Outcome } from '../../core/framework';
 import type { Upload } from '../api/files';
 
@@ -80,6 +81,17 @@ export const prepareCase = async (page: Page, account: WebAccount): Promise<stri
   const signed = await signIn(page, account);
   if (signed !== undefined) return signed;
   return openCase(page);
+};
+
+/**
+ * Preparación completa de una fila web: sesión, caso abierto y registro de avisos instalado. Si algo no se cumple, devuelve la fila
+ * como `preparationFailed` (no se puede afirmar nada sobre avisos sin el registro). Devuelve `undefined` si la fila puede seguir.
+ */
+export const prepareRow = async (page: Page, account: WebAccount, expected: string): Promise<Outcome | undefined> => {
+  const prepared = await prepareCase(page, account);
+  if (prepared !== undefined) return preparationFailedWeb(expected, prepared);
+  if (!(await registryArmed(page))) return preparationFailedWeb(expected, UNARMED_REASON);
+  return undefined;
 };
 
 // --- Acciones con diagnóstico -------------------------------------------------------------------------------------------------------
@@ -234,31 +246,75 @@ export const payloadOf = (file: Upload): { readonly name: string; readonly mimeT
 export const chooseFiles = (input: Locator, label: string, files: readonly Upload[]): Promise<Blocked | undefined> =>
   interact(input, label, (element) => element.setInputFiles(files.map(payloadOf), { timeout: CEILING_MS }));
 
+/** Resultado de un arrastre: el bloqueo (si lo hubo) y el valor de `data-over` de la zona mientras el archivo está encima. */
+export interface DropResult {
+  readonly blocked: Blocked | undefined;
+  /** Valor de `data-over` de la zona durante el arrastre (`null` si no se pudo leer). */
+  readonly overWhileDragging: string | null;
+}
+
 /**
- * Arrastra un archivo a la zona «Arrastra aquí tus evidencias»: se construye un `DataTransfer` dentro de la página y se envía el
- * evento `drop` (Playwright no arrastra archivos del escritorio). Lo que hace el manejador de la zona se observa después.
+ * Arrastra un archivo a la zona «Arrastra aquí tus evidencias»: dentro de la página se construye un `DataTransfer` y se despachan
+ * `dragenter`, `dragover` y, después, `drop` (Playwright no arrastra archivos del escritorio). Entre `dragover` y `drop` se lee
+ * `data-over` de la zona: el estado visual de «archivo encima» es observable.
  */
-export const dropFile = (zone: Locator, file: Upload): Promise<Blocked | undefined> =>
-  interact(zone, 'arrastrar el archivo a la zona «Arrastra aquí tus evidencias»', (element) =>
+export const dropFile = async (zone: Locator, file: Upload): Promise<DropResult> => {
+  const seen: { over: string | null } = { over: null };
+  const blocked = await interact(zone, 'arrastrar el archivo a la zona «Arrastra aquí tus evidencias»', (element) =>
     element.evaluate(
-      (node, payload) => {
+      async (node, payload) => {
         const transfer = new DataTransfer();
         transfer.items.add(new File([new Uint8Array(payload.data)], payload.name, { type: payload.type }));
+        node.dispatchEvent(new DragEvent('dragenter', { dataTransfer: transfer, bubbles: true, cancelable: true }));
+        node.dispatchEvent(new DragEvent('dragover', { dataTransfer: transfer, bubbles: true, cancelable: true }));
+        // El estado de la zona se actualiza tras el `dragover`: se da un instante antes de leerlo
+        await new Promise((done) => setTimeout(done, 50));
+        const over = node.getAttribute('data-over');
         node.dispatchEvent(new DragEvent('drop', { dataTransfer: transfer, bubbles: true, cancelable: true }));
+        return over;
       },
       { name: file.name, type: file.type, data: Array.from(file.bytes) },
       { timeout: CEILING_MS },
-    ),
+    ).then((over) => {
+      seen.over = typeof over === 'string' ? over : null;
+    }),
   );
+  return { blocked, overWhileDragging: seen.over };
+};
 
-/** Descarga que dispara `trigger`: el nombre sugerido por el navegador. Un fallo de la descarga lanza (la fila lo recoge). */
-export const downloadName = async (page: Page, trigger: () => Promise<unknown>): Promise<string> => {
+/** Descarga que dispara `trigger`: nombre sugerido y bytes del archivo guardado. Un fallo de la descarga lanza (la fila lo recoge). */
+export const downloadBytes = async (page: Page, trigger: () => Promise<unknown>): Promise<{ readonly name: string; readonly bytes: Buffer }> => {
   const pending = page.waitForEvent('download', { timeout: CEILING_MS });
   pending.catch(() => undefined);
   await trigger();
   const download: Download = await pending;
-  return download.suggestedFilename();
+  const path = await download.path();
+  if (path === null) throw new Error('la descarga no dejó archivo');
+  return { name: download.suggestedFilename(), bytes: await readFile(path) };
 };
+
+/**
+ * Hace lenta la petición de registro (solo para observar el estado «mientras se envía»): la respuesta del servidor llega tras `ms`.
+ * La petición sale igual; lo que se comprueba es que el formulario queda ocupado durante ese tiempo.
+ */
+export const delayRunPost = async (page: Page, ms: number): Promise<void> => {
+  await page.route(/\/test-cases\/TC-001\/runs$/, async (route) => {
+    if (route.request().method() === 'POST') await sleep(ms);
+    await route.continue();
+  });
+};
+
+/** Cabeceras de la tabla del historial, en orden (la historia fija «Fecha», «Resultado», «Notas», «Evidencias» y «Ejecutado por»). */
+export const readTableHeaders = (page: Page): Promise<readonly string[] | undefined> =>
+  safe(
+    () =>
+      runsTable(page).evaluate(
+        (table) => Array.from(table.querySelectorAll('thead th')).map((header) => (header as HTMLElement).innerText.trim()),
+        undefined,
+        { timeout: READ_MS },
+      ),
+    undefined,
+  );
 
 // --- Avisos emergentes: registro desde antes de la acción -----------------------------------------------------------------------------
 
@@ -326,12 +382,44 @@ export const toastShown = async (page: Page, tone: 'ok' | 'danger' | 'info' | 'w
   return { seen: found.reached, observed: log.length === 0 ? 'ningún aviso' : `avisos: ${log.map((entry) => `${entry.tone} «${entry.title}»${entry.body === '' ? '' : ` / «${entry.body}»`}`).join(' | ')}` };
 };
 
-/** Tras una acción que termina ahora, espera la ventana de observación y dice si NO apareció ningún aviso de éxito desde la armada. */
-export const noOkToast = async (page: Page): Promise<{ readonly held: boolean; readonly seen: string }> => {
+/**
+ * ¿Está el registro de avisos instalado en la página? Un registro ausente NO es un registro vacío: sin esta comprobación,
+ * `toastLog` devolvería `[]` y una ventana de silencio daría «no aparece ningún aviso» sin haber mirado nada.
+ */
+export const registryArmed = (page: Page): Promise<boolean> =>
+  safe(() => page.evaluate((key: string) => Array.isArray((window as unknown as Record<string, unknown>)[key]), TOAST_KEY), false);
+
+/** Resultado de una ventana de silencio: si el registro estaba armado y si NO salió ningún aviso (del tono pedido, o de cualquiera). */
+export interface QuietWindow {
+  readonly armed: boolean;
+  readonly held: boolean;
+  readonly seen: string;
+}
+
+/**
+ * Tras una acción, espera la ventana de observación (4 s, mayor que la vida de un aviso de 3 s) y dice si NO salió ningún aviso
+ * del tono pedido (o de cualquier tono, si no se pide ninguno) desde la armada. Sin registro armado, `held` es falso: no se afirma nada.
+ */
+export const quietWindow = async (page: Page, tone?: 'ok'): Promise<QuietWindow> => {
   await sleep(QUIET_WINDOW_MS);
-  const ok = (await toastLog(page)).filter((entry) => entry.tone === 'ok');
-  return { held: ok.length === 0, seen: ok.map((entry) => `«${entry.title}»`).join(', ') };
+  const armed = await registryArmed(page);
+  const log = await toastLog(page);
+  const shown = tone === undefined ? log : log.filter((entry) => entry.tone === tone);
+  return { armed, held: armed && shown.length === 0, seen: shown.map((entry) => `${entry.tone} «${entry.title}»`).join(', ') };
 };
+
+/** Ventana de silencio para «no aparece el aviso de éxito». */
+export const noOkToast = (page: Page): Promise<QuietWindow> => quietWindow(page, 'ok');
+
+/** Ventana de silencio para «no aparece ningún aviso» (de cualquier tono). */
+export const noToast = (page: Page): Promise<QuietWindow> => quietWindow(page);
+
+/** Motivo de preparación cuando el registro de avisos no está armado (la fila no puede afirmar la ausencia de avisos). */
+export const UNARMED_REASON = 'el registro de avisos no está instalado en la página: no se puede afirmar que no aparece ningún aviso';
+
+/** Comprobación de una ventana de silencio: «no aparece…» si el registro estaba armado y no salió nada; lo visto si salió algo. */
+export const quietCheck = (quiet: QuietWindow, what: string): Check =>
+  check(quiet.held, `no aparece ${what}`, !quiet.armed ? UNARMED_REASON : quiet.held ? `no aparece ${what}` : `aparece ${quiet.seen}`);
 
 // --- Peticiones: cuántas veces el formulario envió la ejecución ----------------------------------------------------------------------
 

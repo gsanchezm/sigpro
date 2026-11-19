@@ -1,16 +1,29 @@
-import type { Locator } from '@playwright/test';
+import type { Locator, Page } from '@playwright/test';
 import { defineBrowserRows, type BrowserRowHandler } from '../../core/framework';
 import { resetTenants, TENANT_A } from '../../../story-runs/support/prepare';
 import { cell, check, preparationFailedWeb, strict, type Check } from '../../support/checks';
-import { ACTION, isVisible, waitUntil } from '../../support/browser';
-import { ACCOUNT_OF, bearer, loginAs, sendRun, verdict } from '../api/common';
+import { ACTION, isVisible, linesOf, waitUntil } from '../../support/browser';
+import { ACCOUNT_OF, bearer, getRaw, loginAs, sendRun, verdict } from '../api/common';
 import { upload } from '../api/files';
-import { downloadName, firstRunId, interact, onWeb, prepareCase, readRunRow, runRowOf, runsTable, type Blocked, type RunRowRead } from './common';
+import {
+  downloadBytes,
+  firstRunId,
+  interact,
+  onWeb,
+  prepareCase,
+  readRunRow,
+  readTableHeaders,
+  runRowOf,
+  runsTable,
+  type Blocked,
+  type RunRowRead,
+} from './common';
 
 // US-VER-EJECUCION-007 — Historial de ejecuciones con sus evidencias y descargas, en la web. Preparación de cada fila: reinicio de
 // alumno01; la persona entra como consultor@sigpro.test y abre /verification/TC-001. La E4 registra antes RUN-051 con la API (alumno01).
-// Las celdas de cada fila se leen en UNA evaluación (texto, imágenes con su estado, pies de figura); la descarga se observa por el
-// nombre sugerido por el navegador, no por el de la evidencia.
+// Las celdas de cada fila se leen en UNA evaluación (texto, imágenes con su estado, pies de figura). El pie de la evidencia se compara
+// por su primera línea (el nombre). La descarga se comprueba por el nombre sugerido y por los BYTES del archivo guardado, comparados
+// con los que guarda la API.
 
 /** Resultado de la celda, con el texto que muestra el historial (el mismo que el selector). */
 const RESULTADO: ReadonlyMap<string, string> = new Map<string, string>([
@@ -61,15 +74,24 @@ const settledRow = async (row: Locator): Promise<RunRowRead | undefined> => {
   return readRunRow(row);
 };
 
-/** Distintivo «PDF»: el icono de la evidencia es una imagen SVG en data URI cuyo texto contiene «PDF». */
-const pdfBadgeOf = (src: string | null): boolean => {
-  if (src === null) return false;
-  const comma = src.indexOf(',');
-  if (comma < 0) return false;
+/** Bytes que guarda la API para una evidencia, leídos con la cuenta de alumno01 (`undefined` si no se pueden leer). */
+const apiBytesOf = async (id: string): Promise<Buffer | undefined> => {
+  const session = await loginAs(strict('cuenta', ACCOUNT_OF, 'alumno01@sigpro.lab'));
+  if (session.token === undefined) return undefined;
+  const fetched = await getRaw(`/evidence/${id}`, TENANT_A, bearer(session.token));
+  return fetched.status === 200 ? fetched.bytes : undefined;
+};
+
+/** Descarga de una evidencia desde su fila: nombre sugerido, bytes guardados y el bloqueo del clic si lo hubo. */
+const downloadFrom = async (page: Page, button: Locator, label: string): Promise<{ readonly name?: string; readonly bytes?: Buffer; readonly blocked?: Blocked; readonly error?: string }> => {
+  const clicked: { blocked?: Blocked } = {};
   try {
-    return decodeURIComponent(src.slice(comma + 1)).includes('>PDF<');
-  } catch {
-    return false;
+    const saved = await downloadBytes(page, async () => {
+      clicked.blocked = await interact(button, label, (element) => element.click(ACTION));
+    });
+    return { name: saved.name, bytes: saved.bytes, ...(clicked.blocked === undefined ? {} : { blocked: clicked.blocked }) };
+  } catch (failure) {
+    return { ...(clicked.blocked === undefined ? {} : { blocked: clicked.blocked }), error: failure instanceof Error ? (failure.message.split('\n')[0] ?? 'error') : String(failure) };
   }
 };
 
@@ -87,16 +109,20 @@ const muestra: BrowserRowHandler = async (row, { page }) => {
   const target = runRowOf(page, id);
   await waitUntil(() => isVisible(target));
   const read = await settledRow(target);
+  const columns = await readTableHeaders(page);
   const checks: Check[] = [
-    check(read?.cells[1] === result, `resultado «${result}»`, `resultado «${read?.cells[1] ?? '(sin leer)'}»`),
-    check(read?.cells[2] === notes, `notas «${notes}»`, `notas «${read?.cells[2] ?? '(sin leer)'}»`),
-    check(read?.cells[4] === REGISTRO, `registrada por ${REGISTRO}`, `registrada por «${read?.cells[4] ?? '(sin leer)'}»`),
+    check(columns !== undefined && JSON.stringify(columns) === JSON.stringify(['Fecha', 'Resultado', 'Notas', 'Evidencias', 'Ejecutado por']), 'columnas del historial «Fecha», «Resultado», «Notas», «Evidencias» y «Ejecutado por»', `columnas ${columns === undefined ? '(sin leer)' : columns.join(', ')}`),
+    check(read?.cells[1] === result, `resultado «${result}» (columna «Resultado»)`, `resultado «${read?.cells[1] ?? '(sin leer)'}»`),
+    check(read?.cells[2] === notes, `notas «${notes}» (columna «Notas»)`, `notas «${read?.cells[2] ?? '(sin leer)'}»`),
+    check(read?.cells[4] === REGISTRO, `registrada por ${REGISTRO} (columna «Ejecutado por»)`, `registrada por «${read?.cells[4] ?? '(sin leer)'}»`),
   ];
   if (evidence === undefined) {
     checks.push(check(read?.cells[3] === 'Sin evidencias', 'en la columna de evidencias «Sin evidencias»', `columna de evidencias «${read?.cells[3] ?? '(sin leer)'}»`));
   } else {
     const thumb = read?.images.find((image) => image.alt === 'Evidencia TC-001');
-    checks.push(check(read?.captions.includes(evidence) === true, `la captura ${evidence} en la columna de evidencias`, `pies de evidencia: ${read?.captions.join(' | ') || 'ninguno'}`));
+    // El pie de la evidencia: su primera línea es el nombre del archivo (el resto son el tamaño y el botón)
+    const captionName = read?.captions.map((caption) => linesOf(caption)[0]);
+    checks.push(check(captionName?.includes(evidence) === true, `la captura ${evidence} en la columna de evidencias`, `nombres de evidencia: ${captionName?.join(' | ') || 'ninguno'}`));
     checks.push(check(thumb !== undefined && thumb.state === 'ready', 'la miniatura «Evidencia TC-001» cargada', `miniatura ${thumb === undefined ? 'sin «Evidencia TC-001»' : `con estado ${thumb.state ?? '(sin estado)'}`}`));
   }
   return verdict(checks);
@@ -133,18 +159,18 @@ const descargaImagen: BrowserRowHandler = async (row, { page }) => {
   const target = runRowOf(page, id);
   await settledRow(target);
   const button = target.getByRole('button', { name: `Descargar ${name}`, exact: true });
-  const clicked: { blocked?: Blocked } = {};
-  const saved = await downloadName(page, async () => {
-    clicked.blocked = await interact(button, `pulsar «Descargar ${name}» en ${id}`, (element) => element.click(ACTION));
-  }).catch(() => undefined);
+  const download = await downloadFrom(page, button, `pulsar «Descargar ${name}» en ${id}`);
+  const apiBytes = await apiBytesOf('EV-001');
   const thumbShown = await isVisible(target.getByRole('img', { name: 'Evidencia TC-001', exact: true }));
   const read = await readRunRow(target);
+  const same = download.bytes !== undefined && apiBytes !== undefined && download.bytes.equals(apiBytes);
   return verdict(
     [
-      check(saved === name, `el navegador guarda el archivo ${name}`, saved === undefined ? `no se descargó ningún archivo${clicked.blocked === undefined ? '' : ` (${clicked.blocked.message})`}` : `el navegador guarda ${saved}`),
+      check(download.name === name, `el navegador guarda el archivo ${name} (nombre sugerido)`, download.name === undefined ? `no se descargó ningún archivo${download.error === undefined ? '' : ` (${download.error})`}${download.blocked === undefined ? '' : ` · ${download.blocked.message}`}` : `el navegador guarda ${download.name}`),
+      check(same, `los bytes guardados son los de la evidencia EV-001 que guarda la API`, download.bytes === undefined ? 'sin bytes descargados' : apiBytes === undefined ? 'la API no devuelve EV-001 con alumno01 (no hay bytes de referencia)' : `bytes guardados ${download.bytes.length}; bytes de la API ${apiBytes.length}; ${same ? 'idénticos' : 'distintos'}`),
       check(thumbShown, 'la miniatura de la evidencia está identificada como «Evidencia TC-001»', thumbShown ? 'miniatura «Evidencia TC-001» visible' : `imágenes de la fila: ${read?.images.map((image) => image.alt ?? '(sin texto)').join(', ') || 'ninguna'}`),
     ],
-    clicked.blocked?.note,
+    download.blocked === undefined ? undefined : download.blocked.note,
   );
 };
 
@@ -163,19 +189,20 @@ const descargaPdf: BrowserRowHandler = async (row, { page }) => {
   const target = runRowOf(page, 'RUN-051');
   await settledRow(target);
   const read = await readRunRow(target);
-  const pdf = read?.images.find((image) => image.alt === `Documento PDF ${name}`);
-  const badge = pdfBadgeOf(pdf?.src ?? null);
+  // El distintivo PDF se pinta como un icono (imagen con texto «PDF»): se comprueba que el elemento se ve, no su contenido
+  const badgeShown = await isVisible(target.getByRole('img', { name: `Documento PDF ${name}`, exact: true }));
+  const captionName = read?.captions.map((caption) => linesOf(caption)[0]);
   const button = target.getByRole('button', { name: `Descargar ${name}`, exact: true });
-  const clicked: { blocked?: Blocked } = {};
-  const saved = await downloadName(page, async () => {
-    clicked.blocked = await interact(button, `pulsar «Descargar ${name}» en RUN-051`, (element) => element.click(ACTION));
-  }).catch(() => undefined);
+  const download = await downloadFrom(page, button, `pulsar «Descargar ${name}» en RUN-051`);
+  const apiBytes = await apiBytesOf('EV-014');
+  const same = download.bytes !== undefined && apiBytes !== undefined && download.bytes.equals(apiBytes);
   return verdict(
     [
-      check(pdf !== undefined && badge && read?.captions.includes(name) === true, `la evidencia de RUN-051 muestra el distintivo «PDF» y el nombre ${name}`, `imagen «${pdf?.alt ?? '(sin imagen)'}» ${badge ? 'con distintivo PDF' : 'sin distintivo PDF'}; pie: ${read?.captions.join(' | ') || 'ninguno'}`),
-      check(saved === name, `el navegador guarda el archivo ${name}`, saved === undefined ? `no se descargó ningún archivo${clicked.blocked === undefined ? '' : ` (${clicked.blocked.message})`}` : `el navegador guarda ${saved}`),
+      check(badgeShown && captionName?.includes(name) === true, `la evidencia de RUN-051 se pinta con el distintivo «PDF» y el nombre ${name}`, `distintivo ${badgeShown ? 'visible' : 'no visible'}; nombres de evidencia: ${captionName?.join(' | ') || 'ninguno'}`),
+      check(download.name === name, `el navegador guarda el archivo ${name} (nombre sugerido)`, download.name === undefined ? `no se descargó ningún archivo${download.error === undefined ? '' : ` (${download.error})`}${download.blocked === undefined ? '' : ` · ${download.blocked.message}`}` : `el navegador guarda ${download.name}`),
+      check(same, 'los bytes guardados son los de la evidencia EV-014 que guarda la API', download.bytes === undefined ? 'sin bytes descargados' : apiBytes === undefined ? 'la API no devuelve EV-014 con alumno01 (no hay bytes de referencia)' : `bytes guardados ${download.bytes.length}; bytes de la API ${apiBytes.length}; ${same ? 'idénticos' : 'distintos'}`),
     ],
-    clicked.blocked?.note,
+    download.blocked === undefined ? undefined : download.blocked.note,
   );
 };
 

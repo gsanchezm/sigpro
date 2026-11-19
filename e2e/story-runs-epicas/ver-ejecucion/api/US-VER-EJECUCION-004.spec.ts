@@ -1,21 +1,36 @@
 import { defineApiRows, type ApiRowHandler } from '../../core/framework';
 import { resetTenants } from '../../../story-runs/support/prepare';
 import { cell, check, preparationFailed, strict, type Check } from '../../support/checks';
-import { ACCOUNT_OF, TENANT_A, TENANT_B, bearer, dispositionOf, expectChecks, getRaw, loginAs, sendRun, verdict, type Expect, type Fetched } from './common';
+import { ACCOUNT_OF, TENANT_A, TENANT_B, bearer, dispositionChecks, endsWithIend, expectChecks, getRaw, loginAs, pngDimensions, sendRun, verdict, type Expect, type Fetched } from './common';
 import { isPng, upload, type Upload } from './files';
 import type { ApiResult } from '../../../story-runs/support/api';
 
 // US-VER-EJECUCION-004 — Descarga de una evidencia por su identificador, dentro de su tenant (API). Preparación de cada fila: reinicio
 // de alumno01 (y de alumno02 en la E4) con su administrador. «(captura recién subida)» y «(PDF recién subido)» las crea la propia fila
 // con alumno01 (ejecución con resultado pass, EV-014). La descarga se pide con la cuenta de la fila; la cabecera x-tenant no cambia
-// el tenant del token.
+// el tenant del token. Cada 200 se comprueba también con Cache-Control (Regla 004:19).
 
 const ALUMNO_A = 'alumno01@sigpro.lab';
+
+/** Cabeceras de caché que la historia fija para toda descarga correcta. */
+const CACHE = 'private, max-age=300';
 
 /** Archivo que la fila sube como evidencia recién subida (EV-014). */
 const SUBIDA: ReadonlyMap<string, Upload> = new Map<string, Upload>([
   ['(captura recién subida)', upload('captura.png', 'image/png', 'png', 1024)], // strict: 004/E2/evidencia
   ['(PDF recién subido)', upload('informe.pdf', 'application/pdf', 'pdf', 1024)],
+]);
+
+/** Tipo de la E2 (columna «tipo»): el que la historia espera en la cabecera Content-Type. */
+const TIPO: ReadonlyMap<string, string> = new Map<string, string>([
+  ['image/png', 'image/png'], // strict: 004/E2/tipo
+  ['application/pdf', 'application/pdf'],
+]);
+
+/** Nombre de la E2 (columna «nombre»): el que la historia espera en Content-Disposition. */
+const NOMBRE: ReadonlyMap<string, string> = new Map<string, string>([
+  ['captura.png', 'captura.png'], // strict: 004/E2/nombre
+  ['informe.pdf', 'informe.pdf'],
 ]);
 
 /** Sube el archivo con alumno01 en una ejecución (resultado pass). `saved` si la subida responde 201; si no, la respuesta que lo explica. */
@@ -28,19 +43,24 @@ const registerEvidence = async (file: Upload): Promise<{ readonly saved: boolean
 
 // --- E1: cualquier rol autenticado descarga la evidencia del seed ------------------------------------------------------------------
 
-/** EV-001 con la cuenta de la fila: 200, PNG, cabeceras y el nombre TC-001-001.png. */
+/** EV-001 con la cuenta de la fila: 200, PNG válido de la imagen del seed (160 × 100), cabeceras y nombre TC-001-001.png. */
 const seedDownload: ApiRowHandler = async (row) => {
   await resetTenants([TENANT_A]);
   const session = await loginAs(strict('cuenta', ACCOUNT_OF, cell(row, 'cuenta')));
   if (session.token === undefined) return preparationFailed(`${cell(row, 'cuenta')} inicia sesión en alumno01`, `${cell(row, 'cuenta')} no obtiene accessToken en alumno01`, session.last);
   const answer = await getRaw('/evidence/EV-001', TENANT_A, bearer(session.token));
-  const disposition = dispositionOf(answer.headers?.get('content-disposition'));
+  const length = answer.headers?.get('content-length') ?? null;
+  const dims = pngDimensions(answer.bytes);
   const checks: Check[] = [
     ...expectChecks({ status: 200 }, answer),
     check(answer.headers?.get('content-type') === 'image/png', 'Content-Type image/png', `Content-Type ${answer.headers?.get('content-type') ?? '(sin cabecera)'}`),
-    check(disposition.type === 'inline' && disposition.name === 'TC-001-001.png', 'Content-Disposition inline con el nombre TC-001-001.png', `Content-Disposition ${disposition.type ?? '(sin cabecera)'} con el nombre ${disposition.name ?? '(sin nombre)'}`),
-    check(answer.headers?.get('cache-control') === 'private, max-age=300', 'Cache-Control private, max-age=300', `Cache-Control ${answer.headers?.get('cache-control') ?? '(sin cabecera)'}`),
-    check(isPng(answer.bytes), 'el cuerpo es un PNG válido', isPng(answer.bytes) ? 'el cuerpo empieza por la firma PNG' : 'el cuerpo no empieza por la firma PNG'),
+    ...dispositionChecks(answer.headers?.get('content-disposition'), 'TC-001-001.png'),
+    check(answer.headers?.get('cache-control') === CACHE, `Cache-Control ${CACHE}`, `Cache-Control ${answer.headers?.get('cache-control') ?? '(sin cabecera)'}`),
+    // El PNG válido: firma, IHDR de la imagen del seed (160 × 100), fin IEND y, si viene, el Content-Length de los bytes
+    check(isPng(answer.bytes), 'el cuerpo es un PNG válido (firma PNG)', isPng(answer.bytes) ? 'empieza por la firma PNG' : 'no empieza por la firma PNG'),
+    check(dims?.width === 160 && dims?.height === 100, 'la imagen del seed mide 160 × 100', dims === undefined ? 'sin cabecera IHDR' : `imagen de ${dims.width} × ${dims.height}`),
+    check(endsWithIend(answer.bytes), 'el PNG termina en el fragmento IEND', endsWithIend(answer.bytes) ? 'termina en IEND' : 'no termina en IEND (archivo truncado)'),
+    check(length === null || Number(length) === answer.bytes.length, 'Content-Length (si viene) coincide con los bytes recibidos', length === null ? 'sin Content-Length' : `Content-Length ${length} y ${answer.bytes.length} bytes`),
   ];
   return verdict(checks);
 };
@@ -56,13 +76,13 @@ const freshDownload: ApiRowHandler = async (row) => {
   const reader = await loginAs(strict('cuenta', ACCOUNT_OF, 'gestor@sigpro.test'));
   if (reader.token === undefined) return preparationFailed('gestor@sigpro.test inicia sesión en alumno01', 'gestor@sigpro.test no obtiene accessToken en alumno01', reader.last);
   const answer = await getRaw('/evidence/EV-014', TENANT_A, bearer(reader.token));
-  const disposition = dispositionOf(answer.headers?.get('content-disposition'));
-  const wantedType = cell(row, 'tipo');
-  const wantedName = cell(row, 'nombre');
+  const wantedType = strict('tipo', TIPO, cell(row, 'tipo'));
+  const wantedName = strict('nombre', NOMBRE, cell(row, 'nombre'));
   const checks: Check[] = [
     ...expectChecks({ status: 200 }, answer),
     check(answer.headers?.get('content-type') === wantedType, `Content-Type ${wantedType}`, `Content-Type ${answer.headers?.get('content-type') ?? '(sin cabecera)'}`),
-    check(disposition.type === 'inline' && disposition.name === wantedName, `Content-Disposition inline con el nombre ${wantedName}`, `Content-Disposition ${disposition.type ?? '(sin cabecera)'} con el nombre ${disposition.name ?? '(sin nombre)'}`),
+    ...dispositionChecks(answer.headers?.get('content-disposition'), wantedName),
+    check(answer.headers?.get('cache-control') === CACHE, `Cache-Control ${CACHE}`, `Cache-Control ${answer.headers?.get('cache-control') ?? '(sin cabecera)'}`),
     check(answer.bytes.equals(file.bytes), 'el cuerpo es el mismo archivo que se adjuntó', answer.bytes.equals(file.bytes) ? 'el cuerpo es idéntico al adjuntado' : `el cuerpo tiene ${answer.bytes.length} bytes y el adjuntado ${file.bytes.length}`),
   ];
   return verdict(checks);
@@ -97,14 +117,14 @@ const sinSesion: ApiRowHandler = async (row) => {
 
 // --- E4: una evidencia solo es visible dentro de su tenant -----------------------------------------------------------------------
 
-/** Identificador de la evidencia que pide la E4 (la que la fila sube en alumno01). */
-const ID_E4: ReadonlyMap<string, string> = new Map<string, string>([['EV-014', 'EV-014']]); // strict: 004/E4/id
-
 /** Cabecera `x-tenant` de la petición: el tenant de alumno01 o el de alumno02. */
 const CABECERA_TENANT: ReadonlyMap<string, string> = new Map<string, string>([
   ['alumno01', TENANT_A], // strict: 004/E4/cabecera
   ['alumno02', TENANT_B],
 ]);
+
+/** Identificador de la evidencia que pide la E4 (la que la fila sube en alumno01). */
+const ID_E4: ReadonlyMap<string, string> = new Map<string, string>([['EV-014', 'EV-014']]); // strict: 004/E4/id
 
 const RESPUESTA_E4: ReadonlyMap<string, Expect> = new Map<string, Expect>([
   ['200 con Content-Type image/png y el nombre captura.png', { status: 200 }], // strict: 004/E4/respuesta
@@ -127,9 +147,9 @@ const aislamiento: ApiRowHandler = async (row) => {
   const answer: Fetched = await getRaw(`/evidence/${id}`, headerTenant, bearer(token));
   const checks: Check[] = [...expectChecks(expect, answer)];
   if (expect.status === 200) {
-    const disposition = dispositionOf(answer.headers?.get('content-disposition'));
     checks.push(check(answer.headers?.get('content-type') === 'image/png', 'Content-Type image/png', `Content-Type ${answer.headers?.get('content-type') ?? '(sin cabecera)'}`));
-    checks.push(check(disposition.name === 'captura.png', 'nombre captura.png', `nombre ${disposition.name ?? '(sin nombre)'}`));
+    checks.push(...dispositionChecks(answer.headers?.get('content-disposition'), 'captura.png'));
+    checks.push(check(answer.headers?.get('cache-control') === CACHE, `Cache-Control ${CACHE}`, `Cache-Control ${answer.headers?.get('cache-control') ?? '(sin cabecera)'}`));
   }
   return verdict(checks);
 };

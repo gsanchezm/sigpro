@@ -13,17 +13,21 @@ import {
   evidenceMultipleInput,
   evidenceSimpleInput,
   interact,
+  noToast,
   onWeb,
-  prepareCase,
+  prepareRow,
+  quietCheck,
   readFilesPanel,
   removeFileButton,
+  watchRunPosts,
   type Blocked,
   type FilesPanel,
 } from './common';
 
 // US-VER-EJECUCION-006 — Elegir evidencias antes de enviar, en la web: tipo, tamaño, cantidad, repetidos, quitar y arrastrar. Todo es
-// local: ninguna fila envía la ejecución al servidor. Preparación de cada fila: reinicio de alumno01 y consultor@sigpro.test con el
-// caso abierto y sin archivos. La lectura de «Archivos seleccionados» y de sus avisos se hace en una sola evaluación.
+// local: ninguna fila envía la ejecución al servidor (Regla 006:28), y cada fila lo comprueba con el recuento de peticiones. Preparación
+// de cada fila: reinicio de alumno01 y consultor@sigpro.test con el caso abierto (registro de avisos armado) y sin archivos. La lectura de
+// «Archivos seleccionados» y de sus avisos se hace en una sola evaluación.
 
 /** Lo que muestra la lista de archivos tras una elección: el archivo entra (lista) o se rechaza con su aviso. */
 type Expect006 =
@@ -86,20 +90,27 @@ const settled = async (page: Page, done: (panel: FilesPanel) => boolean): Promis
   return readFilesPanel(page);
 };
 
-/** Una línea de la lista de archivos: nombre, tamaño, vista previa y distintivo, en texto observable. */
+/** Texto observable de la lista (una línea por archivo, sus partes separadas por « / »). */
 const describeItems = (panel: FilesPanel | undefined): string => {
   if (panel === undefined) return '(sin leer)';
   if (panel.items.length === 0) return panel.noneText ? 'ningún archivo seleccionado' : '(lista vacía)';
   return panel.items.map((item) => item.lines.join(' / ')).join(' | ');
 };
 
+/** Texto de los avisos visibles (o «ninguno»). */
+const describeErrors = (panel: FilesPanel | undefined): string => (panel === undefined ? '(sin leer)' : panel.errors.length === 0 ? 'ninguno' : panel.errors.map((text) => `«${text}»`).join(', '));
+
+/** Comprobación de que la elección no envía nada al servidor (Regla 006:28). */
+const noPost = (posts: () => number): Check => check(posts() === 0, 'elegir o quitar archivos no envía nada al servidor', `peticiones de ejecución enviadas: ${posts()}`);
+
 // --- E1: cada archivo se acepta o se rechaza al elegirlo -----------------------------------------------------------------------------
 
 const elige: BrowserRowHandler = async (row, { page }) => {
   await resetTenants([TENANT_A]);
   const expected = `${cell(row, 'nombre')} se acepta o se rechaza al elegirlo`;
-  const prepared = await prepareCase(page, 'consultor');
-  if (prepared !== undefined) return preparationFailedWeb(expected, prepared);
+  const prepared = await prepareRow(page, 'consultor', expected);
+  if (prepared !== undefined) return prepared;
+  const posts = watchRunPosts(page);
   const name = cell(row, 'nombre');
   const media = strict('tipo', TIPO, cell(row, 'tipo'));
   const size = strict('tamano', TAMANO, cell(row, 'tamano'));
@@ -117,8 +128,9 @@ const elige: BrowserRowHandler = async (row, { page }) => {
     if (want.badge) checks.push(check(item?.lines.includes('PDF') === true, 'distintivo «PDF»', `distintivo ${item?.lines.includes('PDF') === true ? 'PDF' : '(sin distintivo)'}`));
   } else {
     checks.push(check(item === undefined, `${name} no aparece en «Archivos seleccionados»`, item === undefined ? `${name} no aparece` : `${name} aparece en la lista`));
-    checks.push(check(panel?.errors.includes(want.aviso) === true, `aparece el aviso «${want.aviso}»`, `avisos: ${panel === undefined ? '(sin leer)' : panel.errors.length === 0 ? 'ninguno' : panel.errors.map((text) => `«${text}»`).join(', ')}`));
+    checks.push(check(panel?.errors.includes(want.aviso) === true, `aparece el aviso «${want.aviso}»`, `avisos: ${describeErrors(panel)}`));
   }
+  checks.push(noPost(posts));
   return verdict(checks);
 };
 
@@ -127,8 +139,9 @@ const elige: BrowserRowHandler = async (row, { page }) => {
 const limita: BrowserRowHandler = async (row, { page }) => {
   await resetTenants([TENANT_A]);
   const expected = `elegir ${cell(row, 'nuevos')} con ${cell(row, 'ya_elegidos')} ya elegidos: ${cell(row, 'resultado')}`;
-  const prepared = await prepareCase(page, 'consultor');
-  if (prepared !== undefined) return preparationFailedWeb(expected, prepared);
+  const prepared = await prepareRow(page, 'consultor', expected);
+  if (prepared !== undefined) return prepared;
+  const posts = watchRunPosts(page);
   const already = strict('ya_elegidos', YA_ELEGIDOS, cell(row, 'ya_elegidos'));
   const incoming = strict('nuevos', NUEVOS, cell(row, 'nuevos'));
   const want = strict('resultado', RESULTADO_E2, cell(row, 'resultado'));
@@ -147,19 +160,26 @@ const limita: BrowserRowHandler = async (row, { page }) => {
   const checks: Check[] = [
     check(panel?.items.length === already + want.added, `«Archivos seleccionados» con ${already + want.added} archivo(s)`, `«Archivos seleccionados» con ${panel?.items.length ?? '(sin leer)'} archivo(s)`),
     check(expectedNames.every((name) => added.some((item) => item.lines.includes(name))), `entran ${want.added} de los nuevos (${expectedNames.join(', ') || 'ninguno'})`, `nuevos en la lista: ${added.map((item) => item.lines[0] ?? '').join(', ') || 'ninguno'}`),
-    check(want.aviso === undefined ? panel?.errors.length === 0 : panel?.errors.includes(want.aviso) === true, want.aviso === undefined ? 'ningún aviso' : `aviso «${want.aviso}»`, `avisos: ${panel === undefined ? '(sin leer)' : panel.errors.length === 0 ? 'ninguno' : panel.errors.map((text) => `«${text}»`).join(', ')}`),
+    check(want.aviso === undefined ? panel?.errors.length === 0 : panel?.errors.includes(want.aviso) === true, want.aviso === undefined ? 'ningún aviso' : `aviso «${want.aviso}»`, `avisos: ${describeErrors(panel)}`),
+    noPost(posts),
   ];
+  // «Ningún aviso» (fila de 0 + 5) incluye los avisos emergentes: se observa una ventana de 4 s con el registro armado
+  if (want.aviso === undefined) {
+    const quiet = await noToast(page);
+    checks.push(quietCheck(quiet, 'ningún aviso emergente'));
+  }
   return verdict(checks);
 };
 
-// --- E3: un archivo repetido no se añade otra vez -----------------------------------------------------------------------------------------
+// --- E3: un archivo repetido no se añade otra vez -----------------------------------------------------------------------------------
 
 const repetido: BrowserRowHandler = async (row, { page }) => {
   await resetTenants([TENANT_A]);
   const name = cell(row, 'nombre');
   const expected = `«Archivos seleccionados» sigue con un único ${name} y sin aviso`;
-  const prepared = await prepareCase(page, 'consultor');
-  if (prepared !== undefined) return preparationFailedWeb(expected, prepared);
+  const prepared = await prepareRow(page, 'consultor', expected);
+  if (prepared !== undefined) return prepared;
+  const posts = watchRunPosts(page);
   const first = await chooseFiles(evidenceSimpleInput(page), `elegir ${name}`, [png(name)]);
   if (first !== undefined) return actionFailed(expected, first);
   await settled(page, (current) => current.items.length === 1);
@@ -168,20 +188,24 @@ const repetido: BrowserRowHandler = async (row, { page }) => {
   await sleep(1_000);
   const panel = await readFilesPanel(page);
   const count = panel?.items.filter((item) => item.lines.includes(name)).length ?? -1;
+  const quiet = await noToast(page);
   return verdict([
     check(count === 1 && panel?.items.length === 1, `«Archivos seleccionados» con un único ${name}`, `«Archivos seleccionados»: ${describeItems(panel)}`),
-    check(panel?.errors.length === 0, 'ningún aviso', `avisos: ${panel === undefined ? '(sin leer)' : panel.errors.length === 0 ? 'ninguno' : panel.errors.map((text) => `«${text}»`).join(', ')}`),
+    check(panel?.errors.length === 0, 'ningún aviso', `avisos: ${describeErrors(panel)}`),
+    quietCheck(quiet, 'ningún aviso emergente'),
+    noPost(posts),
   ]);
 };
 
-// --- E4: un archivo seleccionado se quita de la lista ------------------------------------------------------------------------------------
+// --- E4: un archivo seleccionado se quita de la lista ------------------------------------------------------------------------------
 
 const quita: BrowserRowHandler = async (row, { page }) => {
   await resetTenants([TENANT_A]);
   const name = cell(row, 'nombre');
   const expected = `${name} deja de aparecer en «Archivos seleccionados» y el aviso de texto.txt desaparece`;
-  const prepared = await prepareCase(page, 'consultor');
-  if (prepared !== undefined) return preparationFailedWeb(expected, prepared);
+  const prepared = await prepareRow(page, 'consultor', expected);
+  if (prepared !== undefined) return prepared;
+  const posts = watchRunPosts(page);
   const pair = await chooseFiles(evidenceMultipleInput(page), 'elegir captura.png e informe.pdf', [png('captura.png'), upload('informe.pdf', 'application/pdf', 'pdf', 1024)]);
   if (pair !== undefined) return preparationFailedWeb(expected, pair.message);
   await settled(page, (current) => current.items.length === 2);
@@ -195,13 +219,15 @@ const quita: BrowserRowHandler = async (row, { page }) => {
   const other = name === 'captura.png' ? 'informe.pdf' : 'captura.png';
   return verdict([
     check(after?.items.some((item) => item.lines.includes(name)) === false, `${name} deja de aparecer en «Archivos seleccionados»`, `«Archivos seleccionados»: ${describeItems(after)}`),
-    check(after?.errors.includes('texto.txt: solo se admiten PNG, JPEG o PDF') === false, 'el aviso «texto.txt: solo se admiten PNG, JPEG o PDF» desaparece', `avisos: ${after === undefined ? '(sin leer)' : after.errors.length === 0 ? 'ninguno' : after.errors.map((entry) => `«${entry}»`).join(', ')}`),
+    check(after?.errors.includes('texto.txt: solo se admiten PNG, JPEG o PDF') === false, 'el aviso «texto.txt: solo se admiten PNG, JPEG o PDF» desaparece', `avisos: ${describeErrors(after)}`),
     check(after?.items.some((item) => item.lines.includes(other)) === true, `${other} sigue en la lista (no se quitó por error)`, `«Archivos seleccionados»: ${describeItems(after)}`),
+    noPost(posts),
   ]);
 };
 
 /** Pulsa «Quitar <nombre>» del archivo indicado (con su diagnóstico si falla). */
-const interactRemove = (page: Page, name: string): Promise<Blocked | undefined> => interact(removeFileButton(page, name), `pulsar «Quitar ${name}»`, (element) => element.click({ timeout: ACTION.timeout }));
+const interactRemove = (page: Page, name: string): Promise<Blocked | undefined> => interact(removeFileButton(page, name), `pulsar «Quitar ${name}»`, (element) => element.click(ACTION));
+
 
 // --- E5: un archivo arrastrado a la zona se añade igual que uno elegido -------------------------------------------------------------
 
@@ -209,18 +235,20 @@ const arrastra: BrowserRowHandler = async (row, { page }) => {
   await resetTenants([TENANT_A]);
   const name = cell(row, 'nombre');
   const expected = `${name} aparece en «Archivos seleccionados» con el tamaño 1.0 KB`;
-  const prepared = await prepareCase(page, 'consultor');
-  if (prepared !== undefined) return preparationFailedWeb(expected, prepared);
+  const prepared = await prepareRow(page, 'consultor', expected);
+  if (prepared !== undefined) return prepared;
+  const posts = watchRunPosts(page);
   const dropped = await dropFile(dropzone(page), png(name));
-  if (dropped !== undefined) return actionFailed(expected, dropped);
+  if (dropped.blocked !== undefined) return actionFailed(expected, dropped.blocked);
   const panel = await settled(page, (current) => current.items.length > 0 || current.errors.length > 0);
   const item = panel?.items.find((entry) => entry.lines.includes(name));
   return verdict(
     [
       check(item !== undefined, `${name} aparece en «Archivos seleccionados»`, `«Archivos seleccionados»: ${describeItems(panel)}`),
       check(item?.lines.includes('1.0 KB') === true, 'con el tamaño 1.0 KB', `tamaño visible ${item?.lines.find((line) => /KB|MB|B$/.test(line)) ?? '(sin tamaño)'}`),
+      noPost(posts),
     ],
-    'Arrastre simulado: se envía el evento drop con un DataTransfer construido en la página (Playwright no arrastra archivos del escritorio).',
+    `Arrastre simulado: se despachan dragenter, dragover y drop con un DataTransfer construido en la página (Playwright no arrastra archivos del escritorio). Durante el arrastre la zona queda con data-over=${dropped.overWhileDragging ?? '(sin leer)'}; esa lectura es evidencia, no un paso de la historia.`,
   );
 };
 

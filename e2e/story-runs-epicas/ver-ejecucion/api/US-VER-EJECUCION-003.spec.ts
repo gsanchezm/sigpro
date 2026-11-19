@@ -102,7 +102,12 @@ const tamano: ApiRowHandler = async (row) => {
   const size = strict('tamano', TAMANO, cell(row, 'tamano'));
   const expect = strict('respuesta', RESPUESTA_TAMANO, cell(row, 'respuesta'))(name, size);
   const answer = await sendRun({ tenant: TENANT_A, code: 'TC-001', fields: { result: 'pass' }, files: [upload(name, 'image/png', 'png', size)], headers: bearer(session.token) });
-  return verdict(expectChecks(expect, answer));
+  // Un rechazo por tamaño no deja ejecución ni evidencias (Regla 003:24)
+  const rejected = answer.status === 201 ? [] : await nothingSaved(session.token);
+  return verdict(
+    [...expectChecks(expect, answer), ...rejected],
+    'La Regla fija 5.242.880 bytes como límite del corte de transporte (multer); ninguna fila del Esquema lo prueba en su punto exacto (la fila enorme.png usa 5.242.881).',
+  );
 };
 
 // --- E3: la cantidad de archivos se limita a cinco -------------------------------------------------------------------------------
@@ -135,7 +140,9 @@ const cantidad: ApiRowHandler = async (row) => {
   const expect = strict('respuesta', RESPUESTA_CANTIDAD, cell(row, 'respuesta'))(count);
   const files: Upload[] = Array.from({ length: count }, (_, index) => upload(`foto-${index + 1}.png`, 'image/png', 'png', 1024));
   const answer = await sendRun({ tenant: TENANT_A, code: 'TC-001', fields: { result: 'pass' }, files, headers: bearer(session.token) });
-  return verdict(expectChecks(expect, answer));
+  // Un rechazo por cantidad no deja ejecución ni evidencias (Regla 003:24)
+  const rejected = answer.status === 201 ? [] : await nothingSaved(session.token);
+  return verdict(expectChecks(expect, answer).concat(rejected));
 };
 
 // --- E4: el nombre guardado no incluye la ruta -------------------------------------------------------------------------------------
@@ -191,7 +198,9 @@ const rechazo: ApiRowHandler = async (row) => {
     ...expectChecks({ status: 201, runId: 'RUN-051', evidencias: [{ id: 'EV-014', filename: NOMBRE_PNG, mimeType: 'image/png', size: 1024 }] }, second).map((entry) => ({ ...entry, expected: `última respuesta ${entry.expected}`, observed: `última ${entry.observed}` })),
     check(runCountOf(after) === 3, 'el caso TC-001 tiene 3 ejecuciones', `el caso TC-001 con ${String(runCountOf(after))} ejecuciones`),
   ];
-  return verdict(checks);
+  // La Regla 003:22 fija el orden cantidad → tipo → tamaño. Ninguna fila de esta historia envía a la vez un archivo de tipo no válido
+  // y otro de tamaño excesivo, así que ese orden no se prueba aquí (anotado, no se añade una fila).
+  return verdict(checks, 'La Regla 003:22 fija el orden cantidad → tipo → tamaño; ninguna fila combina un tipo no válido con un tamaño excesivo, así que ese orden no se prueba aquí.');
 };
 
 // --- E6: el caso se busca antes que los archivos ------------------------------------------------------------------------------------

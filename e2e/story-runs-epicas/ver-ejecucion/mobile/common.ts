@@ -2,9 +2,9 @@ import type { Locator, Page } from '@playwright/test';
 import { DEMO, TENANT_A, type Credentials } from '../../../story-runs/support/prepare';
 import { MOVIL_VERIFICATION_TESTIDS, VERIFICACION_TESTIDS } from '../../../../packages/shared/src/testids';
 import { ACTION, CEILING_MS, runSteps, safe, waitUntil, type Step } from '../../support/browser';
-import { check, conclude, type Check } from '../../support/checks';
+import { check, conclude, preparationFailedWeb, type Check } from '../../support/checks';
 import { outcome, type BrowserRowHandler, type Outcome } from '../../core/framework';
-import { payloadOf, interact, type Blocked, type ToastResult, recordToasts, TOAST_KEY, toastLog, armToasts, toastShown, noOkToast, watchRunPosts, CASE_PATH } from '../web/common';
+import { payloadOf, interact, registryArmed, UNARMED_REASON, type Blocked, type ToastResult, recordToasts, TOAST_KEY, toastLog, armToasts, toastShown, noOkToast, watchRunPosts, CASE_PATH } from '../web/common';
 import type { Upload } from '../api/files';
 
 // Piezas comunes de las filas de la app móvil de EP-VER-EJECUCION, servida como web de Expo (390 × 844). NO es iOS ni Android nativo: los
@@ -105,20 +105,64 @@ export const visibleTextOf = (target: Locator): Promise<string | undefined> =>
     undefined,
   );
 
-/** Un control bloqueado para el usuario: deshabilitado, de solo lectura o con `aria-disabled`. `undefined` = sin leer. */
+/**
+ * Un control bloqueado, leído solo en SUS PROPIOS atributos: `disabled` (propiedad), `readonly` (propiedad) o `aria-disabled="true"`
+ * en el propio elemento. No sube por los ancestros: un ancestro deshabilitado no prueba que el control lo esté. `undefined` = sin leer.
+ */
 export const lockedOf = (target: Locator): Promise<boolean | undefined> =>
   safe(
     () =>
       target.first().evaluate(
         (element) => {
           const field = element as HTMLInputElement;
-          return field.disabled === true || field.readOnly === true || element.getAttribute('aria-disabled') === 'true' || element.closest('[aria-disabled="true"]') !== null;
+          return field.disabled === true || field.readOnly === true || element.getAttribute('aria-disabled') === 'true';
         },
         undefined,
         { timeout: READ_MS },
       ),
     undefined,
   );
+
+/**
+ * Intento de uso de un control bloqueado: se hace clic FORZADO (sin esperar a que sea usable) y se devuelve el estado de la
+ * acción en su efecto, no en su atributo. No lanza: un clic que no llega a nada es el resultado buscado.
+ */
+export const attemptClick = (target: Locator): Promise<void> => safe(() => target.first().click({ force: true, timeout: READ_MS }), undefined).then(() => undefined);
+
+/**
+ * La imagen ampliada de la hoja está CARGADA (no solo presente): si es una `img`, debe estar completa con ancho natural; si es un
+ * fondo de imagen, debe tener una imagen de fondo y un tamaño visible. `false` si no carga o no se ve.
+ */
+export const zoomImageLoaded = (page: Page): Promise<boolean> =>
+  safe(
+    () =>
+      page.getByTestId(MOVIL_VERIFICATION_TESTIDS.EVIDENCE_ZOOM_IMAGE).first().evaluate(
+        (element) => {
+          if (element instanceof HTMLImageElement) return element.complete && element.naturalWidth > 0;
+          const style = getComputedStyle(element);
+          return style.backgroundImage !== 'none' && element.getBoundingClientRect().width > 0;
+        },
+        undefined,
+        { timeout: READ_MS },
+      ),
+    false,
+  );
+
+/** Intento de elegir archivos con un botón bloqueado: `true` si el selector del sistema se abrió (no debería). */
+export const attemptPicker = async (page: Page, button: Locator): Promise<boolean> => {
+  const opened = page.waitForEvent('filechooser', { timeout: READ_MS }).then(
+    () => true,
+    () => false,
+  );
+  await attemptClick(button);
+  return opened;
+};
+
+/** Intento de escribir en un campo de solo lectura: se fuerza el foco y se teclea; el valor no debe cambiar. */
+export const attemptTyping = async (page: Page, field: Locator, text: string): Promise<void> => {
+  await attemptClick(field);
+  await safe(() => page.keyboard.type(text), undefined);
+};
 
 /** Valor de `aria-checked` de una opción (`true`, `false`), o `undefined` si no se lee. */
 export const checkedOf = (target: Locator): Promise<boolean | undefined> =>
@@ -131,44 +175,40 @@ export const checkedOf = (target: Locator): Promise<boolean | undefined> =>
 export const reasonOf = (target: Locator): Promise<string | undefined> =>
   safe(() => target.first().getAttribute('data-reason', { timeout: READ_MS }).then((value) => value ?? undefined), undefined);
 
-/** Lectura atómica de la lista de archivos elegidos: cada archivo con sus líneas y si tiene vista previa. */
-export interface MobileFiles {
+/** Lectura del bloque de evidencias: los archivos elegidos (con sus líneas y su vista previa) y los avisos de archivos visibles. */
+export interface MobilePanel {
   readonly items: readonly { readonly lines: readonly string[]; readonly preview: boolean }[];
+  readonly errors: readonly string[];
 }
 
-/** Sin archivos la app no pinta la lista (muestra «Ningún archivo seleccionado»): eso es una lista vacía, no una lectura fallida. */
-export const readMobileFiles = async (page: Page): Promise<MobileFiles | undefined> => {
-  const present = await safe(() => filesList(page).count(), -1);
-  if (present === 0) return { items: [] };
-  return safe(
+/**
+ * Lectura ATÓMICA del bloque de evidencias (archivos y avisos) en UNA sola evaluación sobre el formulario de la ejecución, para que
+ * los dos datos correspondan al mismo instante. Sin archivos la app no pinta la lista: es una lista vacía, no una lectura fallida.
+ */
+export const readMobilePanel = (page: Page): Promise<MobilePanel | undefined> =>
+  safe(
     () =>
-      filesList(page).evaluate(
-        (list) => ({
-          items: Array.from(list.querySelectorAll('[role="listitem"]')).map((item) => ({
-            lines: (item as HTMLElement).innerText.split('\n').map((line) => line.trim()).filter((line) => line !== ''),
-            preview: item.querySelector('[data-testid^="run-file-preview-"]') !== null,
-          })),
-        }),
+      page.getByTestId(VERIFICACION_TESTIDS.RUN_FORM).evaluate(
+        (form) => {
+          const list = form.querySelector('[data-testid="run-files"]');
+          const box = form.querySelector('[data-testid="run-files-error"]');
+          const items = list === null ? [] : Array.from(list.querySelectorAll('[role="listitem"]')).map((item) => ({ lines: (item as HTMLElement).innerText.split('\n').map((line) => line.trim()).filter((line) => line !== ''), preview: item.querySelector('[data-testid^="run-file-preview-"]') !== null }));
+          const errors = box === null ? [] : Array.from(box.querySelectorAll('*')).filter((node) => node.children.length === 0).map((node) => (node as HTMLElement).innerText.trim()).filter((text) => text !== '');
+          return { items, errors };
+        },
         undefined,
         { timeout: READ_MS },
       ),
     undefined,
   );
-};
 
-/** Avisos de archivos visibles (cada uno en su línea); sin aviso, lista vacía. */
-export const readFileErrors = async (page: Page): Promise<readonly string[]> => {
-  const present = await safe(() => filesErrorBox(page).count(), -1);
-  if (present === 0) return [];
-  return safe(
-    () =>
-      filesErrorBox(page).evaluate(
-        (box) => Array.from(box.querySelectorAll('*')).filter((node) => node.children.length === 0).map((node) => (node as HTMLElement).innerText.trim()).filter((text) => text !== ''),
-        undefined,
-        { timeout: READ_MS },
-      ),
-    [],
-  );
+/** Preparación de una fila móvil: sesión, caso abierto y registro de avisos instalado (si no, la fila es preparationFailed). */
+export const prepareMobileRow = async (page: Page, account: MobileAccount, expected: string): Promise<Outcome | undefined> => {
+  const signed = await signIn(page, account);
+  const opened = signed ?? (await openCaseMobile(page));
+  if (opened !== undefined) return preparationFailedWeb(expected, opened);
+  if (!(await registryArmed(page))) return preparationFailedWeb(expected, UNARMED_REASON);
+  return undefined;
 };
 
 /** Lectura atómica de una tarjeta del historial: sus líneas visibles, sus miniaturas (estado y texto) y si tiene botón de ampliar. */

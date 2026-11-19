@@ -119,15 +119,34 @@ export const getRaw = async (path: string, tenant: string, headers: Readonly<Rec
   }
 };
 
-/** Tipo y nombre de una cabecera `Content-Disposition` (`filename*` UTF-8 o `filename` entre comillas). */
-export const dispositionOf = (header: string | null | undefined): { readonly type: string | undefined; readonly name: string | undefined } => {
-  if (header === null || header === undefined) return { type: undefined, name: undefined };
+/** Tipo y nombres de una cabecera `Content-Disposition`: el parámetro `filename` (ASCII, entre comillas) y `filename*` (UTF-8). */
+export const dispositionOf = (header: string | null | undefined): { readonly type: string | undefined; readonly plain: string | undefined; readonly encoded: string | undefined } => {
+  if (header === null || header === undefined) return { type: undefined, plain: undefined, encoded: undefined };
   const type = (header.split(';')[0] ?? '').trim();
   const star = /filename\*=UTF-8''([^;]+)/i.exec(header);
   const plain = /filename="([^"]*)"/i.exec(header);
   const encoded = star?.[1];
-  return { type, name: encoded !== undefined ? decodeURIComponent(encoded) : plain?.[1] };
+  return { type, plain: plain?.[1], encoded: encoded === undefined ? undefined : decodeURIComponent(encoded) };
 };
+
+/** Comprobaciones de `Content-Disposition`: tipo `inline` y el nombre en `filename` Y en `filename*` (Regla 004:19). */
+export const dispositionChecks = (header: string | null | undefined, name: string): Check[] => {
+  const parts = dispositionOf(header);
+  return [
+    check(parts.type === 'inline', 'Content-Disposition inline', `Content-Disposition ${parts.type ?? '(sin cabecera)'}`),
+    check(parts.plain === name, `filename ${name}`, `filename ${parts.plain ?? '(ausente)'}`),
+    check(parts.encoded === name, `filename* ${name}`, `filename* ${parts.encoded ?? '(ausente)'}`),
+  ];
+};
+
+/** Dimensiones de un PNG leídas de su cabecera IHDR (`undefined` si no empieza por la firma PNG ni trae IHDR). */
+export const pngDimensions = (bytes: Buffer): { readonly width: number; readonly height: number } | undefined => {
+  if (bytes.length < 24 || !bytes.subarray(12, 16).equals(Buffer.from('IHDR', 'ascii'))) return undefined;
+  return { width: bytes.readUInt32BE(16), height: bytes.readUInt32BE(20) };
+};
+
+/** ¿Termina el PNG con el fragmento IEND (4 bytes de longitud 0, «IEND» y su CRC)? Un archivo truncado no lo tiene. */
+export const endsWithIend = (bytes: Buffer): boolean => bytes.length >= 12 && bytes.subarray(bytes.length - 12).equals(Buffer.from('0000000049454e44ae426082', 'hex'));
 
 // --- Expectativas de una respuesta ----------------------------------------------------------------------------------------------
 

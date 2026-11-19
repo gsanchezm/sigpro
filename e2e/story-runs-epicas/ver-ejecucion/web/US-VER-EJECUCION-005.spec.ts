@@ -1,7 +1,7 @@
 import type { Locator } from '@playwright/test';
 import { defineBrowserRows, type BrowserRowHandler } from '../../core/framework';
 import { resetTenants, TENANT_A } from '../../../story-runs/support/prepare';
-import { cell, check, preparationFailedWeb, sleep, strict, type Check } from '../../support/checks';
+import { cell, check, sleep, strict, type Check } from '../../support/checks';
 import { ACTION, attrOf, isVisible, safe, waitUntil } from '../../support/browser';
 import { ACCOUNT_OF, caseOf, field, loginAs, runCountOf, runIdsOf, runsById, verdict } from '../api/common';
 import { upload, type Upload } from '../api/files';
@@ -11,6 +11,7 @@ import {
   armToasts,
   chooseFiles,
   deniedNote,
+  delayRunPost,
   evidenceSimpleInput,
   firstRunId,
   headerResult,
@@ -20,9 +21,11 @@ import {
   noOkToast,
   notesBox,
   onWeb,
-  prepareCase,
+  prepareRow,
+  quietCheck,
   readFilesPanel,
   readRunRow,
+  readTableHeaders,
   resultErrorText,
   resultRadio,
   runForm,
@@ -39,8 +42,8 @@ import { VERIFICACION_TESTIDS } from '../../../../packages/shared/src/testids';
 
 // US-VER-EJECUCION-005 — Registro de una ejecución desde el detalle del caso (web). Preparación de cada fila: reinicio de alumno01 con
 // su administrador; la persona entra en /login?tenant=alumno01 con la cuenta de la fila y abre /verification/TC-001. Cada aviso se
-// observa en el registro de avisos de la página (armado justo antes de la acción); el historial y la cabecera se leen tras el aviso,
-// y la persistencia se comprueba por la API, después de la interfaz.
+// observa en el registro de avisos de la página, que debe estar instalado (si no, la fila es preparationFailed). Las ventanas de
+// silencio duran 4 s. El historial, la cabecera y la API se leen después del aviso; la API se consulta después de la interfaz.
 
 // --- Celdas ---------------------------------------------------------------------------------------------------------------------------
 
@@ -122,13 +125,16 @@ const apiCase = async () => {
 /** Desactivado (propiedad) o `undefined` si no se puede leer. */
 const disabledOf = (target: Locator): Promise<boolean | undefined> => safe(() => target.isDisabled({ timeout: READ_MS }), undefined);
 
+/** Marcado (propiedad) o `undefined` si no se puede leer. */
+const checkedOf = (target: Locator): Promise<boolean | undefined> => safe(() => target.isChecked({ timeout: READ_MS }), undefined);
+
 // --- E1: una ejecución con resultado y notas aparece en el historial -------------------------------------------------------------------
 
 const registra: BrowserRowHandler = async (row, { page }) => {
   await resetTenants([TENANT_A]);
   const expected = `ejecución registrada «${cell(row, 'aviso')}»`;
-  const prepared = await prepareCase(page, 'consultor');
-  if (prepared !== undefined) return preparationFailedWeb(expected, prepared);
+  const prepared = await prepareRow(page, 'consultor', expected);
+  if (prepared !== undefined) return prepared;
   const choice = strict('resultado', RESULTADO, cell(row, 'resultado'));
   const aviso = strict('aviso', AVISO, cell(row, 'aviso'));
   const ultimo = strict('ultimo', ULTIMO, cell(row, 'ultimo'));
@@ -138,25 +144,39 @@ const registra: BrowserRowHandler = async (row, { page }) => {
     () => interact(notesBox(page), 'escribir en «Notas»', (element) => element.fill('Prueba de humo', ACTION)),
   );
   if (picked !== undefined) return actionFailed(expected, picked);
+  // Mientras se envía la petición se retrasa su respuesta: el formulario queda ocupado y el botón no vuelve a pulsarse
+  await delayRunPost(page, 1_500);
   await armToasts(page);
   const sent = await interact(submitButton(page), 'pulsar «Registrar ejecución»', (element) => element.click(ACTION));
   if (sent !== undefined) return actionFailed(expected, sent);
+  const busy = await waitUntil(async () => (await disabledOf(submitButton(page))) === true);
+  const busyDisabled = await disabledOf(submitButton(page));
+  const formBusy = await safe(() => runForm(page).getAttribute('aria-busy', { timeout: READ_MS }), null);
+  // Un segundo clic sobre el botón ocupado no envía otra petición (se comprueba con el recuento de peticiones)
+  await safe(() => submitButton(page).click({ force: true, timeout: READ_MS }), undefined);
   const toast = await toastShown(page, 'ok', 'Ejecución registrada', aviso);
   await waitUntil(async () => (await firstRunId(page)) === 'RUN-051');
   const first = await firstRunId(page);
   const firstRow = await readRunRow(runRowOf(page, 'RUN-051'));
+  const columns = await readTableHeaders(page);
   const header = await waitUntil(async () => (await headerResult(page)) === ultimo.label).then(() => headerResult(page));
+  const radios = await Promise.all(['Superado', 'Fallido', 'Bloqueado'].map((label) => checkedOf(resultRadio(page, label))));
+  const notes = await safe(() => notesBox(page).inputValue({ timeout: READ_MS }), undefined);
+  const files = await readFilesPanel(page);
   const after = await apiCase();
   const saved = after === undefined ? undefined : runsById(after).get('RUN-051');
   const checks: Check[] = [
     check(toast.seen, `aviso «Ejecución registrada» con el texto «${aviso}»`, toast.observed),
     check(first === 'RUN-051', 'el historial muestra RUN-051 como primera fila', `primera fila ${first ?? '(ninguna)'}`),
-    check(firstRow?.cells[1] === choice.label, `RUN-051 con el resultado «${choice.label}»`, `RUN-051 con el resultado «${firstRow?.cells[1] ?? '(sin leer)'}»`),
-    check(firstRow?.cells[2] === 'Prueba de humo', 'RUN-051 con las notas «Prueba de humo»', `RUN-051 con las notas «${firstRow?.cells[2] ?? '(sin leer)'}»`),
+    check(columns !== undefined && JSON.stringify(columns) === JSON.stringify(['Fecha', 'Resultado', 'Notas', 'Evidencias', 'Ejecutado por']), 'columnas del historial «Fecha», «Resultado», «Notas», «Evidencias» y «Ejecutado por»', `columnas ${columns === undefined ? '(sin leer)' : columns.join(', ')}`),
+    check(firstRow?.cells[1] === choice.label, `RUN-051 con el resultado «${choice.label}»`, `RUN-051 con el resultado «${firstRow?.cells[1] ?? '(sin leer)'}» (columna «Resultado»)`),
+    check(firstRow?.cells[2] === 'Prueba de humo', 'RUN-051 con las notas «Prueba de humo»', `RUN-051 con las notas «${firstRow?.cells[2] ?? '(sin leer)'}» (columna «Notas»)`),
     check(header === ultimo.label, `la cabecera muestra el último resultado «${ultimo.label}»`, `la cabecera muestra «${header ?? '(sin leer)'}»`),
+    check(radios.every((value) => value === false) && notes === '' && files?.items.length === 0, 'el formulario queda vacío (resultado, notas y archivos)', `resultado marcado: ${radios.map((value) => (value === true ? 'sí' : value === false ? 'no' : 'sin leer')).join(', ')}; notas «${notes ?? '(sin leer)'}»; archivos ${files === undefined ? '(sin leer)' : files.items.length}`),
+    check(busy.reached && busyDisabled === true && formBusy === 'true', 'mientras se envía, «Registrar ejecución» está deshabilitado y el formulario queda ocupado', `botón ${busyDisabled === true ? 'deshabilitado' : busyDisabled === false ? 'habilitado' : 'sin leer'}; formulario aria-busy ${formBusy ?? '(sin leer)'}`),
     check(after !== undefined && field(after.body, 'lastResult') === choice.api, `la API guarda el último resultado ${choice.api}`, `la API guarda el último resultado ${String(after === undefined ? '(sin leer)' : field(after.body, 'lastResult'))}`),
     check(after !== undefined && runIdsOf(after)[0] === 'RUN-051' && saved?.result === choice.api && saved?.notes === 'Prueba de humo', 'la API guarda RUN-051 como primera, con el resultado y las notas', `la API: primera ${after === undefined ? '(sin leer)' : (runIdsOf(after)[0] ?? '(ninguna)')}, RUN-051 ${saved === undefined ? '(no está)' : `con ${String(saved.result)} y notas «${String(saved.notes)}»`}`),
-    check(posts() === 1, 'se envía una sola petición de ejecución', `peticiones de ejecución enviadas: ${posts()}`),
+    check(posts() === 1, 'se envía una sola petición de ejecución (el segundo clic no envía otra)', `peticiones de ejecución enviadas: ${posts()}`),
   ];
   const note = ultimo.label === 'Bloqueado' ? 'La fila no distingue por la cabecera: el último resultado del seed ya es «Bloqueado»; se confirma además por el historial y por la API.' : undefined;
   return verdict(checks, note);
@@ -167,8 +187,8 @@ const registra: BrowserRowHandler = async (row, { page }) => {
 const sinResultado: BrowserRowHandler = async (row, { page }) => {
   await resetTenants([TENANT_A]);
   const expected = 'sin resultado no se envía y aparece «Selecciona un resultado»';
-  const prepared = await prepareCase(page, 'consultor');
-  if (prepared !== undefined) return preparationFailedWeb(expected, prepared);
+  const prepared = await prepareRow(page, 'consultor', expected);
+  if (prepared !== undefined) return prepared;
   const notas = strict('notas', NOTAS_E2, cell(row, 'notas'));
   const posts = watchRunPosts(page);
   if (notas !== undefined) {
@@ -185,7 +205,7 @@ const sinResultado: BrowserRowHandler = async (row, { page }) => {
   const count = await apiRunCount();
   return verdict([
     check(message === 'Selecciona un resultado', 'bajo las opciones aparece «Selecciona un resultado»', `bajo las opciones aparece «${message ?? '(no visible)'}»`),
-    check(quiet.held, 'no aparece el aviso «Ejecución registrada»', quiet.held ? 'no aparece el aviso «Ejecución registrada»' : `aparece «${quiet.seen}»`),
+    quietCheck(quiet, 'el aviso «Ejecución registrada»'),
     check(rows === 2, 'el historial sigue con 2 ejecuciones', `el historial muestra ${rows} ejecución(es)`),
     check(count === 2, 'la API sigue con 2 ejecuciones del caso', `la API responde ${String(count)} ejecuciones`),
     check(posts() === 0, 'no se envía ninguna petición de ejecución', `peticiones de ejecución enviadas: ${posts()}`),
@@ -197,8 +217,8 @@ const sinResultado: BrowserRowHandler = async (row, { page }) => {
 const notasLimite: BrowserRowHandler = async (row, { page }) => {
   await resetTenants([TENANT_A]);
   const expected = 'las notas de la fila se aceptan o se rechazan según su longitud';
-  const prepared = await prepareCase(page, 'consultor');
-  if (prepared !== undefined) return preparationFailedWeb(expected, prepared);
+  const prepared = await prepareRow(page, 'consultor', expected);
+  if (prepared !== undefined) return prepared;
   const size = strict('caracteres', CARACTERES, cell(row, 'caracteres'));
   const outcomeExpected = strict('respuesta', RESPUESTA_E3, cell(row, 'respuesta'));
   const posts = watchRunPosts(page);
@@ -230,7 +250,7 @@ const notasLimite: BrowserRowHandler = async (row, { page }) => {
   const count = await apiRunCount();
   return verdict([
     check(shown, 'bajo «Notas» aparece «Las notas admiten hasta 1000 caracteres»', shown ? 'bajo «Notas» aparece «Las notas admiten hasta 1000 caracteres»' : 'bajo «Notas» no aparece el aviso «Las notas admiten hasta 1000 caracteres» (no sale ningún aviso del límite)'),
-    check(quiet.held, 'no se envía la ejecución: no aparece «Ejecución registrada»', quiet.held ? 'no aparece «Ejecución registrada»' : `aparece «${quiet.seen}»`),
+    quietCheck(quiet, 'el aviso «Ejecución registrada» (la ejecución no se envía)'),
     check(rows === 2, 'el historial sigue con 2 ejecuciones', `el historial muestra ${rows} ejecución(es)`),
     check(count === 2, 'la API sigue con 2 ejecuciones del caso', `la API responde ${String(count)} ejecuciones`),
     check(posts() === 0, 'no se envía ninguna petición de ejecución', `peticiones de ejecución enviadas: ${posts()}`),
@@ -242,8 +262,8 @@ const notasLimite: BrowserRowHandler = async (row, { page }) => {
 const rechazaArchivo: BrowserRowHandler = async (row, { page }) => {
   await resetTenants([TENANT_A]);
   const expected = `el servidor rechaza el archivo con el aviso «${cell(row, 'aviso')}»`;
-  const prepared = await prepareCase(page, 'consultor');
-  if (prepared !== undefined) return preparationFailedWeb(expected, prepared);
+  const prepared = await prepareRow(page, 'consultor', expected);
+  if (prepared !== undefined) return prepared;
   const file = strict('archivo', ARCHIVO_E4, cell(row, 'archivo'))();
   const aviso = strict('aviso', AVISO_E4, cell(row, 'aviso'));
   const posts = watchRunPosts(page);
@@ -263,19 +283,22 @@ const rechazaArchivo: BrowserRowHandler = async (row, { page }) => {
   const rows = await runRowCount(page);
   const count = await apiRunCount();
   const panel = await readFilesPanel(page);
-  const radio = await safe(() => resultRadio(page, 'Bloqueado').isChecked({ timeout: READ_MS }), undefined);
+  const radio = await checkedOf(resultRadio(page, 'Bloqueado'));
   const notes = await safe(() => notesBox(page).inputValue({ timeout: READ_MS }), undefined);
   const kept = panel?.items.some((item) => item.lines.includes(file.name)) === true;
-  return verdict([
-    check(motive === aviso, `aviso de error «${aviso}»`, `aviso de error «${motive ?? '(no visible)'}»`),
-    check(quiet.held, 'no aparece el aviso «Ejecución registrada»', quiet.held ? 'no aparece el aviso «Ejecución registrada»' : `aparece «${quiet.seen}»`),
-    check(rows === 2, 'el historial sigue con 2 ejecuciones', `el historial muestra ${rows} ejecución(es)`),
-    check(count === 2, 'la API sigue con 2 ejecuciones del caso', `la API responde ${String(count)} ejecuciones`),
-    check(posts() === 1, 'el formulario sí envía la petición (la rechaza el servidor)', `peticiones de ejecución enviadas: ${posts()}`),
-    check(radio === true, 'el formulario conserva el resultado «Bloqueado»', `resultado «Bloqueado» ${radio === undefined ? '(sin leer)' : radio ? 'marcado' : 'sin marcar'}`),
-    check(notes === 'Prueba con evidencia no válida', 'el formulario conserva las notas', `notas «${notes ?? '(sin leer)'}»`),
-    check(kept, `el formulario conserva ${file.name} en «Archivos seleccionados»`, kept ? `${file.name} sigue en «Archivos seleccionados»` : `«Archivos seleccionados» sin ${file.name}`),
-  ], text === undefined ? undefined : `el aviso de error muestra «${text}»; la historia deja pendiente si lleva el código HTTP, y solo se compara el motivo`);
+  return verdict(
+    [
+      check(motive === aviso, `aviso de error «${aviso}»`, `aviso de error «${motive ?? '(no visible)'}»`),
+      quietCheck(quiet, 'el aviso «Ejecución registrada»'),
+      check(rows === 2, 'el historial sigue con 2 ejecuciones', `el historial muestra ${rows} ejecución(es)`),
+      check(count === 2, 'la API sigue con 2 ejecuciones del caso', `la API responde ${String(count)} ejecuciones`),
+      check(posts() === 1, 'el formulario sí envía la petición (la rechaza el servidor)', `peticiones de ejecución enviadas: ${posts()}`),
+      check(radio === true, 'el formulario conserva el resultado «Bloqueado»', `resultado «Bloqueado» ${radio === undefined ? '(sin leer)' : radio ? 'marcado' : 'sin marcar'}`),
+      check(notes === 'Prueba con evidencia no válida', 'el formulario conserva las notas', `notas «${notes ?? '(sin leer)'}»`),
+      check(kept, `el formulario conserva ${file.name} en «Archivos seleccionados»`, kept ? `${file.name} sigue en «Archivos seleccionados»` : `«Archivos seleccionados» sin ${file.name}`),
+    ],
+    text === undefined ? undefined : `el aviso de error muestra «${text}»; la historia deja pendiente si lleva el código HTTP, y solo se compara el motivo`,
+  );
 };
 
 // --- E5: sin el permiso el formulario se ve, pero no se puede enviar -------------------------------------------------------------
@@ -284,8 +307,8 @@ const sinPermiso: BrowserRowHandler = async (row, { page }) => {
   await resetTenants([TENANT_A]);
   const expected = `ve «${MOTIVO_PERMISO}» y el formulario no se puede usar`;
   const account = strict('cuenta', CUENTA_E5, cell(row, 'cuenta'));
-  const prepared = await prepareCase(page, account);
-  if (prepared !== undefined) return preparationFailedWeb(expected, prepared);
+  const prepared = await prepareRow(page, account, expected);
+  if (prepared !== undefined) return prepared;
   const seen = await textOfVisible(deniedNote(page));
   const radios = ['Superado', 'Fallido', 'Bloqueado'].map((label) => resultRadio(page, label));
   const radioStates = await Promise.all(radios.map((radio) => disabledOf(radio)));
@@ -294,14 +317,19 @@ const sinPermiso: BrowserRowHandler = async (row, { page }) => {
   const inputStates = await Promise.all(inputs.map((input) => safe(() => input.isDisabled({ timeout: READ_MS }), undefined)));
   const submitState = await disabledOf(submitButton(page));
   const submitTitle = await attrOf(submitButton(page), 'title');
+  // «Al pasar el puntero»: se pasa el puntero sobre el botón; el tooltip nativo no se observa, así que se lee su `title`
+  const hovered = await safe(() => submitButton(page).hover({ timeout: READ_MS }).then(() => true), false);
   const allLocked = (states: readonly (boolean | undefined)[]): boolean => states.every((state) => state === true);
-  return verdict([
-    check(seen === MOTIVO_PERMISO, `aviso «${MOTIVO_PERMISO}» visible`, `aviso «${seen ?? '(no visible)'}»`),
-    check(allLocked(radioStates), 'las opciones de resultado están deshabilitadas', `opciones de resultado: ${radioStates.map((state) => (state === true ? 'deshabilitada' : state === false ? 'habilitada' : 'sin leer')).join(', ')}`),
-    check(notesState === true, '«Notas» está deshabilitado', notesState === undefined ? '«Notas» sin leer' : notesState ? '«Notas» deshabilitado' : '«Notas» habilitado'),
-    check(allLocked(inputStates), 'los controles para adjuntar evidencias están deshabilitados', `controles de evidencias: ${inputStates.map((state) => (state === true ? 'deshabilitado' : state === false ? 'habilitado' : 'sin leer')).join(', ')}`),
-    check(submitState === true && submitTitle === MOTIVO_PERMISO, `«Registrar ejecución» deshabilitado, con el motivo «${MOTIVO_PERMISO}»`, `«Registrar ejecución» ${submitState === true ? 'deshabilitado' : submitState === false ? 'habilitado' : 'sin leer'}, con el motivo «${submitTitle ?? '(sin motivo)'}»`),
-  ]);
+  return verdict(
+    [
+      check(seen === MOTIVO_PERMISO, `aviso «${MOTIVO_PERMISO}» visible`, `aviso «${seen ?? '(no visible)'}»`),
+      check(allLocked(radioStates), 'las opciones de resultado están deshabilitadas', `opciones de resultado: ${radioStates.map((state) => (state === true ? 'deshabilitada' : state === false ? 'habilitada' : 'sin leer')).join(', ')}`),
+      check(notesState === true, '«Notas» está deshabilitado', notesState === undefined ? '«Notas» sin leer' : notesState ? '«Notas» deshabilitado' : '«Notas» habilitado'),
+      check(allLocked(inputStates), 'los controles para adjuntar evidencias están deshabilitados', `controles de evidencias: ${inputStates.map((state) => (state === true ? 'deshabilitado' : state === false ? 'habilitado' : 'sin leer')).join(', ')}`),
+      check(submitState === true && submitTitle === MOTIVO_PERMISO, `«Registrar ejecución» deshabilitado, con el motivo «${MOTIVO_PERMISO}»`, `«Registrar ejecución» ${submitState === true ? 'deshabilitado' : submitState === false ? 'habilitado' : 'sin leer'}, con el motivo «${submitTitle ?? '(sin motivo)'}»`),
+    ],
+    `Al pasar el puntero: se hizo hover (${hovered ? 'hecho' : 'no se pudo'}) y se lee el atributo title; el tooltip nativo no se observa, así que es una aproximación.`,
+  );
 };
 
 defineBrowserRows({

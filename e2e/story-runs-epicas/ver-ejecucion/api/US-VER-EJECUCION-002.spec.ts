@@ -1,7 +1,7 @@
 import { defineApiRows, type ApiRowHandler } from '../../core/framework';
 import { resetTenants } from '../../../story-runs/support/prepare';
 import { cell, check, preparationFailed, strict, type Check } from '../../support/checks';
-import { ACCOUNT_OF, TENANT_A, auditOf, bearer, caseOf, executedEventsFor, expectChecks, field, loginAs, runCountOf, runIdsOf, runsById, sendRun, verdict, type Expect, type RunFields } from './common';
+import { ACCOUNT_OF, TENANT_A, TENANT_B, auditOf, bearer, caseOf, executedEventsFor, expectChecks, field, loginAs, runCountOf, runIdsOf, runsById, sendRun, verdict, type Expect, type RunFields } from './common';
 
 // US-VER-EJECUCION-002 — Registro de una ejecución por la API: resultado, notas, efecto en el caso y auditoría. Preparación de cada
 // fila: reinicio de alumno01 con su administrador y la cuenta alumno01 en x-tenant alumno01. Las lecturas del efecto (último resultado,
@@ -26,7 +26,13 @@ const valida: ApiRowHandler = async (row) => {
     fields: { result, notes: 'Prueba de humo', executedByName: 'Alumno 01' },
     evidencias: [],
   };
-  return verdict(expectChecks(expect, answer));
+  // Regla 002:25: la cabecera x-tenant no cambia el tenant de una petición con token. Con x-tenant de alumno02 la ejecución queda
+  // en alumno01 (el tenant del token), y se comprueba por el historial de alumno01.
+  const crossed = await sendRun({ tenant: TENANT_B, code: 'TC-001', fields: { result, notes: 'Prueba de humo' }, headers: bearer(session.token) });
+  const crossedId = String(field(crossed.body, 'id'));
+  const own = await caseOf(session.token);
+  const crossCheck = check(crossed.status === 201 && runIdsOf(own).includes(crossedId), 'con x-tenant alumno02 la ejecución queda en alumno01 (el tenant del token)', `con x-tenant alumno02: respuesta ${crossed.status}, ${crossed.status === 201 ? `ejecución ${crossedId} ${runIdsOf(own).includes(crossedId) ? 'en el historial de alumno01' : 'fuera del historial de alumno01'}` : 'sin ejecución creada'}`);
+  return verdict([...expectChecks(expect, answer), crossCheck]);
 };
 
 /** Texto de notas de una fila: lo que se envía, lo que queda guardado y si la API lo rechaza. */
@@ -38,6 +44,12 @@ interface NotasPlan {
 
 /** Tamaños de las notas: el texto de 1.000 caracteres con espacios a los lados se recorta antes de contar. */
 const LETRAS = (count: number): string => 'a'.repeat(count);
+
+/** Respuesta de cada texto de notas (columna «respuesta» de la E2): creada (201) o rechazada (422 por notesLong). */
+const RESPUESTA_NOTAS: ReadonlyMap<string, 'creada' | 'rechazada'> = new Map<string, 'creada' | 'rechazada'>([
+  ['201', 'creada'], // strict: 002/E2/respuesta
+  ['422 validation_failed con el motivo notesLong en notes', 'rechazada'],
+]);
 
 /** Efecto de cada fila de la E2 (columna «efecto»): la frase que la comprobación afirma. */
 const EFECTO: ReadonlyMap<string, string> = new Map<string, string>([
@@ -65,7 +77,9 @@ const notas: ApiRowHandler = async (row) => {
   if (session.token === undefined) return preparationFailed('alumno01 inicia sesión en alumno01', 'alumno01 no obtiene accessToken en alumno01', session.last);
   const fields: RunFields = plan.send === undefined ? { result: 'pass' } : { result: 'pass', notes: plan.send };
   const answer = await sendRun({ tenant: TENANT_A, code: 'TC-001', fields, headers: bearer(session.token) });
-  const expect: Expect = plan.rejected
+  // La respuesta esperada sale de la columna «respuesta» por su mapa estricto; el plan de notas solo dice qué se envía y qué queda
+  const kind = strict('respuesta', RESPUESTA_NOTAS, cell(row, 'respuesta'));
+  const expect: Expect = kind === 'rechazada'
     ? { status: 422, code: 'validation_failed', errors: { notes: 'notesLong' } }
     : { status: 201, runId: 'RUN-051', caso: 'TC-001', fields: { notes: plan.stored } };
   const after = await caseOf(session.token);

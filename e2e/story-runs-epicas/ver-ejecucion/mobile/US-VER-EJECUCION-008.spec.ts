@@ -1,13 +1,16 @@
 import type { Page } from '@playwright/test';
 import { defineBrowserRows, type BrowserRowHandler } from '../../core/framework';
 import { resetTenants, TENANT_A } from '../../../story-runs/support/prepare';
-import { cell, check, preparationFailedWeb, sleep, strict, type Check } from '../../support/checks';
+import { cell, check, sleep, strict, type Check } from '../../support/checks';
 import { ACTION, waitUntil } from '../../support/browser';
 import { ACCOUNT_OF, caseOf, loginAs, runCountOf, runIdsOf, runsById } from '../api/common';
 import { upload } from '../api/files';
-import { armToasts, inOrder, interact, noOkToast, toastShown, watchRunPosts } from '../web/common';
+import { armToasts, delayRunPost, inOrder, interact, noOkToast, noToast, quietCheck, toastShown, watchRunPosts, type QuietWindow } from '../web/common';
 import {
   actionFailedMobile,
+  attemptClick,
+  attemptPicker,
+  attemptTyping,
   checkedOf,
   deniedNote,
   firstCardId,
@@ -17,12 +20,12 @@ import {
   notesErrorText,
   notesField,
   onExpoWeb,
-  openCaseMobile,
   pickManyButton,
   pickOneButton,
   pickPdfButton,
   pickWith,
-  readMobileFiles,
+  prepareMobileRow,
+  readMobilePanel,
   reasonOf,
   resultErrorText,
   resultRadio,
@@ -30,7 +33,6 @@ import {
   runCardCount,
   serverErrorBox,
   settledCard,
-  signIn,
   submitButton,
   visibleTextOf,
   type MobileAccount,
@@ -38,7 +40,9 @@ import {
 
 // US-VER-EJECUCION-008 — Registro de una ejecución desde el detalle del caso, en la app móvil (Expo web, 390 × 844; NO es nativo).
 // Preparación de cada fila: reinicio de alumno01; la app en /login con alumno01 en «Tenant de trabajo», la cuenta de la fila y el caso
-// abierto. La persistencia se comprueba por la API después de la interfaz. Las lecturas son de texto visible y de atributos.
+// abierto, con el registro de avisos instalado (si no, la fila es preparationFailed). La persistencia se comprueba por la API después
+// de la interfaz. Las lecturas son de texto visible y de atributos propios. Los controles bloqueados se prueban además con un intento
+// de uso que debe no tener efecto (clic forzado, escritura, selector y envío).
 
 interface Resultado {
   readonly label: string;
@@ -93,41 +97,47 @@ const apiRunCount = async (): Promise<number | undefined> => {
 };
 
 /** Aviso de éxito con su texto exacto (el título es «Ejecución registrada»). */
-const toastOk = (page: Page, body: string) => toastShown(page, 'ok', 'Ejecución registrada', body);
-
-/** Prepara la fila: la app móvil con la cuenta y el caso abierto (o el motivo si no llega). */
-const prepare = async (page: Page, account: MobileAccount): Promise<string | undefined> => {
-  const signed = await signIn(page, account);
-  if (signed !== undefined) return signed;
-  return openCaseMobile(page);
-};
+const savedToast = (page: Page, body: string) => toastShown(page, 'ok', 'Ejecución registrada', body);
 
 /** Escribe las notas de la fila (vacío = no se escribe nada). */
 const typeNotes = (page: Page, notes: string | undefined) => (notes === undefined ? undefined : interact(notesField(page), 'escribir en «Notas»', (element) => element.fill(notes, ACTION)));
+
+/** Estado del formulario tras un envío exitoso: ninguna opción marcada y «Notas» vacío. */
+const formCleared = async (page: Page): Promise<{ readonly radios: readonly (boolean | undefined)[]; readonly notes: string | undefined }> => ({
+  radios: await Promise.all(['Superado', 'Fallido', 'Bloqueado'].map((label) => checkedOf(resultRadio(page, label)))),
+  notes: await notesField(page).inputValue({ timeout: 2_000 }).catch(() => undefined),
+});
 
 // --- E1: una ejecución con resultado y notas aparece en el historial -------------------------------------------------------------------
 
 const registra: BrowserRowHandler = async (row, { page }) => {
   await resetTenants([TENANT_A]);
   const expected = `ejecución registrada «${cell(row, 'aviso')}», primera del historial, con el formulario vacío`;
-  const prepared = await prepare(page, 'consultor');
-  if (prepared !== undefined) return preparationFailedWeb(expected, prepared);
+  const prepared = await prepareMobileRow(page, 'consultor', expected);
+  if (prepared !== undefined) return prepared;
   const choice = strict('resultado', RESULTADO, cell(row, 'resultado'));
   const aviso = strict('aviso', AVISO, cell(row, 'aviso'));
+  const posts = watchRunPosts(page);
   const picked = await inOrder(
     () => interact(resultRadio(page, choice.label), `elegir «${choice.label}»`, (element) => element.click(ACTION)),
     () => interact(notesField(page), 'escribir «Prueba de humo» en «Notas»', (element) => element.fill('Prueba de humo', ACTION)),
   );
   if (picked !== undefined) return actionFailedMobile(expected, picked);
+  // Mientras se envía, la petición se retrasa: el botón queda ocupado (aria-busy) y no vuelve a enviar
+  await delayRunPost(page, 1_500);
   await armToasts(page);
   const sent = await interact(submitButton(page), 'pulsar «Registrar ejecución»', (element) => element.click(ACTION));
   if (sent !== undefined) return actionFailedMobile(expected, sent);
-  const toast = await toastOk(page, aviso);
+  const busy = await waitUntil(async () => (await submitButton(page).getAttribute('aria-busy', { timeout: 2_000 }).catch(() => null)) === 'true');
+  const busyState = await submitButton(page).getAttribute('aria-busy', { timeout: 2_000 }).catch(() => null);
+  const busyLocked = await lockedOf(submitButton(page));
+  await attemptClick(submitButton(page));
+  const toast = await savedToast(page, aviso);
   await waitUntil(async () => (await firstCardId(page)) === 'RUN-051');
   const first = await firstCardId(page);
   const card = await settledCard(runCard(page, 'RUN-051'));
-  const radios = await Promise.all(['Superado', 'Fallido', 'Bloqueado'].map((label) => checkedOf(resultRadio(page, label))));
-  const notes = await notesField(page).inputValue({ timeout: 2_000 }).catch(() => undefined);
+  const cleared = await formCleared(page);
+  const panel = await readMobilePanel(page);
   const session = await loginAs(strict('cuenta', ACCOUNT_OF, 'alumno01@sigpro.lab'));
   const after = session.token === undefined ? undefined : await caseOf(session.token);
   const saved = after === undefined ? undefined : runsById(after).get('RUN-051');
@@ -135,9 +145,12 @@ const registra: BrowserRowHandler = async (row, { page }) => {
     check(toast.seen, `aviso «Ejecución registrada» con el texto «${aviso}»`, toast.observed),
     check(first === 'RUN-051', 'el historial muestra RUN-051 como primera tarjeta', `primera tarjeta ${first ?? '(ninguna)'}`),
     check(card?.lines.includes(choice.label) === true, `RUN-051 con el resultado «${choice.label}»`, `RUN-051 muestra ${card?.lines.find((line) => ['Superado', 'Fallido', 'Bloqueado'].includes(line)) ?? '(ningún resultado)'}`),
-    check(radios.every((value) => value === false), 'el formulario queda sin resultado', `opciones marcadas: ${radios.map((value) => (value === true ? 'sí' : value === false ? 'no' : 'sin leer')).join(', ')}`),
-    check(notes === '', '«Notas» vacío', `«Notas» con «${notes ?? '(sin leer)'}»`),
+    check(cleared.radios.every((value) => value === false), 'el formulario queda sin resultado', `opciones marcadas: ${cleared.radios.map((value) => (value === true ? 'sí' : value === false ? 'no' : 'sin leer')).join(', ')}`),
+    check(cleared.notes === '', '«Notas» vacío', `«Notas» con «${cleared.notes ?? '(sin leer)'}»`),
+    check(panel !== undefined && panel.items.length === 0, 'el formulario queda sin archivos', `archivos: ${panel === undefined ? '(sin leer)' : panel.items.length}`),
+    check(busy.reached && busyState === 'true' && busyLocked === true, 'mientras se envía, «Registrar ejecución» queda ocupado y deshabilitado', `aria-busy ${busyState ?? '(sin leer)'}; bloqueado ${busyLocked === true ? 'sí' : busyLocked === false ? 'no' : 'sin leer'}`),
     check(after !== undefined && runIdsOf(after)[0] === 'RUN-051' && saved?.result === choice.api, `la API guarda RUN-051 con ${choice.api} como primera`, `la API: primera ${after === undefined ? '(sin leer)' : (runIdsOf(after)[0] ?? '(ninguna)')}, RUN-051 ${saved === undefined ? '(no está)' : String(saved.result)}`),
+    check(posts() === 1, 'se envía una sola petición (el segundo toque no envía otra)', `peticiones de ejecución enviadas: ${posts()}`),
   ];
   const note = choice.label === 'Bloqueado' ? 'La fila no distingue por la cabecera: el último resultado del seed ya es «Bloqueado»; se confirma por la tarjeta y por la API.' : undefined;
   return mobileVerdict(checks, { note });
@@ -148,8 +161,8 @@ const registra: BrowserRowHandler = async (row, { page }) => {
 const sinResultado: BrowserRowHandler = async (row, { page }) => {
   await resetTenants([TENANT_A]);
   const expected = 'sin resultado no se envía y bajo las opciones aparece «Selecciona un resultado»';
-  const prepared = await prepare(page, 'consultor');
-  if (prepared !== undefined) return preparationFailedWeb(expected, prepared);
+  const prepared = await prepareMobileRow(page, 'consultor', expected);
+  if (prepared !== undefined) return prepared;
   const posts = watchRunPosts(page);
   const typed = await typeNotes(page, strict('notas', NOTAS_E2, cell(row, 'notas')));
   if (typed !== undefined) return actionFailedMobile(expected, typed);
@@ -158,12 +171,12 @@ const sinResultado: BrowserRowHandler = async (row, { page }) => {
   if (sent !== undefined) return actionFailedMobile(expected, sent);
   await waitUntil(async () => (await visibleTextOf(resultErrorText(page))) !== undefined);
   const message = await visibleTextOf(resultErrorText(page));
-  const quiet = await noOkToast(page);
+  const quiet: QuietWindow = await noOkToast(page);
   const cards = await runCardCount(page);
   const count = await apiRunCount();
   return mobileVerdict([
     check(message === 'Selecciona un resultado', 'bajo las opciones aparece «Selecciona un resultado»', `bajo las opciones aparece «${message ?? '(no visible)'}»`),
-    check(quiet.held, 'no aparece el aviso «Ejecución registrada»', quiet.held ? 'no aparece el aviso «Ejecución registrada»' : `aparece «${quiet.seen}»`),
+    quietCheck(quiet, 'el aviso «Ejecución registrada»'),
     check(cards === 2, 'el historial sigue con 2 ejecuciones', `el historial muestra ${cards} ejecución(es)`),
     check(count === 2, 'la API sigue con 2 ejecuciones del caso', `la API responde ${String(count)} ejecuciones`),
     check(posts() === 0, 'no se envía ninguna petición de ejecución', `peticiones de ejecución enviadas: ${posts()}`),
@@ -175,11 +188,11 @@ const sinResultado: BrowserRowHandler = async (row, { page }) => {
 const notasLimite: BrowserRowHandler = async (row, { page }) => {
   await resetTenants([TENANT_A]);
   const expected = 'las notas de la fila se aceptan o se rechazan según su longitud';
-  const prepared = await prepare(page, 'consultor');
-  if (prepared !== undefined) return preparationFailedWeb(expected, prepared);
+  const prepared = await prepareMobileRow(page, 'consultor', expected);
+  if (prepared !== undefined) return prepared;
+  const posts = watchRunPosts(page);
   const size = strict('caracteres', CARACTERES, cell(row, 'caracteres'));
   const want = strict('respuesta', RESPUESTA_E3, cell(row, 'respuesta'));
-  const posts = watchRunPosts(page);
   const picked = await inOrder(
     () => interact(resultRadio(page, 'Fallido'), 'elegir «Fallido»', (element) => element.click(ACTION)),
     () => interact(notesField(page), `escribir ${size} caracteres en «Notas»`, (element) => element.fill('a'.repeat(size), ACTION)),
@@ -189,7 +202,7 @@ const notasLimite: BrowserRowHandler = async (row, { page }) => {
   const sent = await interact(submitButton(page), 'pulsar «Registrar ejecución»', (element) => element.click(ACTION));
   if (sent !== undefined) return actionFailedMobile(expected, sent);
   if (want === 'guarda') {
-    const toast = await toastOk(page, 'TC-001: Fallido · RUN-051');
+    const toast = await savedToast(page, 'TC-001: Fallido · RUN-051');
     await waitUntil(async () => (await firstCardId(page)) === 'RUN-051');
     const session = await loginAs(strict('cuenta', ACCOUNT_OF, 'alumno01@sigpro.lab'));
     const after = session.token === undefined ? undefined : await caseOf(session.token);
@@ -208,7 +221,7 @@ const notasLimite: BrowserRowHandler = async (row, { page }) => {
   const count = await apiRunCount();
   return mobileVerdict([
     check(notice === 'Las notas admiten hasta 1000 caracteres', 'bajo «Notas» aparece «Las notas admiten hasta 1000 caracteres»', notice === undefined ? 'bajo «Notas» no aparece ningún aviso' : `bajo «Notas» aparece «${notice}»`),
-    check(quiet.held, 'no aparece el aviso «Ejecución registrada»', quiet.held ? 'no aparece el aviso «Ejecución registrada»' : `aparece «${quiet.seen}»`),
+    quietCheck(quiet, 'el aviso «Ejecución registrada» (la ejecución no se envía)'),
     check(cards === 2, 'el historial sigue con 2 ejecuciones', `el historial muestra ${cards} ejecución(es)`),
     check(count === 2, 'la API sigue con 2 ejecuciones del caso', `la API responde ${String(count)} ejecuciones`),
     check(posts() === 0, 'no se envía ninguna petición de ejecución', `peticiones de ejecución enviadas: ${posts()}`),
@@ -220,8 +233,8 @@ const notasLimite: BrowserRowHandler = async (row, { page }) => {
 const rechazaArchivo: BrowserRowHandler = async (row, { page }) => {
   await resetTenants([TENANT_A]);
   const expected = `el servidor rechaza el archivo con el aviso «${AVISO_E4}»`;
-  const prepared = await prepare(page, 'consultor');
-  if (prepared !== undefined) return preparationFailedWeb(expected, prepared);
+  const prepared = await prepareMobileRow(page, 'consultor', expected);
+  if (prepared !== undefined) return prepared;
   const file = strict('archivo', ARCHIVO_E4, cell(row, 'archivo'))();
   const picked = await inOrder(
     () => interact(resultRadio(page, 'Bloqueado'), 'elegir «Bloqueado»', (element) => element.click(ACTION)),
@@ -229,7 +242,7 @@ const rechazaArchivo: BrowserRowHandler = async (row, { page }) => {
     () => pickWith(page, pickOneButton(page), 'pulsar «Adjuntar un archivo»', [file]),
   );
   if (picked !== undefined) return actionFailedMobile(expected, picked);
-  await waitUntil(async () => ((await readMobileFiles(page))?.items.length ?? 0) === 1);
+  await waitUntil(async () => ((await readMobilePanel(page))?.items.length ?? 0) === 1);
   const posts = watchRunPosts(page);
   await armToasts(page);
   const sent = await interact(submitButton(page), 'pulsar «Registrar ejecución»', (element) => element.click(ACTION));
@@ -240,14 +253,14 @@ const rechazaArchivo: BrowserRowHandler = async (row, { page }) => {
   const quiet = await noOkToast(page);
   const cards = await runCardCount(page);
   const count = await apiRunCount();
-  const panel = await readMobileFiles(page);
+  const panel = await readMobilePanel(page);
   const radio = await checkedOf(resultRadio(page, 'Bloqueado'));
   const notes = await notesField(page).inputValue({ timeout: 2_000 }).catch(() => undefined);
   const kept = panel?.items.some((item) => item.lines.includes(file.name)) === true;
   return mobileVerdict(
     [
       check(motive === AVISO_E4, `aviso de error «${AVISO_E4}»`, `aviso de error «${motive ?? '(no visible)'}»`),
-      check(quiet.held, 'no aparece el aviso «Ejecución registrada»', quiet.held ? 'no aparece el aviso «Ejecución registrada»' : `aparece «${quiet.seen}»`),
+      quietCheck(quiet, 'el aviso «Ejecución registrada»'),
       check(cards === 2, 'el historial sigue con 2 ejecuciones', `el historial muestra ${cards} ejecución(es)`),
       check(count === 2, 'la API sigue con 2 ejecuciones del caso', `la API responde ${String(count)} ejecuciones`),
       check(posts() === 1, 'la app sí envía la petición (la rechaza el servidor)', `peticiones de ejecución enviadas: ${posts()}`),
@@ -265,22 +278,40 @@ const sinPermiso: BrowserRowHandler = async (row, { page }) => {
   await resetTenants([TENANT_A]);
   const expected = `ve «${MOTIVO_PERMISO}» y el formulario no se puede usar`;
   const account = strict('cuenta', CUENTA_E5, cell(row, 'cuenta'));
-  const prepared = await prepare(page, account);
-  if (prepared !== undefined) return preparationFailedWeb(expected, prepared);
+  const prepared = await prepareMobileRow(page, account, expected);
+  if (prepared !== undefined) return prepared;
+  const posts = watchRunPosts(page);
   const seen = await visibleTextOf(deniedNote(page));
-  const radios = await Promise.all(['Superado', 'Fallido', 'Bloqueado'].map((label) => lockedOf(resultRadio(page, label))));
-  const notes = await lockedOf(notesField(page));
-  const attach = await Promise.all([pickOneButton(page), pickManyButton(page), pickPdfButton(page)].map((button) => lockedOf(button)));
-  const submit = await lockedOf(submitButton(page));
+  // Estado de atributos propios (no se sube por los ancestros) y, después, un intento de uso que no debe tener efecto
+  const radioLabels = ['Superado', 'Fallido', 'Bloqueado'];
+  const radioLocked = await Promise.all(radioLabels.map((label) => lockedOf(resultRadio(page, label))));
+  const notesLocked = await lockedOf(notesField(page));
+  const attachLocked = await Promise.all([pickOneButton(page), pickManyButton(page), pickPdfButton(page)].map((button) => lockedOf(button)));
+  const submitLocked = await lockedOf(submitButton(page));
   const reason = await reasonOf(submitButton(page));
-  const everyLocked = (values: readonly (boolean | undefined)[]): boolean => values.every((value) => value === true);
+  // Intentos de uso: clic forzado en cada opción, escritura en «Notas», selector en cada botón de archivos y envío
+  await attemptClick(resultRadio(page, 'Bloqueado'));
+  const radioAfter = await checkedOf(resultRadio(page, 'Bloqueado'));
+  const notesBefore = await notesField(page).inputValue({ timeout: 2_000 }).catch(() => undefined);
+  await attemptTyping(page, notesField(page), 'intento');
+  const notesAfter = await notesField(page).inputValue({ timeout: 2_000 }).catch(() => undefined);
+  // Uno a uno: cada botón se prueba solo, para que un selector no se atribuya a otro
+  const pickerOpened: boolean[] = [];
+  for (const button of [pickOneButton(page), pickManyButton(page), pickPdfButton(page)]) pickerOpened.push(await attemptPicker(page, button));
+  await attemptClick(submitButton(page));
+  const quiet: QuietWindow = await noToast(page);
   return mobileVerdict(
     [
       check(seen === MOTIVO_PERMISO, `aviso «${MOTIVO_PERMISO}» visible`, `aviso «${seen ?? '(no visible)'}»`),
-      check(everyLocked(radios), 'las opciones de resultado no se pueden usar', `opciones de resultado: ${radios.map((value) => (value === true ? 'bloqueada' : value === false ? 'usable' : 'sin leer')).join(', ')}`),
-      lockedCheck('«Notas»', notes),
-      check(everyLocked(attach), 'los controles para adjuntar evidencias no se pueden usar', `controles: ${attach.map((value) => (value === true ? 'bloqueado' : value === false ? 'usable' : 'sin leer')).join(', ')}`),
-      lockedCheck('«Registrar ejecución»', submit),
+      check(radioLocked.every((value) => value === true), 'las opciones de resultado no se pueden usar', `opciones (propiedades): ${radioLocked.map((value) => (value === true ? 'bloqueada' : value === false ? 'usable' : 'sin leer')).join(', ')}`),
+      lockedCheck('«Notas»', notesLocked),
+      check(attachLocked.every((value) => value === true), 'los controles para adjuntar evidencias no se pueden usar', `controles (propiedades): ${attachLocked.map((value) => (value === true ? 'bloqueado' : value === false ? 'usable' : 'sin leer')).join(', ')}`),
+      lockedCheck('«Registrar ejecución»', submitLocked),
+      check(radioAfter === false, 'al pulsar una opción bloqueada no cambia el resultado', `opción «Bloqueado» tras el intento: ${radioAfter === undefined ? 'sin leer' : radioAfter ? 'marcada' : 'sin marcar'}`),
+      check(notesBefore === notesAfter, '«Notas» no cambia al escribir en él', `«Notas» antes «${notesBefore ?? '(sin leer)'}», después «${notesAfter ?? '(sin leer)'}»`),
+      check(pickerOpened.every((opened) => opened === false), 'ningún botón de archivos abre el selector', `selectores abiertos: ${pickerOpened.filter(Boolean).length}`),
+      check(posts() === 0, 'no sale ninguna petición de ejecución', `peticiones de ejecución enviadas: ${posts()}`),
+      quietCheck(quiet, 'ningún aviso emergente'),
     ],
     { evidence: { motivoDelBotonDataReason: reason ?? null } },
   );
