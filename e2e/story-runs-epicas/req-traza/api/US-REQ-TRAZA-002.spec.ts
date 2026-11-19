@@ -15,6 +15,7 @@ import {
   bodyOf,
   concluir,
   countPair,
+  prefixed,
   linksOf,
   pairCheck,
   resetAlumno01,
@@ -30,8 +31,6 @@ const putLink = (requirement: string, testCase: string, token: string | undefine
   call('PUT', `/requirements/${requirement}/tests/${testCase}`, { tenant: TENANT_A, ...(token === undefined ? {} : { token }) });
 
 /** Frase de cada comprobación con el prefijo de la petición (primera o segunda), para que el informe distinga las dos. */
-const labeled = (prefix: string, checks: readonly { readonly ok: boolean; readonly expected: string; readonly observed: string }[]) =>
-  checks.map((entry) => ({ ...entry, expected: `${prefix}: ${entry.expected}`, observed: `${prefix}: ${entry.observed}` }));
 
 /** E1: un enlace nuevo responde 204 y aparece en la matriz. */
 const linkNew: ApiRowHandler = async (row) => {
@@ -69,8 +68,8 @@ const linkTwice: ApiRowHandler = async (row) => {
   const after = await traceabilityOf(program, TENANT_A, signed.token);
   return concluir(
     [
-      ...labeled('primera petición', answerChecks({ status: 204, sinCuerpo: true }, first)),
-      ...labeled('segunda petición', answerChecks({ status: 204, sinCuerpo: true }, second)),
+      ...prefixed('primera petición', answerChecks({ status: 204, sinCuerpo: true }, first)),
+      ...prefixed('segunda petición', answerChecks({ status: 204, sinCuerpo: true }, second)),
       check(after.status === 200, 'la matriz responde 200', `respuesta ${after.status}`),
       pairCheck(linksOf(after.body), requirement, testCase, true),
     ],

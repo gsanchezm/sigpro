@@ -170,13 +170,15 @@ export interface Answer {
   readonly code?: string;
   readonly sinCuerpo?: boolean;
   readonly errors?: Readonly<Record<string, string>>;
+  /** La historia dice que el `message` del cuerpo es igual al código (solo entonces se comprueba). */
+  readonly mensaje?: boolean;
 }
 
 export const RESPUESTA: ReadonlyMap<string, Answer> = new Map<string, Answer>([
   ['401 con el código missing_token', { status: 401, code: 'missing_token' }],
   ['401 con el código invalid_token', { status: 401, code: 'invalid_token' }],
   ['204 sin cuerpo', { status: 204, sinCuerpo: true }],
-  ['404 con el código requirement_not_found', { status: 404, code: 'requirement_not_found' }],
+  ['404 con el código requirement_not_found', { status: 404, code: 'requirement_not_found', mensaje: true }],
   ['422 con el código validation_failed y el motivo differentProgram en testCaseCode', { status: 422, code: 'validation_failed', errors: { testCaseCode: 'differentProgram' } }],
 ]);
 
@@ -340,8 +342,8 @@ export const answerChecks = (answer: Answer, result: ApiResult): Check[] => {
   const checks: Check[] = [
     statusCheck,
     check(errorCode(result) === code, `código ${code}`, `código ${errorCode(result) ?? '(sin código)'}`),
-    check(messageOf(result) === code, `message ${code}`, `message ${messageOf(result) ?? '(sin message)'}`),
   ];
+  if (answer.mensaje === true) checks.push(check(messageOf(result) === code, `message ${code}`, `message ${messageOf(result) ?? '(sin message)'}`));
   for (const [field_, value] of Object.entries(answer.errors ?? {})) {
     const observed = field(field(result.body, 'errors'), field_);
     checks.push(check(observed === value, `errors.${field_} ${value}`, `errors.${field_} ${typeof observed === 'string' ? observed : '(ausente)'}`));
@@ -373,3 +375,19 @@ export const concluir = (checks: readonly Check[], extra: { readonly note?: stri
 
 /** Cuerpo recortado para la evidencia (sin tokens: las respuestas de la matriz no los traen). */
 export const bodyOf = (result: ApiResult): string => JSON.stringify(result.body ?? null).slice(0, 300);
+
+/** Prefija la frase de cada comprobación (para distinguir, p. ej., la comprobación del token MFA de la de la respuesta normal). */
+export const prefixed = (prefix: string, checks: readonly Check[]): Check[] => checks.map((entry) => ({ ...entry, expected: `${prefix}: ${entry.expected}`, observed: `${prefix}: ${entry.observed}` }));
+
+/**
+ * Requisitos del programa sin ningún caso enlazado, según la API (lectura con la cuenta dada). `undefined` si la lectura falla: quien
+ * llama no lo da por cumplido.
+ */
+export const uncoveredRequirements = async (account: Account, program: string): Promise<readonly string[] | undefined> => {
+  const signed = await signIn(account);
+  if (signed.token === undefined) return undefined;
+  const read = await traceabilityOf(program, account.tenant, signed.token);
+  if (read.status !== 200) return undefined;
+  const covered = new Set(linksOf(read.body).map((pair) => pair.requirementCode));
+  return codesOf(read.body, 'requirements').filter((code) => !covered.has(code));
+};

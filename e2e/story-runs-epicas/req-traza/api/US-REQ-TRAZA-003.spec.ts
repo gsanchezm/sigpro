@@ -84,7 +84,7 @@ const unknownTestCase: ApiRowHandler = async (row) => {
   const after = await traceabilityOf('PRG-002', TENANT_A, gestor.token);
   return concluir(
     [
-      ...answerChecks({ status: 404, code: 'test_case_not_found' }, put),
+      ...answerChecks({ status: 404, code: 'test_case_not_found', mensaje: true }, put),
       onlyErrorBody(put, 'ningún dato del caso'),
       check(after.status === 200, 'la matriz responde 200', `respuesta ${after.status}`),
       check(samePairs(beforeLinks, linksOf(after.body)), 'la lista links no cambia', samePairs(beforeLinks, linksOf(after.body)) ? 'la lista links no cambia' : 'la lista links cambió'),
@@ -106,7 +106,7 @@ const unknownRequirement: ApiRowHandler = async (row) => {
   const after = await traceabilityOf('PRG-002', TENANT_A, gestor.token);
   return concluir(
     [
-      ...answerChecks({ status: 404, code: 'requirement_not_found' }, put),
+      ...answerChecks({ status: 404, code: 'requirement_not_found', mensaje: true }, put),
       onlyErrorBody(put, 'ningún dato del requisito'),
       check(after.status === 200, 'la matriz responde 200', `respuesta ${after.status}`),
       check(samePairs(beforeLinks, linksOf(after.body)), 'la lista links no cambia', samePairs(beforeLinks, linksOf(after.body)) ? 'la lista links no cambia' : 'la lista links cambió'),

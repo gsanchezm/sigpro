@@ -56,6 +56,7 @@ const unlinkExisting: ApiRowHandler = async (row) => {
   return concluir(
     [
       ...answerChecks({ status: 204, sinCuerpo: true }, del),
+      check(signed.role === account.role, `el token trae el rol ${account.role}`, `el token trae el rol ${signed.role ?? '(sin rol)'}`),
       check(after.status === 200, 'la matriz responde 200', `respuesta ${after.status}`),
       pairCheck(afterLinks, requirement, testCase, false),
       check(
@@ -132,7 +133,7 @@ const unknownRequirementUnlink: ApiRowHandler = async (row) => {
   const gestor = await signIn(GESTOR);
   if (gestor.token === undefined) return preparationFailed('gestor@sigpro.test tiene un accessToken válido en alumno01', 'iniciar sesión de gestor@sigpro.test en alumno01', gestor.last);
   const del = await unlink(requirement, 'TC-012', gestor.token);
-  return concluir([...answerChecks({ status: 404, code: 'requirement_not_found' }, del), onlyErrorBody(del, 'ningún dato del requisito')], { evidence: { respuesta: del.status, cuerpo: bodyOf(del) } });
+  return concluir([...answerChecks({ status: 404, code: 'requirement_not_found', mensaje: true }, del), onlyErrorBody(del, 'ningún dato del requisito')], { evidence: { respuesta: del.status, cuerpo: bodyOf(del) } });
 };
 
 defineApiRows({

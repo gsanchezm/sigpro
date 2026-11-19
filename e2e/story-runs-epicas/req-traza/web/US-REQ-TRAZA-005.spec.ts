@@ -1,45 +1,61 @@
 import type { Page } from '@playwright/test';
 import { DEMO } from '../../../story-runs/support/prepare';
-import { ACTION, CEILING_MS, pathOf, safe, waitUntil } from '../../support/browser';
+import { ACTION, pathOf, safe, waitUntil } from '../../support/browser';
 import { cell, check, preparationFailedWeb, strict } from '../../support/checks';
 import { defineBrowserRows, type BrowserRowHandler, type Outcome } from '../../core/framework';
-import { CASO, PROGRAM_CODE, REQUISITO, TENANT_A, resetAlumno01 } from '../api/common';
+import { CASO, GESTOR, PROGRAM_CODE, REQUISITO, TENANT_A, resetAlumno01, sameList, uncoveredRequirements } from '../api/common';
 import {
   READ_MS,
+  TRACE_500,
   actionFailed,
   alertOf,
   cellOf,
   cellState,
   concluirWeb,
-  coverageText,
+  coverageSettles,
   delayMatrix,
   emptyBlockOf,
   failMatrix,
+  headerCodesOnScreen,
   headerLink,
   interact,
-  legendLabelOf,
+  labeledRows,
+  legendEntries,
+  legendLabelFor,
   linesOf,
   loadingOf,
+  matrixPanel,
   matrixTable,
   onWeb,
   openMatrix,
+  rawTextOf,
+  rowCodesOnScreen,
   retryButton,
   settledMatrix,
   signIn,
   textCheck,
-  rawTextOf,
   textOf,
-  uncoveredLabelOf,
+  within,
   type DelayControl,
 } from './common';
 
 // US-REQ-TRAZA-005 — Leer la matriz de trazabilidad del programa (web, 1440 px). Cada fila reinicia alumno01 por la API, inicia sesión
-// el gestor por el formulario y abre la pestaña «Matriz de trazabilidad». Las cifras y los símbolos se leen de la pantalla. La espera y
-// el fallo de la respuesta los fabrica la prueba (la historia los da como dato) y se apagan antes de «Reintentar».
+// el gestor por el formulario y abre la pestaña «Matriz de trazabilidad». Las cifras, las etiquetas y los símbolos se leen de la pantalla
+// y se comparan con lo que la API dice (los requisitos sin caso). La espera y el fallo de la respuesta los fabrica la prueba (la historia
+// los da como dato) y se apagan antes de «Reintentar».
 
 const COVERAGE_PRG_002 = '13 de 14 requisitos con cobertura';
 const EMPTY_BODY = 'Este programa no tiene requisitos o casos de prueba que cruzar.';
-const TRACE_500 = 'GET /api/programs/PRG-002/traceability → 500 Internal Server Error';
+const HELP = 'Marca qué casos de prueba verifican cada requisito.';
+const LEYENDA = ['✓Superado', '✕Fallido', '!Bloqueado', '·Sin ejecutar'];
+/** Los casos sin ejecutar («·») no se pueden producir con el seed: cada caso tiene al menos una ejecución (historia 001, Reglas). */
+const NOTA_SIN_EJECUTAR = 'La rama «·» (caso que nunca se ha ejecutado) no es reproducible con el seed: todos los casos tienen al menos una ejecución; esa rama no se ejercita aquí.';
+/**
+ * «El motivo que devuelve la API» se lee como la traza de la respuesta que muestra la app (método, ruta, estado y su texto) y el
+ * identificador de traza que la API añade a cada error (all-exceptions.filter.ts:32; error-view.ts:42). El campo `message` del cuerpo
+ * no aparece en la web: la historia no dice cuál de las dos cosas espera, así que la lectura es una interpretación.
+ */
+const NOTA_MOTIVO = '«El motivo que devuelve la API» se lee como la traza de la respuesta (método, ruta, estado y su texto) más el identificador de traza que añade la API (all-exceptions.filter.ts:32; error-view.ts:42); el campo message del cuerpo no se muestra en la web. Interpretación: la historia no dice cuál de los dos espera.';
 
 /** Cifras de cobertura de la historia (texto exacto de la leyenda). */
 const COBERTURA: ReadonlyMap<string, string> = new Map<string, string>([
@@ -47,18 +63,16 @@ const COBERTURA: ReadonlyMap<string, string> = new Map<string, string>([
   ['11 de 12 requisitos con cobertura', '11 de 12 requisitos con cobertura'],
 ]);
 
-/** Símbolo que muestra la casilla → resultado de la última ejecución que representa. */
+/** Símbolo de la historia (el que pinta la casilla) y el texto de la leyenda que lo acompaña. */
 const SIMBOLO: ReadonlyMap<string, string> = new Map<string, string>([
-  ['✓', 'pass'],
-  ['✕', 'fail'],
-  ['!', 'blocked'],
+  ['✓', '✓'],
+  ['✕', '✕'],
+  ['!', '!'],
 ]);
-
-/** Resultado (texto de la leyenda) → clave del resultado. */
 const RESULTADO: ReadonlyMap<string, string> = new Map<string, string>([
-  ['Superado', 'pass'],
-  ['Fallido', 'fail'],
-  ['Bloqueado', 'blocked'],
+  ['Superado', 'Superado'],
+  ['Fallido', 'Fallido'],
+  ['Bloqueado', 'Bloqueado'],
 ]);
 
 /** Ruta a la que lleva la cabecera de cada caso. */
@@ -86,9 +100,6 @@ const AVISO: ReadonlyMap<string, Warning> = new Map<string, Warning>([
   ['el texto «No se pudo contactar con el servidor»', { kind: 'texto', text: 'No se pudo contactar con el servidor' }],
 ]);
 
-/** Espera con techo a una condición; devuelve si se cumplió (sin lanzar). */
-const within = (condition: () => Promise<boolean>, ceilingMs: number = CEILING_MS): Promise<boolean> => waitUntil(condition, ceilingMs).then((result) => result.reached);
-
 /** Reinicio por la API, inicio de sesión del gestor por el formulario y pestaña de la matriz. Devuelve el fallo de preparación, si lo hay. */
 const openAsGestor = async (page: Page, program: string, expected: string): Promise<Outcome | undefined> => {
   await resetAlumno01();
@@ -98,17 +109,40 @@ const openAsGestor = async (page: Page, program: string, expected: string): Prom
   return undefined;
 };
 
-/** E1: la cifra de cobertura del programa y el requisito sin caso (su fila muestra «Sin cobertura»). */
+const isSorted = (codes: readonly string[]): boolean => codes.every((code, index) => index === 0 || (codes[index - 1] ?? '') <= code);
+const sortedCopy = (codes: readonly string[]): readonly string[] => [...codes].sort();
+
+/** E1: la cifra de cobertura, los requisitos sin caso (los de la API, y solo esos), el orden, la ayuda y la leyenda. */
 const coverageFigure: BrowserRowHandler = onWeb(async (row, { page }) => {
   const program = strict('programa', PROGRAM_CODE, cell(row, 'programa'));
   const coverage = strict('cobertura', COBERTURA, cell(row, 'cobertura'));
   const uncovered = strict('sin_cobertura', REQUISITO, cell(row, 'sin_cobertura'));
   const prepared = await openAsGestor(page, program, `ve el texto «${coverage}»; la fila de ${uncovered} muestra la etiqueta «Sin cobertura»`);
   if (prepared !== undefined) return prepared;
-  const label = await uncoveredLabelOf(page, uncovered);
+  const apiUncovered = await uncoveredRequirements(GESTOR, program);
+  const shownCoverage = await coverageSettles(page, coverage);
+  // Las etiquetas se comparan con los requisitos sin caso que dice la API: una fila de más o de menos no pasa
+  await waitUntil(async () => {
+    const labeled = await labeledRows(page);
+    return labeled !== undefined && apiUncovered !== undefined && sameList(sortedCopy(labeled), sortedCopy(apiUncovered));
+  });
+  const labeled = await labeledRows(page);
+  const rows = await rowCodesOnScreen(page);
+  const headers = await headerCodesOnScreen(page);
+  const helpVisible = await safe(() => matrixPanel(page).getByText(HELP, { exact: true }).isVisible(), undefined);
+  const legend = await legendEntries(page);
   return concluirWeb([
-    textCheck(await coverageText(page), coverage, 've el texto'),
-    check(label === true, `la fila de ${uncovered} muestra la etiqueta «Sin cobertura»`, label === undefined ? 'la fila no se lee' : label ? 'muestra la etiqueta «Sin cobertura»' : 'no muestra la etiqueta «Sin cobertura»'),
+    textCheck(shownCoverage, coverage, 've el texto'),
+    check(labeled?.includes(uncovered) === true, `la fila de ${uncovered} muestra la etiqueta «Sin cobertura»`, labeled === undefined ? 'las etiquetas no se leen' : labeled.includes(uncovered) ? 'muestra la etiqueta «Sin cobertura»' : 'no muestra la etiqueta «Sin cobertura»'),
+    check(
+      labeled !== undefined && apiUncovered !== undefined && sameList(sortedCopy(labeled), sortedCopy(apiUncovered)),
+      'solo los requisitos sin caso (según la API) muestran «Sin cobertura»',
+      `en pantalla: ${labeled?.join(', ') ?? '(sin leer)'}; según la API: ${apiUncovered?.join(', ') ?? '(sin leer)'}`,
+    ),
+    check(rows !== undefined && isSorted(rows), 'las filas van en orden de código', `filas: ${rows?.join(', ') ?? '(sin leer)'}`),
+    check(headers !== undefined && isSorted(headers), 'las columnas van en orden de código', `columnas: ${headers?.join(', ') ?? '(sin leer)'}`),
+    check(helpVisible === true, `se ve el texto «${HELP}»`, helpVisible === undefined ? '(sin leer)' : helpVisible ? `se ve el texto «${HELP}»` : `no se ve «${HELP}»`),
+    check(legend !== undefined && sameList(legend, LEYENDA), `la leyenda tiene los cuatro símbolos (${LEYENDA.join(', ')})`, `la leyenda tiene: ${legend?.join(', ') ?? '(sin leer)'}`),
   ]);
 });
 
@@ -117,17 +151,17 @@ const symbolOfLastRun: BrowserRowHandler = onWeb(async (row, { page }) => {
   const requirement = strict('requisito', REQUISITO, cell(row, 'requisito'));
   const testCase = strict('caso', CASO, cell(row, 'caso'));
   const symbol = strict('simbolo', SIMBOLO, cell(row, 'simbolo'));
-  const result = strict('resultado', RESULTADO, cell(row, 'resultado'));
-  const prepared = await openAsGestor(page, 'PRG-002', `el cruce de ${requirement} con ${testCase} muestra ${cell(row, 'simbolo')}, que en la leyenda significa «${cell(row, 'resultado')}»`);
+  const meaning = strict('resultado', RESULTADO, cell(row, 'resultado'));
+  const prepared = await openAsGestor(page, 'PRG-002', `el cruce de ${requirement} con ${testCase} muestra ${symbol}, que en la leyenda significa «${meaning}»`);
   if (prepared !== undefined) return prepared;
   const state = await cellState(cellOf(page, requirement, testCase));
-  const meaning = state.result === undefined ? undefined : await legendLabelOf(page, state.result);
+  const label = state.symbol === undefined ? undefined : await legendLabelFor(page, state.symbol);
   return concluirWeb(
     [
-      check(state.symbol === cell(row, 'simbolo'), `el cruce muestra ${cell(row, 'simbolo')}`, `el cruce muestra ${state.symbol ?? '(sin leer)'}`),
-      check(meaning === cell(row, 'resultado'), `la leyenda de ese símbolo dice «${cell(row, 'resultado')}»`, `la leyenda de ese símbolo dice «${meaning ?? '(sin leer)'}»`),
+      check(state.symbol === symbol, `el cruce muestra ${symbol}`, `el cruce muestra ${state.symbol ?? '(sin leer)'}`),
+      check(label === meaning, `la leyenda de ese símbolo dice «${meaning}»`, `la leyenda de ese símbolo dice «${label ?? '(sin leer)'}»`),
     ],
-    { evidence: { claveDelSimbolo: symbol, claveDelResultadoEsperada: result, resultadoDelCruce: state.result, simboloVisto: state.symbol } },
+    { note: NOTA_SIN_EJECUTAR, evidence: { simboloVisto: state.symbol } },
   );
 });
 
@@ -149,10 +183,11 @@ const unlinkedCell: BrowserRowHandler = onWeb(async (row, { page }) => {
 const headerLinkRoute: BrowserRowHandler = onWeb(async (row, { page }) => {
   const testCase = strict('caso', CASO, cell(row, 'caso'));
   const route = strict('ruta', RUTA, cell(row, 'ruta'));
-  const prepared = await openAsGestor(page, 'PRG-002', `pulsar el código ${testCase} de la cabecera lleva a ${route}`);
+  const expected = `pulsar el código ${testCase} de la cabecera lleva a ${route}`;
+  const prepared = await openAsGestor(page, 'PRG-002', expected);
   if (prepared !== undefined) return prepared;
   const pressed = await interact(headerLink(page, testCase), `pulsar el código ${testCase} de la cabecera`, (element) => element.click(ACTION));
-  if (pressed !== undefined) return actionFailed(`pulsar el código ${testCase} de la cabecera lleva a ${route}`, pressed);
+  if (pressed !== undefined) return actionFailed(expected, pressed);
   const arrived = await within(async () => pathOf(page) === route);
   const path = pathOf(page);
   return concluirWeb([check(arrived && path === route, `llega a ${route}`, `llega a ${path}`)]);
@@ -200,14 +235,13 @@ const loadingWhileWaiting: BrowserRowHandler = onWeb(async (row, { page }) => {
     seen.current = { busy, tableVisible };
     return true;
   }, delay);
-  const reached = await within(async () => (await coverageText(page)) === COVERAGE_PRG_002);
+  const shownCoverage = await coverageSettles(page, COVERAGE_PRG_002);
   return concluirWeb(
     [
       check(seen.current !== undefined, 've un indicador de carga mientras llega la respuesta', seen.current !== undefined ? 've un indicador de carga' : 'no se vio el indicador antes de liberar la respuesta'),
       check(seen.current?.busy === 'true', 'el indicador tiene aria-busy «true»', `aria-busy «${seen.current?.busy ?? '(sin leer)'}»`),
       check(seen.current?.tableVisible === false, 'no ve la tabla de la matriz mientras espera', seen.current?.tableVisible === true ? 've la tabla mientras espera' : seen.current?.tableVisible === undefined ? 'la tabla no se lee' : 'no ve la tabla'),
-      textCheck(await coverageText(page), COVERAGE_PRG_002, 'al llegar la respuesta ve el texto'),
-      check(reached, `al llegar la respuesta aparece «${COVERAGE_PRG_002}»`, reached ? 'aparece' : 'no aparece'),
+      textCheck(shownCoverage, COVERAGE_PRG_002, 'al llegar la respuesta ve el texto'),
     ],
     { evidence: { esperaMs: delay, cargadorLeidoAntesDeLiberar: seen.current !== undefined } },
   );
@@ -233,27 +267,21 @@ const failureAndRetry: BrowserRowHandler = onWeb(async (row, { page }) => {
   const alertText = (await textOf(alertOf(page))) ?? '(sin leer)';
   const warningCheck =
     warning.kind === 'traza'
-      ? check(alertText.includes(TRACE_500), `el aviso muestra el motivo de la API: «${TRACE_500}»`, `el aviso dice «${alertText}»`)
+      ? check(alertText.startsWith(TRACE_500), `el aviso muestra el motivo de la API: «${TRACE_500}» (con su identificador de traza)`, `el aviso dice «${alertText}»`)
       : check(alertText.includes(warning.text), `el aviso muestra «${warning.text}»`, `el aviso dice «${alertText}»`);
   failing.on = false;
   const retried = await interact(retryButton(page), 'pulsar «Reintentar»', (element) => element.click(ACTION));
   if (retried !== undefined) return actionFailed(expected, retried);
-  const shown = await within(async () => (await coverageText(page)) === COVERAGE_PRG_002);
+  const shown = await coverageSettles(page, COVERAGE_PRG_002);
   return concluirWeb(
     [
       check(alertShown, 've un aviso de error', alertShown ? 've un aviso de error' : 'no aparece el aviso de error'),
       check(retryShown, 've el botón «Reintentar»', retryShown ? 've el botón «Reintentar»' : 'no aparece el botón «Reintentar»'),
       warningCheck,
-      check(shown, `al pulsar «Reintentar» ve «${COVERAGE_PRG_002}»`, shown ? `ve «${COVERAGE_PRG_002}»` : `ve «${(await coverageText(page)) ?? '(sin leer)'}»`),
+      textCheck(shown, COVERAGE_PRG_002, 'al pulsar «Reintentar» ve el texto'),
     ],
     {
-      ...(warning.kind === 'texto'
-        ? {
-            note: 'La app muestra la traza de la petición fallida («GET … → network error»), no el texto «No se pudo contactar con el servidor»: el cliente lanza un ApiError con esa traza (packages/shared/src/client.ts:148) y formatTrace la devuelve no vacía (packages/shared/src/error-view.ts:40-43), así que el texto de respaldo nunca se muestra.',
-          }
-        : {
-            note: '«El motivo que devuelve la API» se lee aquí como la traza de la respuesta que muestra la app (método, ruta, estado y su texto); el campo message del cuerpo no se muestra en la web.',
-          }),
+      note: warning.kind === 'traza' ? NOTA_MOTIVO : `La app muestra la traza de la petición fallida («GET … → network error»), no el texto «No se pudo contactar con el servidor»: el cliente lanza un ApiError con esa traza (packages/shared/src/client.ts:148) y formatTrace la devuelve no vacía (packages/shared/src/error-view.ts:40-43), así que el texto de respaldo nunca se muestra.`,
       evidence: { avisoLeido: alertText, petición: kind },
     },
   );

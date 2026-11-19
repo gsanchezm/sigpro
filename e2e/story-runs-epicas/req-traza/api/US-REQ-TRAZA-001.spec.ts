@@ -1,4 +1,5 @@
 import { call, field } from '../../../story-runs/support/api';
+import { DEMO, startSession } from '../../../story-runs/support/prepare';
 import { cell, check, preparationFailed, strict } from '../../support/checks';
 import { defineApiRows, type ApiRowHandler } from '../../core/framework';
 import {
@@ -33,6 +34,7 @@ import {
   messageOf,
   onlyErrorBody,
   pairCheck,
+  prefixed,
   prepareIsolation,
   resetAlumno01,
   resetBoth,
@@ -57,6 +59,19 @@ const tokenFor = (kind: 'none' | 'text' | 'refresh', signed: Signed): string | u
 /** Lista de la respuesta (los elementos), sin leer nada si la lista no existe. */
 const itemsOf = (body: unknown, key: string): readonly unknown[] => arrayOf(body, key);
 
+/** Último resultado de los nueve casos de PRG-002 (Reglas de la historia). */
+const ULTIMOS_RESULTADOS_PRG_002: ReadonlyMap<string, string> = new Map<string, string>([
+  ['TC-010', 'pass'],
+  ['TC-011', 'pass'],
+  ['TC-012', 'pass'],
+  ['TC-013', 'fail'],
+  ['TC-014', 'pass'],
+  ['TC-015', 'pass'],
+  ['TC-016', 'blocked'],
+  ['TC-017', 'fail'],
+  ['TC-018', 'pass'],
+]);
+
 /** E1: la matriz de cada programa trae sus requisitos y sus casos (listas exactas). */
 const matrixOfProgram: ApiRowHandler = async (row) => {
   const program = strict('programa', PROGRAM_CODE, cell(row, 'programa'));
@@ -66,11 +81,17 @@ const matrixOfProgram: ApiRowHandler = async (row) => {
   const gestor = await signIn(GESTOR);
   if (gestor.token === undefined) return preparationFailed('gestor@sigpro.test tiene un accessToken válido en alumno01', 'iniciar sesión de gestor@sigpro.test en alumno01', gestor.last);
   const read = await traceabilityOf(program, TENANT_A, gestor.token);
+  const empty = requirementsWanted.length === 0 && casesWanted.length === 0;
   return concluir(
     [
       check(read.status === 200, 'la respuesta es 200', `respuesta ${read.status}`),
       codeListCheck('requirements', read.body, requirementsWanted, cell(row, 'requisitos')),
       codeListCheck('testCases', read.body, casesWanted, cell(row, 'casos')),
+      // Las tres listas, y solo estas (Reglas de la historia)
+      check(sameList(keysOf(read.body), ['links', 'requirements', 'testCases']), 'el cuerpo trae solo requirements, testCases y links', `claves del cuerpo: ${keysOf(read.body).join(', ') || '(ninguna)'}`),
+      check(Array.isArray(field(read.body, 'links')), 'links es una lista', Array.isArray(field(read.body, 'links')) ? 'links es una lista' : 'links no es una lista'),
+      // Un programa sin requisitos ni casos responde con las tres listas vacías
+      ...(empty ? [check(linksOf(read.body).length === 0, 'las tres listas vacías (links incluido)', `links: ${linksOf(read.body).length} enlaces`)] : []),
     ],
     { evidence: { respuesta: read.status, cuerpo: bodyOf(read) } },
   );
@@ -104,8 +125,11 @@ const lastResultOfCase: ApiRowHandler = async (row) => {
   const read = await traceabilityOf('PRG-002', TENANT_A, gestor.token);
   const found = itemsOf(read.body, 'testCases').find((item) => field(item, 'code') === caseCode);
   const observed = found === undefined ? undefined : field(found, 'lastResult');
+  const lastResults = new Map(itemsOf(read.body, 'testCases').map((item) => [String(field(item, 'code')), field(item, 'lastResult')]));
+  const distintos = [...ULTIMOS_RESULTADOS_PRG_002.entries()].filter(([code, result]) => lastResults.get(code) !== result).map(([code, result]) => `${code} es ${String(lastResults.get(code))} (esperado ${result})`);
   return concluir([
     check(read.status === 200, 'la respuesta es 200', `respuesta ${read.status}`),
+    check(distintos.length === 0, 'los nueve casos de PRG-002 tienen su último resultado de la historia', distintos.length === 0 ? 'los nueve casos coinciden' : `distintos: ${distintos.join('; ')}`),
     check(observed === resultWanted, `el caso ${caseCode} tiene lastResult ${resultWanted}`, `el caso ${caseCode} tiene lastResult ${found === undefined ? '(caso ausente en testCases)' : String(observed)}`),
   ]);
 };
@@ -178,7 +202,19 @@ const withoutSession: ApiRowHandler = async (row) => {
   }
   const token = tokenFor(credential.kind, gestor);
   const read = await traceabilityOf('PRG-002', TENANT_A, token);
-  return concluir([...answerChecks(answer, read), onlyErrorBody(read, 'requirements, testCases ni links')], { evidence: { respuesta: read.status, cuerpo: bodyOf(read) } });
+  // Un mfaToken tampoco es un accessToken: la regla pide 401 invalid_token (la fila no lo envía, así que se prueba aparte)
+  const mfa = await startSession(TENANT_A, DEMO.admin);
+  const mfaToken = field(mfa.result.body, 'mfaToken');
+  if (typeof mfaToken !== 'string') return preparationFailed('admin@sigpro.test recibe un mfaToken en alumno01', 'iniciar sesión de admin@sigpro.test (segundo factor)', mfa.result);
+  const withMfa = await traceabilityOf('PRG-002', TENANT_A, mfaToken);
+  return concluir(
+    [
+      ...answerChecks(answer, read),
+      onlyErrorBody(read, 'requirements, testCases ni links'),
+      ...prefixed('con un mfaToken', answerChecks({ status: 401, code: 'invalid_token' }, withMfa)),
+    ],
+    { evidence: { respuesta: read.status, cuerpo: bodyOf(read) } },
+  );
 };
 
 /** E8: cada tenant ve solo sus requisitos; alumno02 ha creado REQ-041 en PRG-001. */

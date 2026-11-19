@@ -6,18 +6,25 @@ import { check, sleep, type Check } from '../../support/checks';
 import { outcome, type BrowserRowHandler, type Outcome } from '../../core/framework';
 import { AUDITOR, CONSULTOR, GESTOR, type Account } from '../api/common';
 
-// Piezas comunes de las filas web de EP-REQ-TRAZA (escritorio 1440 px). Los localizadores son de rol y de nombre accesible; los ids
-// de prueba solo donde la pantalla no ofrece otro rastro (la leyenda, la tabla, la fila de cada requisito y el cuerpo vacío). Cada
-// lectura tiene plazo corto (2 s) y cada acción sobre un elemento pasa por `interact`, que devuelve el diagnóstico si falla.
+// Piezas comunes de las filas web de EP-REQ-TRAZA (escritorio 1440 px). Los localizadores son de rol y de nombre accesible; los ids de
+// prueba solo donde la pantalla no ofrece otro rastro (la leyenda, la tabla, la fila de cada requisito y el cuerpo vacío). Cada lectura
+// tiene plazo corto (2 s) y cada acción sobre un elemento pasa por `interact`, que devuelve el diagnóstico si falla. La app móvil (Expo
+// web) reutiliza estas piezas: sus pantallas usan los mismos ids de matriz.
 
 /** Plazo de cada lectura de la pantalla: una lectura que no llega en este tiempo queda «sin leer», nunca cumplida. */
 export const READ_MS = 2_000;
-/** Ventana que se observa tras una acción para afirmar que NO aparece un aviso de éxito (mayor que su vida, 3 s). */
-export const QUIET_MS = 4_000;
 
 export const LOGIN_URL = `/login?tenant=${TENANT_A}`;
 export const MATRIX_TITLE = 'Matriz de trazabilidad';
 export const COOKIE_NOTE = 'La prueba fija la preferencia de cookies (sigpro.cookies = accepted) antes de abrir la app, como el piloto; el aviso de cookies no se ejerce aquí.';
+
+/**
+ * Traza que muestra la app para un 500 de la matriz: «método + /api + ruta → estado + texto de estado» (packages/shared/src/client.ts:143,
+ * la tabla de textos en packages/shared/src/domain.ts:97). El texto «Internal Server Error» es el de la frase estándar de HTTP.
+ */
+export const TRACE_500 = 'GET /api/programs/PRG-002/traceability → 500 Internal Server Error';
+/** Identificador de traza del 500 fabricado: la API lo añade a todo error (all-exceptions.filter.ts:32) y la app lo muestra tras la traza. */
+export const TRACE_ID = 'traza-de-la-prueba';
 
 /** Añade a cada resultado la nota de cookies (la preferencia se fija por adelantado para que el aviso no tape controles). */
 export const onWeb =
@@ -54,7 +61,7 @@ export const UI_ACCOUNTS: ReadonlyMap<string, UiAccount> = new Map<string, UiAcc
 
 /**
  * Preparación de cada fila: abre /login?tenant=alumno01 en un navegador sin sesión, escribe el correo y la contraseña de la cuenta
- * y pulsa «Entrar». Termina cuando la app llega a /programs con la lista de programas asentada.
+ * y pulsa «Entrar». Termina cuando la app llega a /programs con la lista de programas asentada y el registro de avisos armado.
  */
 export const signIn = (page: Page, credentials: Credentials): Promise<string | undefined> => {
   const steps: Step[] = [
@@ -66,9 +73,12 @@ export const signIn = (page: Page, credentials: Credentials): Promise<string | u
     ['escribir la contraseña', () => page.getByLabel('Contraseña', { exact: true }).fill(credentials.password, ACTION)],
     ['pulsar «Entrar»', () => page.getByRole('button', { name: 'Entrar', exact: true }).click(ACTION)],
     ['llegar a /programs', () => page.waitForURL(/\/programs/, { timeout: CEILING_MS })],
-    ['ver la lista de programas', async () => {
-      if (!(await waitUntil(() => isVisible(page.getByRole('table')))).reached) throw new Error('la lista de programas no aparece');
-    }],
+    [
+      'ver la lista de programas',
+      async () => {
+        if (!(await waitUntil(() => isVisible(page.getByRole('table')))).reached) throw new Error('la lista de programas no aparece');
+      },
+    ],
     ['armar el registro de avisos', () => armToasts(page)],
   ];
   return runSteps(steps);
@@ -78,9 +88,12 @@ export const signIn = (page: Page, credentials: Credentials): Promise<string | u
 export const openMatrix = (page: Page, program: string): Promise<string | undefined> =>
   runSteps([
     [`abrir /programs/${program}/requirements`, () => page.goto(`/programs/${program}/requirements`, { timeout: CEILING_MS })],
-    ['ver las pestañas de requisitos', async () => {
-      if (!(await waitUntil(() => isVisible(matrixTab(page)))).reached) throw new Error('las pestañas de requisitos no aparecen');
-    }],
+    [
+      'ver las pestañas de requisitos',
+      async () => {
+        if (!(await waitUntil(() => isVisible(matrixTab(page)))).reached) throw new Error('las pestañas de requisitos no aparecen');
+      },
+    ],
     ['pulsar «Matriz de trazabilidad»', () => matrixTab(page).click(ACTION)],
   ]);
 
@@ -100,19 +113,31 @@ export const loadingOf = (page: Page): Locator => matrixPanel(page).getByRole('s
 export const alertOf = (page: Page): Locator => matrixPanel(page).getByRole('alert');
 export const retryButton = (page: Page): Locator => matrixPanel(page).getByRole('button', { name: 'Reintentar', exact: true });
 
-/** Texto normalizado de un elemento (espacios de cualquier clase colapsados), o `undefined` si no se puede leer en el plazo. */
+/** Texto normalizado de un elemento (los espacios de cualquier clase colapsados), o `undefined` si no se puede leer en el plazo. */
 export const textOf = (target: Locator): Promise<string | undefined> =>
   safe(async () => ((await target.first().innerText({ timeout: READ_MS })) ?? '').replace(/\s+/g, ' ').trim(), undefined);
 
-/** Texto visible tal cual (con los saltos de línea), con plazo corto: para leer las líneas de un bloque. */
-export const rawTextOf = (target: Locator): Promise<string | undefined> =>
-  safe(async () => (await target.first().innerText({ timeout: READ_MS })) ?? undefined, undefined);
+/** Texto tal cual, con sus saltos de línea (para leer las líneas de un bloque). */
+export const rawTextOf = (target: Locator): Promise<string | undefined> => safe(async () => (await target.first().innerText({ timeout: READ_MS })) ?? undefined, undefined);
 
-/** Líneas visibles de un elemento (título y cuerpo de un aviso, o de un bloque). */
-export const linesOf = (text: string | undefined): readonly string[] => (text ?? '').split('\n').map((line) => line.trim()).filter((line) => line !== '');
+/** Líneas no vacías de un texto con saltos de línea. */
+export const linesOf = (text: string | undefined): readonly string[] =>
+  (text ?? '')
+    .split('\n')
+    .map((line) => line.trim())
+    .filter((line) => line !== '');
+
+/** Espera (con techo) a que la condición se cumpla; devuelve si se cumplió. Nunca lanza. */
+export const within = (condition: () => Promise<boolean>, ceilingMs: number = CEILING_MS): Promise<boolean> => waitUntil(condition, ceilingMs).then((result) => result.reached);
 
 /** Texto de la leyenda (cifra de cobertura), o `undefined` si no se lee. */
 export const coverageText = (page: Page): Promise<string | undefined> => textOf(legendOf(page));
+
+/** La cifra de cobertura llega al valor esperado (con techo de espera) y se devuelve el texto leído al final. */
+export const coverageSettles = async (page: Page, expected: string): Promise<string | undefined> => {
+  await waitUntil(async () => (await coverageText(page)) === expected);
+  return coverageText(page);
+};
 
 /** Símbolo que pinta la casilla (contenido de su `::after`): «✓», «✕», «!», «·», o «(sin símbolo)» si no pinta nada. */
 export const symbolOf = (cell: Locator): Promise<string | undefined> =>
@@ -130,12 +155,11 @@ export const symbolOf = (cell: Locator): Promise<string | undefined> =>
     undefined,
   );
 
-/** Estado de una casilla: marcada, deshabilitada, título, resultado (`data-result`) y símbolo. Cada lectura tiene plazo corto. */
+/** Estado de una casilla: marcada, deshabilitada, título y símbolo. Cada lectura tiene plazo corto. */
 export interface CellState {
   readonly checked: boolean | undefined;
   readonly disabled: boolean | undefined;
   readonly title: string | undefined;
-  readonly result: string | undefined;
   readonly symbol: string | undefined;
 }
 
@@ -143,33 +167,72 @@ export const cellState = async (cell: Locator): Promise<CellState> => ({
   checked: await safe<boolean | undefined>(() => cell.isChecked({ timeout: READ_MS }), undefined),
   disabled: await safe<boolean | undefined>(() => cell.isDisabled({ timeout: READ_MS }), undefined),
   title: await safe<string | undefined>(async () => (await cell.getAttribute('title', { timeout: READ_MS })) ?? undefined, undefined),
-  result: await safe<string | undefined>(async () => (await cell.getAttribute('data-result', { timeout: READ_MS })) ?? undefined, undefined),
   symbol: await symbolOf(cell),
 });
 
-/** Estado de una casilla en lenguaje de la historia: «marcado» o «sin marcar» (una lectura fallida no es ninguno de los dos). */
+/** «marcado» o «sin marcar» en lenguaje de la historia (una lectura fallida no es ninguno de los dos). */
 export const markedWord = (checked: boolean | undefined): string | undefined => (checked === undefined ? undefined : checked ? 'marcado' : 'sin marcar');
 
-/** Etiqueta «Sin cobertura» visible en la fila de un requisito (texto de su cabecera). */
+/** La fila del requisito muestra la etiqueta «Sin cobertura» (texto visible de su cabecera). */
 export const uncoveredLabelOf = (page: Page, requirement: string): Promise<boolean | undefined> =>
   safe(
     async () => {
-      const header = rowOf(page, requirement).getByRole('rowheader');
-      const text = ((await header.first().innerText({ timeout: READ_MS })) ?? '').replace(/\s+/g, ' ');
+      const text = ((await rowOf(page, requirement).getByRole('rowheader').first().innerText({ timeout: READ_MS })) ?? '').replace(/\s+/g, ' ');
       return text.includes('Sin cobertura');
     },
     undefined,
   );
 
-/** Códigos de los requisitos cuya fila muestra la etiqueta «Sin cobertura» (lectura de todas las filas de la tabla). */
+/**
+ * Códigos de las filas que muestran la etiqueta «Sin cobertura»: una hoja del DOM cuyo texto es exactamente esa etiqueta (el atributo
+ * `title` de la fila no cuenta). Se lee en orden de pantalla.
+ */
 export const labeledRows = (page: Page): Promise<readonly string[] | undefined> =>
   safe(
-    async () => {
-      const headers = await matrixPanel(page).getByRole('rowheader').allInnerTexts();
-      return headers.map((text) => text.replace(/\s+/g, ' ').trim()).filter((text) => text.includes('Sin cobertura')).map((text) => /^(REQ-\d{3})/.exec(text)?.[1] ?? text);
-    },
+    () =>
+      matrixPanel(page)
+        .locator('[data-testid^="matrix-row-"]')
+        .evaluateAll((rows) =>
+          rows
+            .filter((row) => Array.from(row.querySelectorAll('*')).some((node) => node.children.length === 0 && node.textContent?.trim() === 'Sin cobertura'))
+            .map((row) => (row.getAttribute('data-testid') ?? '').replace('matrix-row-', '')),
+        ),
     undefined,
   );
+
+/** Códigos de las filas de la matriz en orden de pantalla (sin leer el contenido de las celdas). */
+export const rowCodesOnScreen = (page: Page): Promise<readonly string[] | undefined> =>
+  safe(
+    () =>
+      matrixPanel(page)
+        .locator('[data-testid^="matrix-row-"]')
+        .evaluateAll((rows) => rows.map((row) => (row.getAttribute('data-testid') ?? '').replace('matrix-row-', ''))),
+    undefined,
+  );
+
+/** Textos de los enlaces de la cabecera de la matriz (los códigos de caso), en orden de pantalla. */
+export const headerCodesOnScreen = (page: Page): Promise<readonly string[] | undefined> =>
+  safe(async () => (await matrixTable(page).getByRole('link').allInnerTexts()).map((text) => text.trim()), undefined);
+
+/**
+ * Entradas de la leyenda de símbolos, sin espacios: «✓Superado», «✕Fallido», «!Bloqueado», «·Sin ejecutar». Son los cuatro de la historia
+ * (ver «Reglas»); se leen del texto de cada elemento de la lista de leyenda.
+ */
+export const legendEntries = (page: Page): Promise<readonly string[] | undefined> =>
+  safe(
+    async () =>
+      (await matrixPanel(page).getByRole('list', { name: 'Leyenda de la matriz', exact: true }).getByRole('listitem').allTextContents()).map((text) =>
+        text.replace(/\s+/g, ''),
+      ),
+    undefined,
+  );
+
+/** Etiqueta de la leyenda que acompaña a un símbolo («✓» → «Superado»), o `undefined` si no hay entrada con ese símbolo. */
+export const legendLabelFor = async (page: Page, glyph: string): Promise<string | undefined> => {
+  const entries = await legendEntries(page);
+  const entry = entries?.find((text) => text.startsWith(glyph));
+  return entry === undefined ? undefined : entry.slice(glyph.length);
+};
 
 // --- Avisos emergentes: registro desde antes de la acción ----------------------------------------------------------------------
 
@@ -183,7 +246,10 @@ export interface ToastEntry {
   readonly at: number;
 }
 
-/** Se ejecuta en el navegador antes de cargar la app: registra cada aparición de un aviso (sin la cruz de cierre). No usa variables de fuera. */
+/**
+ * Se ejecuta en el navegador antes de cargar la app: registra cada aparición de un aviso. El título y el cuerpo se leen de sus nodos
+ * (la columna de texto del aviso, sin el botón de cierre), no de las líneas del texto visible. No usa variables de fuera.
+ */
 export const recordToasts = (key: string): void => {
   const registry = window as unknown as Record<string, unknown>;
   if (Array.isArray(registry[key])) return;
@@ -191,8 +257,9 @@ export const recordToasts = (key: string): void => {
   registry[key] = log;
   const toneOf = (element: Element): string | undefined => /^toast-(ok|danger|info|warn)$/.exec(element.getAttribute('data-testid') ?? '')?.[1];
   const record = (element: Element, tone: string): void => {
-    const lines = (element as HTMLElement).innerText.split('\n').map((line) => line.trim()).filter((line) => line !== '' && line !== '×');
-    log.push({ tone, title: lines[0] ?? '', body: lines[1] ?? '', at: Date.now() });
+    const column = element.querySelector('div.min-w-0') ?? element;
+    const parts = Array.from(column.children).filter((child) => child.tagName !== 'BUTTON' && (child.textContent ?? '').trim() !== '');
+    log.push({ tone, title: (parts[0]?.textContent ?? '').trim(), body: (parts[1]?.textContent ?? '').trim(), at: Date.now() });
   };
   const scan = (node: Node): void => {
     if (!(node instanceof Element)) return;
@@ -206,7 +273,7 @@ export const recordToasts = (key: string): void => {
   new MutationObserver((mutations) => mutations.forEach((mutation) => mutation.addedNodes.forEach(scan))).observe(document, { childList: true, subtree: true });
 };
 
-/** Vacía el registro y marca el instante de la acción que se va a probar. */
+/** Vacía el registro y marca el instante de la acción que se va a probar. Debe llamarse justo antes del clic. */
 export const armToasts = (page: Page): Promise<unknown> =>
   safe(
     () =>
@@ -223,27 +290,35 @@ export const armToasts = (page: Page): Promise<unknown> =>
 export const toastLog = (page: Page): Promise<readonly ToastEntry[]> =>
   safe(() => page.evaluate((key: string) => ((window as unknown as Record<string, unknown>)[key] as ToastEntry[] | undefined) ?? [], TOAST_KEY), []);
 
-/** Resultado de buscar un aviso: si apareció (con espera de techo) y lo que hay en el registro, en una frase. */
+/** Resultado de buscar un aviso: si apareció (con espera de techo), el cuerpo que trajo y lo que hay en el registro. */
 export interface ToastResult {
   readonly seen: boolean;
+  readonly body?: string;
   readonly observed: string;
 }
 
-/** Espera (con techo) a un aviso del tono y título dados, con el cuerpo si se pide; consulta el registro, no la pantalla. */
-export const toastShown = async (page: Page, tone: 'ok' | 'danger' | 'info' | 'warn', title: string, body?: string): Promise<ToastResult> => {
-  const matches = (entry: ToastEntry): boolean => entry.tone === tone && entry.title === title && (body === undefined || entry.body === body);
+const describeLog = (log: readonly ToastEntry[]): string =>
+  log.length === 0 ? '(ningún aviso)' : log.map((entry) => `${entry.tone} «${entry.title}»${entry.body === '' ? '' : ` / «${entry.body}»`}`).join(' | ');
+
+/** Espera (con techo) a un aviso con ese tono, título y cuerpo exacto. */
+export const toastShown = async (page: Page, tone: 'ok' | 'danger' | 'info' | 'warn', title: string, body: string): Promise<ToastResult> => {
+  const matches = (entry: ToastEntry): boolean => entry.tone === tone && entry.title === title && entry.body === body;
   const found = await waitUntil(async () => (await toastLog(page)).some(matches));
-  const log = await toastLog(page);
-  const observed = log.length === 0 ? '(ningún aviso)' : log.map((entry) => `${entry.tone} «${entry.title}»${entry.body === '' ? '' : ` / «${entry.body}»`}`).join(' | ');
-  return { seen: found.reached, observed };
+  const hit = (await toastLog(page)).find(matches);
+  return { seen: found.reached, ...(hit === undefined ? {} : { body: hit.body }), observed: describeLog(await toastLog(page)) };
 };
 
-/** Tras una acción, espera la ventana de observación y dice si NO apareció ningún aviso de éxito desde la última «armada». */
-export const noOkToast = async (page: Page): Promise<{ readonly held: boolean; readonly seen: string }> => {
-  await sleep(QUIET_MS);
-  const ok = (await toastLog(page)).filter((entry) => entry.tone === 'ok');
-  return { held: ok.length === 0, seen: ok.map((entry) => `«${entry.title}»`).join(', ') };
+/** Espera (con techo) a un aviso con ese tono y título cuyo cuerpo EMPIEZA por `prefix` (la traza de la API incluye un identificador variable). */
+export const toastStartingWith = async (page: Page, tone: 'ok' | 'danger' | 'info' | 'warn', title: string, prefix: string): Promise<ToastResult> => {
+  const matches = (entry: ToastEntry): boolean => entry.tone === tone && entry.title === title && entry.body.startsWith(prefix);
+  const found = await waitUntil(async () => (await toastLog(page)).some(matches));
+  const hit = (await toastLog(page)).find(matches);
+  return { seen: found.reached, ...(hit === undefined ? {} : { body: hit.body }), observed: describeLog(await toastLog(page)) };
 };
+
+/** El aviso con ese título está visible en la pantalla ahora (su tono es el id de prueba `toast-<tono>`). */
+export const toastVisible = (page: Page, tone: 'ok' | 'danger' | 'info' | 'warn', title: string): Promise<boolean | undefined> =>
+  safe<boolean | undefined>(() => page.locator(`[data-testid="toast-${tone}"]`).filter({ hasText: title }).first().isVisible(), undefined);
 
 // --- Acciones con diagnóstico ----------------------------------------------------------------------------------------------------
 
@@ -291,19 +366,17 @@ export const actionFailed = (expected: string, blocked: Blocked): Outcome => out
 export const concluirWeb = (checks: readonly Check[], extra: { readonly note?: string; readonly evidence?: Readonly<Record<string, unknown>> } = {}): Outcome => {
   const failed = checks.filter((entry) => !entry.ok).map((entry) => `esperaba «${entry.expected}»; se observó «${entry.observed}»`);
   const note = [extra.note, ...failed].filter((part): part is string => part !== undefined && part !== '').join(' · ');
-  const expected = checks.map((entry) => entry.expected).join('; ');
-  const observed = checks.map((entry) => entry.observed).join('; ');
-  return outcome(checks.every((entry) => entry.ok), expected, observed, {
+  return outcome(checks.every((entry) => entry.ok), checks.map((entry) => entry.expected).join('; '), checks.map((entry) => entry.observed).join('; '), {
     ...(note === '' ? {} : { note }),
     ...(extra.evidence === undefined ? {} : { evidence: extra.evidence }),
   });
 };
 
-/** Texto de una comprobación sobre la leyenda o un aviso: igual exacto, o «sin leer» si no hay texto. */
+/** Texto de una comprobación sobre la leyenda o un aviso: exacto, o «sin leer» si no hay texto. */
 export const textCheck = (observed: string | undefined, expected: string, what: string): Check =>
   check(observed === expected, `${what} «${expected}»`, `${what} «${observed ?? '(sin leer)'}»`);
 
-// --- Intercepción de la matriz (la prueba fija el retardo o el fallo; la historia lo da como dato) ----------------------------
+// --- Intercepción de la matriz y de los enlaces (la prueba fija el retardo o el fallo; la historia lo da como dato) ---------
 
 /** Coincide con GET /api/programs/:code/traceability. */
 export const traceabilityRoute =
@@ -314,12 +387,12 @@ export const traceabilityRoute =
 /** Cabeceras CORS de una respuesta fabricada: la web llama a la API desde otro origen y sin ellas el navegador daría un fallo de red. */
 const corsOf = (route: Route): Record<string, string> => ({ 'access-control-allow-origin': route.request().headers().origin ?? '*', 'access-control-expose-headers': '*' });
 
-/** Control de la demora: `released` pasa a verdadero justo antes de dejar pasar la respuesta (la fila comprueba que el cargador se leyó antes). */
+/** Control de una demora: `released` pasa a verdadero justo antes de dejar pasar la respuesta (la fila comprueba lo que se ve antes). */
 export interface DelayControl {
   released: boolean;
 }
 
-/** Demora la respuesta de la matriz (la historia da la espera como dato). Las peticiones que no son GET siguen su curso. */
+/** Demora la respuesta de la matriz. Las peticiones que no son GET siguen su curso. */
 export const delayMatrix = (page: Page, program: string, ms: number, control: DelayControl): Promise<unknown> =>
   page.route(traceabilityRoute(program), async (route) => {
     if (route.request().method() !== 'GET') return route.continue();
@@ -328,13 +401,29 @@ export const delayMatrix = (page: Page, program: string, ms: number, control: De
     return route.continue();
   });
 
+/**
+ * Demora el enlace o el desenlace de un cruce (PUT o DELETE sobre /tests/). La historia no fija el tiempo de respuesta: la prueba lo fija
+ * para observar qué se ve antes de que el servidor conteste.
+ */
+export const delayLinkRequests = (page: Page, ms: number, control: DelayControl): Promise<unknown> =>
+  page.route(
+    (url) => url.pathname.includes('/tests/'),
+    async (route) => {
+      const method = route.request().method();
+      if (method !== 'PUT' && method !== 'DELETE') return route.continue();
+      await sleep(ms);
+      control.released = true;
+      return route.continue();
+    },
+  );
+
 /** La matriz ya no carga: aparece la tabla, el estado vacío o el aviso de error (con plazo de techo). */
 export const settledMatrix = async (page: Page): Promise<boolean> =>
   (await waitUntil(async () => (await isVisible(matrixTable(page))) || (await isVisible(emptyBlockOf(page))) || (await isVisible(alertOf(page))))).reached;
 
 /**
- * Responde un fallo a la matriz mientras `failing.on` sea verdadero (la prueba lo apaga justo antes de «Reintentar»). `kind` = `500`
- * devuelve un cuerpo de error del servidor; `sin respuesta` corta la conexión. Las demás peticiones pasan.
+ * Responde un fallo a la matriz mientras `failing.on` sea verdadero (la prueba lo apaga justo antes de «Reintentar»). `responda 500`
+ * devuelve un cuerpo de error del servidor con su identificador de traza; `no obtenga respuesta` corta la conexión. El resto pasa.
  */
 export const failMatrix = (page: Page, program: string, kind: 'responda 500' | 'no obtenga respuesta', failing: { on: boolean }): Promise<unknown> =>
   page.route(traceabilityRoute(program), async (route) => {
@@ -344,15 +433,7 @@ export const failMatrix = (page: Page, program: string, kind: 'responda 500' | '
       status: 500,
       contentType: 'application/json',
       headers: corsOf(route),
-      body: JSON.stringify({ statusCode: 500, error: 'Internal Server Error', message: 'Error provocado por la prueba', code: 'internal_error' }),
+      body: JSON.stringify({ statusCode: 500, error: 'Internal Server Error', message: 'Error provocado por la prueba', code: 'internal_error', traceId: TRACE_ID }),
     });
   });
-
-/** Texto de la leyenda de un resultado (la etiqueta junto al símbolo), para comprobar qué significa un símbolo. */
-export const legendLabelOf = async (page: Page, result: string): Promise<string | undefined> => {
-  const text = await safe(async () => ((await matrixPanel(page).locator(`li[data-result="${result}"]`).first().innerText({ timeout: READ_MS })) ?? ''), undefined);
-  if (text === undefined) return undefined;
-  const lines = linesOf(text);
-  return lines[lines.length - 1];
-};
 
