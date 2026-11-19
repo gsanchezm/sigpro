@@ -59,6 +59,8 @@ const renewsInApp: BrowserRowHandler = async (row, { page }) => {
 
   const back = await tapTab(page, 'Programas', 'programs');
   const arrived = await waitUntil(() => onProgramsMobile(page));
+  // Las rutas visitadas se congelan aquí: abrir después la pantalla de acceso (comprobación de la casilla) NO cuenta como llegar a /login
+  const visitedBeforeAccess = [...traffic.visited];
 
   // Pantalla de acceso sin sesión guardada: no ofrece la casilla «Mantener la sesión en este equipo» (la app no tiene esa opción)
   const accessOpened = await openAccessWithoutSession(page);
@@ -67,7 +69,7 @@ const renewsInApp: BrowserRowHandler = async (row, { page }) => {
   return conclude(
     [
       check(path === '/nc' && shown.reached, 'llega a /nc y ve la no conformidad NC-001 en la pantalla', `ruta ${path}; NC-001 ${shown.reached ? 'visible' : 'no visible'}`),
-      check(!traffic.visited.includes('/login'), 'no llega a /login', `rutas visitadas: ${traffic.visited.join(' → ') || '(ninguna)'}`),
+      check(!visitedBeforeAccess.includes('/login'), 'no llega a /login', `rutas visitadas: ${visitedBeforeAccess.join(' → ') || '(ninguna)'}`),
       // Regla que la fila da por hecha: el 401 se repite una sola vez, tras una renovación con el refreshToken guardado
       check(sequence.ok, 'la lista responde 401, la app renueva la sesión (200) y repite la lista (200)', sequence.observed),
       check(renewalRequests.length === 1, 'la app pide la renovación una sola vez', `peticiones a /api/auth/refresh: ${renewalRequests.length}`),
