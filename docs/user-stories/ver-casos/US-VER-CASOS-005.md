@@ -5,7 +5,7 @@ epica: EP-VER-CASOS
 titulo: "[Web] Buscar, filtrar, ordenar y paginar la lista de casos con la dirección de la página"
 etiquetas: [web]
 relacionadas: [US-VER-CASOS-002, US-VER-CASOS-004, US-VER-CASOS-006, US-PROG-LISTA-004]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["/verification"]
 ---
 

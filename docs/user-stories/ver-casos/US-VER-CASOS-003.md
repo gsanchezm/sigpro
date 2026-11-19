@@ -5,7 +5,7 @@ epica: EP-VER-CASOS
 titulo: "[API] Consultar el detalle de un caso de prueba y su 404"
 etiquetas: [api]
 relacionadas: [US-LOGIN-001, US-VER-CASOS-001, US-VER-CASOS-002, US-VER-CASOS-006, US-VER-CASOS-009]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["GET /api/test-cases/:code"]
 ---
 

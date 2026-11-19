@@ -5,7 +5,7 @@ epica: EP-VER-CASOS
 titulo: "[Móvil] Ver la lista de casos en tarjetas con «Cargar más» y sus estados"
 etiquetas: [movil]
 relacionadas: [US-LOGIN-012, US-VER-CASOS-001, US-VER-CASOS-004, US-VER-CASOS-008, US-VER-CASOS-009]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["/verification"]
 ---
 

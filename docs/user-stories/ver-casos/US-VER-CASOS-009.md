@@ -5,7 +5,7 @@ epica: EP-VER-CASOS
 titulo: "[Móvil] Abrir el detalle de un caso y volver a la lista"
 etiquetas: [movil]
 relacionadas: [US-LOGIN-012, US-VER-CASOS-003, US-VER-CASOS-006, US-VER-CASOS-007, US-VER-CASOS-008]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["/verification/:code"]
 ---
 

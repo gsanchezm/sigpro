@@ -5,7 +5,7 @@ epica: EP-VER-CASOS
 titulo: "[Móvil] Buscar, filtrar y ordenar la lista de casos"
 etiquetas: [movil]
 relacionadas: [US-LOGIN-012, US-VER-CASOS-002, US-VER-CASOS-005, US-VER-CASOS-007]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["/verification"]
 ---
 

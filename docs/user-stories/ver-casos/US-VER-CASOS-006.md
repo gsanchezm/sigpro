@@ -5,7 +5,7 @@ epica: EP-VER-CASOS
 titulo: "[Web] Abrir el detalle de un caso: pasos, requisitos, historial y volver"
 etiquetas: [web]
 relacionadas: [US-VER-CASOS-003, US-VER-CASOS-004, US-VER-CASOS-005, US-VER-CASOS-009, US-LOGIN-007]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["/verification/:code"]
 ---
 

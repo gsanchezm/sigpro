@@ -5,7 +5,7 @@ epica: EP-VER-CASOS
 titulo: "[API] Listar los casos de prueba en páginas de 10 con sus totales y su forma"
 etiquetas: [api]
 relacionadas: [US-LOGIN-001, US-VER-CASOS-002, US-VER-CASOS-003, US-VER-CASOS-004, US-PROG-LISTA-001]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["GET /api/test-cases"]
 ---
 

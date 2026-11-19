@@ -5,7 +5,7 @@ epica: EP-VER-CASOS
 titulo: "[Web] Ver la tabla de casos de prueba y sus estados de carga, vacío y error"
 etiquetas: [web]
 relacionadas: [US-LOGIN-007, US-VER-CASOS-001, US-VER-CASOS-005, US-VER-CASOS-007]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["/verification"]
 ---
 
