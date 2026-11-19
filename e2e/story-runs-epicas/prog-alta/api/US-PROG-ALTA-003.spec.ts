@@ -1,7 +1,8 @@
 import { field, type ApiResult } from '../../../story-runs/support/api';
-import { cell, check, conclude, preparationFailed, responseCheck, strict, type Check } from '../../support/checks';
+import { cell, check, preparationFailed, responseCheck, strict, type Check } from '../../support/checks';
+import { conclude } from './common';
 import { defineApiRows, type ApiRowHandler } from '../../core/framework';
-import { credentialsOf, EDITABLE_KEYS, fieldCheck, getProgram, resetTenants, seedPrg001Check, seedReady, sessionFor, snapshotOf, TENANT_A, updateProgram, API_FIELD } from './common';
+import { API_FIELD, credentialsOf, EDITABLE_KEYS, fieldCheck, getProgram, latestAuditFields, resetTenants, seedPrg001Check, seedReady, sessionFor, snapshotOf, TENANT_A, updateProgram } from './common';
 
 // US-PROG-ALTA-003 — Editar un programa enviando solo los campos que cambian (API). Preparación de cada fila: reinicio de alumno01,
 // inicio de sesión de gestor@sigpro.test y PRG-001 con los datos de la semilla. Antes de editar se guarda una foto de PRG-001: el
@@ -49,19 +50,31 @@ const editOneField: ApiRowHandler = async (row) => {
   const value = strict('valor', VALUE_OF, cell(row, 'valor'));
   const changes = strict('campo', CHANGED, campo);
   const result: ApiResult = await updateProgram(token, 'PRG-001', { [apiKey]: value });
+  // El «resto» se mide con una lectura posterior al PATCH (no con la respuesta del PATCH)
+  const after = await getProgram(token, 'PRG-001');
 
   const changedKeys = changes.map(([key]) => key);
   const restKeys = EDITABLE_KEYS.filter((key) => !changedKeys.includes(key));
   const snapshot = snapshotOf(before.body);
   const restChecks: Check[] = restKeys.map((key) => {
-    const observed = field(result.body, key);
-    return check(observed === snapshot[key], `${key} sin cambios`, `${key} ${String(observed)} (antes ${String(snapshot[key])})`);
+    const observed = field(after.body, key);
+    return check(observed !== undefined && observed === snapshot[key], `${key} sin cambios`, `${key} ${String(observed)} (antes ${String(snapshot[key])})`);
   });
+
+  // Auditoría: la última entrada program.updated de PRG-001 lista los campos que cambiaron (la API usa sus nombres de campo)
+  const auditKeys = changedKeys.filter((key) => key !== 'ownerName');
+  const audited = await latestAuditFields('PRG-001', 'program.updated');
+  const auditCheck = check(
+    audited !== undefined && auditKeys.every((key) => audited.includes(key)),
+    `la auditoría program.updated de PRG-001 lista ${auditKeys.join(', ')}`,
+    audited === undefined ? 'la auditoría no se puede leer' : `la auditoría program.updated de PRG-001 lista ${audited.join(', ') || '(ningún campo)'}`,
+  );
 
   return conclude([
     responseCheck(result, { status: 200 }),
     ...changes.map(([key, wanted]) => fieldCheck(result.body, key, wanted, key)),
     ...restChecks,
+    auditCheck,
   ]);
 };
 
@@ -72,6 +85,13 @@ const ANSWERS: ReadonlyMap<string, (result: ApiResult) => readonly Check[]> = ne
   ['404 program_not_found', (result) => [responseCheck(result, { status: 404, code: 'program_not_found' })]],
 ]);
 
+/** Códigos de la tabla del Esquema 2 (uno existe en la semilla y dos no): cada uno tal cual va en la dirección de la petición. */
+const PROGRAM_CODE: ReadonlyMap<string, string> = new Map<string, string>([
+  ['PRG-024', 'PRG-024'],
+  ['PRG-025', 'PRG-025'],
+  ['PRG-000', 'PRG-000'],
+]);
+
 const onlyExisting: ApiRowHandler = async (row) => {
   const expected = `respuesta ${cell(row, 'respuesta')}`;
   await resetTenants([TENANT_A]);
@@ -80,7 +100,8 @@ const onlyExisting: ApiRowHandler = async (row) => {
   const seed = await seedReady(session.token);
   if (!seed.ok) return preparationFailed(expected, 'el tenant tiene la semilla (PRG-001 a PRG-024) tras el reinicio', seed.result);
   const answer = strict('respuesta', ANSWERS, cell(row, 'respuesta'));
-  const result = await updateProgram(session.token, cell(row, 'codigo'), { name: 'Radar nuevo de prueba' });
+  const code = strict('codigo', PROGRAM_CODE, cell(row, 'codigo'));
+  const result = await updateProgram(session.token, code, { name: 'Radar nuevo de prueba' });
   return conclude(answer(result));
 };
 

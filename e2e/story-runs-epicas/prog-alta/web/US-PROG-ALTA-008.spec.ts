@@ -1,7 +1,8 @@
 import type { Page } from '@playwright/test';
 import { TENANT_A } from '../../../story-runs/support/prepare';
 import { PROGRAMAS_TESTIDS } from '../../../../packages/shared/src/testids';
-import { cell, check, conclude, preparationFailedWeb, strict } from '../../support/checks';
+import { cell, check, preparationFailedWeb, strict } from '../../support/checks';
+import { conclude } from './common';
 import { defineBrowserRows, type BrowserRowHandler } from '../../core/framework';
 import { ACTION, isVisible, runSteps, waitUntil } from '../../support/browser';
 import {
@@ -15,6 +16,7 @@ import {
   fieldValueCheck,
   fillStep1,
   fillStep2,
+  firstListedCode,
   interact,
   LOCAL_MS,
   NET_MS,
@@ -70,6 +72,11 @@ const backRow: BrowserRowHandler = async (row, { page }) => {
     const first = await completeStep1(page);
     if (first) return preparationFailedWeb(expected, first.message);
   }
+  // En el paso 2 se escriben también fechas y presupuesto del cuerpo base (lo que da por hecho la fila) antes de retroceder
+  if (step === 2) {
+    const data = await fillStep2(page, BASE.start, BASE.end, BASE.budget, 'Alta');
+    if (data) return preparationFailedWeb(expected, data.message);
+  }
   if (step >= 3) {
     const second = await fillStep2(page, BASE.start, BASE.end, BASE.budget, 'Alta');
     if (second) return preparationFailedWeb(expected, second.message);
@@ -110,10 +117,24 @@ const closeRow: BrowserRowHandler = async (row, { page }) => {
   const failed = await exit(page);
   if (failed) return actionFailed(expected, failed);
   const closed = await waitUntil(async () => !(await isVisible(wizardOf(page))), LOCAL_MS);
-  return conclude([check(closed.reached, 'el asistente se cierra', 'el asistente sigue abierto'), ...(await noNewProgramChecks())]);
+  return conclude([check(closed.reached, 'el asistente se cierra', closed.reached ? 'el asistente se cierra' : 'el asistente sigue abierto'), ...(await noNewProgramChecks())]);
 };
 
 // --- Esquema 3: el resumen muestra los datos escritos --------------------------------------------------------------------------
+
+/** Etiqueta de la tabla del Esquema 3 → la etiqueta del resumen (dt). */
+const SUMMARY_LABEL: ReadonlyMap<string, string> = new Map<string, string>([
+  ['«Código»', 'Código'],
+  ['«Fechas»', 'Fechas'],
+  ['«Presupuesto»', 'Presupuesto'],
+  ['«Prioridad»', 'Prioridad'],
+]);
+
+/** Aviso de la tabla del Esquema 6 → el texto del aviso del servidor. */
+const NOTICE_OF: ReadonlyMap<string, string> = new Map<string, string>([
+  ['«500 · Ha ocurrido un error inesperado»', '500 · Ha ocurrido un error inesperado'],
+  ['«— · Ha ocurrido un error inesperado»', '— · Ha ocurrido un error inesperado'],
+]);
 
 const summaryRow: BrowserRowHandler = async (row, { page }) => {
   const expected = `el resumen muestra ${cell(row, 'campo')} con el valor ${cell(row, 'valor')}`;
@@ -124,7 +145,7 @@ const summaryRow: BrowserRowHandler = async (row, { page }) => {
   const filled = await completeToStep3(page);
   if (filled) return preparationFailedWeb(expected, filled.message);
   if (!(await waitForStep(page, 3))) return preparationFailedWeb(expected, 'el asistente no llegó a «Paso 3 de 3»');
-  const label = cell(row, 'campo').replace(/^«(.+)»$/, '$1');
+  const label = strict('campo', SUMMARY_LABEL, cell(row, 'campo'));
   return conclude([await summaryCheck(page, label, cell(row, 'valor'))]);
 };
 
@@ -158,11 +179,16 @@ const switchRow: BrowserRowHandler = async (row, { page }) => {
   const toast = await waitForOkToast(page, 'Programa creado', 'PRG-025 se añadió a la lista', NET_MS);
   const closed = await waitUntil(async () => !(await isVisible(wizardOf(page))), LOCAL_MS);
   const stored = await programStatus('PRG-025');
+  // Regla de la historia: la lista muestra el nuevo programa en la primera fila (orden por código, de mayor a menor)
+  const firstRow = await waitUntil(async () => (await firstListedCode(page)) === 'PRG-025', NET_MS);
+  const firstCode = await firstListedCode(page);
+  const interruptor = cell(row, 'interruptor');
   return conclude([
-    check(stateCheck.reached, `«Notificar al equipo por correo» ${cell(row, 'interruptor')}`, `«Notificar al equipo por correo» no está ${cell(row, 'interruptor')}`),
-    check(toast, 'aviso «Programa creado» con «PRG-025 se añadió a la lista»', 'no aparece el aviso «Programa creado» con ese texto'),
-    check(closed.reached, 'el asistente se cierra', 'el asistente sigue abierto'),
+    check(stateCheck.reached, `«Notificar al equipo por correo» ${interruptor}`, stateCheck.reached ? `«Notificar al equipo por correo» está ${interruptor}` : `«Notificar al equipo por correo» no está ${interruptor}`),
+    check(toast, 'aviso «Programa creado» con «PRG-025 se añadió a la lista»', toast ? 'aviso «Programa creado» con «PRG-025 se añadió a la lista»' : 'no aparece el aviso «Programa creado» con ese texto'),
+    check(closed.reached, 'el asistente se cierra', closed.reached ? 'el asistente se cierra' : 'el asistente sigue abierto'),
     check(stored === 200, 'PRG-025 queda creado en el tenant', `PRG-025 responde ${stored} tras el alta`),
+    check(firstRow.reached, 'la lista muestra PRG-025 en la primera fila', `la primera fila de la lista es ${firstCode ?? '(sin leer)'}`),
   ]);
 };
 
@@ -170,13 +196,20 @@ const switchRow: BrowserRowHandler = async (row, { page }) => {
 
 const DUPLICATE_TEXT = 'Ya existe un programa con ese nombre';
 
+/** Nombres de la tabla del Esquema 5: cada uno tal cual va al asistente. */
+const DUPLICATE_NAME_OF: ReadonlyMap<string, string> = new Map<string, string>([
+  ['Sistema de mando táctico Ártemis', 'Sistema de mando táctico Ártemis'],
+  ['sistema de MANDO táctico ártemis', 'sistema de MANDO táctico ártemis'],
+  ['Programa DUPLICADO de prueba', 'Programa DUPLICADO de prueba'],
+]);
+
 const duplicateRow: BrowserRowHandler = async (row, { page }) => {
   const expected = `el asistente vuelve a «Paso 1 de 3» con el aviso «422 · ${DUPLICATE_TEXT}» arriba y bajo «Nombre», y no se crea ningún programa`;
   const opened = await signIn(page);
   if (opened) return preparationFailedWeb(expected, opened);
   const openedWizard = await openWizard(page);
   if (openedWizard) return preparationFailedWeb(expected, openedWizard.message);
-  const filled = await completeWithName(page, cell(row, 'nombre'));
+  const filled = await completeWithName(page, strict('nombre', DUPLICATE_NAME_OF, cell(row, 'nombre')));
   if (filled) return preparationFailedWeb(expected, filled.message);
   if (!(await waitForStep(page, 3))) return preparationFailedWeb(expected, 'el asistente no llegó a «Paso 3 de 3»');
   const submitted = await clickWizardButton(page, 'Crear programa');
@@ -229,12 +262,18 @@ const serverErrorRow: BrowserRowHandler = async (row, { page }) => {
   if (routed) return preparationFailedWeb(expected, routed);
   const submitted = await clickWizardButton(page, 'Crear programa');
   if (submitted) return actionFailed(expected, submitted);
-  const notice = cell(row, 'aviso').replace(/^«(.+)»$/, '$1');
-  return conclude([
-    await alertCheck(wizardOf(page).getByTestId(PROGRAMAS_TESTIDS.PROGRAMS_WIZARD_SERVER_ERROR), notice, 'el aviso del servidor', NET_MS),
-    await stepCheck(page, 3, 'sigue en'),
-    ...(await noNewProgramChecks()),
-  ]);
+  const notice = strict('aviso', NOTICE_OF, cell(row, 'aviso'));
+  // «No se crea ningún programa» NO se comprueba: la prueba intercepta POST /api/programs sin reenviarla, así que el servidor nunca
+  // recibe el alta y una comprobación del tenant sería vacua. Se anota aquí en lugar de afirmarla como observada.
+  return conclude(
+    [
+      await alertCheck(wizardOf(page).getByTestId(PROGRAMAS_TESTIDS.PROGRAMS_WIZARD_SERVER_ERROR), notice, 'el aviso del servidor', NET_MS),
+      await stepCheck(page, 3, 'sigue en'),
+    ],
+    {
+      note: 'no se comprueba «no se crea ningún programa»: la prueba intercepta POST /api/programs y responde 500 o no responde sin reenviarla al servidor, así que la comprobación sería vacua',
+    },
+  );
 };
 
 defineBrowserRows({

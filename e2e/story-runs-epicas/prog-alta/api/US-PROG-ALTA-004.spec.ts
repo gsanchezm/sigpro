@@ -1,5 +1,6 @@
 import { field } from '../../../story-runs/support/api';
-import { cell, conclude, preparationFailed, responseCheck, strict, type Check } from '../../support/checks';
+import { cell, preparationFailed, responseCheck, strict, type Check } from '../../support/checks';
+import { conclude } from './common';
 import { defineApiRows, type ApiRowHandler, type Outcome } from '../../core/framework';
 import { credentialsOf, fieldCheck, getProgram, reasonCheck, resetTenants, seedPrg001Check, sessionFor, snapshotOf, TENANT_A, unchangedChecks, updateProgram } from './common';
 

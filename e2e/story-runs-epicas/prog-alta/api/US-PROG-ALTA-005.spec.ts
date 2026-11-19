@@ -1,5 +1,6 @@
 import type { ApiResult } from '../../../story-runs/support/api';
-import { cell, conclude, preparationFailed, responseCheck, strict, type Check } from '../../support/checks';
+import { cell, preparationFailed, responseCheck, strict, type Check } from '../../support/checks';
+import { conclude } from './common';
 import { defineApiRows, type ApiRowHandler } from '../../core/framework';
 import { baseBody, credentialsOf, createProgram, fieldCheck, getProgram, noProgramCreated, resetTenants, seedPrg001Check, sessionFor, TENANT_A, updateProgram } from './common';
 

@@ -2,21 +2,27 @@ import type { Page } from '@playwright/test';
 import { DEMO, TENANT_A, type Credentials } from '../../../story-runs/support/prepare';
 import { EDITAR_PROGRAMA_TESTIDS } from '../../../../packages/shared/src/testids';
 import { isVisible, textOf, waitUntil, ACTION } from '../../support/browser';
-import { check, cell, conclude, preparationFailedWeb, strict } from '../../support/checks';
+import { check, cell, preparationFailedWeb, strict } from '../../support/checks';
+import { conclude } from './common';
 import { defineBrowserRows, type BrowserRowHandler } from '../../core/framework';
 import {
   absentCheck,
   actionFailed,
   alertCheck,
+  editBudgetField,
+  editClassifiedField,
   editDenied,
-  editForm,
+  editDescriptionField,
   editEndField,
+  editForm,
   editNameField,
   editNotFound,
+  editOwnerField,
   editPath,
   editSaveButton,
   editSettled,
   editStartField,
+  editStatusField,
   fillField,
   interact,
   NET_MS,
@@ -54,11 +60,18 @@ const gestorOnEdit = async (page: Page): Promise<string | undefined> => {
 
 // --- Esquema 1: un nombre repetido no se guarda y lo dice en el formulario -----------------------------------------------------
 
+/** Nombres de la tabla del Esquema 1 (repetido o con «duplicado»): cada uno tal cual va al formulario. */
+const DUPLICATE_NAME_OF: ReadonlyMap<string, string> = new Map<string, string>([
+  ['Radar de vigilancia costera RVC-2', 'Radar de vigilancia costera RVC-2'],
+  ['radar de vigilancia costera rvc-2', 'radar de vigilancia costera rvc-2'],
+  ['Programa DUPLICADO de prueba', 'Programa DUPLICADO de prueba'],
+]);
+
 const duplicateName: BrowserRowHandler = async (row, { page }) => {
   const expected = `ve el aviso «422 · ${DUPLICATE_TEXT}» arriba y el mismo texto bajo «Nombre», y el programa no cambia`;
   const prepared = await gestorOnEdit(page);
   if (prepared) return preparationFailedWeb(expected, prepared);
-  const typed = await fillField(editNameField(page), cell(row, 'nombre'), 'Nombre');
+  const typed = await fillField(editNameField(page), strict('nombre', DUPLICATE_NAME_OF, cell(row, 'nombre')), 'Nombre');
   if (typed) return actionFailed(expected, typed);
   const saved = await interact(editSaveButton(page), 'pulsar «Guardar»', (element) => element.click(ACTION));
   if (saved) return actionFailed(expected, saved);
@@ -107,7 +120,7 @@ const endRule: BrowserRowHandler = async (row, { page }) => {
   const toast = await waitForOkToast(page, 'Programa actualizado', 'PRG-001 se guardó correctamente', NET_MS);
   const stored = await programNow('PRG-001');
   return conclude([
-    check(toast, 'se guarda y ve el aviso «Programa actualizado»', 'no aparece el aviso «Programa actualizado»'),
+    check(toast, 'se guarda y ve el aviso «Programa actualizado»', toast ? 'aparece el aviso «Programa actualizado»' : 'no aparece el aviso «Programa actualizado»'),
     check(stored?.startDate === '2024-06-30', 'PRG-001 guardado con inicio 2024-06-30', `PRG-001 tiene inicio ${String(stored?.startDate)}`),
   ]);
 };
@@ -131,13 +144,26 @@ const deniedRole: BrowserRowHandler = async (row, { page }) => {
     await absentCheck(editForm(page), 'formulario de edición'),
     await absentCheck(editNameField(page), 'campo «Nombre» para editar'),
     await absentCheck(editSaveButton(page), 'botón «Guardar»'),
+    await absentCheck(editDescriptionField(page), 'campo «Descripción» para editar'),
+    await absentCheck(editOwnerField(page), 'campo «Responsable» para editar'),
+    await absentCheck(editStatusField(page), 'campo «Estado» para editar'),
+    await absentCheck(editStartField(page), 'campo «Fecha de inicio» para editar'),
+    await absentCheck(editEndField(page), 'campo «Fecha de fin» para editar'),
+    await absentCheck(editBudgetField(page), 'campo «Presupuesto (€)» para editar'),
+    await absentCheck(editClassifiedField(page), 'casilla «Programa clasificado» para editar'),
   ]);
 };
 
 // --- Esquema 4: un programa que no existe en el tenant muestra el aviso de no encontrado ------------------------------------
 
+/** Códigos de la tabla del Esquema 4 (no existen en el tenant). */
+const MISSING_CODE: ReadonlyMap<string, string> = new Map<string, string>([
+  ['PRG-999', 'PRG-999'],
+  ['PRG-025', 'PRG-025'],
+]);
+
 const notFound: BrowserRowHandler = async (row, { page }) => {
-  const codigo = cell(row, 'codigo');
+  const codigo = strict('codigo', MISSING_CODE, cell(row, 'codigo'));
   const expected = `ve el aviso «No se encontró el programa» y el enlace «Volver a Programas» (${codigo})`;
   const signed = await signIn(page);
   if (signed) return preparationFailedWeb(expected, signed);

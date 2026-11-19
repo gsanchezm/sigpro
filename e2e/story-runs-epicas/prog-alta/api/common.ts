@@ -1,6 +1,18 @@
-import { adminCredentials, call, field, type ApiResult } from '../../../story-runs/support/api';
+import { adminCredentials, adminToken, call, field, type ApiResult } from '../../../story-runs/support/api';
 import { DEMO, TENANT_A, startSession, type Credentials } from '../../../story-runs/support/prepare';
-import { check, errorsOf, strict, type Check } from '../../support/checks';
+import { check, conclude as sharedConclude, errorsOf, strict, type Check } from '../../support/checks';
+import type { Outcome } from '../../core/framework';
+
+/**
+ * Resultado de las comprobaciones de una fila. Una fila que discrepa lleva en `note` en qué difiere: a la nota propia de la fila se
+ * añade cada comprobación que no se cumplió (lo que la historia esperaba y lo que se observó).
+ */
+export const conclude = (checks: readonly Check[], extra: Pick<Outcome, 'note' | 'evidence'> = {}): Outcome => {
+  const failing = checks.filter((entry) => !entry.ok);
+  const difference = failing.length === 0 ? undefined : `Difiere de la historia en: ${failing.map((entry) => `se esperaba ${entry.expected}; se observó ${entry.observed}`).join('; ')}.`;
+  const note = [extra.note, difference].filter((part): part is string => part !== undefined).join(' ');
+  return sharedConclude(checks, { ...(extra.evidence === undefined ? {} : { evidence: extra.evidence }), ...(note === '' ? {} : { note }) });
+};
 
 // Piezas comunes de las filas de API de EP-PROG-ALTA. Todas las peticiones llevan `x-tenant: alumno01`. Las cuentas de la historia
 // salen de un mapa de texto → credenciales (lo que no conoce LANZA). Las comprobaciones de «Entonces» se construyen aquí con la
@@ -123,7 +135,43 @@ export const SEED_PRG_001: Readonly<Record<string, unknown>> = {
 };
 
 /** Los campos editables de un programa (los que se comparan para saber si la edición cambió algo). */
-export const EDITABLE_KEYS: readonly string[] = ['name', 'description', 'ownerId', 'ownerName', 'status', 'priority', 'classified', 'startDate', 'endDate', 'budgetEur'];
+export const EDITABLE_KEYS: readonly string[] = [
+  'name',
+  'description',
+  'ownerId',
+  'ownerName',
+  'status',
+  'priority',
+  'classified',
+  'startDate',
+  'endDate',
+  'budgetEur',
+  'progress',
+  'milestonesDone',
+  'milestonesTotal',
+];
+
+/**
+ * Auditoría del tenant para un código (`GET /api/audit?q=<código>`, del más reciente al más antiguo). Lo lee el administrador de
+ * alumno01 (rol admin: `audit.view`), sin segundo factor. `undefined` si la lectura no responde 200.
+ */
+export const auditItems = async (code: string): Promise<readonly unknown[] | undefined> => {
+  const listed = await call('GET', '/audit', { tenant: TENANT_A, token: await adminToken(TENANT_A), query: `q=${code}&limit=100` });
+  if (listed.status !== 200) return undefined;
+  const items = field(listed.body, 'items');
+  return Array.isArray(items) ? items : undefined;
+};
+
+/** Cuántas entradas de auditoría de `action` sobre `code` hay ahora. */
+export const auditCount = async (code: string, action: string): Promise<number | undefined> =>
+  (await auditItems(code))?.filter((item) => field(item, 'action') === action && field(item, 'entityId') === code).length;
+
+/** Campos de la última entrada de `action` sobre `code` (`diff.fields`), o `undefined` si no hay ninguna o no se puede leer. */
+export const latestAuditFields = async (code: string, action: string): Promise<readonly string[] | undefined> => {
+  const entry = (await auditItems(code))?.find((item) => field(item, 'action') === action && field(item, 'entityId') === code);
+  const fields = field(field(entry, 'diff'), 'fields');
+  return Array.isArray(fields) ? fields.map((value) => String(value)) : undefined;
+};
 
 /** Foto de los campos editables de un programa (cuerpo de la respuesta de GET o de PATCH). */
 export const snapshotOf = (source: unknown): Readonly<Record<string, unknown>> =>

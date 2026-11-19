@@ -1,6 +1,7 @@
 import { DEMO, TENANT_A, type Credentials } from '../../../story-runs/support/prepare';
 import { PROGRAMAS_TESTIDS } from '../../../../packages/shared/src/testids';
-import { cell, conclude, preparationFailedWeb, strict, type Check } from '../../support/checks';
+import { cell, preparationFailedWeb, strict, type Check } from '../../support/checks';
+import { conclude } from './common';
 import { defineBrowserRows, type BrowserRowHandler, type Outcome } from '../../core/framework';
 import {
   actionFailed,
@@ -58,7 +59,9 @@ const onlyManagers: BrowserRowHandler = async (row, { page }) => {
   const opened = await signIn(page, credentials);
   if (opened) return preparationFailedWeb(expected, opened);
   if (strict('resultado', RESULT_OF, expected) === 'denied') {
-    return conclude([await disabledWithReason(newProgramButton(page), DENIED_REASON, 'Nuevo programa')]);
+    return conclude([await disabledWithReason(newProgramButton(page), DENIED_REASON, 'Nuevo programa')], {
+      note: 'el botón deshabilitado no se pulsa: la fila comprueba su estado y su motivo (atributo title)',
+    });
   }
   const clicked = await openWizard(page);
   if (clicked) return actionFailed(expected, clicked);
@@ -134,7 +137,9 @@ const descriptionLimit: BrowserRowHandler = async (row, { page }) => {
   if (next) return actionFailed(expected, next);
   // «No avanza» es que NO ocurra algo: se observa durante el tiempo de la prueba (2 s), no en un instante
   if (strict('resultado', DESCRIPTION_RESULT, expected) === 'step2') return conclude([await stepCheck(page, 2, 'pasa a')]);
-  return conclude([await stayedInStep(page, 1)]);
+  return conclude([await stayedInStep(page, 1)], {
+    note: 'la historia no fija aviso bajo «Descripción» para más de 2000 caracteres (decisión pendiente): la fila solo comprueba que el asistente no avanza durante 2 s',
+  });
 };
 
 // --- Esquema 4: el paso 2 pide fechas coherentes y un presupuesto mayor que cero -------------------------------------------------

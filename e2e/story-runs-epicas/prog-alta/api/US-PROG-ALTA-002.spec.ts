@@ -1,5 +1,6 @@
 import { field, type ApiResult } from '../../../story-runs/support/api';
-import { cell, check, conclude, preparationFailed, responseCheck, strict, type Check } from '../../support/checks';
+import { cell, check, preparationFailed, responseCheck, strict, type Check } from '../../support/checks';
+import { conclude } from './common';
 import { defineApiRows, type ApiRowHandler, type Outcome } from '../../core/framework';
 import { API_FIELD, baseBody, createProgram, fieldCheck, noProgramCreated, reasonCheck, resetTenants, seedReady, sessionFor, TENANT_A, credentialsOf } from './common';
 
@@ -31,15 +32,33 @@ const rejectedWithoutProgram = async (token: string, result: ApiResult, motive: 
 
 // --- Esquema 1: un cuerpo al que le falta un campo obligatorio no crea el programa -----------------------------------------------
 
+/** Nota de las filas cuyo motivo deja la historia en «Decisiones pendientes» (el validador responde su texto por defecto). */
+const DEFAULT_MOTIVE_NOTE = 'motivo por defecto del validador; decisión de producto pendiente';
+/** Nota de las filas en que la Regla fija la clave y la sección de decisiones pendientes no la fija. */
+const RULE_KEY_NOTE = 'la Regla L21 fija esa clave; la sección Decisiones pendientes de la historia deja sin decidir el motivo cuando el campo falta del cuerpo';
+
+/**
+ * Campo que falta → motivo que fija la Regla L21 (inicio: requiredStart; fin: endAfterStart). Nombre, propietario y presupuesto no
+ * tienen motivo fijado: se comprueba que existe motivo y la fila lo anota como decisión pendiente.
+ */
+const MISSING_MOTIVE: ReadonlyMap<string, { readonly motive?: string; readonly note: string }> = new Map<string, { readonly motive?: string; readonly note: string }>([
+  ['nombre', { note: DEFAULT_MOTIVE_NOTE }],
+  ['propietario', { note: DEFAULT_MOTIVE_NOTE }],
+  ['inicio', { motive: 'requiredStart', note: RULE_KEY_NOTE }],
+  ['fin', { motive: 'endAfterStart', note: RULE_KEY_NOTE }],
+  ['presupuesto', { note: DEFAULT_MOTIVE_NOTE }],
+]);
+
 const missingField: ApiRowHandler = async (row) => {
   const expected = `respuesta 422 validation_failed con un motivo para ${cell(row, 'campo')} y no se crea ningún programa`;
   const prepared = await preparedToken(expected);
   if ('failed' in prepared) return prepared.failed;
+  const missing = strict('campo', MISSING_MOTIVE, cell(row, 'campo'));
   const key = strict('campo', API_FIELD, cell(row, 'campo'));
   const body = baseBody();
   delete body[key];
   const result = await createProgram(prepared.token, body);
-  return conclude(await rejectedWithoutProgram(prepared.token, result, { key }));
+  return conclude(await rejectedWithoutProgram(prepared.token, result, { key, ...(missing.motive === undefined ? {} : { motive: missing.motive }) }), { note: missing.note });
 };
 
 // --- Esquema 2: el nombre tiene al menos tres caracteres sin contar los espacios de los extremos -------------------------------
@@ -195,7 +214,7 @@ const optionRule: ApiRowHandler = async (row) => {
   if (value !== undefined) body[apiKey] = value;
   const result = await createProgram(prepared.token, body);
   const answer = strict('respuesta', OPTION_ANSWER, cell(row, 'respuesta'));
-  if (!answer.created) return conclude(await rejectedWithoutProgram(prepared.token, result, { key: apiKey }));
+  if (!answer.created) return conclude(await rejectedWithoutProgram(prepared.token, result, { key: apiKey }), { note: DEFAULT_MOTIVE_NOTE });
   const checks: Check[] = [responseCheck(result, { status: 201 })];
   // «con priority medium», «con classified false»…: el valor por defecto que la historia nombra
   if (answer.key !== undefined) checks.push(fieldCheck(result.body, answer.key, answer.value, answer.key));
@@ -208,11 +227,19 @@ const optionRule: ApiRowHandler = async (row) => {
 
 // --- Esquema 7: un nombre repetido o con «duplicado» no crea el programa -----------------------------------------------------
 
+/** Nombres repetidos o con «duplicado» del Esquema 7 (la tabla): cada uno debe llegar tal cual al cuerpo. */
+const DUPLICATE_NAME: ReadonlyMap<string, string> = new Map<string, string>([
+  ['Sistema de mando táctico Ártemis', 'Sistema de mando táctico Ártemis'],
+  ['sistema de mando táctico ártemis', 'sistema de mando táctico ártemis'],
+  ['Programa DUPLICADO de prueba', 'Programa DUPLICADO de prueba'],
+]);
+
 const duplicateName: ApiRowHandler = async (row) => {
   const expected = `respuesta 422 duplicate_name con motivo dupName en nombre y no se crea ningún programa (nombre ${cell(row, 'nombre')})`;
   const prepared = await preparedToken(expected);
   if ('failed' in prepared) return prepared.failed;
-  const result = await createProgram(prepared.token, { ...baseBody(), name: cell(row, 'nombre') });
+  const name = strict('nombre', DUPLICATE_NAME, cell(row, 'nombre'));
+  const result = await createProgram(prepared.token, { ...baseBody(), name });
   return conclude(await rejectedWithoutProgram(prepared.token, result, { key: 'name', motive: 'dupName' }, 'duplicate_name'));
 };
 

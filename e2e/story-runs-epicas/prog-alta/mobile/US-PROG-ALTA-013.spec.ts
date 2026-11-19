@@ -2,7 +2,8 @@ import type { Locator, Page } from '@playwright/test';
 import { DEMO, TENANT_A, type Credentials } from '../../../story-runs/support/prepare';
 import { EDITAR_PROGRAMA_TESTIDS } from '../../../../packages/shared/src/testids';
 import { ACTION, isVisible, pathOf, textOf, waitUntil } from '../../support/browser';
-import { check, cell, conclude, preparationFailedWeb, strict } from '../../support/checks';
+import { check, cell, preparationFailedWeb, strict } from '../../support/checks';
+import { conclude } from '../web/common';
 import { defineBrowserRows, type BrowserRowHandler } from '../../core/framework';
 import { absentCheck, actionFailed, alertCheck, fieldValueCheck, interact, NET_MS, programNow, textCheck, visibleCheck, waitForOkToast, type Blocked } from '../web/common';
 import {
@@ -11,9 +12,11 @@ import {
   buttonNamed,
   disabledReason,
   editBudgetField,
+  editClassifiedSwitch,
+  editEndField,
+  editField,
   editNameField,
   editSaveButton,
-  editSaveCloseButton,
   editSettled,
   editStartField,
   editStatusField,
@@ -103,19 +106,25 @@ const showsSaved: BrowserRowHandler = async (row, { page }) => {
 
 // --- Esquema 2: guardar aplica el cambio y se queda en la pantalla --------------------------------------------------------
 
+/** Valor de la celda «valor» del Esquema 2 → texto a escribir o elegir, campo de PRG-001 que cambia y el valor que debe quedar guardado. */
+const SAVE_VALUE: ReadonlyMap<string, { readonly text: string; readonly key: string; readonly stored: unknown }> = new Map<string, { readonly text: string; readonly key: string; readonly stored: unknown }>([
+  ['500000', { text: '500000', key: 'budgetEur', stored: 500000 }],
+  ['En pausa', { text: 'En pausa', key: 'status', stored: 'on_hold' }],
+]);
+
 const saveChange: BrowserRowHandler = async (row, { page }) => {
   const expected = `ve el aviso «${SAVED_TITLE}» con el texto «${SAVED_BODY}» y sigue en la edición con el campo ${cell(row, 'campo')} en ${cell(row, 'valor')}`;
   const prepared = await openEdit(page);
   if (prepared) return preparationFailedWeb(expected, prepared);
   const changed = strict('campo', CHANGED, cell(row, 'campo'));
-  const valor = cell(row, 'valor');
+  const valor = strict('valor', SAVE_VALUE, cell(row, 'valor'));
   if (changed === 'budget') {
-    const typed = await typeInto(editBudgetField(page), valor, 'Presupuesto (€)');
+    const typed = await typeInto(editBudgetField(page), valor.text, 'Presupuesto (€)');
     if (typed) return actionFailed(expected, typed);
   } else {
     const opened = await interact(editStatusField(page), 'abrir «Estado»', (element) => element.click(ACTION));
     if (opened) return actionFailed(expected, opened);
-    const chosen = await interact(page.getByRole('radio', { name: valor, exact: true }), `elegir «${valor}»`, (element) => element.click(ACTION));
+    const chosen = await interact(page.getByRole('radio', { name: valor.text, exact: true }), 'elegir «' + valor.text + '»', (element) => element.click(ACTION));
     if (chosen) return actionFailed(expected, chosen);
   }
   const saved = await interact(editSaveButton(page), 'pulsar «Guardar»', (element) => element.click(ACTION));
@@ -124,16 +133,21 @@ const saveChange: BrowserRowHandler = async (row, { page }) => {
   const stays = await waitUntil(async () => pathOf(page) === EDIT_PATH, 1_000);
   const shown =
     changed === 'budget'
-      ? await fieldValueCheck(editBudgetField(page), valor, 'el campo «Presupuesto (€)»', NET_MS)
-      : await pickerCheck(editStatusField(page), valor, 'el campo «Estado»');
+      ? await fieldValueCheck(editBudgetField(page), valor.text, 'el campo «Presupuesto (€)»', NET_MS)
+      : await pickerCheck(editStatusField(page), valor.text, 'el campo «Estado»');
+  // Persistencia: el valor queda guardado en el tenant (lectura por API, no la respuesta del PATCH)
+  const stored = await programNow('PRG-001');
+  const storedValue = stored === undefined ? undefined : stored[valor.key];
   return conclude([
-    check(toast, `ve el aviso «${SAVED_TITLE}» con «${SAVED_BODY}»`, `no aparece el aviso «${SAVED_TITLE}»`),
-    check(stays.reached, `sigue en ${EDIT_PATH}`, `está en ${pathOf(page)}`),
+    check(toast, `ve el aviso «${SAVED_TITLE}» con «${SAVED_BODY}»`, toast ? `aparece el aviso «${SAVED_TITLE}» con «${SAVED_BODY}»` : `no aparece el aviso «${SAVED_TITLE}»`),
+    check(stays.reached, 'sigue en ' + EDIT_PATH, stays.reached ? 'sigue en ' + EDIT_PATH : 'está en ' + pathOf(page)),
     shown,
+    check(storedValue === valor.stored, 'PRG-001 guarda ' + valor.key + ' = ' + String(valor.stored), storedValue === undefined ? 'PRG-001 no se puede leer por API' : 'PRG-001 guarda ' + valor.key + ' = ' + String(storedValue)),
   ]);
 };
 
-// --- Esquema 3: guardar y cerrar lleva al detalle del programa ---------------------------------------------------------------
+/** Botón de la tabla del Esquema 3 → nombre del botón que pulsa la fila. */
+const BUTTON_OF: ReadonlyMap<string, string> = new Map<string, string>([['«Guardar y cerrar»', 'Guardar y cerrar']]);
 
 const saveAndClose: BrowserRowHandler = async (row, { page }) => {
   const expected = `llega al detalle de PRG-001 (${DETAIL_PATH}) y ve el aviso «${SAVED_TITLE}»`;
@@ -141,11 +155,17 @@ const saveAndClose: BrowserRowHandler = async (row, { page }) => {
   if (prepared) return preparationFailedWeb(expected, prepared);
   const typed = await typeInto(editNameField(page), NAME_CHANGED, 'Nombre');
   if (typed) return actionFailed(expected, typed);
-  const closed = await interact(editSaveCloseButton(page), `pulsar ${cell(row, 'boton')}`, (element) => element.click(ACTION));
+  const boton = strict('boton', BUTTON_OF, cell(row, 'boton'));
+  const closed = await interact(buttonNamed(page, boton), 'pulsar ' + boton, (element) => element.click(ACTION));
   if (closed) return actionFailed(expected, closed);
   const arrived = await waitUntil(async () => pathOf(page) === DETAIL_PATH, NET_MS);
   const toast = await waitForOkToast(page, SAVED_TITLE, SAVED_BODY, NET_MS);
-  return conclude([check(arrived.reached, `llega a ${DETAIL_PATH}`, `está en ${pathOf(page)}`), check(toast, `ve el aviso «${SAVED_TITLE}»`, `no ve el aviso «${SAVED_TITLE}»`)]);
+  const stored = await programNow('PRG-001');
+  return conclude([
+    check(arrived.reached, 'llega a ' + DETAIL_PATH, arrived.reached ? 'llega a ' + DETAIL_PATH : 'está en ' + pathOf(page)),
+    check(toast, `ve el aviso «${SAVED_TITLE}»`, toast ? `ve el aviso «${SAVED_TITLE}»` : `no ve el aviso «${SAVED_TITLE}»`),
+    check(stored?.name === NAME_CHANGED, 'PRG-001 guardado con el nombre ' + NAME_CHANGED, stored === undefined ? 'PRG-001 no se puede leer por API' : 'PRG-001 guardado con el nombre «' + String(stored.name) + '»'),
+  ]);
 };
 
 // --- Esquema 4: los avisos del servidor y de las fechas aparecen junto al campo que falla ------------------------------
@@ -198,6 +218,13 @@ const deniedRole: BrowserRowHandler = async (row, { page }) => {
     await visibleCheck(buttonNamed(page, 'Volver al detalle'), 'el botón «Volver al detalle»'),
     await absentCheck(page.getByTestId(EDITAR_PROGRAMA_TESTIDS.PROGRAM_EDIT_FORM), 'formulario de edición'),
     await absentCheck(editNameField(page), 'campo «Nombre» para editar'),
+    await absentCheck(editField(page, 'Descripción'), 'campo «Descripción» para editar'),
+    await absentCheck(ownerField(page), 'campo «Responsable» para editar'),
+    await absentCheck(editStatusField(page), 'campo «Estado» para editar'),
+    await absentCheck(editStartField(page), 'campo «Fecha de inicio» para editar'),
+    await absentCheck(editEndField(page), 'campo «Fecha de fin» para editar'),
+    await absentCheck(editBudgetField(page), 'campo «Presupuesto (€)» para editar'),
+    await absentCheck(editClassifiedSwitch(page), 'interruptor «Programa clasificado» para editar'),
   ]);
 };
 

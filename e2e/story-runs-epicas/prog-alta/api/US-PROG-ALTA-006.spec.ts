@@ -1,5 +1,6 @@
 import { call, field, type ApiResult } from '../../../story-runs/support/api';
-import { cell, check, conclude, preparationFailed, responseCheck, strict } from '../../support/checks';
+import { cell, check, preparationFailed, responseCheck, strict } from '../../support/checks';
+import { conclude } from './common';
 import { defineApiRows, type ApiRowHandler } from '../../core/framework';
 import { credentialsOf, resetTenants, sessionFor, TENANT_A } from './common';
 
@@ -42,13 +43,27 @@ const everyRoleSeesList: ApiRowHandler = async (row) => {
 
 // --- Esquema 2: cada persona lleva el número de programas a su cargo -------------------------------------------------------------
 
+/** Personas de la tabla del Esquema 2 (el nombre tal cual lo muestra la historia). */
+const PERSON_OF: ReadonlyMap<string, string> = new Map<string, string>([
+  ['Marta Ruiz', 'Marta Ruiz'],
+  ['Carmen Vidal', 'Carmen Vidal'],
+  ['Pablo Serrano', 'Pablo Serrano'],
+  ['Alumno 01', 'Alumno 01'],
+]);
+
+/** Número de programas de la tabla del Esquema 2, como número. */
+const COUNT_OF: ReadonlyMap<string, number> = new Map<string, number>([
+  ['4', 4],
+  ['0', 0],
+]);
+
 const programCountRow: ApiRowHandler = async (row) => {
   const expected = `la persona ${cell(row, 'persona')} tiene programCount ${cell(row, 'programas')}`;
   await resetTenants([TENANT_A]);
   const session = await sessionFor(credentialsOf(GESTOR));
   if (session.token === undefined) return preparationFailed(expected, `${GESTOR} inicia sesión y recibe accessToken`, session.last);
-  const persona = cell(row, 'persona');
-  const expectedCount = Number(cell(row, 'programas'));
+  const persona = strict('persona', PERSON_OF, cell(row, 'persona'));
+  const expectedCount = strict('programas', COUNT_OF, cell(row, 'programas'));
   const result = await owners(session.token);
   // Una sola persona con ese nombre: si hay dos, la lectura es ambigua y no se da por cumplida
   const matches = personsOf(result).filter((person) => field(person, 'name') === persona);

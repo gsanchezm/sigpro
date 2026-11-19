@@ -3,8 +3,20 @@ import { adminToken, call, field } from '../../../story-runs/support/api';
 import { DEMO, resetTenants, TENANT_A, type Credentials } from '../../../story-runs/support/prepare';
 import { ACCESO_DYNAMIC_TESTIDS, EDITAR_PROGRAMA_TESTIDS, PROGRAMAS_TESTIDS } from '../../../../packages/shared/src/testids';
 import { ACTION, CEILING_MS, HOLD_MS, attrOf, holdsFor, isVisible, linesOf, pathOf, runSteps, safe, textOf, valueOf, waitUntil } from '../../support/browser';
-import { check, type Check } from '../../support/checks';
+import { check, conclude as sharedConclude, type Check } from '../../support/checks';
 import { outcome, type BrowserRowHandler, type Outcome } from '../../core/framework';
+
+/**
+ * Resultado de las comprobaciones de una fila (web y móvil). Una fila que discrepa lleva en `note` en qué difiere: a la nota propia de
+ * la fila se añade cada comprobación que no se cumplió (lo que la historia esperaba y lo que se observó). Las filas que coinciden solo
+ * llevan su nota propia.
+ */
+export const conclude = (checks: readonly Check[], extra: Pick<Outcome, 'note' | 'evidence'> = {}): Outcome => {
+  const failing = checks.filter((entry) => !entry.ok);
+  const difference = failing.length === 0 ? undefined : `Difiere de la historia en: ${failing.map((entry) => `se esperaba ${entry.expected}; se observó ${entry.observed}`).join('; ')}.`;
+  const note = [extra.note, difference].filter((part): part is string => part !== undefined).join(' ');
+  return sharedConclude(checks, { ...(extra.evidence === undefined ? {} : { evidence: extra.evidence }), ...(note === '' ? {} : { note }) });
+};
 
 // Piezas comunes de las filas web de EP-PROG-ALTA (escritorio 1440 × 900). Los localizadores son de rol y de etiqueta; los ids de
 // prueba de testids.ts solo donde la pantalla no ofrece otro rastro (avisos de campo, aviso del servidor, resumen).
@@ -252,6 +264,7 @@ export const editStatusField = (page: Page): Locator => page.getByLabel('Estado'
 export const editStartField = (page: Page): Locator => page.getByLabel('Fecha de inicio');
 export const editEndField = (page: Page): Locator => page.getByLabel('Fecha de fin');
 export const editBudgetField = (page: Page): Locator => page.getByLabel('Presupuesto');
+export const editDescriptionField = (page: Page): Locator => page.getByLabel('Descripción');
 export const editClassifiedField = (page: Page): Locator => page.getByRole('checkbox', { name: 'Programa clasificado', exact: true });
 export const editSaveButton = (page: Page): Locator => page.getByRole('button', { name: 'Guardar', exact: true });
 export const editSaveCloseButton = (page: Page): Locator => page.getByRole('button', { name: 'Guardar y cerrar', exact: true });
@@ -279,6 +292,10 @@ export const waitForOkToast = async (page: Page, title: string, body: string, ce
 
 /** Código HTTP de `GET /api/programs/<code>` con el administrador del tenant (lectura independiente de la sesión del navegador). */
 export const programStatus = async (code: string): Promise<number> => (await call('GET', `/programs/${code}`, { tenant: TENANT_A, token: await adminToken(TENANT_A) })).status;
+
+/** Código de la primera fila de la tabla de programas que se ve (enlace con el código), o `undefined` si no se lee. */
+export const firstListedCode = (page: Page): Promise<string | undefined> =>
+  safe(async () => ((await page.getByRole('table').getByRole('link', { name: /^PRG-\d{3}$/ }).first().textContent({ timeout: 500 })) ?? '').trim() || undefined, undefined);
 
 /** Ningún programa nuevo en el tenant: el total sigue en la semilla (24) y PRG-025 responde 404. */
 export const noNewProgramChecks = async (): Promise<readonly Check[]> => {
@@ -329,7 +346,7 @@ export const absentCheck = async (target: Locator, what: string): Promise<Check>
 export const stayedInStep = async (page: Page, step: number): Promise<Check> => {
   const expected = `Paso ${step} de 3`;
   const held = await holdsFor(async () => (await wizardStepText(page)) === expected, HOLD_MS);
-  return check(held.held, `sigue en «${expected}» durante 2 s`, `cambió de paso a los ${held.brokeAtMs ?? '?'} ms`);
+  return check(held.held, `sigue en «${expected}» durante 2 s`, held.held ? `sigue en «${expected}» durante 2 s` : `cambió de paso a los ${held.brokeAtMs ?? '?'} ms`);
 };
 
 /** Valor de una fila del resumen del paso 3 (`dt` → `dd`), o `undefined` si no hay esa etiqueta. */

@@ -2,9 +2,10 @@ import type { Locator, Page } from '@playwright/test';
 import { DEMO, TENANT_A, type Credentials } from '../../../story-runs/support/prepare';
 import { PROGRAMAS_TESTIDS } from '../../../../packages/shared/src/testids';
 import { ACTION, isVisible, textOf, waitUntil } from '../../support/browser';
-import { check, cell, conclude, preparationFailedWeb, strict, type Check } from '../../support/checks';
+import { check, cell, preparationFailedWeb, strict, type Check } from '../../support/checks';
+import { conclude } from '../web/common';
 import { defineBrowserRows, type BrowserRowHandler } from '../../core/framework';
-import { actionFailed, alertCheck, fieldValueCheck, interact, LOCAL_MS, NET_MS, noNewProgramChecks, textCheck, visibleCheck, waitForOkToast, type Blocked } from '../web/common';
+import { actionFailed, alertCheck, fieldValueCheck, interact, LOCAL_MS, NET_MS, noNewProgramChecks, programNow, textCheck, visibleCheck, waitForOkToast, type Blocked } from '../web/common';
 import {
   disabledReason,
   newProgramButton,
@@ -75,9 +76,15 @@ const SEARCH_OF: ReadonlyMap<string, { readonly text: string; readonly matches: 
 ]);
 
 /** Nombre del Esquema 6 → qué se espera al crear: el alta o el aviso de nombre repetido. */
-const CREATE_OF: ReadonlyMap<string, 'created' | 'duplicate'> = new Map<string, 'created' | 'duplicate'>([
-  [BASE_NAME, 'created'],
-  ['Sistema de mando táctico Ártemis', 'duplicate'],
+const CREATE_OF: ReadonlyMap<string, { readonly name: string; readonly kind: 'created' | 'duplicate' }> = new Map<string, { readonly name: string; readonly kind: 'created' | 'duplicate' }>([
+  [BASE_NAME, { name: BASE_NAME, kind: 'created' }],
+  ['Sistema de mando táctico Ártemis', { name: 'Sistema de mando táctico Ártemis', kind: 'duplicate' }],
+]);
+
+/** Nombres del paso 1 del Esquema 2 (la tabla): el nombre tal cual va a la hoja. */
+const NAME_STEP_ONE: ReadonlyMap<string, string> = new Map<string, string>([
+  ['ab', 'ab'],
+  ['abc', 'abc'],
 ]);
 
 /** Resultado del Esquema 2 → qué aviso (o el paso siguiente) se espera. */
@@ -193,7 +200,8 @@ const stepOneRule: BrowserRowHandler = async (row, { page }) => {
   if (signed) return preparationFailedWeb(expected, signed);
   const opened = await openSheet(page);
   if (opened) return preparationFailedWeb(expected, opened.message);
-  const filled = await fillStep1(page, cell(row, 'nombre'), strict('responsable', OWNER_OF, cell(row, 'responsable')));
+  const name = strict('nombre', NAME_STEP_ONE, cell(row, 'nombre'));
+  const filled = await fillStep1(page, name, strict('responsable', OWNER_OF, cell(row, 'responsable')));
   if (filled) return actionFailed(expected, filled);
   const next = await pressWizard(page, 'Siguiente');
   if (next) return actionFailed(expected, next);
@@ -289,18 +297,24 @@ const createRow: BrowserRowHandler = async (row, { page }) => {
   if (signed) return preparationFailedWeb(expected, signed);
   const opened = await openSheet(page);
   if (opened) return preparationFailedWeb(expected, opened.message);
-  const kind = strict('nombre', CREATE_OF, cell(row, 'nombre'));
-  const filled = await reachStep3(page, cell(row, 'nombre'));
+  const create = strict('nombre', CREATE_OF, cell(row, 'nombre'));
+  const filled = await reachStep3(page, create.name);
   if (filled) return preparationFailedWeb(expected, filled.message);
   const submitted = await pressWizard(page, 'Crear programa');
   if (submitted) return actionFailed(expected, submitted);
-  if (kind === 'created') {
+  if (create.kind === 'created') {
     const toast = await waitForOkToast(page, 'Programa creado', 'PRG-025 se añadió a la lista', NET_MS);
     const closed = await waitUntil(async () => !(await isVisible(wizardOf(page))), NET_MS);
-    return conclude([check(toast, 'aviso «Programa creado» con «PRG-025 se añadió a la lista»', 'no aparece ese aviso'), check(closed.reached, 'la hoja se cierra', 'la hoja sigue abierta')]);
+    // Persistencia: el alta queda en el tenant con los datos del cuerpo base (lectura por API, no la respuesta del POST)
+    const stored = await programNow('PRG-025');
+    return conclude([
+      check(toast, 'aviso «Programa creado» con «PRG-025 se añadió a la lista»', toast ? 'aparece el aviso «Programa creado» con «PRG-025 se añadió a la lista»' : 'no aparece ese aviso'),
+      check(closed.reached, 'la hoja se cierra', closed.reached ? 'la hoja se cierra' : 'la hoja sigue abierta'),
+      check(stored?.name === BASE_NAME && stored?.ownerId === 'u2' && stored?.startDate === '2027-03-01' && stored?.endDate === '2027-03-02' && stored?.budgetEur === 900000 && stored?.priority === 'high', 'PRG-025 guardado con el cuerpo base (Programa de prueba alfa, u2, 2027-03-01 a 2027-03-02, 900000, prioridad high)', stored === undefined ? 'PRG-025 no se puede leer por API' : 'PRG-025 guardado con ' + String(stored?.name) + ', ' + String(stored?.ownerId) + ', ' + String(stored?.startDate) + ' a ' + String(stored?.endDate) + ', ' + String(stored?.budgetEur) + ', prioridad ' + String(stored?.priority)),
+    ]);
   }
   return conclude([
-    await alertCheck(wizardOf(page).getByTestId(PROGRAMAS_TESTIDS.PROGRAMS_WIZARD_SERVER_ERROR), `422 · ${DUPLICATE_TEXT}`, 'el aviso de arriba', NET_MS),
+    await alertCheck(wizardOf(page).getByTestId(PROGRAMAS_TESTIDS.PROGRAMS_WIZARD_SERVER_ERROR), '422 · ' + DUPLICATE_TEXT, 'el aviso de arriba', NET_MS),
     await alertCheck(wizardOf(page).getByTestId(PROGRAMAS_TESTIDS.PROGRAMS_WIZARD_NAME_ERROR), DUPLICATE_TEXT, 'el aviso bajo «Nombre»', NET_MS),
     await mobileStep(page, 1, 'vuelve a'),
     ...(await noNewProgramChecks()),
