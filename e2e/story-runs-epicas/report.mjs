@@ -61,6 +61,7 @@ for (const id of storyIds) if (!stories.some((story) => story.header.story === i
 // --- Coherencia fila a fila con el manifiesto ---------------------------------------------------------------------------
 const NO_EXEC = new Set(['no-ejecutable', 'pendiente-de-decision']);
 const rowsByStory = new Map();
+const storyCommitNotes = [];
 for (const story of stories) {
   const expected = new Set(manifestOf(story.header.story).map((row) => row.rowId));
   const seenIds = new Set();
@@ -71,7 +72,19 @@ for (const story of stories) {
     if (row.verdict === 'error-de-prueba') problems.push(`Error del arnés en ${row.rowId}: ${row.observed}`);
   }
   for (const id of expected) if (!seenIds.has(id)) problems.push(`${story.header.story}: falta la fila ${id} del manifiesto`);
-  if (story.header.storiesCommit !== manifest.storiesCommit) problems.push(`${story.header.story}: commit de las historias ${story.header.storiesCommit} ≠ manifiesto ${manifest.storiesCommit}`);
+  // El commit de las historias es el último que tocó docs/user-stories: otras épicas lo mueven sin cambiar ESTA historia. Se acepta un commit
+  // distinto del manifiesto si el archivo de la historia solo difiere en la línea `verificacion:` (que no se publica ni cambia las filas).
+  if (story.header.storiesCommit !== manifest.storiesCommit) {
+    const file = `docs/user-stories/${slug.toLowerCase()}/${story.header.story}.md`;
+    const diff = git(['diff', '-U0', story.header.storiesCommit, manifest.storiesCommit, '--', file]);
+    const changed = diff === null ? ['(no se pudo comparar)'] : diff.split('\n').filter((line) => /^[+-]/.test(line) && !/^(\+\+\+|---)/.test(line) && !/^[+-]verificacion:/.test(line));
+    if (changed.length > 0) problems.push(`${story.header.story}: el archivo de la historia cambió entre el commit con el que se ejecutó (${String(story.header.storiesCommit).slice(0, 7)}) y el del manifiesto (${String(manifest.storiesCommit).slice(0, 7)}) más allá de la línea verificacion`);
+    else storyCommitNotes.push(`${story.header.story}: ejecutada con las historias en ${String(story.header.storiesCommit).slice(0, 7)}; el manifiesto actual es de ${String(manifest.storiesCommit).slice(0, 7)} y su archivo solo difiere, si acaso, en la línea verificacion`);
+  }
+  for (const row of story.rows) {
+    const current = manifestOf(story.header.story).find((entry) => entry.rowId === row.rowId);
+    if (current && (JSON.stringify(current.cells) !== JSON.stringify(row.cells) || JSON.stringify(current.resolvedSteps) !== JSON.stringify(row.resolvedSteps))) problems.push(`${row.rowId}: las celdas o los pasos de la fila ejecutada no coinciden con el manifiesto actual`);
+  }
   if (story.header.apiPlantedBugs !== false) problems.push(`${story.header.story}: la API tenía los defectos del curso activos o desconocidos (${story.header.apiPlantedBugs})`);
   if (story.header.harnessDirty !== false) problems.push(`${story.header.story}: el arnés tenía cambios sin confirmar al ejecutar`);
   const settings = story.header.settings ?? {};
@@ -121,11 +134,12 @@ const windows = runIds
 for (let i = 1; i < windows.length; i += 1) if (windows[i].start < windows[i - 1].end) problems.push(`Las ejecuciones ${windows[i - 1].id} y ${windows[i].id} se solapan en el tiempo`);
 
 // --- El arnés: un solo commit, sin cambios desde entonces ----------------------------------------------------------------
-const HARNESS_PATHS = ['e2e/story-runs-epicas', 'e2e/playwright.stories-epicas.config.ts', ':(exclude)e2e/story-runs-epicas/report.mjs'];
+// Las piezas comunes (marco, comprobaciones, puerta) y la carpeta de ESTA épica: las carpetas de otras épicas se añaden sin invalidar esta evidencia
+const HARNESS_PATHS = ['e2e/story-runs-epicas/support', 'e2e/story-runs-epicas/gate', `e2e/story-runs-epicas/${slug.toLowerCase()}`, 'e2e/playwright.stories-epicas.config.ts'];
 const harnessCommits = [...new Set(stories.map((story) => story.header.commit))];
 if (harnessCommits.length > 1) problems.push(`Las ejecuciones no son del mismo commit del arnés: ${harnessCommits.map((commit) => commit.slice(0, 7)).join(', ')}`);
 const harnessUnchanged = harnessCommits.length === 1 && git(['diff', '--quiet', harnessCommits[0], 'HEAD', '--', ...HARNESS_PATHS]) !== null;
-if (!harnessUnchanged) problems.push('El arnés cambió desde el commit con el que se ejecutó (o ese commit ya no existe)');
+if (harnessCommits.length === 1 && !harnessUnchanged) problems.push('El arnés cambió desde el commit con el que se ejecutó (o ese commit ya no existe)');
 if (harnessCommits.length === 1 && git(['merge-base', '--is-ancestor', harnessCommits[0], 'HEAD']) === null) problems.push(`El commit del arnés ${harnessCommits[0].slice(0, 7)} no es antecesor de HEAD`);
 
 // --- Procedencia de los builds (el registro del piloto, solo lectura) ------------------------------------------------------
@@ -194,9 +208,10 @@ out();
 out('## Cómo se ejecutó');
 out();
 out(`- **Qué se probó (historias):** commit \`${manifest.storiesCommit?.slice(0, 7) ?? '?'}\`, sin cambios sin confirmar al ejecutar; manifiesto generado ${manifest.generatedAt}.`);
-out(`- **Con qué se probó (arnés):** commit ${harnessCommits.map((commit) => `\`${commit.slice(0, 7)}\``).join(', ') || '?'}${harnessUnchanged ? ', sin cambios desde entonces en e2e/story-runs-epicas ni en su config' : ' (**el arnés cambió desde entonces**)'}. Es un arnés APARTE del del piloto: no modifica nada de e2e/story-runs/ ni de su evidencia.`);
+out(`- **Con qué se probó (arnés):** commit ${harnessCommits.map((commit) => `\`${commit.slice(0, 7)}\``).join(', ') || '?'}${harnessUnchanged ? ', sin cambios desde entonces en las piezas comunes (support, gate), en la carpeta de la épica ni en su config' : ' (**el arnés cambió desde entonces**)'}. Es un arnés APARTE del del piloto: no modifica nada de e2e/story-runs/ ni de su evidencia.`);
 out(`- **Entorno:** PostgreSQL portátil aislado, API con los defectos del curso apagados, web y app móvil servidas como web de Expo a 390 px (NO es nativo). La puerta (\`e2e/story-runs-epicas/gate/aislamiento.spec.ts\`) midió en cada ejecución: ${gateRuns.filter((run) => run?.environment).map((run) => `5432 ${run.environment.ports?.['5432'] ? '**accesible**' : 'inaccesible'} y ${run.environment.isolatedPgPort} ${run.environment.ports?.[String(run.environment.isolatedPgPort)] ? 'accesible' : '**inaccesible**'}`).join('; ') || 'sin datos'}.`);
 out(`- **Builds:** ${buildProblems.length === 0 && buildsRecord ? `construidos desde el commit \`${buildsRecord.commit.slice(0, 7)}\` (registro del piloto, solo lectura); su huella coincide con la medida por la puerta y ninguna entrada de los builds ha cambiado hasta HEAD.` : '**procedencia no demostrada** (ver problemas).'}`);
+if (storyCommitNotes.length > 0) out(`- **Commit de las historias por archivo:** ${storyCommitNotes.join('; ')}.`);
 out(`- **Ejecuciones:** ${runIds.map((id) => `\`${id}\` (${stories.filter((story) => story.header.runId === id).map((story) => story.header.story).join(', ')})`).join('; ') || 'ninguna'}.`);
 out();
 out('## Resumen');
