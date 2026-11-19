@@ -52,7 +52,7 @@ Característica: Filtros y orden de la lista de casos de prueba por la API
       | program=PRG-999 | 0 | 0 | (ninguno) |
       | result=fail | 5 | 10 | TC-002, TC-006, TC-013, TC-017, TC-021 |
       | result=blocked | 6 | 12 | TC-001, TC-005, TC-009, TC-016, TC-020, TC-024 |
-      | result=pass | 14 | 28 | TC-003, TC-004, TC-007, TC-008, TC-010, TC-011, TC-012, TC-014, TC-015, TC-018, TC-019, TC-022, TC-023, TC-025 |
+      | result=pass | 14 | 28 | TC-003, TC-004, TC-007, TC-008, TC-010, TC-011, TC-012, TC-014, TC-015, TC-018 |
       | result=none | 0 | 0 | (ninguno) |
       | program=PRG-001&result=blocked | 3 | 6 | TC-001, TC-005, TC-009 |
 
