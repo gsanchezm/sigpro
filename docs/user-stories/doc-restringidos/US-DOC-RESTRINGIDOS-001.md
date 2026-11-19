@@ -21,7 +21,7 @@ para no recibir un documento restringido si mi rol no puede verlo y poder avisar
 - La respuesta trae `items` con los documentos visibles y `hiddenCount` con el número de documentos restringidos del tenant que el rol no puede ver. Para quien tiene el permiso, `hiddenCount` vale 0.
 - Los filtros `program` (código de programa), `classification` (`public` o `restricted`) y `q` (código o título, sin distinguir mayúsculas) se aplican solo a los documentos visibles: un restringido no sale con ningún filtro para quien no lo puede ver.
 - Preparación de cada fila, en el tenant `alumno01`: se reinicia con `POST /api/admin/reset` y el token de `alumno01@sigpro.lab` (contraseña `Alumno1234!`). Después la fila obtiene el `accessToken` de la cuenta de su ejemplo con `POST /api/auth/login`, con la cabecera `x-tenant: alumno01`. La cuenta `admin@sigpro.test` (`Admin1234!`) completa además el segundo factor con el código `123456` (`POST /api/auth/mfa`) y usa el `accessToken` que recibe; `gestor@sigpro.test` (`Gestor1234!`), `auditor@sigpro.test` (`Audit1234!`) y `consultor@sigpro.test` (`Consul1234!`) entran sin segundo factor. Todas las peticiones llevan la cabecera `x-tenant: alumno01`.
-- Datos del seed (`docs/GUIA-ALUMNO.md`): hay 12 documentos, de `DOC-001` a `DOC-012`. Los restringidos son `DOC-003`, `DOC-006`, `DOC-009` y `DOC-012`. Los programas `PRG-001` y `PRG-005` están marcados como clasificados.
+- Datos del seed (`apps/api/src/seed/data.ts`): hay 12 documentos, de `DOC-001` a `DOC-012`, repartidos entre `PRG-001` y `PRG-006`. Los restringidos son `DOC-003`, `DOC-006`, `DOC-009` y `DOC-012`. Entre los programas que tienen documentos, `PRG-001` y `PRG-005` son los marcados como clasificados.
 
 ## Criterios de aceptación
 ```gherkin
