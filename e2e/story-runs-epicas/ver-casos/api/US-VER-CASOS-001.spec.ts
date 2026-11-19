@@ -8,9 +8,13 @@ import {
   countCheck,
   isolatedState,
   itemByCode,
+  itemsOf,
   joinedCodes,
   listCases,
   numberCheck,
+  ownLastResult,
+  ownLastRunAt,
+  ownRunCount,
   queryOfRequest,
   resetTenants,
   sessionFor,
@@ -18,7 +22,9 @@ import {
   TENANT_A,
   TENANT_B,
   textFieldCheck,
-  type SessionOf, concluded } from './common';
+  type SessionOf,
+  concluded,
+} from './common';
 
 // US-VER-CASOS-001 — Listar los casos de prueba en páginas de 10 con sus totales y su forma (API). Preparación de cada fila:
 // reinicio de alumno01 con el token de su administrador; el reinicio de alumno02 y el borrado del enlace REQ-001 ↔ TC-001 solo en
@@ -111,7 +117,26 @@ const credentialRow: ApiRowHandler = async (row) => {
     token = session.token;
   }
   const result = await listCases(undefined, token);
-  return concluded(expectedChecks(result));
+  const checks: Check[] = [...expectedChecks(result)];
+  // «Los cuatro roles reciben la misma lista»: se compara la lista completa (páginas 1 a 3: códigos, orden y cada elemento) con la de gestor
+  if (credential.kind === 'account' && token !== undefined) {
+    const reference = await sessionFor('gestor');
+    if (reference.token === undefined) return preparationFailed(cell(row, 'respuesta'), 'gestor@sigpro.test inicia sesión y recibe accessToken (referencia)', reference.last);
+    const mine = await wholeList(token);
+    const theirs = await wholeList(reference.token);
+    const same = mine.statusOk && theirs.statusOk && JSON.stringify(mine.items) === JSON.stringify(theirs.items);
+    checks.push(
+      check(same, `la misma lista que gestor@sigpro.test (${theirs.codes.length} casos, en el mismo orden)`, `${mine.codes.length} casos: ${mine.codes.join(', ') || '(ninguno)'}${same ? ', igual que gestor' : ', distinta de gestor o sin leer'}`),
+    );
+  }
+  return concluded(checks);
+};
+
+/** Lista completa de TC-001…: páginas 1 a 3 con su token (códigos en orden y elementos enteros). */
+const wholeList = async (token: string): Promise<{ readonly statusOk: boolean; readonly items: readonly unknown[]; readonly codes: readonly string[] }> => {
+  const pages = await Promise.all([1, 2, 3].map((page) => listCases(`page=${page}`, token)));
+  const items = pages.flatMap((page) => itemsOf(page));
+  return { statusOk: pages.every((page) => page.status === 200), items, codes: items.map((item) => String(field(item, 'code'))) };
 };
 
 // --- Esquema 5: cada caso trae sus datos y el resumen de sus ejecuciones -------------------------------------------------
@@ -132,7 +157,7 @@ const caseData: ApiRowHandler = async (row) => {
     numberCheck(item, 'runCount', Number(cell(row, 'ejecuciones'))),
     textFieldCheck(item, 'lastResult', cell(row, 'ultimo'), 'lastResult'),
     textFieldCheck(item, 'lastRunAt', cell(row, 'ultima_fecha'), 'lastRunAt'),
-  ]);
+  ], { note: 'La regla del desempate de la última ejecución por id (misma fecha) no se prueba: ningún caso del seed tiene dos ejecuciones con la misma fecha.' });
 };
 
 // --- Esquema 6: la lista solo trae los casos del tenant de la sesión ----------------------------------------------------
@@ -159,10 +184,15 @@ const isolation: ApiRowHandler = async (row) => {
   const result = await listCases(undefined, session.token, tenant);
   const item = itemByCode(result, 'TC-001');
   const codes = item === undefined ? '(sin TC-001)' : joinedCodes(field(item, 'requirementCodes'));
+  // Datos propios del tenant: runCount, lastResult y lastRunAt de TC-001 (alumno02 tiene una ejecución extra; alumno01 no)
+  const lastRunAt = item === undefined ? '(sin TC-001)' : String(field(item, 'lastRunAt'));
   return concluded([
     check(item !== undefined, 'el caso TC-001 en items', item === undefined ? 'el caso TC-001 no está en items' : 'el caso TC-001 en items'),
     check(codes === cell(row, 'requisitos'), `requirementCodes ${cell(row, 'requisitos')}`, `requirementCodes ${codes}`),
     numberCheck(result.body, 'total', TOTAL_CASES),
+    numberCheck(item, 'runCount', ownRunCount(tenant), 'runCount del tenant'),
+    check(lastRunAt === (ownLastRunAt(tenant, prepared.extraRun) ?? '(sin ejecución extra)'), `lastRunAt ${ownLastRunAt(tenant, prepared.extraRun) ?? '(sin ejecución extra)'}`, `lastRunAt ${lastRunAt}`),
+    textFieldCheck(item, 'lastResult', ownLastResult(tenant), 'lastResult del tenant'),
   ]);
 };
 

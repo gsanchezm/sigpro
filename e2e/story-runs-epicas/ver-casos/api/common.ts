@@ -1,4 +1,4 @@
-import { adminToken, call, field, type ApiResult } from '../../../story-runs/support/api';
+import { API_URL, adminToken, call, field, type ApiResult } from '../../../story-runs/support/api';
 import { DEMO, TENANT_A, TENANT_B, resetTenants, startSession, type Credentials } from '../../../story-runs/support/prepare';
 import { check, conclude, type Check } from '../../support/checks';
 import type { Outcome } from '../../core/framework';
@@ -55,12 +55,67 @@ export const tenantAdminSession = async (tenant: string): Promise<SessionOf> => 
  * Preparación del Esquema de aislamiento: reinicia alumno01 y alumno02 y quita el enlace REQ-001 ↔ TC-001 en alumno01 con el token
  * de su administrador (`DELETE /api/requirements/REQ-001/tests/TC-001`). Esa petición solo prepara el estado: debe responder 204.
  */
-export const isolatedState = async (): Promise<{ readonly failure?: { readonly step: string; readonly result: ApiResult } }> => {
+/** Estado de aislamiento: un fallo de preparación, o la ejecución extra que se registró solo en alumno02 (para distinguir sus datos). */
+export interface IsolationState {
+  readonly failure?: { readonly step: string; readonly result: ApiResult };
+  readonly extraRun?: { readonly id: string | undefined; readonly executedAt: string | undefined };
+}
+
+/** Notas de la ejecución de preparación de alumno02 (no existe en alumno01, que parte del seed). */
+export const EXTRA_RUN_NOTES = 'Ejecución de preparación: solo existe en alumno02';
+
+/** Cuerpo de una respuesta que puede no ser JSON: el texto tal cual si no lo es. */
+const parseBody = (text: string): unknown => {
+  try {
+    return JSON.parse(text) as unknown;
+  } catch {
+    return text;
+  }
+};
+
+/**
+ * `POST /api/test-cases/:code/runs` en multipart (la forma que pide la API): registra una ejecución «pass» con sus notas. Devuelve la
+ * respuesta cruda (el código de estado se comprueba en quien llama).
+ */
+export const postRun = async (tenant: string, token: string, code: string, notes: string): Promise<ApiResult> => {
+  const form = new FormData();
+  form.append('result', 'pass');
+  form.append('notes', notes);
+  const started = performance.now();
+  const response = await fetch(`${API_URL}/test-cases/${encodeURIComponent(code)}/runs`, {
+    method: 'POST',
+    headers: { authorization: `Bearer ${token}`, 'x-tenant': tenant },
+    body: form,
+  });
+  return { status: response.status, body: parseBody(await response.text()), ms: Math.round(performance.now() - started) };
+};
+
+/**
+ * Preparación del Esquema de aislamiento: reinicia alumno01 y alumno02, quita el enlace REQ-001 ↔ TC-001 en alumno01 (DELETE, debe
+ * responder 204) y registra en alumno02 una ejecución extra de TC-001 (2xx comprobado). Así TC-001 tiene datos distintos por tenant:
+ * alumno01 con 2 ejecuciones del seed y alumno02 con 3, y una fuga de ejecuciones se ve en runCount/lastRunAt.
+ */
+export const isolatedState = async (): Promise<IsolationState> => {
   await resetTenants([TENANT_A, TENANT_B]);
   const token = await adminToken(TENANT_A);
   const removed = await call('DELETE', '/requirements/REQ-001/tests/TC-001', { tenant: TENANT_A, token });
-  return removed.status === 204 ? {} : { failure: { step: 'quitar el enlace REQ-001 ↔ TC-001 en alumno01', result: removed } };
+  if (removed.status !== 204) return { failure: { step: 'quitar el enlace REQ-001 ↔ TC-001 en alumno01', result: removed } };
+  const admin = await tenantAdminSession(TENANT_B);
+  if (admin.token === undefined) return { failure: { step: 'alumno02@sigpro.lab inicia sesión y recibe accessToken', result: admin.last } };
+  const run = await postRun(TENANT_B, admin.token, 'TC-001', EXTRA_RUN_NOTES);
+  if (run.status < 200 || run.status >= 300) return { failure: { step: 'registrar una ejecución extra de TC-001 en alumno02', result: run } };
+  const id = field(run.body, 'id');
+  const executedAt = field(run.body, 'executedAt');
+  return { extraRun: { id: typeof id === 'string' ? id : undefined, executedAt: typeof executedAt === 'string' ? executedAt : undefined } };
 };
+
+/** Ejecuciones de TC-001 en cada tenant tras la preparación: 2 del seed en alumno01; 3 en alumno02 (las 2 del seed más la extra). */
+export const ownRunCount = (tenant: string): number => (tenant === TENANT_B ? 3 : 2);
+/** Último resultado de TC-001 en cada tenant: el del seed (bloqueado, 05/02/2026) en alumno01; «pass» de la extra en alumno02. */
+export const ownLastResult = (tenant: string): string => (tenant === TENANT_B ? 'pass' : 'blocked');
+/** Fecha de la última ejecución de TC-001: la del seed en alumno01 y la de la extra en alumno02. */
+export const ownLastRunAt = (tenant: string, extra: IsolationState['extraRun']): string | undefined =>
+  tenant === TENANT_B ? extra?.executedAt : '2026-02-05T09:00:00.000Z';
 
 /** `GET /api/test-cases` con la query dada (sin `?`), el token opcional y el tenant de la cabecera `x-tenant`. */
 export const listCases = (query: string | undefined, token?: string, tenant: string = TENANT_A): Promise<ApiResult> =>

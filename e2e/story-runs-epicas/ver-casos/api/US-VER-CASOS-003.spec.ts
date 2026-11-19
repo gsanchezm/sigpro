@@ -2,7 +2,7 @@ import { cell, check, parseResponse, preparationFailed, responseCheck, strict, t
 import { quoted } from '../../support/browser';
 import { defineApiRows, type ApiRowHandler } from '../../core/framework';
 import { field } from '../../../story-runs/support/api';
-import { detailCase, isolatedState, joinedCodes, resetTenants, sessionFor, tenantAdminSession, TENANT_A, TENANT_B, textFieldCheck as textField, type SessionOf, concluded } from './common';
+import { detailCase, isolatedState, joinedCodes, ownRunCount, resetTenants, sessionFor, tenantAdminSession, TENANT_A, TENANT_B, textFieldCheck as textField, type SessionOf, concluded } from './common';
 
 // US-VER-CASOS-003 — Consultar el detalle de un caso de prueba y su 404 (API). Preparación de cada fila: reinicio de alumno01 con
 // el token de su administrador y, después, gestor@sigpro.test inicia sesión (`x-tenant: alumno01`). El Esquema de aislamiento
@@ -134,7 +134,15 @@ const isolation: ApiRowHandler = async (row) => {
   const result = await detailCase('TC-001', session.token, tenant);
   const requirements = field(result.body, 'requirements');
   const codes = Array.isArray(requirements) ? joinedCodes(requirements) : '(sin lista de requirements)';
-  return concluded([responseCheck(result, { status: 200 }), check(codes === cell(row, 'requisitos'), `requirements con los códigos ${cell(row, 'requisitos')}`, `requirements con los códigos ${codes}`)]);
+  // Datos propios del tenant: las ejecuciones de TC-001 (alumno02 tiene una extra, la más reciente; alumno01 no la tiene)
+  const runs = field(result.body, 'runs');
+  const runList = Array.isArray(runs) ? runs : [];
+  return concluded([
+    responseCheck(result, { status: 200 }),
+    check(codes === cell(row, 'requisitos'), `requirements con los códigos ${cell(row, 'requisitos')}`, `requirements con los códigos ${codes}`),
+    check(runList.length === ownRunCount(tenant), `runs con ${ownRunCount(tenant)} ejecuciones (las de su tenant)`, `runs con ${Array.isArray(runs) ? runs.length : '(no es lista)'} ejecuciones`),
+    textField(runList[0], 'id', tenant === TENANT_B ? (prepared.extraRun?.id ?? '(sin ejecución extra)') : 'RUN-002', 'id de la ejecución más reciente (RUN-002 en alumno01, como en el Esquema 2)'),
+  ]);
 };
 
 defineApiRows({

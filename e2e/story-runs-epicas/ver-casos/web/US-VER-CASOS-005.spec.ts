@@ -12,6 +12,7 @@ import {
   emptyOf,
   filtersClearOf,
   nextOf,
+  prevOf,
   oneText,
   onWeb,
   pageOf,
@@ -121,12 +122,14 @@ const filters: BrowserRowHandler = async (row, { page }) => {
   ]);
   if (chosen) return preparationFailedWeb(expected, chosen);
   const shown = await waitForList(page, codesOf(cell(row, 'codigos')), quoted(cell(row, 'recuento')), SETTLE_MS);
-  const subtitle = await oneText(pageOf(page).locator('p[aria-live="polite"]'));
+  const subtitle = await oneText(pageOf(page).getByText(/ casos de prueba · /));
   return concluded([
     check(sameCodes(shown.codes, codesOf(cell(row, 'codigos'))), `ve ${cell(row, 'codigos')}`, `ve ${describeCodes(shown.codes)}`),
     check(shown.count === quoted(cell(row, 'recuento')), `el recuento ${cell(row, 'recuento')}`, `el recuento «${shown.count ?? '(sin leer)'}»`),
     check(subtitle === quoted(cell(row, 'resumen')), `el resumen ${cell(row, 'resumen')}`, `el resumen «${subtitle ?? '(sin leer)'}»`),
-  ]);
+  ], {
+    note: 'La Regla de vuelta a la primera página al cambiar un filtro (005.md) no se prueba aquí: la lista ya está en la primera página y no hay un paso previo que la deje en otra.',
+  });
 };
 
 // --- Esquema 3: pulsar una cabecera ordena la lista por esa columna -----------------------------------------------------
@@ -139,27 +142,27 @@ const headerSort: BrowserRowHandler = async (row, { page }) => {
   const failed = await prepared(page, expected);
   if (failed) return failed;
   const trail: string[] = [];
-  const initialSort = await attrOf(sortOf(page, key).locator('xpath=..'), 'aria-sort');
+  const ariaAfter: string[] = [];
+  // Esperado tras cada clic: «Código» parte ascendente (el primer clic la invierte); las demás no están ordenadas (el primer clic
+  // ordena ascendente y el segundo invierte). Así cada clic tiene efecto aunque el estado final vuelva al inicial.
+  const expectedAria = (click: number): string => (click === 1 ? (key === 'code' ? 'descending' : 'ascending') : key === 'code' ? 'ascending' : 'descending');
   for (let click = 1; click <= times; click += 1) {
-    // Cada clic cambia la dirección (sort/dir): se espera a ese cambio antes del siguiente, aunque el orden vuelva al inicial
+    // Cada clic cambia la dirección (sort/dir): se espera a ese cambio antes del siguiente
     const before = page.url();
     const pressed = await runSteps([[`pulsar la cabecera ${cell(row, 'columna')}`, () => sortOf(page, key).click(ACTION)]]);
     if (pressed) return preparationFailedWeb(expected, pressed);
     await waitUntil(async () => page.url() !== before, SETTLE_MS);
-    const ariaSort = await attrOf(sortOf(page, key).locator('xpath=..'), 'aria-sort');
-    trail.push(`clic ${click}: aria-sort ${ariaSort ?? '(sin leer)'} · ${currentAddress(page.url())}`);
+    const ariaSort = (await attrOf(sortOf(page, key).locator('xpath=..'), 'aria-sort')) ?? '(sin leer)';
+    ariaAfter.push(ariaSort);
+    trail.push(`clic ${click}: aria-sort ${ariaSort} · ${currentAddress(page.url())}`);
   }
   await waitUntil(async () => startsWith(await codesShown(page), primeros), SETTLE_MS);
   const first = (await codesShown(page))?.slice(0, primeros.length);
-  const sameAsStart = times === 2 && initialSort === 'ascending' && key === 'code';
-  return concluded(
-    [
-      check(first !== undefined && first.join(', ') === primeros.join(', '), `los tres primeros casos ${cell(row, 'primeros')}`, `los tres primeros casos ${first === undefined ? '(sin leer)' : first.join(', ')}`),
-    ],
-    {
-      note: `${trail.join(' · ')}${sameAsStart ? ' · la fila no distingue un clic sin efecto: «Código» ya ordena ascendente y dos pulsaciones dejan el orden inicial' : ''}`,
-    },
-  );
+  const expectedList = Array.from({ length: times }, (_, index) => expectedAria(index + 1));
+  return concluded([
+    check(first !== undefined && first.join(', ') === primeros.join(', '), `los tres primeros casos ${cell(row, 'primeros')}`, `los tres primeros casos ${first === undefined ? '(sin leer)' : first.join(', ')}`),
+    check(ariaAfter.join(',') === expectedList.join(','), `aria-sort tras cada clic: ${expectedList.join(', ')}`, `aria-sort tras cada clic: ${ariaAfter.join(', ')}`),
+  ], { note: trail.join(' · ') });
 };
 
 // --- Esquema 4: un filtro sin coincidencias muestra el aviso de lista vacía con la opción de limpiar filtros ------------
@@ -234,10 +237,13 @@ const pagination: BrowserRowHandler = async (row, { page }) => {
   const count = await oneText(countOf(page));
   const first = (await codesShown(page))?.[0];
   const reach = await buttonReach(nextOf(page));
+  // Regla (005.md): en la primera página «Página anterior» no se puede pulsar; tras pasar de página, sí
+  const prevReach = await buttonReach(prevOf(page));
   return concluded([
     check(count === quoted(cell(row, 'recuento')), `el recuento ${cell(row, 'recuento')}`, `el recuento «${count ?? '(sin leer)'}»`),
     check(first === cell(row, 'primero'), `el primer caso ${cell(row, 'primero')}`, `el primer caso ${first ?? '(ninguno)'}`),
     check(reach === cell(row, 'siguiente'), `«Página siguiente» ${cell(row, 'siguiente')}`, `«Página siguiente» ${reach ?? '(sin leer)'}`),
+    check(prevReach === (times === 0 ? 'no se puede pulsar' : 'se puede pulsar'), `«Página anterior» ${times === 0 ? 'no se puede pulsar (primera página)' : 'se puede pulsar'}`, `«Página anterior» ${prevReach ?? '(sin leer)'}`),
   ]);
 };
 

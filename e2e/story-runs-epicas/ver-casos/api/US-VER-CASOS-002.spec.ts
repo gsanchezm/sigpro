@@ -1,7 +1,7 @@
 import { cell, check, preparationFailed, responseCheck, type Check } from '../../support/checks';
-import { defineApiRows, type ApiRowHandler } from '../../core/framework';
-import { field, type ApiResult } from '../../../story-runs/support/api';
-import { codesCheck, codesIn, codesOf, itemsOf, listCases, numberCheck, queryOfRequest, resetTenants, sessionFor, TENANT_A, concluded } from './common';
+import { defineApiRows, pending, type ApiRowHandler } from '../../core/framework';
+import { field } from '../../../story-runs/support/api';
+import { codesCheck, codesIn, codesOf, listCases, numberCheck, queryOfRequest, resetTenants, sessionFor, TENANT_A, concluded } from './common';
 
 // US-VER-CASOS-002 — Filtrar y ordenar la lista de casos de prueba (API). Preparación de cada fila: reinicio de alumno01 con el
 // token de su administrador y, después, gestor@sigpro.test inicia sesión en alumno01 (`x-tenant: alumno01`).
@@ -13,17 +13,6 @@ import { codesCheck, codesIn, codesOf, itemsOf, listCases, numberCheck, queryOfR
 const filterQuery = (text: string): string => {
   if (!/^[a-z]+=[A-Za-z0-9-]+(&[a-z]+=[A-Za-z0-9-]+)*$/.test(text)) throw new Error(`celda sin interpretación: filtro «${text}»`);
   return text;
-};
-
-/** Nota de paginación: el ejemplo lista más códigos de los que cabe en una página, y la respuesta lo deja ver en el observado. */
-const pagingNote = (result: ApiResult, expectedCount: number): { readonly note?: string } => {
-  const pageSize = Number(field(result.body, 'pageSize'));
-  const total = Number(field(result.body, 'total'));
-  const shown = itemsOf(result).length;
-  if (expectedCount <= shown || total < expectedCount) return {};
-  return {
-    note: `El ejemplo lista ${expectedCount} códigos en la respuesta de una sola petición, pero la respuesta pagina de ${pageSize}: trae ${shown} de ${total} casos (la Regla de paginación de 10 y el ejemplo se contradicen; el manejador sigue el ejemplo y lo anota).`,
-  };
 };
 
 // --- Esquema 1: el texto busca en el código y en el título sin distinguir mayúsculas ------------------------------------
@@ -46,13 +35,18 @@ const combinedFilters: ApiRowHandler = async (row) => {
   const session = await sessionFor('gestor');
   if (session.token === undefined) return preparationFailed(expected, 'gestor@sigpro.test inicia sesión y recibe accessToken', session.last);
   const result = await listCases(filterQuery(cell(row, 'filtro')), session.token);
+  // «Decisiones pendientes» (002.md): un programa que no existe debe ignorarse o dar total 0; hoy da 0. La fila no juzga ese 0: se anota.
+  if (cell(row, 'filtro') === 'program=PRG-999') {
+    const measured = `respuesta ${result.status}, total ${String(field(result.body, 'total'))}, totalRuns ${String(field(result.body, 'totalRuns'))}, casos ${codesIn(result).join(', ') || '(ninguno)'}`;
+    return pending(expected, measured, 'Decisión pendiente en 002.md («Decisiones pendientes»): un código de programa que no existe debe tratarse como valor no válido o dar total 0. Hoy la API da 0; la fila lo anota sin juzgarlo.');
+  }
   const checks: Check[] = [
     responseCheck(result, { status: 200 }),
     numberCheck(result.body, 'total', Number(cell(row, 'total'))),
     numberCheck(result.body, 'totalRuns', Number(cell(row, 'ejecuciones'))),
     codesCheck(codesIn(result), expectedCodes),
   ];
-  return concluded(checks, pagingNote(result, expectedCodes.length));
+  return concluded(checks);
 };
 
 // --- Esquema 3: un valor no válido en el filtro o en el orden se ignora --------------------------------------------------

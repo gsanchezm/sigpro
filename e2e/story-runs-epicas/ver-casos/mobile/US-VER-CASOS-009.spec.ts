@@ -3,7 +3,7 @@ import { cell, check, preparationFailedWeb, strict } from '../../support/checks'
 import { ACTION, CEILING_MS, quoted, runSteps, safe, waitUntil } from '../../support/browser';
 import { defineBrowserRows, type BrowserRowHandler } from '../../core/framework';
 import { resetTenants, TENANT_A } from '../../../story-runs/support/prepare';
-import { failGet, failGetWhile, oneText, type FailSwitch } from '../web/common';
+import { failFirstGet, failGet, oneText, type FailTally } from '../web/common';
 import { VERIFICACION_DYNAMIC_TESTIDS, VERIFICACION_TESTIDS } from '../../../../packages/shared/src/testids';
 import {
   addressOf,
@@ -188,20 +188,18 @@ const detailData: BrowserRowHandler = async (row, { page }) => {
 // --- Esquema 2: el historial muestra la fecha, el resultado, las notas y quién lo registró --------------------------------
 
 interface RunCard {
-  readonly id: string | null;
   readonly leaves: readonly string[];
   readonly thumbs: number;
   readonly badge: string | null;
 }
 
-/** Tarjetas del historial, en orden: código (aria-label), hojas de texto y miniaturas de evidencia. */
+/** Tarjetas del historial, en orden: hojas de texto (incluido el código visible), miniaturas de evidencia y badge del resultado. */
 const runCards = (page: Page): Promise<readonly RunCard[] | undefined> =>
   safe(
     () =>
       runsOf(page).evaluate(
         (root: Element) =>
           Array.from(root.querySelectorAll('[role="listitem"]')).map((item) => ({
-            id: item.getAttribute('aria-label'),
             leaves: Array.from(item.querySelectorAll('*'))
               .filter((node) => node.children.length === 0)
               .map((node) => (node.textContent ?? '').trim())
@@ -225,6 +223,8 @@ const runHistory: BrowserRowHandler = async (row, { page }) => {
   const opening = await openFromList(page, 'TC-001');
   if (opening) return preparationFailedWeb(expected, opening);
   const card = (await runCards(page))?.[position];
+  // Código visible de la ejecución: su texto dentro de la tarjeta (RunsHistory.tsx:38), no el aria-label
+  const visibleId = card?.leaves.find((leaf) => /^RUN-d{3}$/.test(leaf));
   const dateLeaf = card?.leaves.find((leaf) => DATE_TOKEN.test(leaf));
   const date = dateLeaf === undefined ? undefined : DATE_TOKEN.exec(dateLeaf)?.[0];
   const label = card?.badge ?? undefined;
@@ -232,7 +232,7 @@ const runHistory: BrowserRowHandler = async (row, { page }) => {
   const evidenceOk = evidence === 'none' ? card?.leaves.includes('Sin evidencias') === true && card.thumbs === 0 : card?.thumbs === 1;
   return concluded(
     [
-      check(card?.id === cell(row, 'ejecucion'), `la ${cell(row, 'posicion')} ejecución ${cell(row, 'ejecucion')}`, `la ${cell(row, 'posicion')} ejecución ${card?.id ?? '(ninguna)'}`),
+      check(visibleId === cell(row, 'ejecucion'), `la ${cell(row, 'posicion')} ejecución ${cell(row, 'ejecucion')}`, `la ${cell(row, 'posicion')} ejecución ${visibleId ?? '(ninguna)'}`),
       check(date === cell(row, 'fecha'), `la fecha ${cell(row, 'fecha')}`, `la fecha ${date ?? '(sin leer)'}`),
       check(label === result, `el resultado ${result}`, `el resultado «${label ?? '(sin leer)'}»`),
       check(card?.leaves.includes(notes) === true, `las notas ${cell(row, 'notas')}`, `las notas ${card?.leaves.join(' · ') ?? '(sin leer)'}`),
@@ -352,23 +352,25 @@ const retryCase: BrowserRowHandler = async (row, { page }) => {
   const expected = `tras «Reintentar», el título ${cell(row, 'titulo')} y los pasos del caso`;
   const failed = await prepared(page, expected);
   if (failed) return failed;
-  const failing: FailSwitch = { active: true };
-  await failGetWhile(page, `/api/test-cases/${code}`, 'status500', failing);
+  // Solo la primera petición del caso falla («la primera petición»); las siguientes pasan. El recuento va a la evidencia.
+  const tally: FailTally = { failed: 0, passed: 0 };
+  await failFirstGet(page, `/api/test-cases/${code}`, 'status500', tally);
   const opened = await openDirect(page, `${VERIFICATION_PATH}/${code}`);
   if (opened) return preparationFailedWeb(expected, opened);
   const shown = await waitUntil(() => detailErrorOf(page).isVisible(), CEILING_MS);
   if (!shown.reached) return preparationFailedWeb(expected, 'la primera petición no mostró el aviso de error');
-  failing.active = false;
   const tapped = await runSteps([['tocar «Reintentar»', () => detailRetryOf(page).click(ACTION)]]);
   if (tapped) return preparationFailedWeb(expected, tapped);
   const back = await waitUntil(() => detailOf(page).isVisible(), CEILING_MS);
   const title = await oneText(detailPageOf(page).getByRole('heading', { level: 1 }));
-  const steps = await safe(() => stepsOf(page).locator('[role="listitem"]').count(), -1);
+  // Los pasos se comparan por su texto y su número (no por cuántos elementos hay)
+  const steps = await safe(() => stepsOf(page).evaluate((root: Element) => Array.from(root.querySelectorAll('[role="listitem"]')).map((item) => Array.from(item.querySelectorAll('*')).filter((node) => node.children.length === 0).map((node) => (node.textContent ?? '').trim()).filter((text) => text !== '')), undefined, { timeout: 2000 }), undefined);
   const errorLeft = await safe(() => detailErrorOf(page).count(), -1);
   return concluded([
     check(back.reached && title === cell(row, 'titulo'), `el título ${cell(row, 'titulo')}`, `el título ${title ?? '(sin leer)'}`),
-    check(steps === 3 && errorLeft === 0, 'los tres pasos del caso y sin aviso de error', `pasos ${steps}, avisos de error ${errorLeft}`),
-  ], { note: DIRECT_AND_TITLE });
+    check(steps !== undefined && steps.length === 3 && steps.every((item, index) => item.join('|') === [`${index + 1}.`, STEPS[index] ?? ''].join('|')), 'los tres pasos numerados 1., 2., 3. con sus textos', `pasos ${steps === undefined ? '(sin leer)' : steps.map((item) => item.join(' ')).join(' · ')}`),
+    check(errorLeft === 0, 'sin aviso de error', `avisos de error ${errorLeft}`),
+  ], { note: `${DIRECT_AND_TITLE} Peticiones del caso: falladas ${tally.failed}, dejadas pasar ${tally.passed}.` });
 };
 
 defineBrowserRows({

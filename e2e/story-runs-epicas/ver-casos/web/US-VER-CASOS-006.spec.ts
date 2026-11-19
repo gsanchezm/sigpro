@@ -1,4 +1,4 @@
-import type { Page } from '@playwright/test';
+import type { Locator, Page } from '@playwright/test';
 import { cell, check, preparationFailedWeb, strict, type Check } from '../../support/checks';
 import { ACTION, CEILING_MS, isVisible, quoted, runSteps, safe, waitUntil } from '../../support/browser';
 import { defineBrowserRows, type BrowserRowHandler } from '../../core/framework';
@@ -9,6 +9,7 @@ import {
   backOf,
   detailOf,
   failGet,
+  leavesOf,
   notFoundOf,
   oneText,
   onWeb,
@@ -75,10 +76,10 @@ const prepared = async (page: Page, expected: string): Promise<ReturnType<typeof
 };
 
 /** Textos hoja del detalle (fragmentos visibles), o `undefined` si no se pudo leer. */
-const detailLeaves = (page: Page): Promise<readonly string[] | undefined> =>
+const detailLeaves = (page: Page, scope?: Locator): Promise<readonly string[] | undefined> =>
   safe(
     () =>
-      detailOf(page).evaluate(
+      (scope ?? detailOf(page)).evaluate(
         (element: Element) =>
           Array.from(element.querySelectorAll('*'))
             .filter((node) => node.children.length === 0)
@@ -115,7 +116,8 @@ const detailData: BrowserRowHandler = async (row, { page }) => {
   const opening = await openCaseFromList(page, code);
   if (opening) return preparationFailedWeb(expected, opening);
   const title = await oneText(detailOf(page).locator('h1'));
-  const leaves = await detailLeaves(page);
+  // El programa se busca en la cabecera del caso (el código y el programa van junto al título), no en todo el detalle
+  const leaves = await detailLeaves(page, detailOf(page).locator('header'));
   const links = await requirementLinks(page);
   const steps = await safe(() => detailOf(page).getByTestId(VERIFICACION_TESTIDS.TESTCASE_STEPS).locator('li').allTextContents(), undefined);
   const expectedText = await oneText(detailOf(page).getByTestId(VERIFICACION_TESTIDS.TESTCASE_EXPECTED));
@@ -150,7 +152,7 @@ const requirementLink: BrowserRowHandler = async (row, { page }) => {
 
 // --- Esquema 3: cada ejecución del historial muestra su fecha, su resultado, sus notas y quién la registró -------------
 
-const runRow = (page: Page, index: number): Promise<{ readonly id: string | null; readonly cells: readonly string[]; readonly thumbs: number } | undefined> =>
+const runRow = (page: Page, index: number): Promise<{ readonly visibleId: string | null; readonly cells: readonly string[]; readonly thumbs: number } | undefined> =>
   safe(
     () =>
       detailOf(page)
@@ -159,7 +161,8 @@ const runRow = (page: Page, index: number): Promise<{ readonly id: string | null
         .nth(index)
         .evaluate(
           (row: Element) => ({
-            id: row.getAttribute('data-testid')?.replace(/^run-row-/, '') ?? null,
+            // Código visible de la ejecución: el texto de la primera celda (su primer bloque), no el data-testid
+            visibleId: row.querySelector('td')?.querySelector('div')?.textContent?.trim() ?? null,
             cells: Array.from(row.querySelectorAll('td')).map((cellNode) => (cellNode.textContent ?? '').trim()),
             thumbs: row.querySelectorAll('td')[3]?.querySelectorAll('[data-testid^="evidence-thumb-"]').length ?? 0,
           }),
@@ -184,7 +187,7 @@ const runHistory: BrowserRowHandler = async (row, { page }) => {
   const evidenceOk = evidence === 'none' ? cells[3] === 'Sin evidencias' : read?.thumbs === 1;
   return concluded(
     [
-      check(read?.id === cell(row, 'ejecucion'), `la ${cell(row, 'posicion')} fila ${cell(row, 'ejecucion')}`, `la ${cell(row, 'posicion')} fila ${read?.id ?? '(ninguna)'}`),
+      check(read?.visibleId === cell(row, 'ejecucion'), `la ${cell(row, 'posicion')} fila ${cell(row, 'ejecucion')}`, `la ${cell(row, 'posicion')} fila ${read?.visibleId ?? '(ninguna)'}`),
       check(date === cell(row, 'fecha'), `la fecha ${cell(row, 'fecha')}`, `la fecha ${date ?? '(sin leer)'}`),
       check(cells[1] === result, `el resultado ${result}`, `el resultado «${cells[1] ?? '(sin leer)'}»`),
       check(cells[2] === quoted(cell(row, 'notas')), `las notas ${cell(row, 'notas')}`, `las notas «${cells[2] ?? '(sin leer)'}»`),
@@ -208,10 +211,14 @@ const notFound: BrowserRowHandler = async (row, { page }) => {
   const back = await safe(() => backOf(page).count(), -1);
   const steps = await safe(() => page.getByTestId(VERIFICACION_TESTIDS.TESTCASE_STEPS).count(), -1);
   const runs = await safe(() => page.getByTestId(VERIFICACION_TESTIDS.TESTCASE_RUNS).count(), -1);
+  // Regla (006.md): la pantalla muestra la traza de la petición fallida; se comprueba que la traza es la de ese código con 404
+  const trace = await leavesOf(notFoundOf(page));
+  const traceLine = `GET /api/test-cases/${cell(row, 'codigo')} → 404`;
   return concluded([
     check(title === NOT_FOUND, `el título «${NOT_FOUND}»`, `el título «${title ?? '(sin leer)'}»`),
     check(back === 1, 'el enlace «Volver a Verificación»', `enlaces de vuelta: ${back}`),
     check(steps === 0 && runs === 0, 'ni pasos ni historial de ejecuciones', `pasos ${steps}, historial ${runs}`),
+    check(trace?.some((fragment) => fragment.startsWith(traceLine)) === true, `la traza de la petición «${traceLine}»`, `la traza ${trace?.find((fragment) => fragment.startsWith('GET ')) ?? '(sin traza)'}`),
   ]);
 };
 

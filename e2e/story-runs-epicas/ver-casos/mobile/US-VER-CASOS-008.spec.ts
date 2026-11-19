@@ -22,7 +22,7 @@ import {
   selectOf,
   signIn,
   startsWithCodes,
-  VERIFICATION_PATH, concluded } from './common';
+  concluded } from './common';
 
 // US-VER-CASOS-008 — Buscar, filtrar y ordenar la lista de casos (app móvil, Expo web a 390 px). Preparación de cada fila: reinicio de
 // alumno01 con el token de su administrador; la app en /login sin sesión guardada; gestor@sigpro.test inicia sesión, llega a /programs
@@ -190,7 +190,7 @@ const clearAll: BrowserRowHandler = async (row, { page }) => {
     check((await countText(page)) === '1–10 de 25', 'el recuento «1–10 de 25»', `el recuento «${(await countText(page)) ?? '(sin leer)'}»`),
     check(first !== undefined && first.join(', ') === primeros.join(', '), `los primeros casos ${cell(row, 'primeros')}`, `los primeros casos ${first === undefined ? '(sin leer)' : first.join(', ')}`),
     check(chipLabel === 'Título ↑', 'el orden elegido «Título ↑»', `el orden elegido «${chipLabel ?? '(sin leer)'}»`),
-  ]);
+  ], { note: 'La visibilidad de «Limpiar filtros» antes de pulsarlo no tiene fila propia: solo se usa como acción (la regla de aparición de 008 no se comprueba aquí).' });
 };
 
 // --- Esquema 5: un filtro sin coincidencias muestra el aviso de lista vacía con la opción de limpiar filtros -------------
@@ -232,7 +232,7 @@ const address: BrowserRowHandler = async (row, { page }) => {
   return concluded([
     check(count === quoted(cell(row, 'recuento')), `el recuento ${cell(row, 'recuento')}`, `el recuento «${count ?? '(sin leer)'}»`),
     check(first === cell(row, 'primero'), `el primer caso ${cell(row, 'primero')}`, `el primer caso ${first ?? '(ninguno)'}`),
-    check(addressOf(page.url()).startsWith(VERIFICATION_PATH), `la dirección ${VERIFICATION_PATH}`, `la dirección ${addressOf(page.url())}`),
+    check(addressOf(page.url()) === cell(row, 'direccion'), `la dirección ${cell(row, 'direccion')} (ruta y query tal cual)`, `la dirección ${addressOf(page.url())}`),
   ], { note: DIRECT_APPROXIMATION });
 };
 

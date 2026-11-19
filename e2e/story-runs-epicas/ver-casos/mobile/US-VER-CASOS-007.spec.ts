@@ -111,12 +111,20 @@ const cardData: BrowserRowHandler = async (row, { page }) => {
   const leaves = await cardLeaves(page, cell(row, 'codigo'));
   const badge = await badgeOf(page, cell(row, 'codigo'));
   const runs = `${cell(row, 'ejecuciones')} ejecuciones`;
-  return concluded([
-    check(badge === result, `el último resultado ${result}`, `el último resultado «${badge ?? '(sin leer)'}»`),
-    check(leaves?.includes(cell(row, 'titulo')) === true, `el título ${cell(row, 'titulo')}`, `fragmentos ${leaves?.join(' · ') ?? '(sin leer)'}`),
-    check(leaves?.includes(cell(row, 'programa')) === true, `el programa ${cell(row, 'programa')}`, `fragmentos ${leaves?.join(' · ') ?? '(sin leer)'}`),
-    check(leaves?.includes(runs) === true, `${runs}`, `fragmentos ${leaves?.join(' · ') ?? '(sin leer)'}`),
-  ]);
+  // El código visible va con aria-hidden (TestCaseCard.tsx:70-72): se lee como texto de la tarjeta, no por su rol
+  const visibleCode = leaves?.find((leaf) => /^TC-\d{3}$/.test(leaf));
+  return concluded(
+    [
+      check(visibleCode === cell(row, 'codigo'), `el código visible ${cell(row, 'codigo')}`, `el código visible ${visibleCode ?? '(sin leer)'}`),
+      check(badge === result, `el último resultado ${result}`, `el último resultado «${badge ?? '(sin leer)'}»`),
+      check(leaves?.includes(cell(row, 'titulo')) === true, `el título ${cell(row, 'titulo')}`, `fragmentos ${leaves?.join(' · ') ?? '(sin leer)'}`),
+      check(leaves?.includes(cell(row, 'programa')) === true, `el programa ${cell(row, 'programa')}`, `fragmentos ${leaves?.join(' · ') ?? '(sin leer)'}`),
+      check(leaves?.includes(runs) === true, `${runs}`, `fragmentos ${leaves?.join(' · ') ?? '(sin leer)'}`),
+    ],
+    {
+      note: 'El menú ⋯ de la tarjeta y su «Ver detalle» (Regla de 007) no tienen fila en esta historia: no se prueban aquí. El código visible va con aria-hidden: se lee como texto.',
+    },
+  );
 };
 
 // --- Esquema 3: la primera carga muestra un indicador hasta que llega la lista ----------------------------------------------

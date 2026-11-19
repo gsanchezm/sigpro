@@ -11,7 +11,7 @@ import {
   errorLeaves,
   errorOf,
   failGet,
-  failGetWhile,
+  failFirstGet,
   leavesOf,
   oneText,
   onWeb,
@@ -25,7 +25,7 @@ import {
   tableOf,
   VERIFICATION_PATH,
   waitForList,
-  type FailSwitch,
+  type FailTally,
   type FailureMode,
   type ListSnapshot,
   concluded,
@@ -112,9 +112,16 @@ const rowsShown = (page: Page): Promise<readonly RowLike[] | undefined> =>
 
 /** Una fila (o tarjeta) trae su código, su resultado, su título, su programa y su número de ejecuciones. */
 const hasOwnData = (entry: RowLike, shape: 'table' | 'cards'): boolean => {
-  const runs = shape === 'cards' ? entry.leaves.some((leaf) => /^\d+ ejecuciones$/.test(leaf)) : entry.leaves.some((leaf) => /^\d+$/.test(leaf));
-  return entry.leaves.includes(entry.code) && STATE_LABELS.includes(entry.badge ?? '') && entry.leaves.some((leaf) => TITLE.test(leaf)) && entry.leaves.some((leaf) => PROGRAM_CODE.test(leaf)) && runs;
+  // Valores, no solo forma: el código, el resultado del badge, el título de ese número de caso, el programa del caso y ≥ 1 ejecución
+  const caseNumber = entry.code.slice(3);
+  const runsLeaf = shape === 'cards' ? entry.leaves.find((leaf) => /^\d+ ejecuciones$/.test(leaf)) : entry.leaves.filter((leaf) => /^\d+$/.test(leaf)).at(-1);
+  const runs = runsLeaf === undefined ? 0 : Number(runsLeaf.split(' ')[0]);
+  const title = entry.leaves.find((leaf) => TITLE.test(leaf) && leaf.endsWith(`(caso ${caseNumber})`));
+  return entry.leaves.includes(entry.code) && STATE_LABELS.includes(entry.badge ?? '') && title !== undefined && entry.leaves.includes(programOfCode(entry.code)) && runs >= 1;
 };
+
+/** Programa de un caso según la agrupación del seed (9 casos por programa): TC-001 PRG-001, TC-010 PRG-002, TC-024 PRG-003 (Ejemplos de 003 y 006). */
+const programOfCode = (code: string): string => `PRG-${String(Math.floor((Number(code.slice(3)) - 1) / 9) + 1).padStart(3, '0')}`;
 
 // --- Esquema 1: la lista se presenta como tabla en escritorio y como tarjetas por debajo de 1024 px ----------------------
 
@@ -178,7 +185,7 @@ const summaryAndCount: BrowserRowHandler = async (row, { page }) => {
   if (opened) return preparationFailedWeb(expected, opened);
   const loaded = await openVerification(page);
   if (loaded) return preparationFailedWeb(expected, loaded);
-  const subtitle = await oneText(pageOf(page).locator('p[aria-live="polite"]'));
+  const subtitle = await oneText(pageOf(page).getByText(/ casos de prueba · /));
   const count = await oneText(countOf(page));
   return concluded([
     check(subtitle === quoted(cell(row, 'resumen')), `el resumen ${cell(row, 'resumen')}`, `el resumen «${subtitle ?? '(sin leer)'}»`),
@@ -249,21 +256,27 @@ const retryRecovers: BrowserRowHandler = async (row, { page }) => {
   const expected = `tras «Reintentar», 10 casos empezando por ${first}`;
   const opened = await signIn(page, 1440);
   if (opened) return preparationFailedWeb(expected, opened);
-  const failing: FailSwitch = { active: true };
-  await failGetWhile(page, '/api/test-cases', 'status500', failing);
+  // Solo la primera petición GET de la lista falla («la primera petición»); las demás pasan. El recuento va a la evidencia.
+  const tally: FailTally = { failed: 0, passed: 0 };
+  await failFirstGet(page, '/api/test-cases', 'status500', tally);
   const navigated = await runSteps([['abrir /verification', () => page.goto(VERIFICATION_PATH, { timeout: CEILING_MS })]]);
   if (navigated) return preparationFailedWeb(expected, navigated);
   const alerted = await waitUntil(() => isVisible(errorOf(page)), WAIT_MS);
-  if (!alerted.reached) return preparationFailedWeb(expected, 'la primera petición no mostró el aviso de error');
-  failing.active = false;
+  if (!alerted.reached) return preparationFailedWeb(expected, `la primera petición no mostró el aviso de error (peticiones falladas ${tally.failed}, dejadas pasar ${tally.passed})`);
   const clicked = await runSteps([['pulsar «Reintentar»', () => retryOf(page).click(ACTION)]]);
   if (clicked) return preparationFailedWeb(expected, clicked);
   const back = await waitForList(page, codesBetween(first, 'TC-010'), undefined, WAIT_MS);
   const alertLeft = await safe(() => errorOf(page).count(), -1);
-  return concluded([
-    check(describeCodes(back.codes) === describeCodes(codesBetween(first, 'TC-010')), `10 casos empezando por ${first}`, describeCodes(back.codes)),
-    check(alertLeft === 0, 'el aviso de error desaparece', alertLeft === 0 ? 'el aviso de error ya no está' : `el aviso de error sigue (${alertLeft})`),
-  ]);
+  return concluded(
+    [
+      check(describeCodes(back.codes) === describeCodes(codesBetween(first, 'TC-010')), `10 casos empezando por ${first}`, describeCodes(back.codes)),
+      check(alertLeft === 0, 'el aviso de error desaparece', alertLeft === 0 ? 'el aviso de error ya no está' : `el aviso de error sigue (${alertLeft})`),
+    ],
+    {
+      evidence: { peticionesFalladas: tally.failed, peticionesDejadasPasar: tally.passed },
+      note: 'Solo se falla la primera petición GET de la lista. Si con el doble efecto de React la pantalla hace otra petición antes de mostrar el aviso, la fila sale como preparación fallida y no como hallazgo.',
+    },
+  );
 };
 
 defineBrowserRows({

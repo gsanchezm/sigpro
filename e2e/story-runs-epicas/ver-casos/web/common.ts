@@ -112,6 +112,7 @@ export const programSelectOf = (page: Page): Locator => page.getByRole('combobox
 export const resultSelectOf = (page: Page): Locator => page.getByRole('combobox', { name: 'Último resultado', exact: true });
 export const sortOf = (page: Page, key: SortKey): Locator => page.getByTestId(VERIFICACION_DYNAMIC_TESTIDS.TESTCASE_SORT(key));
 export const nextOf = (page: Page): Locator => page.getByRole('button', { name: 'Página siguiente', exact: true });
+export const prevOf = (page: Page): Locator => page.getByRole('button', { name: 'Página anterior', exact: true });
 export const rowOf = (page: Page, code: string): Locator => page.getByTestId(VERIFICACION_DYNAMIC_TESTIDS.TESTCASE_ROW(code));
 export const linkOf = (page: Page, code: string): Locator => page.getByTestId(VERIFICACION_DYNAMIC_TESTIDS.TESTCASE_LINK(code));
 export const detailOf = (page: Page): Locator => page.getByTestId(VERIFICACION_TESTIDS.TESTCASE_DETAIL);
@@ -301,6 +302,37 @@ export const failGetWhile = (page: Page, pathname: string, mode: FailureMode, co
     async (route: Route) => {
       const request = route.request();
       if (!control.active || request.method() !== 'GET' || !match(new URL(request.url()))) return route.continue();
+      if (mode === 'noResponse') return route.abort('failed');
+      return route.fulfill({
+        status: 500,
+        contentType: 'application/json',
+        headers: corsHeaders(request.headers().origin),
+        body: JSON.stringify({ statusCode: 500, error: 'Internal Server Error', message: 'Error provocado por la prueba' }),
+      });
+    },
+  );
+
+/** Recuento de una ruta de fallo: peticiones GET que se han fallado y que se han dejado pasar (va a la evidencia de la fila). */
+export interface FailTally {
+  failed: number;
+  passed: number;
+}
+
+/**
+ * Falla SOLO la primera petición GET de `pathname` (la historia habla de «la primera petición»); las siguientes pasan a la red. Cuenta
+ * en `tally` las que se fallan y las que se dejan pasar, para que la evidencia diga cuántas hizo la pantalla.
+ */
+export const failFirstGet = (page: Page, pathname: string, mode: FailureMode, tally: FailTally): Promise<unknown> =>
+  page.route(
+    (url) => url.pathname === pathname,
+    async (route: Route) => {
+      const request = route.request();
+      if (request.method() !== 'GET') return route.continue();
+      if (tally.failed >= 1) {
+        tally.passed += 1;
+        return route.continue();
+      }
+      tally.failed += 1;
       if (mode === 'noResponse') return route.abort('failed');
       return route.fulfill({
         status: 500,
