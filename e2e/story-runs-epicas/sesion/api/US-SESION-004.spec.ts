@@ -2,7 +2,7 @@ import { field, sessionOf, type ApiResult } from '../../../story-runs/support/ap
 import { DEMO, TENANT_A, resetTenants } from '../../../story-runs/support/prepare';
 import { cell, check, conclude, preparationFailed, responseCheck, strict, type Check } from '../../support/checks';
 import { defineApiRows, type ApiRowHandler } from '../../support/framework';
-import { ACCESS_TTL_S, accessAge, agedPreparationFailed, hasTokens, lifetimeOf, loadAged, loginAs, me, refresh, shortText, userOf, type AgedSet } from './common';
+import { ACCESS_TTL_S, accessAge, agedPreparationFailed, hasTokens, lifetimeOf, loadAged, loginAs, me, meUserOf, refresh, shortText, type AgedSet } from './common';
 
 // US-SESION-004 — Duración de los tokens (API). Esquemas 1 y 2: los plazos se leen de las propias reclamaciones (`exp - iat`) del token
 // recién emitido; no hace falta esperar nada. Esquema 3 (catorce y dieciséis minutos): NO espera dentro de la prueba. Los tokens salen
@@ -96,7 +96,7 @@ const REQUESTS: ReadonlyMap<string, (set: AgedSet) => Promise<ApiResult>> = new 
 const RESPONSES: ReadonlyMap<string, (result: ApiResult) => readonly Check[]> = new Map<string, (result: ApiResult) => readonly Check[]>([
   [
     '200 con el correo gestor@sigpro.test',
-    (result) => [responseCheck(result, { status: 200 }), check(userOf(result.body).email === DEMO.gestor.email, 'el correo gestor@sigpro.test', `el correo ${shortText(userOf(result.body).email)}`)],
+    (result) => [responseCheck(result, { status: 200 }), check(meUserOf(result.body).email === DEMO.gestor.email, 'el correo gestor@sigpro.test', `el correo ${shortText(meUserOf(result.body).email)}`)],
   ],
   ['401 invalid_token', (result) => [responseCheck(result, { status: 401, code: 'invalid_token' })]],
   ['200 con un accessToken y un refreshToken', (result) => [responseCheck(result, { status: 200 }), check(hasTokens(result.body), 'trae un accessToken y un refreshToken', hasTokens(result.body) ? 'trae accessToken y refreshToken' : 'falta accessToken o refreshToken')]],

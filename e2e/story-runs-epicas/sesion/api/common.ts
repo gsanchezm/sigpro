@@ -77,6 +77,10 @@ export const userOf = (body: unknown): Readonly<Record<string, unknown>> => {
   return typeof user === 'object' && user !== null ? (user as Record<string, unknown>) : {};
 };
 
+/** El usuario de una respuesta de `GET /api/auth/me`: la API lo devuelve directamente en el cuerpo, sin envolverlo en `user`. */
+export const meUserOf = (body: unknown): Readonly<Record<string, unknown>> =>
+  typeof body === 'object' && body !== null && !Array.isArray(body) ? (body as Record<string, unknown>) : {};
+
 /** `user` con los seis campos que fija la historia: id, name, email, role, mfa y tenant (con su tipo). */
 export const userShapeOk = (user: Readonly<Record<string, unknown>>): boolean =>
   typeof user.id === 'string' && typeof user.name === 'string' && typeof user.email === 'string' && typeof user.role === 'string' && typeof user.mfa === 'boolean' && typeof user.tenant === 'string';

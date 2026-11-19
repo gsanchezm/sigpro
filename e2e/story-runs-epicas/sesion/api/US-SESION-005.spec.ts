@@ -2,7 +2,7 @@ import { adminCredentials, errorCode, sessionOf, type ApiResult, type Session } 
 import { DEMO, TENANT_A, TENANT_B, resetTenants, type Credentials } from '../../../story-runs/support/prepare';
 import { cell, check, conclude, preparationFailed, responseCheck, strict, type Check } from '../../support/checks';
 import { defineApiRows, type ApiRowHandler } from '../../support/framework';
-import { alteredLast, failGestor, loginAs, me, mfaTokenOfAdmin, patchUser, rawGet, redeemMfa, refresh, shortText, userOf } from './common';
+import { alteredLast, failGestor, loginAs, me, mfaTokenOfAdmin, patchUser, rawGet, redeemMfa, refresh, meUserOf, shortText } from './common';
 
 // US-SESION-005 — Identificar la sesión en GET /api/auth/me y rechazar las peticiones sin token válido (API). Preparación de cada fila:
 // reinicio de alumno01; cada cuenta inicia sesión en la propia fila con x-tenant alumno01 y su contraseña (admin@sigpro.test completa el
@@ -68,7 +68,7 @@ const identifiesAccount: ApiRowHandler = async (row) => {
   const started = await sessionOfStep(account, step);
   if (started.session === undefined) return preparationFailed(expected, `${account} tiene una sesión iniciada ${cell(row, 'paso')}`, started.last);
   const profile = await me(started.session.accessToken, TENANT_A);
-  const user = userOf(profile.body);
+  const user = meUserOf(profile.body);
   return conclude([
     responseCheck(profile, { status: 200 }),
     check(user.email === account, `el usuario ${account}`, `el usuario ${shortText(user.email)}`),
@@ -165,7 +165,7 @@ const stillAccepted: ApiRowHandler = async (row) => {
   const renewed = await refresh(session.refreshToken, TENANT_A);
   return conclude([
     responseCheck(profile, { status: 200 }),
-    check(userOf(profile.body).email === DEMO.gestor.email, 'el usuario gestor@sigpro.test', `el usuario ${shortText(userOf(profile.body).email)}`),
+    check(meUserOf(profile.body).email === DEMO.gestor.email, 'el usuario gestor@sigpro.test', `el usuario ${shortText(meUserOf(profile.body).email)}`),
     responseCheck(renewed, { status: 401, code: 'invalid_token' }),
   ]);
 };
@@ -181,7 +181,7 @@ const tenantFromToken: ApiRowHandler = async (row) => {
   const session = sessionOf(started);
   if (!session) return preparationFailed(expected, 'gestor@sigpro.test obtiene su accessToken con remember true', started);
   const profile = await me(session.accessToken, tenant);
-  const user = userOf(profile.body);
+  const user = meUserOf(profile.body);
   const sameTenant: Check = check(user.tenant === TENANT_A && user.email === DEMO.gestor.email, 'el usuario gestor@sigpro.test del tenant alumno01', `usuario ${shortText(user.email)} del tenant ${shortText(user.tenant)}`);
   return conclude([responseCheck(profile, { status: 200 }), sameTenant]);
 };
