@@ -5,7 +5,7 @@ epica: EP-VER-INFORME
 titulo: "[Móvil] Descargar el informe desde «Verificación» y desde el detalle, con selección y entrega"
 etiquetas: [movil]
 relacionadas: [US-VER-CASOS-007, US-VER-CASOS-008, US-VER-CASOS-009, US-VER-EJECUCION-009, US-VER-INFORME-004, US-VER-INFORME-005]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["/verification", "/verification/:code"]
 ---
 

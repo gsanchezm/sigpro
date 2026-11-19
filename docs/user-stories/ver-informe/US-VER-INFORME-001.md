@@ -5,7 +5,7 @@ epica: EP-VER-INFORME
 titulo: "[API] Descargar el informe solo con sesión y con los datos del tenant del token"
 etiquetas: [api]
 relacionadas: [US-LOGIN-001, US-VER-INFORME-002, US-VER-INFORME-003]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["GET /api/verification/report"]
 ---
 

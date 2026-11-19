@@ -5,7 +5,7 @@ epica: EP-VER-INFORME
 titulo: "[API] Elegir el alcance del informe: selección, programa o todos los casos"
 etiquetas: [api]
 relacionadas: [US-VER-INFORME-001, US-VER-INFORME-003]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["GET /api/verification/report"]
 ---
 

@@ -5,7 +5,7 @@ epica: EP-VER-INFORME
 titulo: "[Web] Descargar el informe de un caso desde su detalle"
 etiquetas: [web]
 relacionadas: [US-VER-CASOS-006, US-VER-EJECUCION-006, US-VER-INFORME-003, US-VER-INFORME-004]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["/verification/:code"]
 ---
 

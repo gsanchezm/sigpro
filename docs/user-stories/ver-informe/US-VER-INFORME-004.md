@@ -5,7 +5,7 @@ epica: EP-VER-INFORME
 titulo: "[Web] Descargar el informe desde «Verificación»: cabecera, selección y menú de fila"
 etiquetas: [web]
 relacionadas: [US-VER-CASOS-004, US-VER-CASOS-005, US-VER-INFORME-002, US-VER-INFORME-005, US-VER-INFORME-006]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["/verification"]
 ---
 

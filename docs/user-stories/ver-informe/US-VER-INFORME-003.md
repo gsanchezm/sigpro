@@ -5,7 +5,7 @@ epica: EP-VER-INFORME
 titulo: "[API] Contenido del PDF: resumen por resultado y una ficha por caso"
 etiquetas: [api]
 relacionadas: [US-VER-INFORME-001, US-VER-INFORME-002, US-VER-CASOS-001]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["GET /api/verification/report"]
 ---
 
