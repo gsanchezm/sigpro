@@ -9,25 +9,24 @@ import {
   PROGRAM_CODE,
   REQUISITO,
   TENANT_A,
-  countPair,
-  linksOf,
+  pairCountSettles,
   resetAlumno01,
   sameList,
   signIn as apiSignIn,
-  traceabilityOf,
   uncoveredRequirements,
   type Account,
 } from '../api/common';
 import {
   TRACE_500,
+  ULTIMO_SIMBOLO_DEL_CASO,
   armToasts,
   coverageSettles,
   delayLinkRequests,
   failMatrix,
   interact,
   labeledRows,
-  rawTextOf,
   linesOf,
+  rawTextOf,
   textOf,
   toastShown,
   toastStartingWith,
@@ -57,8 +56,8 @@ import {
 } from './common';
 
 // US-REQ-TRAZA-007 — Leer, marcar y desmarcar cruces en la matriz de trazabilidad (app móvil, Expo web a 390 px). Mismas reglas que la web:
-// cada toque se confirma por la API (GET de la matriz) y el enlace se retrasa para ver qué se pinta antes de la respuesta. El veredicto
-// vale para Expo web, no para iOS ni Android nativo.
+// cada toque se confirma por la API (GET de la matriz, con sondeo de hasta 5 s) y el enlace se retrasa para ver qué se pinta antes de la
+// respuesta. El veredicto vale para Expo web, no para iOS ni Android nativo.
 
 /** Retraso del enlace o desenlace: la historia no fija tiempo; la prueba lo fija para observar el cambio optimista. */
 const DELAY_MS = 1_500;
@@ -99,8 +98,6 @@ const PISTA = 'Desliza a los lados para ver todos los casos de prueba.';
 const SIN_PERMISO = 'Tu rol no permite editar requisitos';
 const ERROR_GENERICO = 'Ha ocurrido un error inesperado';
 const CUBIERTOS_13 = '13 de 14 requisitos con cobertura';
-/** Símbolo del caso TC-010 (su último resultado es «pass»: historia 001, Reglas). */
-const SIMBOLO_TC_010 = '✓';
 /**
  * Borrar REQ-022 arrastra a su hijo REQ-023 (requirements.service.ts:175-184): la matriz del servidor cambia, pero la de la pantalla no se
  * recarga y la historia no fija la cifra tras el rechazo. La vuelta atrás se comprueba con la casilla.
@@ -120,14 +117,6 @@ const accountNamed = (email: string): { readonly credentials: { readonly email: 
   const found = MOBILE_ACCOUNTS.get(email);
   if (found === undefined) throw new Error(`la cuenta ${email} no está en el mapa de cuentas móviles`);
   return found;
-};
-
-/** Cuántas veces está enlazado el par en PRG-002, leído por la API con la cuenta dada (`undefined` si la lectura falla). */
-const linkCountByApi = async (account: Account, requirement: string, testCase: string): Promise<number | undefined> => {
-  const signed = await apiSignIn(account);
-  if (signed.token === undefined) return undefined;
-  const read = await traceabilityOf('PRG-002', TENANT_A, signed.token);
-  return read.status === 200 ? countPair(linksOf(read.body), requirement, testCase) : undefined;
 };
 
 /** Preparación común: reinicio, inicio de sesión de la cuenta en el móvil y vista «Matriz de trazabilidad» asentada. */
@@ -174,7 +163,7 @@ const coverageAndLabels: BrowserRowHandler = onExpoWeb(async (row, { page }) => 
   );
 });
 
-/** E2: tocar un cruce lo enlaza o lo desenlaza: se ve el cambio antes de la respuesta, aviso, cifra, símbolo y enlace confirmado por la API. */
+/** E2: tocar un cruce lo enlaza o lo desenlaza: se ve el cambio antes de la respuesta, aviso, cifra, símbolo de la última ejecución y enlace confirmado por la API. */
 const tapToggles: BrowserRowHandler = onExpoWeb(async (row, { page }) => {
   const account = strict('cuenta', MOBILE_ACCOUNTS, cell(row, 'cuenta'));
   const requirement = strict('requisito', REQUISITO, cell(row, 'requisito'));
@@ -183,6 +172,7 @@ const tapToggles: BrowserRowHandler = onExpoWeb(async (row, { page }) => {
   const aviso = strict('aviso', AVISO, cell(row, 'aviso'));
   const coverage = strict('cobertura', COBERTURA, cell(row, 'cobertura'));
   const end = strict('estado_final', ESTADO, cell(row, 'estado_final'));
+  const symbolWanted = strict('caso', ULTIMO_SIMBOLO_DEL_CASO, cell(row, 'caso'));
   const expected = `tocar el cruce de ${requirement} con ${testCase} muestra ${cell(row, 'aviso')} con «${pairText(requirement, testCase)}», ve «${cell(row, 'cobertura')}» y el cruce queda ${cell(row, 'estado_final')}`;
   const prepared = await prepareMatrix(page, account.credentials.email, 'PRG-002', expected);
   if (prepared !== undefined) return prepared;
@@ -208,7 +198,7 @@ const tapToggles: BrowserRowHandler = onExpoWeb(async (row, { page }) => {
   const after = await mobileCellState(box);
   const glyph = end ? await textOf(box) : undefined;
   const shown = await coverageSettles(page, coverage);
-  const count = await linkCountByApi(account.api, requirement, testCase);
+  const apiPair = await pairCountSettles(account.api, 'PRG-002', requirement, testCase, end ? 1 : 0);
   return outcomeOf(
     [
       check(early.seen, `antes de la respuesta del servidor el cruce ya se ve ${cell(row, 'estado_final')}`, early.seen ? `el cruce se vio ${cell(row, 'estado_final')} antes de la respuesta` : `el cruce no se vio ${cell(row, 'estado_final')} antes de la respuesta`),
@@ -216,11 +206,11 @@ const tapToggles: BrowserRowHandler = onExpoWeb(async (row, { page }) => {
       check(toastOnScreen === true, 'el aviso se ve en pantalla', toastOnScreen === undefined ? '(sin leer)' : toastOnScreen ? 'se ve' : 'no se ve'),
       exactText(shown, coverage, 've el texto'),
       check(after.checked === end, `el cruce queda ${cell(row, 'estado_final')}`, `el cruce queda ${mobileWord(after.checked) ?? '(sin leer)'}`),
-      ...(end ? [check(glyph === SIMBOLO_TC_010, `el cruce marcado conserva el símbolo de la última ejecución (${SIMBOLO_TC_010})`, `el cruce muestra ${glyph ?? '(sin leer)'}`)] : []),
-      check(count === (end ? 1 : 0), 'la API confirma el enlace en la matriz', count === undefined ? 'la matriz no se pudo leer por la API' : `la API lista el par ${count} vez(es)`),
+      ...(end ? [check(glyph === symbolWanted, `el cruce marcado muestra el símbolo de su última ejecución (${symbolWanted})`, `el cruce muestra ${glyph ?? '(sin leer)'}`)] : []),
+      check(apiPair.count === (end ? 1 : 0), 'la API confirma el enlace en la matriz', apiPair.count === undefined ? 'la matriz no se pudo leer por la API' : `la API lista el par ${apiPair.count} vez(es) tras ${apiPair.waitedMs} ms`),
     ],
     undefined,
-    { avisos: toast.observed },
+    { avisos: toast.observed, esperaApiMs: apiPair.waitedMs },
   );
 });
 
@@ -240,12 +230,12 @@ const auditorTaps: BrowserRowHandler = onExpoWeb(async (row, { page }) => {
   const held = await holdsFor(async () => (await mobileCellState(box)).checked === start, HOLD_MS);
   const after = await mobileCellState(box);
   const reason = await visibleTextOf(reasonOf(page));
-  const count = await linkCountByApi(accountNamed('auditor@sigpro.test').api, requirement, testCase);
+  const apiPair = await pairCountSettles(accountNamed('auditor@sigpro.test').api, 'PRG-002', requirement, testCase, start ? 1 : 0);
   return outcomeOf(
     [
       check(held.held && after.checked === start, `el cruce sigue ${cell(row, 'estado')} durante 2 s`, held.held ? `el cruce está ${mobileWord(after.checked) ?? '(sin leer)'} durante 2 s` : `el cruce cambió a los ${held.brokeAtMs ?? '?'} ms`),
       exactText(reason, SIN_PERMISO, 'se ve el texto'),
-      check(count === (start ? 1 : 0), 'la API confirma que el enlace no cambia', count === undefined ? 'la matriz no se pudo leer por la API' : `la API lista el par ${count} vez(es)`),
+      check(apiPair.count === (start ? 1 : 0), 'la API confirma que el enlace no cambia', apiPair.count === undefined ? 'la matriz no se pudo leer por la API' : `la API lista el par ${apiPair.count} vez(es) tras ${apiPair.waitedMs} ms`),
     ],
     undefined,
   );
@@ -354,4 +344,3 @@ defineBrowserRows({
     [6, rejectedTap],
   ]),
 });
-

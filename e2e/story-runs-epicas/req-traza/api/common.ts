@@ -391,3 +391,24 @@ export const uncoveredRequirements = async (account: Account, program: string): 
   const covered = new Set(linksOf(read.body).map((pair) => pair.requirementCode));
   return codesOf(read.body, 'requirements').filter((code) => !covered.has(code));
 };
+
+/**
+ * Recuento del par en la matriz del programa, leído por la API con la cuenta dada. Sondea hasta que el recuento sea `expected` o se
+ * agote el techo (5 s): la escritura de la app puede tardar un poco más que el aviso. Devuelve el último recuento y el tiempo esperado,
+ * para que la evidencia diga cuánto se esperó. `count` `undefined` = la lectura no se pudo hacer.
+ */
+export const pairCountSettles = async (account: Account, program: string, requirement: string, testCase: string, expected: number, ceilingMs = 5_000): Promise<{ readonly count: number | undefined; readonly waitedMs: number }> => {
+  const started = Date.now();
+  const signed = await signIn(account);
+  if (signed.token === undefined) return { count: undefined, waitedMs: 0 };
+  const readCount = async (): Promise<number | undefined> => {
+    const read = await traceabilityOf(program, account.tenant, signed.token);
+    return read.status === 200 ? countPair(linksOf(read.body), requirement, testCase) : undefined;
+  };
+  let count = await readCount();
+  while (count !== expected && Date.now() - started < ceilingMs) {
+    await sleep(250);
+    count = await readCount();
+  }
+  return { count, waitedMs: Date.now() - started };
+};

@@ -47,7 +47,7 @@ import {
 const COVERAGE_PRG_002 = '13 de 14 requisitos con cobertura';
 const EMPTY_BODY = 'Este programa no tiene requisitos o casos de prueba que cruzar.';
 const HELP = 'Marca qué casos de prueba verifican cada requisito.';
-const LEYENDA = ['✓Superado', '✕Fallido', '!Bloqueado', '·Sin ejecutar'];
+const LEYENDA = ['✓ Superado', '✕ Fallido', '! Bloqueado', '· Sin ejecutar'];
 /** Los casos sin ejecutar («·») no se pueden producir con el seed: cada caso tiene al menos una ejecución (historia 001, Reglas). */
 const NOTA_SIN_EJECUTAR = 'La rama «·» (caso que nunca se ha ejecutado) no es reproducible con el seed: todos los casos tienen al menos una ejecución; esa rama no se ejercita aquí.';
 /**
@@ -130,7 +130,7 @@ const coverageFigure: BrowserRowHandler = onWeb(async (row, { page }) => {
   const rows = await rowCodesOnScreen(page);
   const headers = await headerCodesOnScreen(page);
   const helpVisible = await safe(() => matrixPanel(page).getByText(HELP, { exact: true }).isVisible(), undefined);
-  const legend = await legendEntries(page);
+  const legend = (await legendEntries(page))?.map((entry) => `${entry.glyph} ${entry.label}`);
   return concluirWeb([
     textCheck(shownCoverage, coverage, 've el texto'),
     check(labeled?.includes(uncovered) === true, `la fila de ${uncovered} muestra la etiqueta «Sin cobertura»`, labeled === undefined ? 'las etiquetas no se leen' : labeled.includes(uncovered) ? 'muestra la etiqueta «Sin cobertura»' : 'no muestra la etiqueta «Sin cobertura»'),

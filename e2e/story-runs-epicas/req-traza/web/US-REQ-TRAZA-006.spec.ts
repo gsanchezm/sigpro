@@ -9,17 +9,15 @@ import {
   PROGRAM_CODE,
   REQUISITO,
   TENANT_A,
-  countPair,
-  linksOf,
+  pairCountSettles,
   resetAlumno01,
   sameList,
   signIn as apiSignIn,
-  traceabilityOf,
   uncoveredRequirements,
-  type Account,
 } from '../api/common';
 import {
   READ_MS,
+  ULTIMO_SIMBOLO_DEL_CASO,
   UI_ACCOUNTS,
   actionFailed,
   armToasts,
@@ -45,8 +43,9 @@ import {
 } from './common';
 
 // US-REQ-TRAZA-006 — Marcar y desmarcar un cruce en la matriz de trazabilidad (web). Cada fila reinicia alumno01, inicia sesión la cuenta
-// de la fila por el formulario y abre la matriz. Tras cada acción, el enlace se vuelve a leer por la API (GET de la matriz): la pantalla
-// sola no prueba que el cambio se guardó. El enlace se retrasa para ver qué se pinta antes de la respuesta del servidor.
+// de la fila por el formulario y abre la matriz. Tras cada acción, el enlace se vuelve a leer por la API en el programa de la fila (con
+// sondeo de hasta 5 s, porque la escritura puede acabar después del aviso). El enlace se retrasa para ver qué se pinta antes de la
+// respuesta del servidor.
 
 /** Retraso del enlace o desenlace: la historia no fija tiempo; la prueba lo fija para observar el cambio optimista. */
 const DELAY_MS = 1_500;
@@ -83,25 +82,9 @@ const INTENTO: ReadonlyMap<string, string> = new Map<string, string>([
 
 const SIN_PERMISO = 'Tu rol no permite editar requisitos';
 const ERROR_GENERICO = 'Ha ocurrido un error inesperado';
-/** Símbolo del caso TC-010 (su último resultado es «pass»: historia 001, Reglas). */
-const SIMBOLO_TC_010 = '✓';
-/**
- * La cifra de la historia tras borrar REQ-022 es la de la pantalla, que no se recarga: en el servidor, borrar REQ-022 arrastra a su hijo
- * REQ-023 (requirements.service.ts:175-184; el padre se asigna en data.ts) y la cifra sería «11 de 12» (fila 2) y, borrando REQ-028, «13 de 13»
- * (fila 1). Por eso la cifra no prueba la vuelta atrás: la prueba es la casilla.
- */
-const NOTA_CASCADA = 'La cifra de la historia es la de la pantalla, que no se recarga: en el servidor, borrar el requisito deja «13 de 13» (REQ-028) o «11 de 12» (REQ-022, que arrastra a su hijo REQ-023; requirements.service.ts:175-184). La cifra no prueba la vuelta atrás: la prueba es la casilla.';
 
 const pairText = (requirement: string, testCase: string): string => `${requirement} ↔ ${testCase}`;
 const sortedCopy = (codes: readonly string[]): readonly string[] => [...codes].sort();
-
-/** Cuántas veces está enlazado el par en PRG-002, leído por la API con la cuenta dada (`undefined` si la lectura falla). */
-const linkCountByApi = async (account: Account, requirement: string, testCase: string): Promise<number | undefined> => {
-  const signed = await apiSignIn(account);
-  if (signed.token === undefined) return undefined;
-  const read = await traceabilityOf('PRG-002', TENANT_A, signed.token);
-  return read.status === 200 ? countPair(linksOf(read.body), requirement, testCase) : undefined;
-};
 
 /** Preparación común: reinicio, inicio de sesión de la cuenta y pestaña abierta con la matriz asentada. */
 const prepareMatrix = async (page: Page, credentials: { readonly email: string; readonly password: string }, program: string, expected: string): Promise<Outcome | undefined> => {
@@ -112,7 +95,7 @@ const prepareMatrix = async (page: Page, credentials: { readonly email: string; 
   return undefined;
 };
 
-/** Espera a que las etiquetas «Sin cobertura» de la pantalla sean las que da la API (con techo). */
+/** Espera (con techo) a que las etiquetas «Sin cobertura» de la pantalla sean las que da la API. */
 const labelsSettle = (page: Page, expected: readonly string[] | undefined): Promise<unknown> =>
   waitUntil(async () => {
     const labeled = await labeledRows(page);
@@ -123,7 +106,13 @@ const labelsSettle = (page: Page, expected: readonly string[] | undefined): Prom
  * Marca o desmarca la casilla con la petición retrasada: el cambio optimista debe verse antes de que el control se libere. Devuelve si
  * la casilla llegó a verse en el estado de la acción mientras la respuesta seguía pendiente.
  */
-const clickWithPendingAnswer = async (page: Page, box: Locator, label: string, target: boolean, control: DelayControl): Promise<{ readonly blocked?: { readonly message: string; readonly note: string }; readonly seenBeforeAnswer: boolean }> => {
+const clickWithPendingAnswer = async (
+  page: Page,
+  box: Locator,
+  label: string,
+  target: boolean,
+  control: DelayControl,
+): Promise<{ readonly blocked?: { readonly message: string; readonly note: string }; readonly seenBeforeAnswer: boolean }> => {
   await armToasts(page);
   const blocked = await interact(box, label, (element) => element.click(ACTION));
   if (blocked !== undefined) return { blocked, seenBeforeAnswer: false };
@@ -139,14 +128,15 @@ const clickWithPendingAnswer = async (page: Page, box: Locator, label: string, t
   return { seenBeforeAnswer: early.seen };
 };
 
-/** E1: marcar un cruce lo enlaza: se ve marcado antes de la respuesta, aviso «Enlace creado», cifra, símbolo y enlace confirmado por la API. */
+/** E1: marcar un cruce lo enlaza: se ve marcado antes de la respuesta, aviso «Enlace creado», cifra, símbolo de su última ejecución y enlace confirmado por la API. */
 const markCross: BrowserRowHandler = onWeb(async (row, { page }) => {
   const account = strict('cuenta', UI_ACCOUNTS, cell(row, 'cuenta'));
   const program = strict('programa', PROGRAM_CODE, cell(row, 'programa'));
   const requirement = strict('requisito', REQUISITO, cell(row, 'requisito'));
   const testCase = strict('caso', CASO, cell(row, 'caso'));
   const coverage = strict('cobertura', COBERTURA, cell(row, 'cobertura'));
-  const expected = `marcar ${requirement} con ${testCase} se ve marcado, muestra «Enlace creado» con «${pairText(requirement, testCase)}», ve «${cell(row, 'cobertura')}» y la API lo confirma`;
+  const symbolWanted = strict('caso', ULTIMO_SIMBOLO_DEL_CASO, cell(row, 'caso'));
+  const expected = `marcar ${requirement} con ${testCase} se ve marcado, muestra «Enlace creado» con «${pairText(requirement, testCase)}», ve «${cell(row, 'cobertura')}», muestra ${symbolWanted} y la API lo confirma`;
   const prepared = await prepareMatrix(page, account.credentials, program, expected);
   if (prepared !== undefined) return prepared;
   const box = cellOf(page, requirement, testCase);
@@ -160,18 +150,21 @@ const markCross: BrowserRowHandler = onWeb(async (row, { page }) => {
   const toastOnScreen = await toastVisible(page, 'ok', 'Enlace creado');
   const after = await cellState(box);
   const shown = await coverageSettles(page, coverage);
-  const count = await linkCountByApi(account.api, requirement, testCase);
+  const apiPair = await pairCountSettles(account.api, program, requirement, testCase, 1);
   return concluirWeb(
     [
       check(pressed.seenBeforeAnswer, 'antes de la respuesta del servidor la casilla ya se ve marcada', pressed.seenBeforeAnswer ? 'la casilla se vio marcada antes de la respuesta' : 'la casilla no se vio marcada antes de la respuesta'),
       check(toast.seen, `ve el aviso «Enlace creado» con el texto «${pairText(requirement, testCase)}»`, `avisos: ${toast.observed}`),
       check(toastOnScreen === true, 'el aviso se ve en pantalla', toastOnScreen === undefined ? '(sin leer)' : toastOnScreen ? 'se ve' : 'no se ve'),
       check(after.checked === true, 'el cruce queda marcado', `el cruce está ${markedWord(after.checked) ?? '(sin leer)'}`),
-      check(after.symbol === SIMBOLO_TC_010, `el cruce marcado conserva el símbolo de la última ejecución (${SIMBOLO_TC_010})`, `el cruce muestra ${after.symbol ?? '(sin leer)'}`),
+      check(after.symbol === symbolWanted, `el cruce marcado muestra el símbolo de su última ejecución (${symbolWanted})`, `el cruce muestra ${after.symbol ?? '(sin leer)'}`),
       textCheck(shown, coverage, 've el texto'),
-      check(count === 1, 'la API confirma el enlace en la matriz', count === undefined ? 'la matriz no se pudo leer por la API' : `la API lista el par ${count} vez(es)`),
+      check(apiPair.count === 1, 'la API confirma el enlace en la matriz', apiPair.count === undefined ? 'la matriz no se pudo leer por la API' : `la API lista el par ${apiPair.count} vez(es) tras ${apiPair.waitedMs} ms`),
     ],
-    { evidence: { avisos: toast.observed } },
+    {
+      note: 'El símbolo esperado es el de la última ejecución del caso (ULTIMO_SIMBOLO_DEL_CASO): TC-010 «pass» (historia 001) y TC-009 «blocked» (seed, apps/api/src/seed/data.ts, planTestRuns).',
+      evidence: { avisos: toast.observed, esperaApiMs: apiPair.waitedMs },
+    },
   );
 });
 
@@ -201,7 +194,7 @@ const unmarkCross: BrowserRowHandler = onWeb(async (row, { page }) => {
   await labelsSettle(page, apiUncovered);
   const labeledOnScreen = await uncoveredLabelOf(page, requirement);
   const labeled = await labeledRows(page);
-  const count = await linkCountByApi(account.api, requirement, testCase);
+  const apiPair = await pairCountSettles(account.api, program, requirement, testCase, 0);
   return concluirWeb(
     [
       check(pressed.seenBeforeAnswer, 'antes de la respuesta del servidor la casilla ya se ve sin marcar', pressed.seenBeforeAnswer ? 'la casilla se vio sin marcar antes de la respuesta' : 'la casilla no se vio sin marcar antes de la respuesta'),
@@ -215,9 +208,9 @@ const unmarkCross: BrowserRowHandler = onWeb(async (row, { page }) => {
         'la etiqueta «Sin cobertura» está solo en los requisitos sin caso (según la API)',
         `en pantalla: ${labeled?.join(', ') ?? '(sin leer)'}; según la API: ${apiUncovered?.join(', ') ?? '(sin leer)'}`,
       ),
-      check(count === 0, 'la API confirma que el enlace ya no está', count === undefined ? 'la matriz no se pudo leer por la API' : `la API lista el par ${count} vez(es)`),
+      check(apiPair.count === 0, 'la API confirma que el enlace ya no está', apiPair.count === undefined ? 'la matriz no se pudo leer por la API' : `la API lista el par ${apiPair.count} vez(es) tras ${apiPair.waitedMs} ms`),
     ],
-    { evidence: { avisos: toast.observed } },
+    { evidence: { avisos: toast.observed, esperaApiMs: apiPair.waitedMs } },
   );
 });
 
@@ -244,18 +237,21 @@ const auditorCannotChange: BrowserRowHandler = onWeb(async (row, { page }) => {
   if (attempted !== undefined) return actionFailed(expected, attempted);
   const held = await holdsFor(async () => (await safe<boolean | undefined>(() => box.isChecked({ timeout: READ_MS }), undefined)) === stateWanted, HOLD_MS);
   const after = await cellState(box);
-  const count = await linkCountByApi(auditor.api, requirement, testCase);
+  const apiPair = await pairCountSettles(auditor.api, 'PRG-002', requirement, testCase, stateWanted ? 1 : 0);
   return concluirWeb(
     [
       check(hovered === undefined, 'el puntero pasa sobre la casilla', hovered === undefined ? 'el puntero pasó sobre la casilla' : hovered.message),
       check(after.disabled === true, 'la casilla está deshabilitada', `la casilla está ${after.disabled === undefined ? '(sin leer)' : after.disabled ? 'deshabilitada' : 'habilitada'}`),
       check(held.held && after.checked === stateWanted, `el cruce sigue ${cell(row, 'estado')} durante 2 s`, held.held ? `el cruce está ${markedWord(after.checked) ?? '(sin leer)'} durante 2 s` : `el cruce cambió a los ${held.brokeAtMs ?? '?'} ms`),
       check(titled.title === SIN_PERMISO, `al pasar el puntero aparece «${SIN_PERMISO}»`, `el título de la casilla es «${titled.title ?? '(sin leer)'}»`),
-      check(count === (stateWanted ? 1 : 0), 'la API confirma que el enlace no cambia', count === undefined ? 'la matriz no se pudo leer por la API' : `la API lista el par ${count} vez(es)`),
+      check(apiPair.count === (stateWanted ? 1 : 0), 'la API confirma que el enlace no cambia', apiPair.count === undefined ? 'la matriz no se pudo leer por la API' : `la API lista el par ${apiPair.count} vez(es) tras ${apiPair.waitedMs} ms`),
     ],
     { note: 'La explicación se lee del atributo title de la casilla: el tooltip nativo no es legible en el DOM.', evidence: { intento: intent } },
   );
 });
+
+/** Nota de la cifra tras borrar un requisito: la pantalla no se recarga, así que la cifra de la historia no prueba la vuelta atrás. */
+const NOTA_CASCADA = 'La cifra de la historia es la de la pantalla, que no se recarga: en el servidor, borrar el requisito deja «13 de 13» (REQ-028) o «11 de 12» (REQ-022, que arrastra a su hijo REQ-023; requirements.service.ts:175-184). La cifra no prueba la vuelta atrás: la prueba es la casilla.';
 
 /**
  * E4: el servidor rechaza el cambio (el gestor ha borrado el requisito por la API): la casilla vuelve a su estado anterior y aparece

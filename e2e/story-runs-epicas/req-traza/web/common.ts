@@ -214,25 +214,42 @@ export const rowCodesOnScreen = (page: Page): Promise<readonly string[] | undefi
 export const headerCodesOnScreen = (page: Page): Promise<readonly string[] | undefined> =>
   safe(async () => (await matrixTable(page).getByRole('link').allInnerTexts()).map((text) => text.trim()), undefined);
 
-/**
- * Entradas de la leyenda de símbolos, sin espacios: «✓Superado», «✕Fallido», «!Bloqueado», «·Sin ejecutar». Son los cuatro de la historia
- * (ver «Reglas»); se leen del texto de cada elemento de la lista de leyenda.
- */
-export const legendEntries = (page: Page): Promise<readonly string[] | undefined> =>
+/** Una entrada de la leyenda de símbolos: el glifo y el nombre, leídos de sus propios nodos (no de la concatenación del texto). */
+export interface LegendEntry {
+  readonly glyph: string;
+  readonly label: string;
+}
+
+/** Entradas de la leyenda de la matriz (lista con nombre accesible «Leyenda de la matriz»), en orden de pantalla. */
+export const legendEntries = (page: Page): Promise<readonly LegendEntry[] | undefined> =>
   safe(
-    async () =>
-      (await matrixPanel(page).getByRole('list', { name: 'Leyenda de la matriz', exact: true }).getByRole('listitem').allTextContents()).map((text) =>
-        text.replace(/\s+/g, ''),
-      ),
+    () =>
+      matrixPanel(page)
+        .getByRole('list', { name: 'Leyenda de la matriz', exact: true })
+        .getByRole('listitem')
+        .evaluateAll((items) =>
+          items.map((item) => {
+            const glyph = (item.firstElementChild?.textContent ?? '').trim();
+            const text = (item.textContent ?? '').trim();
+            return { glyph, label: text.slice(glyph.length).trim() };
+          }),
+        ),
     undefined,
   );
 
-/** Etiqueta de la leyenda que acompaña a un símbolo («✓» → «Superado»), o `undefined` si no hay entrada con ese símbolo. */
-export const legendLabelFor = async (page: Page, glyph: string): Promise<string | undefined> => {
-  const entries = await legendEntries(page);
-  const entry = entries?.find((text) => text.startsWith(glyph));
-  return entry === undefined ? undefined : entry.slice(glyph.length);
-};
+/** Nombre de la leyenda que acompaña a un símbolo («✓» → «Superado»), o `undefined` si no hay entrada con ese símbolo. */
+export const legendLabelFor = async (page: Page, glyph: string): Promise<string | undefined> => (await legendEntries(page))?.find((entry) => entry.glyph === glyph)?.label;
+
+/**
+ * Símbolo que debe pintar la casilla de un caso marcado: el de su última ejecución. TC-010 es «pass» (historia 001, Reglas: ✓). TC-009 es
+ * «blocked» según el seed (apps/api/src/seed/data.ts, planTestRuns: la ejecución más reciente de TC-009 es la de índice 17) → «!».
+ * TC-012 es «pass» en el seed (índice 23) → ✓. Símbolos de la leyenda: ✓ superado, ✕ fallido, ! bloqueado, · sin ejecutar.
+ */
+export const ULTIMO_SIMBOLO_DEL_CASO: ReadonlyMap<string, string> = new Map<string, string>([
+  ['TC-009', '!'],
+  ['TC-010', '✓'],
+  ['TC-012', '✓'],
+]);
 
 // --- Avisos emergentes: registro desde antes de la acción ----------------------------------------------------------------------
 
