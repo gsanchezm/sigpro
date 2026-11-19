@@ -2,7 +2,7 @@ import type { Locator, Page } from '@playwright/test';
 import { TENANT_A } from '../../../story-runs/support/prepare';
 import { PROGRAMAS_TESTIDS } from '../../../../packages/shared/src/testids';
 import { ACTION, isVisible, linesOf, safe, waitUntil } from '../../support/browser';
-import { check, cell, conclude, preparationFailedWeb, strict, type Check } from '../../support/checks';
+import { check, cell, conclude, preparationFailedWeb, sleep, strict, type Check } from '../../support/checks';
 import { defineBrowserRows, type BrowserRowHandler } from '../../core/framework';
 import {
   actionFailed,
@@ -126,6 +126,41 @@ const fieldValueIs = async (page: Page, text: string): Promise<boolean> => (awai
 
 // --- Esquema 4: la tecla Esc cierra primero la lista de responsables y después el asistente -------------------------------
 
+/** Evidencia: elemento con el foco (etiqueta, id, data-testid y aria-label). No decide el veredicto. */
+const focusedElement = (page: Page): Promise<string> =>
+  safe(
+    () =>
+      page.evaluate(() => {
+        const element = document.activeElement;
+        if (!(element instanceof HTMLElement)) return '(ninguno)';
+        const testid = element.getAttribute('data-testid');
+        const label = element.getAttribute('aria-label');
+        return `${element.tagName.toLowerCase()}${element.id === '' ? '' : `#${element.id}`}${testid === null ? '' : `[data-testid="${testid}"]`}${label === null ? '' : ` aria-label="${label}"`}`;
+      }),
+    '(sin leer)',
+  );
+
+/** Evidencia: `aria-expanded` del campo «Responsable» (el campo puede haber salido del DOM con el asistente cerrado). */
+const expandedOf = (page: Page): Promise<string> => safe(async () => (await wizardOwnerField(page).getAttribute('aria-expanded', { timeout: 500 })) ?? '(sin atributo)', '(sin leer)');
+
+/** Evidencia de un muestreo: estado del campo, lista visible, diálogos y listas que hay en el DOM en ese momento. */
+const sampleAfterEscape = async (page: Page) => ({
+  aria_expanded: await expandedOf(page),
+  lista_visible: await safe<boolean | undefined>(() => personList(page).first().isVisible(), undefined),
+  dialogo_nuevo_programa_en_dom: await safe(() => wizardOf(page).count(), -1),
+  dialogos_en_dom: await safe(
+    () =>
+      page.evaluate(() =>
+        Array.from(document.querySelectorAll('[role="dialog"]')).map((dialog) => {
+          const labelledBy = dialog.getAttribute('aria-labelledby');
+          return labelledBy === null ? (dialog.getAttribute('aria-label') ?? '(sin nombre)') : (document.getElementById(labelledBy)?.textContent ?? '(sin texto)');
+        }),
+      ),
+    [] as string[],
+  ),
+  listboxes_en_dom: await safe(() => page.evaluate(() => document.querySelectorAll('[role="listbox"]').length), -1),
+});
+
 /** Situación de la tabla → si la lista del responsable está abierta (true) o cerrada (false) antes de pulsar Esc. */
 const SITUATION_OPEN: ReadonlyMap<string, boolean> = new Map<string, boolean>([
   ['con la lista abierta', true],
@@ -148,18 +183,35 @@ const escRow: BrowserRowHandler = async (row, { page }) => {
   }
   const listOpen = await waitUntil(async () => (await isVisible(personList(page))) === listOpenBefore, LOCAL_MS);
   if (!listOpen.reached) return preparationFailedWeb(expected, `la lista no está ${listOpenBefore ? 'abierta' : 'cerrada'} antes de pulsar Esc`);
+  // Evidencia (no veredicto): qué tiene el foco, el estado del campo y del DOM antes de pulsar Escape
+  const focusBefore = await focusedElement(page);
+  const expandedBefore = await expandedOf(page);
   const pressed = await interact(wizardOf(page), 'pulsar la tecla Esc', () => page.keyboard.press('Escape'));
   if (pressed) return actionFailed(expected, pressed);
+  // Un solo muestreo tras 1 s y otro tras 3 s desde la tecla
+  await sleep(1_000);
+  const sample1 = await sampleAfterEscape(page);
+  await sleep(2_000);
+  const sample3 = await sampleAfterEscape(page);
+  const evidence = {
+    foco_antes_de_esc: focusBefore,
+    aria_expanded_antes: expandedBefore,
+    tras_1s: sample1,
+    tras_3s: sample3,
+  };
   if (listOpenBefore) {
     const listClosed = await waitUntil(async () => !(await isVisible(personList(page))), LOCAL_MS);
-    return conclude([
-      check(listClosed.reached, 'la lista se cierra', 'la lista sigue abierta'),
-      check(await isVisible(wizardOf(page)), 'el asistente sigue abierto en «Paso 1 de 3»', 'el asistente se cierra'),
-      await stepCheck(page, 1, 'sigue en'),
-    ]);
+    return conclude(
+      [
+        check(listClosed.reached, 'la lista se cierra', 'la lista sigue abierta'),
+        check(await isVisible(wizardOf(page)), 'el asistente sigue abierto en «Paso 1 de 3»', 'el asistente se cierra'),
+        await stepCheck(page, 1, 'sigue en'),
+      ],
+      { evidence },
+    );
   }
   const wizardClosed = await waitUntil(async () => !(await isVisible(wizardOf(page))), LOCAL_MS);
-  return conclude([check(wizardClosed.reached, 'el asistente se cierra', 'el asistente sigue abierto')]);
+  return conclude([check(wizardClosed.reached, 'el asistente se cierra', 'el asistente sigue abierto')], { evidence });
 };
 
 defineBrowserRows({

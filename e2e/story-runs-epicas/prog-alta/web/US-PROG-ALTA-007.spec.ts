@@ -147,6 +147,7 @@ const OPTIONAL_DATE: ReadonlyMap<string, string> = new Map<string, string>([
 
 const BUDGET_VALUE: ReadonlyMap<string, string> = new Map<string, string>([
   ['(vacío)', ''],
+  ['900000', '900000'],
   ['0', '0'],
   ['1', '1'],
 ]);
