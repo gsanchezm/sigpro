@@ -27,7 +27,7 @@ const dir = resolve(results, 'epicas', epic);
 const readJson = (path) => (existsSync(path) ? JSON.parse(readFileSync(path, 'utf8')) : null);
 const git = (args) => {
   try {
-    return execFileSync('git', args, { encoding: 'utf8', cwd: root }).trim();
+    return execFileSync('git', args, { encoding: 'utf8', cwd: root, stdio: ['ignore', 'pipe', 'ignore'] }).trim();
   } catch {
     return null;
   }
@@ -139,7 +139,9 @@ const HARNESS_PATHS = ['e2e/story-runs-epicas/support', 'e2e/story-runs-epicas/g
 const harnessCommits = [...new Set(stories.map((story) => story.header.commit))];
 // Las superficies de una épica pueden ejecutarse en commits distintos (HEAD avanza con los commits de otras épicas y de documentación). Vale si
 // el contenido del arnés (HARNESS_PATHS) es idéntico en cada uno de esos commits y en HEAD: entonces lo que se ejecutó es el mismo arnés.
-const harnessChanged = harnessCommits.filter((commit) => git(['diff', '--quiet', commit, 'HEAD', '--', ...HARNESS_PATHS]) === null);
+// `core` solo cuenta para los commits en los que existe (EP-MFA y EP-REGISTRO se ejecutaron antes de que existiera)
+const harnessPathsAt = (commit) => (git(['cat-file', '-e', `${commit}:e2e/story-runs-epicas/core`]) === null ? HARNESS_PATHS : [...HARNESS_PATHS, 'e2e/story-runs-epicas/core']);
+const harnessChanged = harnessCommits.filter((commit) => git(['diff', '--quiet', commit, 'HEAD', '--', ...harnessPathsAt(commit)]) === null);
 const harnessUnchanged = harnessCommits.length > 0 && harnessChanged.length === 0;
 if (harnessChanged.length > 0) problems.push(`El arnés cambió desde ${harnessChanged.length === 1 ? 'el commit' : 'los commits'} con los que se ejecutó (o ya no existe${harnessChanged.length === 1 ? '' : 'n'}): ${harnessChanged.map((commit) => commit.slice(0, 7)).join(', ')}`);
 for (const commit of harnessCommits) if (git(['merge-base', '--is-ancestor', commit, 'HEAD']) === null) problems.push(`El commit del arnés ${commit.slice(0, 7)} no es antecesor de HEAD`);
