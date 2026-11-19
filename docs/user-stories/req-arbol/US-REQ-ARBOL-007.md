@@ -5,7 +5,7 @@ epica: EP-REQ-ARBOL
 titulo: "[Web] Ver las cifras del programa, leer el documento de requisitos y descargar el CSV"
 etiquetas: [web]
 relacionadas: [US-REQ-ARBOL-011, US-REQ-ARBOL-003, US-REQ-ARBOL-014]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["/programs/:code/requirements"]
 ---
 

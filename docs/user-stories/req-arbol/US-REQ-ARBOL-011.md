@@ -5,7 +5,7 @@ epica: EP-REQ-ARBOL
 titulo: "[Móvil] Ver las cifras del programa y leer el documento de requisitos"
 etiquetas: [movil]
 relacionadas: [US-REQ-ARBOL-007, US-REQ-ARBOL-009, US-REQ-ARBOL-010]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["/programs/:code/requirements"]
 ---
 

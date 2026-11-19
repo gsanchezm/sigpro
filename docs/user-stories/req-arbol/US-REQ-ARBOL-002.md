@@ -5,7 +5,7 @@ epica: EP-REQ-ARBOL
 titulo: "[API] Consultar el detalle de un requisito del tenant"
 etiquetas: [api]
 relacionadas: [US-REQ-ARBOL-001]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["GET /api/requirements/:code"]
 ---
 

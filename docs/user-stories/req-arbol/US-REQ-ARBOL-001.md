@@ -5,7 +5,7 @@ epica: EP-REQ-ARBOL
 titulo: "[API] Listar los requisitos de un programa del tenant con su padre y su posición"
 etiquetas: [api]
 relacionadas: [US-REQ-ARBOL-002, US-PROG-DETALLE-002]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["GET /api/programs/:code/requirements"]
 ---
 

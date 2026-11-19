@@ -5,7 +5,7 @@ epica: EP-REQ-ARBOL
 titulo: "[Móvil] Ver el árbol de requisitos: sangría, plegado, búsqueda y contador"
 etiquetas: [movil]
 relacionadas: [US-REQ-ARBOL-003, US-REQ-ARBOL-004, US-PROG-DETALLE-005]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["/programs/:code/requirements"]
 ---
 

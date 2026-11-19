@@ -5,7 +5,7 @@ epica: EP-REQ-ARBOL
 titulo: "[Web] Buscar en el árbol por código o título y filtrar por estado"
 etiquetas: [web]
 relacionadas: [US-REQ-ARBOL-003, US-REQ-ARBOL-009]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["/programs/:code/requirements"]
 ---
 

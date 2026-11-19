@@ -5,7 +5,7 @@ epica: EP-REQ-ARBOL
 titulo: "[Web] Mostrar la carga, el estado vacío, el error y el programa no encontrado"
 etiquetas: [web]
 relacionadas: [US-REQ-ARBOL-001, US-REQ-ARBOL-012, US-PROG-DETALLE-002]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["/programs/:code/requirements"]
 ---
 

@@ -5,7 +5,7 @@ epica: EP-REQ-ARBOL
 titulo: "[Móvil] Ver el detalle de un requisito en una hoja: campos, casos de prueba y no conformidades"
 etiquetas: [movil]
 relacionadas: [US-REQ-ARBOL-005, US-REQ-ARBOL-009, US-REQ-ARBOL-015]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["/programs/:code/requirements"]
 ---
 

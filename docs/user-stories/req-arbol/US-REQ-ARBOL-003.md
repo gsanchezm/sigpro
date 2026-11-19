@@ -5,7 +5,7 @@ epica: EP-REQ-ARBOL
 titulo: "[Web] Ver el árbol de requisitos: jerarquía, orden, plegar y desplegar"
 etiquetas: [web]
 relacionadas: [US-REQ-ARBOL-009, US-REQ-ARBOL-001, US-PROG-DETALLE-002]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["/programs/:code/requirements"]
 ---
 

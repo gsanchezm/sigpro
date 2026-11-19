@@ -5,7 +5,7 @@ epica: EP-REQ-ARBOL
 titulo: "[Web] Ver el detalle de un requisito: panel junto al árbol o pantalla completa"
 etiquetas: [web]
 relacionadas: [US-REQ-ARBOL-002, US-REQ-ARBOL-003, US-REQ-ARBOL-010]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["/programs/:code/requirements"]
 permisos: [requirement.edit]
 ---

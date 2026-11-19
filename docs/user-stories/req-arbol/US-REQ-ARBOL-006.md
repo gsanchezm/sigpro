@@ -5,7 +5,7 @@ epica: EP-REQ-ARBOL
 titulo: "[Web] Recorrer el árbol y las pestañas con el teclado"
 etiquetas: [web]
 relacionadas: [US-REQ-ARBOL-003, US-REQ-ARBOL-004, US-REQ-ARBOL-005]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["/programs/:code/requirements"]
 ---
 

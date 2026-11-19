@@ -5,7 +5,7 @@ epica: EP-REQ-ARBOL
 titulo: "[Móvil] Mostrar la carga, el estado vacío, el error y el programa no encontrado"
 etiquetas: [movil]
 relacionadas: [US-REQ-ARBOL-008, US-REQ-ARBOL-009]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["/programs/:code/requirements"]
 ---
 
