@@ -5,7 +5,7 @@ epica: EP-DOC-VERSIONES
 titulo: "[API] Validar el contenido y la nota de una versión nueva"
 etiquetas: [api]
 relacionadas: [US-DOC-VERSIONES-001, US-DOC-VERSIONES-003, US-DOC-VERSIONES-005, US-DOC-VERSIONES-009]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["POST /api/documents/:id/versions"]
 ---
 

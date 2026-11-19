@@ -5,7 +5,7 @@ epica: EP-DOC-VERSIONES
 titulo: "[Web] Comparar dos versiones en la ficha"
 etiquetas: [web]
 relacionadas: [US-DOC-VERSIONES-004, US-DOC-VERSIONES-005, US-DOC-VERSIONES-010]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["/documents/:id"]
 ---
 

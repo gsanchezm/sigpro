@@ -5,7 +5,7 @@ epica: EP-DOC-VERSIONES
 titulo: "[API] Permiso para publicar, orden de las comprobaciones y aislamiento por tenant"
 etiquetas: [api]
 relacionadas: [US-DOC-VERSIONES-001, US-DOC-VERSIONES-002, US-DOC-VERSIONES-005, US-DOC-VERSIONES-009]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["POST /api/documents/:id/versions"]
 permisos: [document.publish]
 ---

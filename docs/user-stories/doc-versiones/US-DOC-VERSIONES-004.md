@@ -5,7 +5,7 @@ epica: EP-DOC-VERSIONES
 titulo: "[API] Comparar dos versiones: diff alineado y estadísticas"
 etiquetas: [api]
 relacionadas: [US-DOC-VERSIONES-003, US-DOC-VERSIONES-007, US-DOC-VERSIONES-010]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["GET /api/documents/:id/compare"]
 permisos: [document.viewRestricted]
 ---

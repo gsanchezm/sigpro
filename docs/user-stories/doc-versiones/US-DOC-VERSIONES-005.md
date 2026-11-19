@@ -5,7 +5,7 @@ epica: EP-DOC-VERSIONES
 titulo: "[Web] Publicar una versión nueva desde la ficha"
 etiquetas: [web]
 relacionadas: [US-DOC-VERSIONES-001, US-DOC-VERSIONES-002, US-DOC-VERSIONES-003, US-DOC-VERSIONES-006, US-DOC-VERSIONES-008, US-DOC-VERSIONES-009]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["/documents/:id"]
 permisos: [document.publish]
 ---

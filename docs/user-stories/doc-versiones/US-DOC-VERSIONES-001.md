@@ -5,7 +5,7 @@ epica: EP-DOC-VERSIONES
 titulo: "[API] Publicar una versión nueva: queda la última, con su nota y su autor"
 etiquetas: [api]
 relacionadas: [US-DOC-VERSIONES-002, US-DOC-VERSIONES-003, US-DOC-VERSIONES-005, US-DOC-VERSIONES-009]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["POST /api/documents/:id/versions"]
 permisos: [document.publish]
 ---

@@ -5,7 +5,7 @@ epica: EP-DOC-VERSIONES
 titulo: "[Móvil] Publicar una versión nueva desde la ficha"
 etiquetas: [movil]
 relacionadas: [US-DOC-VERSIONES-001, US-DOC-VERSIONES-002, US-DOC-VERSIONES-005, US-DOC-VERSIONES-006]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["/documents/:id"]
 permisos: [document.publish]
 ---

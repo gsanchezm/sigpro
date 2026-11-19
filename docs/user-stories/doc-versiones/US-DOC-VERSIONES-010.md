@@ -5,7 +5,7 @@ epica: EP-DOC-VERSIONES
 titulo: "[Móvil] Comparar dos versiones con las líneas apiladas"
 etiquetas: [movil]
 relacionadas: [US-DOC-VERSIONES-004, US-DOC-VERSIONES-007, US-DOC-VERSIONES-009]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["/documents/:id"]
 ---
 

@@ -5,7 +5,7 @@ epica: EP-DOC-VERSIONES
 titulo: "[Web] Tras publicar, el historial de la ficha muestra la versión nueva primera"
 etiquetas: [web]
 relacionadas: [US-DOC-VERSIONES-001, US-DOC-VERSIONES-005, US-DOC-VERSIONES-009]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["/documents/:id"]
 ---
 
