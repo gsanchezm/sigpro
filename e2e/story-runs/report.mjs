@@ -32,11 +32,23 @@ const git = (args) => {
 };
 const sameSettings = (settings) => Boolean(settings) && Object.keys(REQUIRED_SETTINGS).every((key) => settings[key] === REQUIRED_SETTINGS[key]);
 
+// Versión de ESTE informe: hash de report.mjs, HEAD al generarlo y si tiene cambios sin confirmar. Sin esto, un informe.md no diría
+// qué versión del informe lo generó y no podría asociarse a un commit
+const REPORT_FILE = 'e2e/story-runs/report.mjs';
+const reportVersion = {
+  file: REPORT_FILE,
+  sha256: createHash('sha256').update(readFileSync(import.meta.filename)).digest('hex'),
+  head: git(['rev-parse', 'HEAD']),
+  lastCommitTouchingIt: git(['log', '-1', '--format=%H', '--', REPORT_FILE]),
+  dirty: git(['status', '--porcelain', '--', REPORT_FILE]) !== '',
+};
+
 const VERDICTS = ['coincide', 'discrepa', 'pendiente-de-decision', 'no-ejecutable', 'error-de-prueba'];
 const SURFACE_LABEL = { api: 'API (HTTP)', web: 'Web, escritorio 1440 px', 'expo-web': 'App móvil como web de Expo a 390 px (NO nativo)' };
 
 // --- Comprobaciones de integridad ---------------------------------------------------------------------------------
 const problems = [];
+if (reportVersion.dirty) problems.push(`${REPORT_FILE} tiene cambios sin confirmar: este informe no se puede asociar a una versión del informe (confirma el cambio y vuelve a generarlo)`);
 const expectedIds = new Set(manifest.rows.map((row) => row.rowId));
 const seen = new Map();
 for (const story of stories) {
@@ -48,6 +60,17 @@ for (const story of stories) {
 }
 for (const id of expectedIds) if (!seen.has(id)) problems.push(`Falta el resultado de la fila ${id}`);
 for (const id of seen.keys()) if (!expectedIds.has(id)) problems.push(`Resultado de una fila que no está en el manifiesto: ${id}`);
+// Un intento POSTERIOR que quedó incompleto o con errores del arnés (`partial/`, lo escribe support/rows.ts) no pisa el resultado bueno
+// anterior, pero el informe no puede callarlo: el resultado usado ya no es el del último intento de esa historia
+const partialDir = resolve(dir, 'partial');
+const partials = existsSync(partialDir) ? readdirSync(partialDir).filter((name) => /^US-.*\.json$/.test(name)).sort() : [];
+for (const name of partials) {
+  const partial = readJson(resolve(partialDir, name));
+  const used = stories.find((story) => story.header.story === partial.header.story);
+  if (used && !(String(used.header.executedAt) < String(partial.header.executedAt))) continue;
+  const errors = partial.rows.filter((row) => row.verdict === 'error-de-prueba').length;
+  problems.push(`Hay un intento posterior de ${partial.header.story} que quedó incompleto o con errores del arnés (partial/${name}, runId ${partial.header.runId}, ${partial.rows.length} filas, ${errors} con error): el resultado usado ${used ? `(${used.header.runId})` : '(ninguno)'} es anterior a ese intento; revisa el parcial y archívalo fuera de partial/ o repite la superficie`);
+}
 for (const story of stories) {
   if (story.header.storiesCommit !== manifest.storiesCommit) problems.push(`${story.header.story}: commit de las historias ${story.header.storiesCommit} ≠ manifiesto ${manifest.storiesCommit}`);
   if (story.header.harnessDirty !== false) problems.push(`${story.header.story}: el arnés tenía cambios sin confirmar al ejecutar (harnessDirty=${story.header.harnessDirty}); el resultado no se puede asociar a un commit`);
@@ -196,6 +219,7 @@ out();
 out(`- **Qué se probó (historias):** commit \`${manifest.storiesCommit?.slice(0, 7) ?? '?'}\`, sin cambios sin confirmar al ejecutar; manifiesto generado ${manifest.generatedAt}.`);
 out(`- **Con qué se probó (arnés):** commit ${harnessCommits.map((commit) => `\`${commit.slice(0, 7)}\``).join(', ')}${harnessCommits.length === 1 ? ' (el mismo en todas las ejecuciones)' : ''}; ${harnessUnchanged ? 'sin cambios desde entonces en `e2e/story-runs` ni en el config' : '**el arnés ha cambiado desde entonces**'}. Cada historia se ejecuta entera de una vez, una ejecución por superficie, siempre en serie (un worker, sin reintentos ni repeticiones ni fragmentos: lo comprueba la puerta con los ajustes EFECTIVOS):`);
 for (const story of stories) out(`  - ${story.header.story}: ${SURFACE_LABEL[story.header.surface] ?? story.header.surface} · runId ${story.header.runId} · empezó ${story.header.startedAt ?? '?'} · terminó ${story.header.executedAt}`);
+out(`- **Con qué versión del informe se generó este documento:** \`${REPORT_FILE}\` sha256 \`${reportVersion.sha256.slice(0, 16)}…\`, última modificación en el commit \`${reportVersion.lastCommitTouchingIt?.slice(0, 7) ?? '?'}\`, HEAD \`${reportVersion.head?.slice(0, 7) ?? '?'}\`, ${reportVersion.dirty ? '**con cambios sin confirmar (no asociable a un commit)**' : 'sin cambios sin confirmar'}. El informe y su autotest no cuentan como cambio del arnés: lo que liga los resultados al arnés es el commit de cada ejecución.`);
 out(`- **Aislamiento:** la puerta \`e2e/story-runs/gate/aislamiento.spec.ts\` es un proyecto del que dependen \`api\`, \`web\` y \`mobile\`, y cada historia se niega a ejecutar si la puerta no consta superada en SU ejecución. Consta superada en ${gateRunsUsed.filter((run) => run.passed).length} de las ${runIds.length} ejecuciones de estos resultados. En cada una midió, en ese momento: ${gateRunsUsed.map((run) => `5432 ${run.environment.ports['5432'] ? '**accesible**' : 'inaccesible'} y ${run.environment.isolatedPgPort} ${run.environment.ports[String(run.environment.isolatedPgPort)] ? 'accesible' : '**inaccesible**'} (Node ${run.environment.node}, el que ejecuta las pruebas; no el de la API)`).join('; ')}. Evidencia en \`docs/story-runs/aislamiento.json\`. Cada fila reinicia su tenant, comprueba que el caos está a cero y usa correos únicos y sesiones propias.`);
 out(`- **La API usa la base aislada:** ${gateRunsUsed.map((run) => {
   const match = sentinelFor(run);
@@ -325,7 +349,7 @@ for (const story of stories) {
 writeFileSync(resolve(dir, 'informe.md'), `${lines.join('\n')}\n`, 'utf8');
 writeFileSync(
   resolve(dir, 'resumen.json'),
-  `${JSON.stringify({ storiesCommit: manifest.storiesCommit, rows: allRows.length, manifestRows: expectedIds.size, totals: grand, perStory: Object.fromEntries(stories.map((story) => [story.header.story, totalsOf(story.rows)])), problems }, null, 2)}\n`,
+  `${JSON.stringify({ report: reportVersion, storiesCommit: manifest.storiesCommit, rows: allRows.length, manifestRows: expectedIds.size, totals: grand, perStory: Object.fromEntries(stories.map((story) => [story.header.story, totalsOf(story.rows)])), problems }, null, 2)}\n`,
   'utf8',
 );
 console.log(`informe.md: ${allRows.length}/${expectedIds.size} filas · ${VERDICTS.map((verdict) => `${verdict}=${grand[verdict]}`).join(' · ')}`);

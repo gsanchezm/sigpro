@@ -22,6 +22,8 @@ const sandbox = () => {
   for (const name of ['manifest.json', 'aislamiento.json', 'builds.json', 'centinelas.json', 'entorno.json']) if (existsSync(join(source, name))) cpSync(join(source, name), join(dir, name));
   mkdirSync(join(dir, 'EP-LOGIN'));
   for (const name of readdirSync(join(source, 'EP-LOGIN')).filter((file) => /^US-.*\.json$/.test(file))) cpSync(join(source, 'EP-LOGIN', name), join(dir, 'EP-LOGIN', name));
+  // También los intentos incompletos (`partial/`): la línea base debe reflejar el estado real, y si hay uno posterior no es «limpia»
+  if (existsSync(join(source, 'EP-LOGIN', 'partial'))) cpSync(join(source, 'EP-LOGIN', 'partial'), join(dir, 'EP-LOGIN', 'partial'), { recursive: true });
   return dir;
 };
 
@@ -124,7 +126,31 @@ const CASES = [
   ['el centinela comprobó otro puerto de PostgreSQL', (d) => mutate(d, 'centinelas.json', (list) => list.forEach((s) => { s.isolatedPgPort = 5999; })), SENTINEL_MSG],
   ['el centinela no identifica su script', (d) => mutate(d, 'centinelas.json', (list) => list.forEach((s) => { delete s.scriptSha256; })), SENTINEL_MSG],
   ['el centinela no identifica la instancia de PostgreSQL', (d) => mutate(d, 'centinelas.json', (list) => list.forEach((s) => { delete s.systemIdentifier; })), SENTINEL_MSG],
+  // Intentos incompletos (`partial/`): un intento posterior al resultado usado se detecta; uno anterior no cuenta
+  [
+    'un intento posterior de una historia quedó incompleto (partial/) y el resultado usado es anterior',
+    (d) => {
+      mkdirSync(join(d, 'EP-LOGIN', 'partial'), { recursive: true });
+      const later = readJson(join(d, 'EP-LOGIN', 'US-LOGIN-003.json'));
+      later.header.executedAt = '2099-01-01T00:00:00.000Z';
+      later.rows = later.rows.slice(0, 2).map((row) => ({ ...row, verdict: 'error-de-prueba' }));
+      writeFileSync(join(d, 'EP-LOGIN', 'partial', 'US-LOGIN-003.json'), JSON.stringify(later), 'utf8');
+    },
+    /Hay un intento posterior de US-LOGIN-003 que quedó incompleto/,
+  ],
   // Casos que DEBEN pasar
+  [
+    'un intento incompleto (partial/) ANTERIOR al resultado usado no cuenta',
+    (d) => {
+      mkdirSync(join(d, 'EP-LOGIN', 'partial'), { recursive: true });
+      const earlier = readJson(join(d, 'EP-LOGIN', 'US-LOGIN-003.json'));
+      earlier.header.executedAt = '2000-01-01T00:00:00.000Z';
+      earlier.rows = earlier.rows.slice(0, 2);
+      writeFileSync(join(d, 'EP-LOGIN', 'partial', 'US-LOGIN-003.json'), JSON.stringify(earlier), 'utf8');
+    },
+    /^$/,
+    { ok: true },
+  ],
   ['un centinela con 1 s de desfase SÍ vale (la tolerancia es de 2 s)', (d) => shiftSentinels(d, 1000), /^$/, { ok: true }],
   ['sin registro de construcción: el informe sale con 0 pero dice que la procedencia NO está demostrada', (d) => rmSync(join(d, 'builds.json')), /^$/, { ok: true, informe: /NO está demostrada/ }],
 ];
@@ -142,11 +168,23 @@ const check = (label, ok, detail) => {
   check('copia SIN manipular: el informe sale con código 0', result.status === 0, result.status === 0 ? '' : `código ${result.status}: ${result.stderr.split('\n')[0]}`);
   check('copia SIN manipular: el informe da la procedencia por demostrada', /demostrada por el registro de construcción/.test(informe));
   rmSync(dir, { recursive: true, force: true });
+  // Con una línea base que ya falla, el informe contiene de antemano mensajes de otros problemas: un caso «detectado» no probaría nada.
+  // El autotest se niega a certificar en lugar de ejecutar casos cuyo resultado no vale
+  if (failures > 0) {
+    console.log(`\nLA COPIA SIN MANIPULAR NO ESTÁ LIMPIA: el autotest no puede certificar nada con una base incoherente (se omiten los ${CASES.length} casos). Primero hay que completar la ronda: ${result.stderr.split('\n').slice(0, 3).join(' | ')}`);
+    process.exit(1);
+  }
 }
 
 for (const [label, mutation, expected, options = {}] of CASES) {
   const dir = sandbox();
-  mutation(dir);
+  try {
+    mutation(dir);
+  } catch (error) {
+    check(label, false, `la manipulación del caso falló (${error instanceof Error ? error.message : String(error)}): el caso no se pudo probar`);
+    rmSync(dir, { recursive: true, force: true });
+    continue;
+  }
   const result = run(dir);
   const informePath = join(dir, 'EP-LOGIN', 'informe.md');
   const informe = existsSync(informePath) ? readFileSync(informePath, 'utf8') : '';
