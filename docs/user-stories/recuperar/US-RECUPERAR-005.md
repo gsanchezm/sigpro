@@ -5,7 +5,7 @@ epica: EP-RECUPERAR
 titulo: "[Web] Enviar la petición: aviso de éxito, botón ocupado y fallo sin aviso de éxito"
 etiquetas: [web]
 relacionadas: [US-RECUPERAR-001, US-RECUPERAR-004, US-RECUPERAR-007]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["/forgot"]
 ---
 

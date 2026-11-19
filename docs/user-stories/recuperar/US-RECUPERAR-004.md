@@ -5,7 +5,7 @@ epica: EP-RECUPERAR
 titulo: "[Web] Recuperar contraseña: correo del acceso, validación y salidas de la pantalla"
 etiquetas: [web]
 relacionadas: [US-RECUPERAR-001, US-RECUPERAR-005, US-RECUPERAR-006, US-LOGIN-007]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["/forgot"]
 ---
 

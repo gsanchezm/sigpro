@@ -5,7 +5,7 @@ epica: EP-RECUPERAR
 titulo: "[Móvil] Enviar la petición: aviso de éxito, botón ocupado, aviso de error y tecla de envío"
 etiquetas: [movil]
 relacionadas: [US-RECUPERAR-001, US-RECUPERAR-005, US-RECUPERAR-006]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["/forgot"]
 ---
 

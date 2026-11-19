@@ -5,7 +5,7 @@ epica: EP-RECUPERAR
 titulo: "[Móvil] Recuperar contraseña: correo del acceso, validación y salidas de la pantalla"
 etiquetas: [movil]
 relacionadas: [US-RECUPERAR-001, US-RECUPERAR-004, US-RECUPERAR-007, US-LOGIN-011, US-LOGIN-012]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["/forgot"]
 ---
 

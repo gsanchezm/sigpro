@@ -5,7 +5,7 @@ epica: EP-RECUPERAR
 titulo: "[API] Responder 202 con cuerpo vacío a la recuperación, exista o no la cuenta"
 etiquetas: [api]
 relacionadas: [US-RECUPERAR-002, US-RECUPERAR-004, US-RECUPERAR-006, US-REGISTRO-006]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["POST /api/auth/forgot"]
 ---
 
