@@ -5,7 +5,7 @@ epica: EP-REGISTRO
 titulo: "[API] Crear una solicitud de acceso pendiente de aprobación"
 etiquetas: [api]
 relacionadas: [US-LOGIN-003, US-REGISTRO-005, US-REGISTRO-011, US-REGISTRO-015]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["POST /api/auth/register"]
 ---
 

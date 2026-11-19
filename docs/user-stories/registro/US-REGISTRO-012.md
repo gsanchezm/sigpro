@@ -5,7 +5,7 @@ epica: EP-REGISTRO
 titulo: "[Web] Reenviar el correo de verificación desde «Solicitud enviada»"
 etiquetas: [web]
 relacionadas: [US-REGISTRO-006, US-REGISTRO-007, US-REGISTRO-015]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["/register"]
 ---
 

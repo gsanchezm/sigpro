@@ -5,7 +5,7 @@ epica: EP-REGISTRO
 titulo: "[Web] Medidor de fuerza de la contraseña y sus cuatro reglas"
 etiquetas: [web]
 relacionadas: [US-REGISTRO-003, US-REGISTRO-013]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["/register"]
 ---
 

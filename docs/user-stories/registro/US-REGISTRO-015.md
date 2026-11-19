@@ -5,7 +5,7 @@ epica: EP-REGISTRO
 titulo: "[Móvil] Enviar la solicitud: aviso de correo ya registrado, «Solicitud enviada» y reenvío de la verificación"
 etiquetas: [movil]
 relacionadas: [US-REGISTRO-001, US-REGISTRO-005, US-REGISTRO-011, US-REGISTRO-012, US-LOGIN-012]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["/register"]
 ---
 

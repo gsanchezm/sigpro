@@ -5,7 +5,7 @@ epica: EP-REGISTRO
 titulo: "[API] Responder 409 si el correo ya tiene cuenta en el tenant"
 etiquetas: [api]
 relacionadas: [US-REGISTRO-011, US-REGISTRO-015]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["POST /api/auth/register"]
 ---
 

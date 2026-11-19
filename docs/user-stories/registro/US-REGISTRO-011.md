@@ -5,7 +5,7 @@ epica: EP-REGISTRO
 titulo: "[Web] Enviar la solicitud: aviso de correo ya registrado y vista «Solicitud enviada»"
 etiquetas: [web]
 relacionadas: [US-REGISTRO-001, US-REGISTRO-005, US-REGISTRO-015, US-LOGIN-007]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["/register"]
 ---
 

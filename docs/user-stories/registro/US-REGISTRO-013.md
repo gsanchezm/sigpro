@@ -5,7 +5,7 @@ epica: EP-REGISTRO
 titulo: "[Móvil] Formulario de solicitud: elementos, ayudas, medidor y mostrar la contraseña"
 etiquetas: [movil]
 relacionadas: [US-LOGIN-011, US-REGISTRO-008, US-REGISTRO-010]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["/register"]
 ---
 

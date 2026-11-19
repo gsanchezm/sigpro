@@ -5,7 +5,7 @@ epica: EP-REGISTRO
 titulo: "[Móvil] Validar la solicitud antes de enviarla: avisos por campo y borrado al editar"
 etiquetas: [movil]
 relacionadas: [US-REGISTRO-002, US-REGISTRO-003, US-REGISTRO-009, US-REGISTRO-016]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["/register"]
 ---
 

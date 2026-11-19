@@ -5,7 +5,7 @@ epica: EP-REGISTRO
 titulo: "[API] Exigir la aceptación de las condiciones y un rol solicitable"
 etiquetas: [api]
 relacionadas: [US-REGISTRO-009, US-REGISTRO-014]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["POST /api/auth/register"]
 ---
 

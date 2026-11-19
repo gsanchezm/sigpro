@@ -5,7 +5,7 @@ epica: EP-REGISTRO
 titulo: "[API] Responder 202 al reenvío de la verificación sin revelar si hay una solicitud"
 etiquetas: [api]
 relacionadas: [US-REGISTRO-007, US-REGISTRO-012, US-REGISTRO-015]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["POST /api/auth/resend"]
 ---
 

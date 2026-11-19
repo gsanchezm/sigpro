@@ -5,7 +5,7 @@ epica: EP-REGISTRO
 titulo: "[Web] Formulario de solicitud: elementos, ayudas y salidas"
 etiquetas: [web]
 relacionadas: [US-LOGIN-006, US-REGISTRO-013]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["/register"]
 ---
 

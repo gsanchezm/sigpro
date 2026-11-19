@@ -5,7 +5,7 @@ epica: EP-REGISTRO
 titulo: "[Web] Validar la solicitud antes de enviarla: avisos por campo, foco y borrado al editar"
 etiquetas: [web]
 relacionadas: [US-REGISTRO-002, US-REGISTRO-003, US-REGISTRO-014, US-REGISTRO-016]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["/register"]
 ---
 

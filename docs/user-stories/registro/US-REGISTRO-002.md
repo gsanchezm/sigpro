@@ -5,7 +5,7 @@ epica: EP-REGISTRO
 titulo: "[API] Rechazar una solicitud con campos obligatorios vacíos o un correo sin forma de dirección"
 etiquetas: [api]
 relacionadas: [US-REGISTRO-009, US-REGISTRO-014]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["POST /api/auth/register"]
 ---
 

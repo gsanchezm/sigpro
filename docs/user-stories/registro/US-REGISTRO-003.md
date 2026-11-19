@@ -5,7 +5,7 @@ epica: EP-REGISTRO
 titulo: "[API] Exigir una contraseña de diez caracteres con mayúscula, minúscula, número y símbolo, y su confirmación"
 etiquetas: [api]
 relacionadas: [US-REGISTRO-009, US-REGISTRO-010, US-REGISTRO-014]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["POST /api/auth/register"]
 ---
 
