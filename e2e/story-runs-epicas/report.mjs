@@ -137,10 +137,12 @@ for (let i = 1; i < windows.length; i += 1) if (windows[i].start < windows[i - 1
 // Las piezas comunes (marco, comprobaciones, puerta) y la carpeta de ESTA épica: las carpetas de otras épicas se añaden sin invalidar esta evidencia
 const HARNESS_PATHS = ['e2e/story-runs-epicas/support', 'e2e/story-runs-epicas/gate', `e2e/story-runs-epicas/${slug.toLowerCase()}`, 'e2e/playwright.stories-epicas.config.ts'];
 const harnessCommits = [...new Set(stories.map((story) => story.header.commit))];
-if (harnessCommits.length > 1) problems.push(`Las ejecuciones no son del mismo commit del arnés: ${harnessCommits.map((commit) => commit.slice(0, 7)).join(', ')}`);
-const harnessUnchanged = harnessCommits.length === 1 && git(['diff', '--quiet', harnessCommits[0], 'HEAD', '--', ...HARNESS_PATHS]) !== null;
-if (harnessCommits.length === 1 && !harnessUnchanged) problems.push('El arnés cambió desde el commit con el que se ejecutó (o ese commit ya no existe)');
-if (harnessCommits.length === 1 && git(['merge-base', '--is-ancestor', harnessCommits[0], 'HEAD']) === null) problems.push(`El commit del arnés ${harnessCommits[0].slice(0, 7)} no es antecesor de HEAD`);
+// Las superficies de una épica pueden ejecutarse en commits distintos (HEAD avanza con los commits de otras épicas y de documentación). Vale si
+// el contenido del arnés (HARNESS_PATHS) es idéntico en cada uno de esos commits y en HEAD: entonces lo que se ejecutó es el mismo arnés.
+const harnessChanged = harnessCommits.filter((commit) => git(['diff', '--quiet', commit, 'HEAD', '--', ...HARNESS_PATHS]) === null);
+const harnessUnchanged = harnessCommits.length > 0 && harnessChanged.length === 0;
+if (harnessChanged.length > 0) problems.push(`El arnés cambió desde ${harnessChanged.length === 1 ? 'el commit' : 'los commits'} con los que se ejecutó (o ya no existe${harnessChanged.length === 1 ? '' : 'n'}): ${harnessChanged.map((commit) => commit.slice(0, 7)).join(', ')}`);
+for (const commit of harnessCommits) if (git(['merge-base', '--is-ancestor', commit, 'HEAD']) === null) problems.push(`El commit del arnés ${commit.slice(0, 7)} no es antecesor de HEAD`);
 
 // --- Procedencia de los builds (el registro del piloto, solo lectura) ------------------------------------------------------
 const BUILD_INPUTS = ['apps', 'packages', 'examples', 'package.json', 'pnpm-lock.yaml', 'pnpm-workspace.yaml', 'tsconfig.base.json', 'docs/GUIA-ALUMNO.md', '.github/workflows/students-e2e.yml'];
