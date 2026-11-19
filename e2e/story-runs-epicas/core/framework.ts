@@ -122,7 +122,7 @@ interface RowResult extends Outcome {
 /** Identifica una ejecución completa: lo fija el config de Playwright en el proceso principal y los workers lo heredan. No lo fijes a mano: dos ejecuciones con el mismo id mezclarían filas. */
 const RUN_ID = process.env.SIGPRO_STORIES_RUN_ID ?? 'sin-id';
 /** Épica de una historia: US-MFA-001 → EP-MFA. Los resultados de cada épica caen en su carpeta de docs/story-runs/epicas/. */
-export const epicOf = (story: string): string => `EP-${story.replace(/^US-/, '').replace(/-d{3}$/, '')}`;
+export const epicOf = (story: string): string => `EP-${story.replace(/^US-/, '').replace(/-[0-9]{3}$/, '')}`;
 /** Carpeta de manejadores de una historia: US-PROG-LISTA-001 → prog-lista. */
 export const slugOf = (story: string): string => epicOf(story).slice(3).toLowerCase();
 const rowFile = (rowId: string): string => `epicas/${epicOf(rowId.split('/')[0] ?? rowId)}/rows/${rowId.replaceAll('/', '__')}.json`;
