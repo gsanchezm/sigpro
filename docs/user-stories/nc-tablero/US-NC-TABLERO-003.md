@@ -5,7 +5,7 @@ epica: EP-NC-TABLERO
 titulo: "[API] Dar un paso permitido por la máquina de estados y rechazar los no admitidos con 409"
 etiquetas: [api]
 relacionadas: [US-NC-TABLERO-002, US-NC-TABLERO-004, US-NC-TABLERO-005, US-NC-TABLERO-008]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["POST /api/nc/:code/transition"]
 permisos: [nc.transition]
 ---

@@ -5,7 +5,7 @@ epica: EP-NC-TABLERO
 titulo: "[Web] Abrir el detalle de una no conformidad en /nc/:code y cambiar su estado desde ahí"
 etiquetas: [web]
 relacionadas: [US-NC-TABLERO-002, US-NC-TABLERO-004, US-NC-TABLERO-006, US-NC-TABLERO-008]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["/nc/:code"]
 permisos: [nc.transition]
 ---

@@ -5,7 +5,7 @@ epica: EP-NC-TABLERO
 titulo: "[Web] Cambiar el estado de una no conformidad desde el tablero"
 etiquetas: [web]
 relacionadas: [US-NC-TABLERO-003, US-NC-TABLERO-004, US-NC-TABLERO-006, US-NC-TABLERO-009]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["/nc"]
 permisos: [nc.transition]
 ---

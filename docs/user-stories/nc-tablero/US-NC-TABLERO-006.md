@@ -5,7 +5,7 @@ epica: EP-NC-TABLERO
 titulo: "[Web] Ver el tablero de no conformidades por estado, con sus tarjetas, sus avisos y la vista de pestañas"
 etiquetas: [web]
 relacionadas: [US-NC-TABLERO-001, US-NC-TABLERO-007, US-NC-TABLERO-008, US-NC-TABLERO-009, US-NC-TABLERO-010]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["/nc"]
 ---
 

@@ -5,7 +5,7 @@ epica: EP-NC-TABLERO
 titulo: "[API] Permitir el paso solo a los roles con el permiso nc.transition"
 etiquetas: [api]
 relacionadas: [US-NC-TABLERO-003, US-NC-TABLERO-008, US-NC-TABLERO-009]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["POST /api/nc/:code/transition"]
 permisos: [nc.transition]
 ---

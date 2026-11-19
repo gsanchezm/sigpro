@@ -5,7 +5,7 @@ epica: EP-NC-TABLERO
 titulo: "[API] Rechazar con 422 un cuerpo de paso no válido y con 404 una no conformidad inexistente"
 etiquetas: [api]
 relacionadas: [US-NC-TABLERO-003, US-NC-TABLERO-004]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["POST /api/nc/:code/transition"]
 ---
 

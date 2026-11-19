@@ -5,7 +5,7 @@ epica: EP-NC-TABLERO
 titulo: "[Móvil] Cambiar el estado de una no conformidad desde su detalle con «Mover a…»"
 etiquetas: [movil]
 relacionadas: [US-NC-TABLERO-003, US-NC-TABLERO-004, US-NC-TABLERO-008, US-NC-TABLERO-010]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["/nc"]
 permisos: [nc.transition]
 ---

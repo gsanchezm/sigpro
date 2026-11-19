@@ -5,7 +5,7 @@ epica: EP-NC-TABLERO
 titulo: "[Móvil] Ver el tablero de no conformidades con su búsqueda y su filtro por severidad"
 etiquetas: [movil]
 relacionadas: [US-NC-TABLERO-001, US-NC-TABLERO-006, US-NC-TABLERO-007, US-NC-TABLERO-011, US-NC-TABLERO-012]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["/nc"]
 ---
 

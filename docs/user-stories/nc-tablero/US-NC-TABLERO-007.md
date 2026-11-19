@@ -5,7 +5,7 @@ epica: EP-NC-TABLERO
 titulo: "[Web] Filtrar el tablero por texto, programa, severidad y sin asignar"
 etiquetas: [web]
 relacionadas: [US-NC-TABLERO-001, US-NC-TABLERO-006, US-NC-TABLERO-010, US-NC-TABLERO-012]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["/nc"]
 ---
 

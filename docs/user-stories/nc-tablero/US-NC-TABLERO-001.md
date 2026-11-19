@@ -5,7 +5,7 @@ epica: EP-NC-TABLERO
 titulo: "[API] Listar las no conformidades del tenant con sus campos, su orden y sus filtros"
 etiquetas: [api]
 relacionadas: [US-NC-TABLERO-002, US-NC-TABLERO-006, US-NC-TABLERO-007, US-NC-TABLERO-010]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["GET /api/nc"]
 ---
 

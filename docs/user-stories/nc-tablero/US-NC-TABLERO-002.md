@@ -5,7 +5,7 @@ epica: EP-NC-TABLERO
 titulo: "[API] Consultar el detalle de una no conformidad y los pasos que admite"
 etiquetas: [api]
 relacionadas: [US-NC-TABLERO-001, US-NC-TABLERO-003, US-NC-TABLERO-009]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["GET /api/nc/:code"]
 ---
 
