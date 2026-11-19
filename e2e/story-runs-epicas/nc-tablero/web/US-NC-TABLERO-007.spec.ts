@@ -206,7 +206,7 @@ const clearRow: BrowserRowHandler = async (row: ManifestRow, { page }) => {
       check(severity === '', '«Severidad» en «Todas las severidades»', `«Severidad» con valor «${severity ?? '(sin leer)'}»`),
       check(unassigned === false, 'la casilla «Solo sin asignar» desmarcada', `casilla ${unassigned === undefined ? '(sin leer)' : unassigned ? 'marcada' : 'desmarcada'}`),
     ],
-    'Con el tablero vacío habría dos botones «Limpiar filtros»; esta fila pulsa el de la barra (nc-filters-clear) y no el del aviso.',
+    'Con el tablero vacío habría dos botones «Limpiar filtros»; esta fila pulsa el de la barra (nc-filters-clear) y no el del aviso. Regla sin fila: los filtros no se guardan en la dirección; no se recarga la página para comprobarlo.',
   );
 };
 

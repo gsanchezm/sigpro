@@ -51,7 +51,8 @@ const commentsOrder: ApiRowHandler = async (row: ManifestRow) => {
   const raw = field(result.body, 'comments');
   const comments: readonly Record<string, unknown>[] = Array.isArray(raw) ? (raw as Record<string, unknown>[]) : [];
   const dates = comments.map((entry) => String(field(entry, 'createdAt')));
-  const ordered = dates.every((value, index) => index === 0 || (dates[index - 1] ?? '') <= value);
+  // Estricto: con dos o más comentarios las fechas deben ser distintas y crecer (en el seed, NC-003 tiene 3 con horas distintas)
+  const ordered = dates.every((value, index) => index === 0 || (dates[index - 1] ?? '') < value);
   return verdict(
     [
       check(result.status === 200, 'respuesta 200', `respuesta ${result.status}`),

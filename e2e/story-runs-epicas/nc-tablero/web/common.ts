@@ -263,6 +263,8 @@ export interface BoardView {
   readonly busy: string | undefined;
   readonly total: string | undefined;
   readonly columns: readonly ColumnView[];
+  /** Estados de las columnas en el ORDEN DEL DOM (izquierda a derecha), tal como están pintadas. */
+  readonly domOrder: readonly string[];
   readonly cardsTotal: number;
   readonly skeletons: number;
   readonly errorText: string | undefined;
@@ -303,6 +305,10 @@ const boardReader = (mobile: boolean): BoardView => {
   const countNode = document.querySelector('[data-testid="nc-count"]');
   const errorNode = document.querySelector('[data-testid="nc-error"]');
   return {
+    domOrder: Array.from(document.querySelectorAll('section[data-testid]'))
+      .map((node) => node.getAttribute('data-testid') ?? '')
+      .filter((id) => /^nc-column-(open|in_analysis|corrective_action|closed|rejected)$/.test(id))
+      .map((id) => id.replace('nc-column-', '')),
     hasBoard: board !== null,
     busy: board === null ? undefined : board.getAttribute('aria-busy') ?? undefined,
     total: countNode === null ? undefined : (countNode.textContent ?? '').trim(),
@@ -350,6 +356,24 @@ export const textNow = async (target: Locator): Promise<string | undefined> => {
 /** Texto de un elemento por testid, leído con plazo corto. */
 export const testidText = (page: Page, testid: string): Promise<string | undefined> => textNow(page.getByTestId(testid));
 
+/**
+ * Nombre que lee una persona de un elemento: su texto SIN los avatares (`role="img"` en la app móvil, `<img>` en la web), con los
+ * espacios normalizados. Así un avatar con iniciales («AM») no se pega al nombre («AMAndrés Molina»).
+ */
+export const nameTextOf = (target: Locator): Promise<string | undefined> =>
+  withLimit<string | undefined>(
+    target.first().evaluate(
+      (node) => {
+        const copy = node.cloneNode(true) as Element;
+        copy.querySelectorAll('[role="img"], img').forEach((avatar) => avatar.remove());
+        return (copy.textContent ?? '').replace(/\s+/g, ' ').trim();
+      },
+      undefined,
+      { timeout: READ_MS },
+    ),
+    undefined,
+  );
+
 // --- Interceptación de peticiones a la API ---------------------------------------------------------------------------------------
 
 /** Comportamiento de la prueba ante una petición: fallar la primera, fallar todas, o retrasarla un tiempo. */
@@ -358,6 +382,8 @@ export type Behaviour = { readonly kind: 'failFirst'; readonly status: number } 
 export interface Interception {
   /** Cada petición que llegó a la ruta, en orden, con lo que se hizo con ella. */
   readonly hits: () => readonly string[];
+  /** Instante (ms) en que la PETICIÓN llegó a la ruta: el retraso se mide desde aquí, no desde la navegación. */
+  readonly receivedAt: () => number | undefined;
   /** Instante (ms) en que la prueba entregó la respuesta retrasada (`undefined` si no hubo retraso o aún no). */
   readonly deliveredAt: () => number | undefined;
 }
@@ -370,11 +396,13 @@ export const intercept = async (page: Page, method: 'GET' | 'POST', pathname: st
   const log: string[] = [];
   let failures = 0;
   let delivered: number | undefined;
+  let received: number | undefined;
   await page.route(
     (url) => url.pathname === pathname,
     async (route) => {
       const request = route.request();
       if (request.method() !== method) return route.continue();
+      if (received === undefined) received = Date.now();
       const number = log.length + 1;
       if (behaviour.kind === 'delay') {
         await sleep(behaviour.ms);
@@ -398,7 +426,7 @@ export const intercept = async (page: Page, method: 'GET' | 'POST', pathname: st
       });
     },
   );
-  return { hits: () => [...log], deliveredAt: () => delivered };
+  return { hits: () => [...log], deliveredAt: () => delivered, receivedAt: () => received };
 };
 
 // --- Arrastre (HTML5) con el puntero, como el piloto: el arrastre se registra por `dragstart` ------------------------------------

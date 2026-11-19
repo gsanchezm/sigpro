@@ -118,7 +118,12 @@ const otherTenantUntouched: ApiRowHandler = async (row: ManifestRow) => {
 
   // La acción de la fila: alumno01 pasa NC-001 a in_analysis en SU tenant. Si no responde 200 no hay nada que comparar.
   const acted = await transitionNc(TENANT_A, actor.token, 'NC-001', { to: 'in_analysis' });
-  if (acted.status !== 200) return preparationFailed(expected, 'alumno01 pasa NC-001 a in_analysis con POST /api/nc/NC-001/transition', acted);
+  if (acted.status !== 200) {
+    return verdict(
+      [check(false, 'la acción de la fila (alumno01 pasa NC-001 a in_analysis) responde 200', `la acción responde ${acted.status}`)],
+      'Fallo de la propia acción de la fila (POST de alumno01 en su tenant), no de la preparación: sin respuesta 200 no hay efecto que comparar.',
+    );
+  }
 
   const read = await detailNc(TENANT_B, owner.token, 'NC-001');
   const otherAfter = await snapshot(TENANT_B, owner.token);

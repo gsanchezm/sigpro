@@ -4,7 +4,7 @@ import { resetTenants, TENANT_A } from '../../../story-runs/support/prepare';
 import { defineBrowserRows, type BrowserRowHandler, type ManifestRow, type Outcome } from '../../core/framework';
 import { cell, check, preparationFailedWeb, strict } from '../../support/checks';
 import { ACTION, attrOf } from '../../support/browser';
-import { actionFailed, BOARD_PATH, columnOf, gotoBoard, intercept, interact, onWeb, prepareWeb, sameOrder, settled, signIn, testidText, verdictWeb, waitBoard, withLimit, type BoardView, type Interception } from './common';
+import { actionFailed, BOARD_PATH, columnOf, gotoBoard, intercept, interact, nameTextOf, onWeb, prepareWeb, sameOrder, settled, signIn, testidText, verdictWeb, waitBoard, withLimit, type BoardView, type Interception } from './common';
 
 // US-NC-TABLERO-006 — Tablero de no conformidades en la web. Preparación de cada fila: reinicio de alumno01 con el token de su
 // administrador (desde Node); la cuenta de la fila inicia sesión en /login?tenant=alumno01 y se abre /nc. Las respuestas que la
@@ -17,6 +17,9 @@ const TITLE_CELLS: ReadonlyMap<string, string> = new Map<string, string>([
   ['Cerrada', 'closed'],
   ['Rechazada', 'rejected'],
 ]);
+
+/** Orden de las columnas de izquierda a derecha que dice la historia (con 1024 px o más). */
+const COLUMN_ORDER = 'open,in_analysis,corrective_action,closed,rejected';
 
 const COUNT_CELLS: ReadonlyMap<string, number> = new Map<string, number>([
   ['4', 4],
@@ -50,6 +53,7 @@ const SEVERITY_CELLS: ReadonlyMap<string, string> = new Map<string, string>([
   ['«Mayor»', 'Mayor'],
 ]);
 
+/** Contador de comentarios tal como lo dice la historia (frase entre «…»). */
 const COMMENTS_CELLS: ReadonlyMap<string, string> = new Map<string, string>([
   ['«1 comentario»', '1 comentario'],
   ['«3 comentarios»', '3 comentarios'],
@@ -77,16 +81,18 @@ const ERROR_TITLE = 'No se pudo cargar el tablero';
 const GESTOR = 'gestor@sigpro.test';
 const LIST_PATH = '/api/nc';
 
-/** Lo que muestra una tarjeta, leído en una sola evaluación. */
+/** Lo que muestra una tarjeta, leído en una sola evaluación (el nombre del responsable se lee aparte, sin avatar). */
 interface CardView {
   readonly present: boolean;
   readonly severity: string | undefined;
   readonly program: string | undefined;
+  /** Nombre accesible del contador de comentarios (la frase «N comentario(s)» de lectura de pantalla). */
   readonly comments: string | undefined;
-  readonly assignee: string | undefined;
+  /** Número VISIBLE del contador de comentarios (lo único que pinta la app web). */
+  readonly visibleNumber: string | undefined;
 }
 
-/** Se ejecuta en el navegador: severidad, programa, frase de comentarios (lectura de pantalla) y responsable de una tarjeta. */
+/** Se ejecuta en el navegador: severidad, programa, frase de comentarios y número visible de una tarjeta. */
 const cardReader = (code: string): CardView => {
   const card = document.querySelector(`[data-testid="nc-card-${code}"]`);
   const textOf = (testid: string): string | undefined => {
@@ -95,12 +101,13 @@ const cardReader = (code: string): CardView => {
   };
   const lines = card === null ? [] : ((card as HTMLElement).innerText ?? '').split('\n').map((line) => line.trim()).filter((line) => line !== '');
   const srOnly = document.querySelector(`[data-testid="nc-card-comments-${code}"] .sr-only`);
+  const visible = document.querySelector(`[data-testid="nc-card-comments-${code}"] [aria-hidden="true"]`);
   return {
     present: card !== null,
     severity: textOf(`nc-card-severity-${code}`),
     program: lines.find((line) => /^PRG-\d{3}$/.test(line)),
     comments: srOnly === null ? undefined : (srOnly.textContent ?? '').trim(),
-    assignee: textOf(`nc-card-assignee-${code}`),
+    visibleNumber: visible === null ? undefined : (visible.textContent ?? '').trim(),
   };
 };
 
@@ -113,7 +120,7 @@ const signedInFor = async (page: Page, email: string, expected: string): Promise
   return signedIn === undefined ? undefined : preparationFailedWeb(expected, `iniciar sesión como ${email}: ${signedIn}`);
 };
 
-// --- Esquema 1: cada columna lleva su título y sus tarjetas ----------------------------------------------------------------------
+// --- Esquema 1: cada columna lleva su título y sus tarjetas ----------------------------------------------------------------
 
 const columnRow: BrowserRowHandler = async (row: ManifestRow, { page }) => {
   const state = strict('titulo', TITLE_CELLS, cell(row, 'titulo'));
@@ -125,15 +132,19 @@ const columnRow: BrowserRowHandler = async (row: ManifestRow, { page }) => {
 
   const view = await waitBoard(page, 'escritorio', settled);
   const column = view === undefined ? undefined : columnOf(view, state);
-  return verdictWeb([
-    check(view !== undefined && column !== undefined, 'tablero leído', view === undefined ? 'tablero sin leer' : 'tablero leído'),
-    check(column?.present === true && column.title === cell(row, 'titulo'), `columna «${cell(row, 'titulo')}»`, `columna titulada «${column?.title ?? '(sin leer)'}»`),
-    check(column?.count === String(count), `contador ${count}`, `contador ${column?.count ?? '(sin leer)'}`),
-    check(column !== undefined && sameOrder(column.cards, codes), `tarjetas ${cell(row, 'codigos')}`, `tarjetas ${column?.cards.join(', ') || '(ninguna)'}`),
-  ]);
+  return verdictWeb(
+    [
+      check(view !== undefined && column !== undefined, 'tablero leído', view === undefined ? 'tablero sin leer' : 'tablero leído'),
+      check(column?.present === true && column.title === cell(row, 'titulo'), `columna «${cell(row, 'titulo')}»`, `columna titulada «${column?.title ?? '(sin leer)'}»`),
+      check(column?.count === String(count), `contador ${count}`, `contador ${column?.count ?? '(sin leer)'}`),
+      check(column !== undefined && sameOrder(column.cards, codes), `tarjetas ${cell(row, 'codigos')}`, `tarjetas ${column?.cards.join(', ') || '(ninguna)'}`),
+      check(view?.domOrder.join(',') === COLUMN_ORDER, 'cinco columnas de izquierda a derecha: Abierta, En análisis, Acción correctiva, Cerrada, Rechazada', `orden en el DOM: ${view?.domOrder.join(', ') || '(sin leer)'}`),
+    ],
+    'La comprobación del orden de columnas es una Regla del tablero (1024 px o más): se aplica en esta fila como en el resto de filas de escritorio.',
+  );
 };
 
-// --- Esquema 2: cada tarjeta muestra su severidad, programa, comentarios y responsable ------------------------------------------
+// --- Esquema 2: cada tarjeta muestra su severidad, programa, comentarios y responsable ------------------------------------
 
 const cardRow: BrowserRowHandler = async (row: ManifestRow, { page }) => {
   const code = strict('código', NC_CODE_CELLS, cell(row, 'codigo'));
@@ -147,19 +158,22 @@ const cardRow: BrowserRowHandler = async (row: ManifestRow, { page }) => {
 
   await waitBoard(page, 'escritorio', settled);
   const card = await readCard(page, code);
+  const assigneeName = await nameTextOf(page.getByTestId(`nc-card-assignee-${code}`));
+  const numberInStory = /^(\d+)/.exec(comments)?.[1];
   return verdictWeb(
     [
       check(card?.present === true, `tarjeta ${code} en el tablero`, card?.present === true ? `tarjeta ${code} en el tablero` : `tarjeta ${code} no está en el tablero`),
       check(card?.severity === severity, `severidad ${severity}`, `severidad ${card?.severity ?? '(sin leer)'}`),
       check(card?.program === program, `programa ${program}`, `programa ${card?.program ?? '(sin código de programa en la tarjeta)'}`),
-      check(card?.comments === comments, `contador de comentarios ${comments}`, `contador de comentarios ${card?.comments ?? '(sin leer)'}`),
-      check(card?.assignee === assignee, `responsable ${assignee}`, `responsable ${card?.assignee ?? '(sin leer)'}`),
+      check(card?.comments === comments, `contador de comentarios (nombre accesible) «${comments}»`, `contador de comentarios (nombre accesible) «${card?.comments ?? '(sin leer)'}»`),
+      check(card?.visibleNumber === numberInStory, `número visible del contador ${numberInStory ?? '(sin número)'}`, `número visible ${card?.visibleNumber ?? '(sin leer)'}`),
+      check(assigneeName === assignee, `responsable ${assignee}`, `responsable ${assigneeName ?? '(sin leer)'}`),
     ],
-    'El número visible del contador de comentarios va acompañado de la frase «N comentario(s)» en la lectura de pantalla (sr-only); la comparación usa esa frase.',
+    `La historia dice «${comments}»; la app web muestra solo el número visible (${numberInStory}) y la frase va en el nombre accesible (lectura de pantalla). Se comparan los dos. Candidata a decisión pendiente de producto: la frase en la web no es visible (la versión móvil sí la muestra). El responsable se lee sin el avatar.`,
   );
 };
 
-// --- Esquema 3: recuento general --------------------------------------------------------------------------------------------------
+// --- Esquema 3: recuento general --------------------------------------------------------------------------------------------
 
 const countRow: BrowserRowHandler = async (row: ManifestRow, { page }) => {
   const recount = strict('recuento', RECOUNT_CELLS, cell(row, 'recuento'));
@@ -172,21 +186,22 @@ const countRow: BrowserRowHandler = async (row: ManifestRow, { page }) => {
   return verdictWeb([check(observed === recount, `recuento «${recount}»`, `recuento «${observed ?? '(sin leer)'}»`)]);
 };
 
-// --- Esquema 4: mientras llega la lista el tablero está ocupado y sin tarjetas ---------------------------------------------------
+// --- Esquema 4: mientras llega la lista el tablero está ocupado y sin tarjetas ---------------------------------------------
 
 const loadingRow: BrowserRowHandler = async (row: ManifestRow, { page }) => {
   const delay = strict('espera', DELAY_CELLS, cell(row, 'espera'));
   const expected = `mientras espera la respuesta de GET /api/nc (${cell(row, 'espera')}) el tablero está ocupado, con indicador de carga y sin tarjetas; al llegar la respuesta ve las cinco columnas con sus 12 tarjetas`;
   const failed = await signedInFor(page, GESTOR, expected);
   if (failed !== undefined) return failed;
-  const interception = await intercept(page, 'GET', LIST_PATH, { kind: 'delay', ms: delay });
+  // El retraso se instala ANTES de abrir /nc; la ventana se mide desde la llegada de la petición (no desde la navegación)
+  const interception: Interception = await intercept(page, 'GET', LIST_PATH, { kind: 'delay', ms: delay });
   const opened = await gotoBoard(page, BOARD_PATH);
   if (opened !== undefined) return preparationFailedWeb(expected, `abrir ${BOARD_PATH}: ${opened}`);
 
-  // La lectura «mientras carga» es una sola evaluación: la última que cumple «ocupado». Solo vale si cae dentro de la espera.
+  // La lectura «mientras carga» es una sola evaluación: la última que cumple «ocupado»
   const during = await waitBoard(page, 'escritorio', (view) => view.busy === 'true');
-  const delivered = interception.deliveredAt();
-  const inWindow = during !== undefined && (delivered === undefined || during.at < delivered);
+  const received = interception.receivedAt();
+  const inWindow = during !== undefined && received !== undefined && during.at < received + delay;
   const duringView: BoardView | undefined = inWindow ? during : undefined;
   const after = await waitBoard(page, 'escritorio', (view) => settled(view) && view.cardsTotal === 12);
   return verdictWeb(
@@ -194,15 +209,15 @@ const loadingRow: BrowserRowHandler = async (row: ManifestRow, { page }) => {
       check(duringView?.busy === 'true', 'el tablero ocupado (aria-busy true)', `aria-busy ${duringView?.busy ?? '(sin leer)'}`),
       check((duringView?.skeletons ?? 0) > 0, 'indicador de carga (filas de esqueleto)', `${duringView?.skeletons ?? '(sin leer)'} filas de carga`),
       check(duringView?.cardsTotal === 0, 'ninguna tarjeta mientras espera', `${duringView?.cardsTotal ?? '(sin leer)'} tarjetas mientras espera`),
-      check(inWindow, 'la lectura cae mientras la respuesta sigue retrasada', inWindow ? 'lectura dentro de la espera' : 'sin leer: la respuesta ya había llegado cuando se leyó'),
+      check(inWindow, `la lectura cae dentro de la espera de ${delay} ms medida desde la petición`, inWindow ? 'lectura dentro de la espera' : `sin leer: la lectura llegó después de los ${delay} ms de la respuesta retrasada (artefacto de tiempo, no un hallazgo sobre la app)`),
       check(after !== undefined && after.columns.length === 5 && after.columns.every((column) => column.present), 'al llegar ve las cinco columnas', `columnas en pantalla: ${after?.columns.filter((column) => column.present).length ?? '(sin leer)'}`),
       check(after?.cardsTotal === 12, 'con sus 12 tarjetas', `${after?.cardsTotal ?? '(sin leer)'} tarjetas`),
     ],
-    `Peticiones a ${LIST_PATH}: ${interception.hits().join(' | ') || '(ninguna)'}. La espera la fija la prueba (${cell(row, 'espera')}); la lectura «mientras carga» se toma en una sola evaluación.`,
+    `Peticiones a ${LIST_PATH}: ${interception.hits().join(' | ') || '(ninguna)'}. Espera fijada por la prueba (${cell(row, 'espera')}), medida desde la llegada de la petición.`,
   );
 };
 
-// --- Esquema 5: un fallo de la lista muestra el aviso con «Reintentar» ----------------------------------------------------------
+// --- Esquema 5: un fallo de la lista muestra el aviso con «Reintentar» ----------------------------------------------------
 
 const failureRow: BrowserRowHandler = async (row: ManifestRow, { page }) => {
   const status = strict('codigo_http', HTTP_CELLS, cell(row, 'codigo_http'));
@@ -233,7 +248,7 @@ const failureRow: BrowserRowHandler = async (row: ManifestRow, { page }) => {
   );
 };
 
-// --- Esquema 6: con menos de 1024 px una pestaña por estado ----------------------------------------------------------------------
+// --- Esquema 6: con menos de 1024 px una pestaña por estado ----------------------------------------------------------------
 
 const tabRow: BrowserRowHandler = async (row: ManifestRow, { page }) => {
   const state = strict('pestaña', TITLE_CELLS, cell(row, 'pestaña'));
@@ -273,4 +288,3 @@ defineBrowserRows({
     [6, onWeb(tabRow)],
   ]),
 });
-

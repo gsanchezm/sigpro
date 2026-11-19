@@ -54,7 +54,7 @@ const commentLength: ApiRowHandler = async (row: ManifestRow) => {
   if (stateOfBody(initial) !== 'open') return preparationFailed(expected, `NC-001 está en open (la lectura da ${stateOfBody(initial) ?? '(sin state)'})`, initial);
 
   const acted = await transitionNc(TENANT_A, admin.token, 'NC-001', bodyWith('in_analysis', 'a'.repeat(length)));
-  return verdict(answerChecks(expect, acted));
+  return verdict(answerChecks(expect, acted), 'La tabla de la historia prueba el límite de 1000 solo con el paso a in_analysis; no se repite con otros pasos.');
 };
 
 // --- Esquema 3: un código que no existe en el tenant responde 404 ----------------------------------------------------------

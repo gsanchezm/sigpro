@@ -153,7 +153,7 @@ const detailShows: BrowserRowHandler = async (row: ManifestRow, { page }) => {
     check(view?.state === cell(row, 'estado'), `estado «${cell(row, 'estado')}»`, `estado «${view?.state ?? '(sin leer)'}»`),
     check(view?.severity === severity, `severidad «${severity}»`, `severidad «${view?.severity ?? '(sin leer)'}»`),
     check(stepsOk, `en «Cambiar estado» ${cell(row, 'pasos')}`, steps.none ? `en «Cambiar estado»: ${view?.transitions.length ?? '(sin leer)'} botones, texto «${(view?.sectionText ?? '(sin leer)').slice(0, 80)}»` : `en «Cambiar estado» ${labels.join(' | ') || '(ningún botón)'}`),
-  ]);
+  ], 'Regla sin fila: el enlace del programa a su ficha no se ejerce aquí (la fila lee el estado, la severidad y los pasos).');
 };
 
 // --- Esquema 2: un código que no existe muestra el aviso y el tablero queda detrás ----------------------------------------
@@ -216,7 +216,7 @@ const readOnlyDetail: BrowserRowHandler = async (row: ManifestRow, { page }) => 
   const entry = view?.transitions.find((button) => button.state === to);
   return verdictWeb(
     [controlCheck(entry, 'deshabilitado', READ_ONLY_REASON, `el botón «${label}»`)],
-    '«Con el motivo» se lee del atributo title del botón (en escritorio el motivo de un paso no permitido va en title).',
+    '«Con el motivo» se lee del atributo title del botón (en escritorio el motivo de un paso no permitido va en title). La historia web no exige que el motivo sea texto visible.',
   );
 };
 

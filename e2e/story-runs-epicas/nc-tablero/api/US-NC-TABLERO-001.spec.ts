@@ -61,20 +61,23 @@ const itemRow: ApiRowHandler = async (row: ManifestRow) => {
 
   const listed = await listNc(TENANT_A, gestor.token);
   const item = itemsOf(listed.body).find((entry) => field(entry, 'code') === code);
+  // `null` (el campo está y vale null) se distingue de un campo AUSENTE: solo el null cumple «(ninguno)»
   const valueOf = (key: string): string => {
     if (item === undefined) return `(${code} no está en items)`;
     const value = field(item, key);
-    return value === null || value === undefined ? '(ninguno)' : String(value);
+    if (value === null) return 'null';
+    return value === undefined ? '(campo ausente)' : String(value);
   };
+  const assigneeOk = item !== undefined && (responsible === null ? Object.prototype.hasOwnProperty.call(item, 'assigneeName') && field(item, 'assigneeName') === null : field(item, 'assigneeName') === responsible);
   return verdict([
     check(listed.status === 200, 'respuesta 200', `respuesta ${listed.status}`),
     check(item !== undefined, `${code} en items`, item === undefined ? `${code} no está en items` : `${code} en items`),
     check(valueOf('programCode') === program, `programCode ${program}`, `programCode ${valueOf('programCode')}`),
     check(valueOf('severity') === severity, `severity ${severity}`, `severity ${valueOf('severity')}`),
     check(valueOf('state') === state, `state ${state}`, `state ${valueOf('state')}`),
-    check(valueOf('assigneeName') === (responsible ?? '(ninguno)'), `assigneeName ${responsible ?? '(ninguno)'}`, `assigneeName ${valueOf('assigneeName')}`),
+    check(assigneeOk, `assigneeName ${responsible === null ? 'null (la historia escribe «(ninguno)»)' : responsible}`, `assigneeName ${valueOf('assigneeName')}`),
     check(valueOf('commentCount') === String(comments), `commentCount ${comments}`, `commentCount ${valueOf('commentCount')}`),
-  ]);
+  ], 'Reglas sin fila en esta historia: los cuatro roles pueden pedir la lista (aquí solo gestor@sigpro.test) y createdAt en ISO 8601 no se comprueba en esta fila.');
 };
 
 // --- Esquemas 2 y 3: la lista sin filtros o con un filtro, por código, y los totales -------------------------------------------

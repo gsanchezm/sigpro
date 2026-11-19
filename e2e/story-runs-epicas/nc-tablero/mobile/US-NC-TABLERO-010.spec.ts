@@ -5,11 +5,11 @@ import { defineBrowserRows, type BrowserRowHandler, type ManifestRow } from '../
 import { cell, check, strict } from '../../support/checks';
 import { ACTION } from '../../support/browser';
 import { actionFailed, intercept, interact, sameSet, verdictWeb, withLimit, type WebAction } from '../web/common';
-import { ERROR_TITLE, EMPTY_HINT, mobileCards, mobileColumn, mobileSettled, onMobile, prepareMobile, readMobileCard, waitMobileBoard } from './common';
+import { ERROR_TITLE, EMPTY_HINT, mobileColumn, mobileSettled, onMobile, prepareMobile, readMobileCard, visibleCardsByPage, waitMobileBoard } from './common';
 
 // US-NC-TABLERO-010 — Tablero de no conformidades en la app móvil (Expo web, 390 × 844). Preparación de cada fila: reinicio de
 // alumno01 con el token de su administrador; gestor@sigpro.test inicia sesión en la app con alumno01 en «Tenant de trabajo» y abre
-// la pestaña «No conformidades». Los filtros de severidad y de búsqueda se pidan al servidor; las tarjetas se comparan por conjunto.
+// la pestaña «No conformidades». Las cinco columnas están montadas; «las tarjetas que se ven» se leen paginando las columnas.
 
 const TITLE_CELLS: ReadonlyMap<string, string> = new Map<string, string>([
   ['Abierta', 'open'],
@@ -26,6 +26,7 @@ const NC_CODE_CELLS: ReadonlyMap<string, string> = new Map<string, string>([
   ['NC-005', 'NC-005'],
 ]);
 
+/** Severidad como texto de la tarjeta (la historia la escribe entre «…»). */
 const SEVERITY_CELLS: ReadonlyMap<string, string> = new Map<string, string>([
   ['«Crítica»', 'Crítica'],
   ['«Mayor»', 'Mayor'],
@@ -73,6 +74,7 @@ const HTTP_CELLS: ReadonlyMap<string, number> = new Map<string, number>([
 
 const GESTOR = 'gestor@sigpro.test';
 const LIST_PATH = '/api/nc';
+const SEARCH_BOX = (page: Page) => page.getByRole('textbox', { name: 'Buscar no conformidades', exact: true });
 
 // --- Esquema 1: cada columna lleva su título y el número de tarjetas ----------------------------------------------------------
 
@@ -85,10 +87,13 @@ const columnRow: BrowserRowHandler = async (row: ManifestRow, { page }) => {
 
   const view = await waitMobileBoard(page, mobileSettled);
   const column = view === undefined ? undefined : mobileColumn(view, state);
-  return verdictWeb([
-    check(column?.label === `${cell(row, 'titulo')} · ${count}`, `columna «${cell(row, 'titulo')} · ${count}»`, `columna «${column?.label ?? '(sin leer)'}»`),
-    check(column?.count === String(count), `contador ${count}`, `contador ${column?.count ?? '(sin leer)'}`),
-  ]);
+  return verdictWeb(
+    [
+      check(column?.present === true && column.title === cell(row, 'titulo'), `título visible «${cell(row, 'titulo')}»`, `título visible «${column?.title ?? '(sin leer)'}»`),
+      check(column?.count === String(count), `contador ${count}`, `contador ${column?.count ?? '(sin leer)'}`),
+    ],
+    `Evidencia: el nombre accesible de la columna es «${column?.label ?? '(sin leer)'}»; el título y el contador se leen de sus textos visibles, no de ese nombre compuesto.`,
+  );
 };
 
 // --- Esquema 2: cada tarjeta muestra su severidad, programa, comentarios y responsable ----------------------------------
@@ -105,13 +110,16 @@ const cardRow: BrowserRowHandler = async (row: ManifestRow, { page }) => {
 
   await waitMobileBoard(page, mobileSettled);
   const card = await readMobileCard(page, code);
-  return verdictWeb([
-    check(card?.present === true, `tarjeta ${code}`, card?.present === true ? `tarjeta ${code}` : `tarjeta ${code} no está en el tablero`),
-    check(card?.severity === severity, `severidad ${severity}`, `severidad ${card?.severity ?? '(sin leer)'}`),
-    check(card?.program === program, `programa ${program}`, `programa ${card?.program ?? '(sin código de programa en la tarjeta)'}`),
-    check(card?.comments === comments, `comentario ${comments}`, `comentario ${card?.comments ?? '(sin leer)'}`),
-    check(card?.assignee === assignee, `responsable ${assignee}`, `responsable ${card?.assignee ?? '(sin leer)'}`),
-  ]);
+  return verdictWeb(
+    [
+      check(card?.present === true, `tarjeta ${code}`, card?.present === true ? `tarjeta ${code}` : `tarjeta ${code} no está en el tablero`),
+      check(card?.severity === severity, `severidad ${severity}`, `severidad ${card?.severity ?? '(sin leer)'}`),
+      check(card?.program === program, `programa ${program}`, `programa ${card?.program ?? '(sin código de programa en la tarjeta)'}`),
+      check(card?.comments === comments, `comentario ${comments}`, `comentario ${card?.comments ?? '(sin leer)'}`),
+      check(card?.assignee === assignee, `responsable ${assignee}`, `responsable ${card?.assignee ?? '(sin leer)'}`),
+    ],
+    'El responsable se lee sin el avatar (sus iniciales no son el nombre).',
+  );
 };
 
 // --- Esquema 3: la severidad y la búsqueda acotan el tablero ----------------------------------------------------------------
@@ -127,13 +135,14 @@ const filterRow: BrowserRowHandler = async (row: ManifestRow, { page }) => {
   const acted = await action(page);
   if (acted !== undefined) return actionFailed(expected, acted);
   const view = await waitMobileBoard(page, (current) => current.total === recount);
-  const onScreen = view === undefined ? [] : mobileCards(view);
+  // Las cinco columnas están montadas; las que se ven se leen paginando (cada columna llevada a la vista)
+  const visible = view === undefined ? [] : await visibleCardsByPage(page);
   return verdictWeb(
     [
       check(view?.total === recount, `recuento «${recount}»`, `recuento «${view?.total ?? '(sin leer)'}»`),
-      check(view !== undefined && sameSet(onScreen, codes), `tarjetas ${cell(row, 'codigos')}`, `tarjetas ${onScreen.join(', ') || '(ninguna)'}`),
+      check(view !== undefined && sameSet(visible, codes), `tarjetas que se ven ${cell(row, 'codigos')}`, `tarjetas que se ven ${visible.join(', ') || '(ninguna)'}`),
     ],
-    'Las tarjetas se comparan como conjunto: el orden de la app móvil va por columna y la historia no fija el orden entre columnas.',
+    'Las tarjetas que se ven se leen paginando las columnas (la app pagina en horizontal) y se comparan por conjunto: la historia no fija el orden entre columnas. Regla sin fila: «Todas» elegido al abrir la pantalla no se comprueba aquí.',
   );
 };
 
@@ -145,7 +154,7 @@ const noMatchRow: BrowserRowHandler = async (row: ManifestRow, { page }) => {
   const failed = await prepareMobile(page, GESTOR, expected);
   if (failed !== undefined) return failed;
 
-  const typed = await interact(page.getByRole('textbox', { name: 'Buscar no conformidades', exact: true }), 'escribir zzzz-no-existe en «Buscar no conformidades»', (element) => element.fill(text, ACTION));
+  const typed = await interact(SEARCH_BOX(page), 'escribir zzzz-no-existe en «Buscar no conformidades»', (element) => element.fill(text, ACTION));
   if (typed !== undefined) return actionFailed(expected, typed);
   const view = await waitMobileBoard(page, (current) => current.emptyLines.includes(EMPTY_HINT));
   return verdictWeb([check(view?.emptyLines.includes(EMPTY_HINT) === true, `aviso «${EMPTY_HINT}»`, `aviso ${view?.emptyLines.find((line) => line.startsWith('Ninguna')) ?? '(no aparece)'}`)]);
@@ -164,7 +173,7 @@ const failureRow: BrowserRowHandler = async (row: ManifestRow, { page }) => {
   if (failed !== undefined) return failed;
 
   const view = await waitMobileBoard(page, (current) => current.errorText !== undefined);
-  const retry = await withLimit(page.getByTestId(NC_TESTIDS.NC_ERROR_RETRY).textContent({ timeout: 2_000 }), null);
+  const retry = await withLimit<string | null>(page.getByTestId(NC_TESTIDS.NC_ERROR_RETRY).textContent({ timeout: 2_000 }), null);
   const hits = holder.hits?.() ?? [];
   return verdictWeb(
     [

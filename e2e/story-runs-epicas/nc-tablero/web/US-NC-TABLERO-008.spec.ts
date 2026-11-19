@@ -2,7 +2,7 @@ import { RESPONSIVE_DYNAMIC_TESTIDS } from '../../../../packages/shared/src/test
 import { TENANT_A } from '../../../story-runs/support/prepare';
 import { defineBrowserRows, notExecutable, type BrowserRowHandler, type ManifestRow, type Outcome } from '../../core/framework';
 import { cell, check, strict } from '../../support/checks';
-import { ACTION } from '../../support/browser';
+import { ACTION, attrOf } from '../../support/browser';
 import {
   actionFailed,
   armDragLog,
@@ -10,6 +10,7 @@ import {
   cardsOnScreen,
   columnOf,
   controlCheck,
+  type DragOutcome,
   interact,
   intercept,
   isDragOutcome,
@@ -17,6 +18,7 @@ import {
   performDrag,
   persistedState,
   prepareWeb,
+  readBoard,
   readCardMenu,
   settleLocal,
   settled,
@@ -29,8 +31,8 @@ import {
 // US-NC-TABLERO-008 — Cambio de estado desde el tablero en la web. Preparación de cada fila: reinicio de alumno01 con el token de su
 // administrador; inicio de sesión de la cuenta de la fila (consultor@sigpro.test mueve, auditor@sigpro.test solo lee) y apertura de
 // /nc. Los arrastres se miden con el puntero y se registran por «dragstart»: un arrastre que no arranca en una tarjeta que SÍ es
-// arrastrable es «no ejecutable»; en la fila del auditor la tarjeta no es arrastrable y no arrancar es lo que dice la historia.
-// Tras cada paso aceptado por la interfaz (y su aviso) se lee el estado por la API.
+// arrastrable es «no ejecutable» (con la evidencia medida); en la fila del auditor la tarjeta no es arrastrable y no arrancar es lo
+// que dice la historia. Tras cada paso aceptado (y su aviso) se lee el estado por la API.
 
 const TITLE_CELLS: ReadonlyMap<string, string> = new Map<string, string>([
   ['Abierta', 'open'],
@@ -80,19 +82,21 @@ const CONSULTOR = 'consultor@sigpro.test';
 const AUDITOR = 'auditor@sigpro.test';
 const READ_ONLY_REASON = 'Tu rol no permite mover no conformidades';
 const NOT_DRAGGABLE_NOTE =
-  'El arrastre de un rol sin permiso no arranca porque la tarjeta no es arrastrable (draggable=false): es lo que dice la historia. La fila sola no distingue una negativa de la app de un fallo del gesto, por eso se lee el atributo draggable. «Con el motivo» se lee del atributo title de la opción del menú.';
+  'El arrastre de un rol sin permiso no arranca porque la tarjeta no es arrastrable (draggable=false): es lo que dice la historia. La fila sola no distingue una negativa de la app de un fallo del gesto, por eso se lee el atributo draggable. «Con el motivo» se lee del atributo title de la opción del menú; la historia web no exige que el motivo sea texto visible.';
 
 /** Un arrastre sin medir (el gesto del puntero falló en el arnés) es una fila con su diagnóstico. */
 const dragProblem = (expected: string, blocked: Blocked): Outcome => actionFailed(expected, blocked);
 
 /**
- * Un arrastre que no arranca. Solo `draggable="false"` es una discrepancia (la app no deja arrastrar a un rol que sí puede mover);
- * `true` o un atributo sin leer no son hallazgos sobre la app: son `notExecutable` con el dato medido.
+ * Un arrastre que no arranca. Solo `draggable="false"` es una discrepancia (la app no deja arrastrar a un rol que sí puede mover).
+ * Con la tarjeta arrastrable (o sin atributo legible) es `notExecutable`, con la evidencia medida: draggable, marca de destino y puntero.
  */
-const notStarted = (expected: string, code: string, draggable: string | undefined): Outcome =>
-  draggable === 'false'
-    ? verdictWeb([check(false, 'la tarjeta arrastrable, con dragstart', `${code} no se arrastra (draggable=false)`)])
-    : notExecutable(expected, `el gesto de arrastrar no arranca en el arnés: no hay «dragstart» sobre ${code} (draggable=${draggable ?? '(sin leer)'}); no se puede afirmar que la app lo impida`);
+const notStarted = (expected: string, code: string, drag: DragOutcome): Outcome => {
+  const measured = `draggable=${drag.draggable ?? '(sin leer)'}; marca de la columna destino «${drag.dropOnTarget}»; puntero sobre la columna destino: ${drag.pointerOnTarget ? 'sí' : 'no'}`;
+  return drag.draggable === 'false'
+    ? verdictWeb([check(false, 'la tarjeta arrastrable, con dragstart', `${code} no se arrastra (${measured})`)])
+    : notExecutable(expected, `el gesto de arrastrar no arranca en el arnés: no hay «dragstart» sobre ${code} (${measured}); no se puede afirmar que la app lo impida`);
+};
 
 // --- Esquema 1: arrastrar a una columna que admite el paso la mueve y avisa ----------------------------------------------------
 
@@ -111,7 +115,7 @@ const acceptedDrag: BrowserRowHandler = async (row: ManifestRow, { page }) => {
   await armToasts(page);
   const drag = await performDrag(page, code, to);
   if (!isDragOutcome(drag)) return dragProblem(expected, drag);
-  if (!drag.started) return notStarted(expected, code, drag.draggable);
+  if (!drag.started) return notStarted(expected, code, drag);
 
   const toast = await toastShown(page, 'ok', aviso);
   const view = await waitBoard(page, 'escritorio', (current) => settled(current) && columnOf(current, origin)?.count === String(countOrigin) && columnOf(current, to)?.count === String(countTo));
@@ -121,13 +125,14 @@ const acceptedDrag: BrowserRowHandler = async (row: ManifestRow, { page }) => {
   const persisted = await persistedState(code);
   return verdictWeb(
     [
+      check(drag.dropOnTarget === 'valid', `la columna «${cell(row, 'destino')}» se marca como destino válido mientras se arrastra`, `marca de la columna mientras se arrastra: «${drag.dropOnTarget}»`),
       check(toast.seen, `aviso «${aviso}»`, `aviso ${toast.observed}`),
       check(originColumn?.count === String(countOrigin), `contador de «${cell(row, 'origen')}» ${countOrigin}`, `contador de «${cell(row, 'origen')}» ${originColumn?.count ?? '(sin leer)'}`),
       check(destination?.count === String(countTo), `contador de «${cell(row, 'destino')}» ${countTo}`, `contador de «${cell(row, 'destino')}» ${destination?.count ?? '(sin leer)'}`),
       check(destination?.cards.includes(code) === true, `${code} en la columna «${cell(row, 'destino')}»`, `${code} ${destination?.cards.includes(code) === true ? 'en' : 'no está en'} la columna «${cell(row, 'destino')}»`),
       check(persisted === to, `la API guarda ${code} en ${to}`, `la API da state ${persisted ?? '(sin leer)'}`),
     ],
-    `Medido con el puntero: dragstart sobre ${code}; marca de la columna de destino durante el arrastre «${drag.dropOnTarget}» (el servidor decide el paso).`,
+    `Medido con el puntero: dragstart sobre ${code}; pointerOnTarget ${drag.pointerOnTarget ? 'sí' : 'no'}; draggable=${drag.draggable ?? '(sin leer)'}.`,
   );
 };
 
@@ -145,7 +150,7 @@ const refusedDrag: BrowserRowHandler = async (row: ManifestRow, { page }) => {
   await armToasts(page);
   const drag = await performDrag(page, code, to);
   if (!isDragOutcome(drag)) return dragProblem(expected, drag);
-  if (!drag.started) return notStarted(expected, code, drag.draggable);
+  if (!drag.started) return notStarted(expected, code, drag);
 
   const toast = await toastShown(page, 'danger', aviso);
   const view = await waitBoard(page, 'escritorio', (current) => settled(current) && columnOf(current, 'open')?.cards.includes(code) === true && columnOf(current, 'open')?.count === '4');
@@ -158,7 +163,7 @@ const refusedDrag: BrowserRowHandler = async (row: ManifestRow, { page }) => {
       check(origin?.count === '4', 'contador 4 en «Abierta»', `contador ${origin?.count ?? '(sin leer)'} en «Abierta»`),
       check(persisted === 'open', `la API sigue con ${code} en open`, `la API da state ${persisted ?? '(sin leer)'}`),
     ],
-    `Medido con el puntero: dragstart sobre ${code}; marca de la columna de destino «${drag.dropOnTarget}». La devolución la hace la página tras la respuesta 409 del servidor.`,
+    `Medido con el puntero: dragstart sobre ${code}; marca de la columna de destino «${drag.dropOnTarget}» (la marca de una columna no admitida no está en la historia: solo evidencia). La devolución la hace la página tras la respuesta 409 del servidor.`,
   );
 };
 
@@ -222,17 +227,25 @@ const responsiveSheet: BrowserRowHandler = async (row: ManifestRow, { page }) =>
   await armToasts(page);
   const chosen = await interact(page.getByTestId(RESPONSIVE_DYNAMIC_TESTIDS.NC_MENU_MOVE(to)), `elegir «Mover a «${cell(row, 'destino')}»» en la hoja`, (element) => element.click(ACTION));
   if (chosen !== undefined) return actionFailed(expected, chosen);
+  // Lectura JUSTO tras elegir y sin pulsar ninguna pestaña: la app no cambia de pestaña al mover
+  const justAfter = await readBoard(page, 'responsive');
+  const selectedAfter = await attrOf(page.getByTestId(RESPONSIVE_DYNAMIC_TESTIDS.NC_TAB('open')), 'aria-selected');
+  const panelAfter = justAfter === undefined ? undefined : columnOf(justAfter, 'open');
   const toast = await toastShown(page, 'ok', aviso);
   const persisted = await persistedState(code);
+  // Criterio: «la tarjeta está en la pestaña «En análisis»» = aparece en esa pestaña (se abre para leerla)
   const tab = await interact(page.getByTestId(RESPONSIVE_DYNAMIC_TESTIDS.NC_TAB(to)), `elegir la pestaña «${cell(row, 'destino')}»`, (element) => element.click(ACTION));
   if (tab !== undefined) return actionFailed(expected, tab);
   const view = await waitBoard(page, 'responsive', (current) => columnOf(current, to)?.present === true && columnOf(current, to)?.cards.includes(code) === true);
   const panel = view === undefined ? undefined : columnOf(view, to);
-  return verdictWeb([
-    check(toast.seen, `aviso «${aviso}»`, `aviso ${toast.observed}`),
-    check(panel?.cards.includes(code) === true, `${code} en la pestaña «${cell(row, 'destino')}»`, `${code} ${panel?.cards.includes(code) === true ? 'en' : 'no está en'} la pestaña «${cell(row, 'destino')}» (panel con ${panel?.cards.join(', ') || '(ninguna)'})`),
-    check(persisted === to, `la API guarda ${code} en ${to}`, `la API da state ${persisted ?? '(sin leer)'}`),
-  ]);
+  return verdictWeb(
+    [
+      check(toast.seen, `aviso «${aviso}»`, `aviso ${toast.observed}`),
+      check(panel?.cards.includes(code) === true, `${code} en la pestaña «${cell(row, 'destino')}»`, `${code} ${panel?.cards.includes(code) === true ? 'en' : 'no está en'} la pestaña «${cell(row, 'destino')}» (panel con ${panel?.cards.join(', ') || '(ninguna)'})`),
+      check(persisted === to, `la API guarda ${code} en ${to}`, `la API da state ${persisted ?? '(sin leer)'}`),
+    ],
+    `Tras elegir la opción y sin pulsar pestañas: aria-selected de «Abierta» = ${selectedAfter ?? '(sin leer)'}; ${code} ${panelAfter?.cards.includes(code) === true ? 'sigue' : 'no está'} en el panel visible. La app no cambia de pestaña sola (el criterio es que la tarjeta aparezca en la pestaña de destino, que se abre para leerla).`,
+  );
 };
 
 // --- Esquema 6: un fallo del servidor al mover deja la tarjeta en su columna --------------------------------------------------
@@ -248,7 +261,7 @@ const serverFailure: BrowserRowHandler = async (row: ManifestRow, { page }) => {
   await armToasts(page);
   const drag = await performDrag(page, 'NC-001', 'in_analysis');
   if (!isDragOutcome(drag)) return dragProblem(expected, drag);
-  if (!drag.started) return notStarted(expected, 'NC-001', drag.draggable);
+  if (!drag.started) return notStarted(expected, 'NC-001', drag);
   const toast = await toastShown(page, 'danger', 'No se pudo mover NC-001');
   const view = await waitBoard(page, 'escritorio', (current) => settled(current) && columnOf(current, 'open')?.cards.includes('NC-001') === true && columnOf(current, 'open')?.count === '4');
   const origin = view === undefined ? undefined : columnOf(view, 'open');
