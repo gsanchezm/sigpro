@@ -62,7 +62,14 @@ export const namesOf = (items: readonly unknown[]): readonly string[] => items.m
 /** Un campo de un proveedor o de un contrato, como texto. */
 export const textOf = (item: unknown, key: string): string => String(field(item, key));
 
-const sameList = (actual: readonly string[], expected: readonly string[]): boolean => actual.length === expected.length && actual.every((value, index) => value === expected[index]);
+/** Dos listas de texto iguales y en el mismo orden. */
+export const sameList = (actual: readonly string[], expected: readonly string[]): boolean => actual.length === expected.length && actual.every((value, index) => value === expected[index]);
+
+/** Identificadores de la lista de proveedores, en el orden en que llegan. */
+export const idsOf = (items: readonly unknown[]): readonly string[] => items.map((item) => textOf(item, 'id'));
+
+/** Identificadores de los seis proveedores del seed, en el orden por nombre (historia 001, tabla de la fila 2). */
+export const SIX_IDS: readonly string[] = ['s1', 's5', 's3', 's6', 's4', 's2'];
 
 /** Texto legible de una lista de nombres. */
 export const describeNames = (names: readonly string[]): string => (names.length === 0 ? 'una lista vacía' : names.join(', '));

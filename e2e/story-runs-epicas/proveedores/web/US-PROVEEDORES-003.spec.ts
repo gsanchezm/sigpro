@@ -11,7 +11,9 @@ import {
   delaySuppliers,
   faultEvidence,
   injectFailures,
-  unchangedCheck,
+  unchangedFor,
+  countNavigations,
+  prepFailedText,
   fichaChecks,
   fichaOf,
   listboxOf,
@@ -60,7 +62,6 @@ const ACCIONES: ReadonlyMap<string, string> = new Map<string, string>([
 /** Lo que dice la historia de la lista → número de opciones que se ven (0 = ninguna lista). */
 const LISTAS: ReadonlyMap<string, number> = new Map<string, number>([
   ['ve cinco opciones', 5],
-  ['ve cuatro opciones', 4],
   ['ve una opción', 1],
   ['no ve ninguna lista de opciones', 0],
 ]);
@@ -155,10 +156,15 @@ const countAndNotice: BrowserRowHandler = async (row, { page }) => {
   if (typed) return typed;
   const snap = await waitSearch(page, (current) => current.status === aviso && (count === 0 ? !current.listVisible : current.listVisible && current.options.length === count));
   const listOk = count === 0 ? !snap.listVisible : snap.listVisible && snap.options.length === count;
-  return conclude([
-    check(listOk, cell(row, 'lista'), count === 0 ? (snap.listVisible ? `ve una lista con ${snap.options.length} opciones` : 'no ve ninguna lista de opciones') : `ve ${snap.listVisible ? snap.options.length : 0} opciones`),
-    check(snap.status === aviso, `el aviso dice ${aviso}`, `el aviso dice ${snap.status ?? '(no se ve)'}`),
-  ]);
+  // Una sola letra: la longitud mínima de la búsqueda es una decisión pendiente (001); la fila no afirma ningún mínimo
+  const note = text.length === 1 ? 'Una sola letra: la longitud mínima de la búsqueda es una decisión pendiente (001); la fila no afirma ningún mínimo.' : undefined;
+  return conclude(
+    [
+      check(listOk, cell(row, 'lista'), count === 0 ? (snap.listVisible ? `ve una lista con ${snap.options.length} opciones` : 'no ve ninguna lista de opciones') : `ve ${snap.listVisible ? snap.options.length : 0} opciones`),
+      check(snap.status === aviso, `el aviso dice ${aviso}`, `el aviso dice ${snap.status ?? '(no se ve)'}`),
+    ],
+    note === undefined ? {} : { note },
+  );
 };
 
 // --- Esquema 2: sin texto, la lista enseña los cinco primeros proveedores por nombre -----------------------------------------------
@@ -230,7 +236,8 @@ const failedSearch: BrowserRowHandler = async (row, { page }) => {
   const ready = await summaryReady(page, expected);
   if (ready) return ready;
   // Todas las peticiones de «fall» fallan: la búsqueda se pide una sola vez tras la pausa, pero no depende de cuántas
-  const faults = await injectFailures(page, matchQuery('fall'), status);
+  // Todas las peticiones de «fall» responden con el error (la historia dice «responda», no «la primera»)
+  const faults = await injectFailures(page, matchQuery('fall'), status, 'always');
   const opened = await openAndType(page, 'fall', expected);
   if (opened) return opened;
   const snap = await waitSearch(page, (current) => current.status === SEARCH_ERROR);
@@ -256,12 +263,11 @@ const pickWithMouse: BrowserRowHandler = async (row, { page }) => {
   if (picked) return picked;
   const snap = await waitSearch(page, fichaShown(proveedor));
   const ficha = await fichaChecks(page, proveedor, cell(row, 'nif'), cell(row, 'correo'), cell(row, 'estado'));
-  const after = await settledPanel(page, PANEL_WEB);
   return conclude([
     check(snap.value === proveedor, `el campo muestra ${proveedor}`, `el campo muestra ${snap.value ?? '(sin leer)'}`),
     check(!snap.listVisible, 'la lista de opciones se cierra', snap.listVisible ? 'la lista sigue abierta' : 'la lista de opciones se cierra'),
     ...ficha,
-    unchangedCheck(before, after),
+    await unchangedFor(page, PANEL_WEB, before),
   ]);
 };
 
@@ -294,14 +300,19 @@ const contractCodeLink: BrowserRowHandler = async (row, { page }) => {
   await waitSearch(page, fichaShown('Aeronáutica Levante S.L.'));
   // El enlace debe llevar a la ruta del programa (su destino se lee antes de pulsar)
   const href = await safe(() => contractLink(page, codigo).getAttribute('href', { timeout: 1_000 }), null);
+  const navigations = countNavigations(page);
   const pressed = await clickOn(contractLink(page, codigo), `pulsar el código ${codigo}`);
   if (pressed) return actionMissing(expected, pressed);
   const arrived = await waitUntil(async () => pathOf(page) === programPath(codigo));
-  // Con PRG-001 la página ya está en esa ruta: la ruta no distingue el clic, pero el destino del enlace sí
-  const note = codigo === 'PRG-001' ? 'Con PRG-001 la página ya está en /programs/PRG-001: la comprobación de la ruta no distingue el clic; el destino del enlace (href) sí.' : undefined;
+  // Con PRG-001 la página ya está en esa ruta: la ruta no distingue el clic. El destino del enlace (href) sí se comprueba, y el número
+  // de navegaciones del marco principal va en la evidencia (las navegaciones sin recarga también cuentan).
+  const note =
+    codigo === 'PRG-001'
+      ? 'La fila no distingue el toque: la ruta ya es la de destino (PRG-001). Se comprueba el destino del enlace (href); el número de navegaciones va en la evidencia.'
+      : undefined;
   return conclude(
     [check(href === programPath(codigo), `el enlace lleva a ${programPath(codigo)}`, `el enlace lleva a ${href ?? '(sin leer)'}`), check(arrived.reached, `llega a ${programPath(codigo)}`, `llega a ${pathOf(page)}`)],
-    note === undefined ? {} : { note },
+    { ...(note === undefined ? {} : { note }), evidence: { navegacionesDespuesDelClic: navigations.count() } },
   );
 };
 
@@ -324,16 +335,21 @@ const keyboardPick: BrowserRowHandler = async (row, { page }) => {
     const pressed = await runSteps([[`pulsar la tecla ${key}`, () => searchInputOf(page).press(key, ACTION)]]);
     if (pressed) return actionMissing(expected, pressed);
   }
-  const active = await waitSearch(page, (current) => current.active === proveedor);
-  const activeOk = active.active === proveedor;
+  // Con «↑» la primera opción ya está activa al abrir la lista: la comprobación es que ↑ no saca de la lista
+  const isUp = movement.length === 1 && movement[0] === 'ArrowUp';
+  const active = await waitSearch(page, (current) => current.listVisible && current.active === proveedor);
+  const activeOk = active.listVisible && active.active === proveedor;
   const pressed = await runSteps([[`pulsar la tecla ${confirm}`, () => searchInputOf(page).press(confirm, ACTION)]]);
   if (pressed) return actionMissing(expected, pressed);
   const snap = await waitSearch(page, fichaShown(proveedor));
-  // La primera opción ya está activa al abrir la lista: con «↑» la fila no distingue pulsar la flecha de no pulsar nada
-  const note = confirm === 'Enter' && movement.length === 1 && movement[0] === 'ArrowUp' ? 'La fila no distingue entre pulsar ↑ y no pulsar nada: la primera opción ya está activa al abrir la lista; se comprueba la opción activa antes de Intro.' : undefined;
+  const note = isUp
+    ? 'Ninguna fila prueba que ↑ mueva la opción: la primera ya está activa al abrir la lista. Esta fila solo comprueba que ↑ no saca de la lista.'
+    : undefined;
   return conclude(
     [
-      check(activeOk, `la opción activa es ${proveedor} antes de Intro`, `la opción activa es ${active.active ?? '(ninguna)'} antes de Intro`),
+      isUp
+        ? check(activeOk, 'con ↑ no sale de la lista: la lista sigue abierta y la primera opción sigue activa', `con ↑ la lista ${active.listVisible ? 'sigue abierta' : 'se cierra'} y la opción activa es ${active.active ?? '(ninguna)'}`)
+        : check(activeOk, `la opción activa es ${proveedor} antes de Intro`, `la opción activa es ${active.active ?? '(ninguna)'} antes de Intro`),
       check(snap.value === proveedor, `el campo muestra ${proveedor}`, `el campo muestra ${snap.value ?? '(sin leer)'}`),
       await seenCheck(fichaOf(page).getByText(`Ficha de proveedor: ${proveedor}`, { exact: true }), `la ficha de proveedor de ${proveedor}`, `la ficha de proveedor de ${proveedor}`),
     ],
@@ -351,7 +367,11 @@ const closeWithoutPicking: BrowserRowHandler = async (row, { page }) => {
   if (ready) return ready;
   const opened = await openAndType(page, 'ca', expected);
   if (opened) return opened;
-  await waitSearch(page, (current) => current.listVisible && current.options.length === 5);
+  // Antes de la salida: la lista debe estar abierta con sus 5 opciones; si no, la fila no prueba nada
+  const open = await waitSearch(page, (current) => current.listVisible && current.options.length === 5);
+  if (!(open.listVisible && open.options.length === 5)) {
+    return prepFailedText(expected, `la lista de opciones no se abrió con «ca» antes de la salida (${open.listVisible ? `${open.options.length} opciones` : 'sin lista'})`);
+  }
   const action =
     salida === 'esc'
       ? runSteps([['pulsar Esc', () => searchInputOf(page).press('Escape', ACTION)]])
@@ -381,11 +401,10 @@ const removeChoice: BrowserRowHandler = async (row, { page }) => {
   const removed = await clickOn(page.getByRole('button', { name: REMOVE, exact: true }), `pulsar «${REMOVE}»`);
   if (removed) return actionMissing(expected, removed);
   const snap = await waitSearch(page, (current) => current.value === '' && !current.fichaVisible);
-  const after = await settledPanel(page, PANEL_WEB);
   return conclude([
     check(snap.value === '', 'el campo «Proveedor del tenant» queda vacío', `el campo tiene «${snap.value ?? '(sin leer)'}»`),
     check(!snap.fichaVisible, 'no aparece ninguna ficha de proveedor', snap.fichaVisible ? 'aparece una ficha de proveedor' : 'no aparece ninguna ficha de proveedor'),
-    unchangedCheck(before, after),
+    await unchangedFor(page, PANEL_WEB, before),
   ]);
 };
 

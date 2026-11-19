@@ -1,7 +1,7 @@
 import type { Locator, Page, Route } from '@playwright/test';
 import { DEMO, TENANT_A, type Credentials } from '../../../story-runs/support/prepare';
 import { DETALLE_TESTIDS, PROVEEDORES_DYNAMIC_TESTIDS, PROVEEDORES_TESTIDS } from '../../../../packages/shared/src/testids';
-import { ACTION, CEILING_MS, pathOf, safe, waitUntil } from '../../support/browser';
+import { ACTION, CEILING_MS, holdsFor, pathOf, safe, waitUntil } from '../../support/browser';
 import { check, sleep, type Check } from '../../support/checks';
 import { outcome, type BrowserRowHandler, type Outcome } from '../../core/framework';
 
@@ -139,6 +139,12 @@ export const seenCheck = async (target: Locator, expected: string, what: string)
 export const notSeenCheck = async (target: Locator, expected: string, what: string): Promise<Check> => {
   const value = await seen(target);
   return check(value === false, expected, value === true ? `ve ${what}` : value === false ? `no ve ${what}` : `${what}: lectura sin resolver (ambiguo)`);
+};
+
+/** «Ya no se ve» sostenido: el elemento no se ve durante `ms` (una reacción tardía no puede darlo por bueno en una sola lectura). */
+export const goneFor = async (target: Locator, expected: string, what: string, ms: number = HOLD_CHECK_MS): Promise<Check> => {
+  const held = await holdsFor(async () => (await seen(target)) === false, ms);
+  return check(held.held, `${expected} durante ${ms} ms`, held.held ? `no ve ${what} durante ${ms} ms` : `ve ${what} a los ${held.brokeAtMs} ms`);
 };
 
 /** Un texto visible igual al esperado (con «…» quitadas de la historia). */
@@ -336,11 +342,21 @@ export const waitPanelUntil = async (page: Page, done: (snap: PanelSnapshot) => 
   return last;
 };
 
-/** La lista de contratados no cambió entre dos instantáneas (mismos nombres en el mismo orden y el mismo contador). */
-export const unchangedCheck = (before: PanelSnapshot, after: PanelSnapshot): Check => {
-  const same = before.rowNames.length === after.rowNames.length && before.rowNames.every((name, index) => name === after.rowNames[index]) && before.counter === after.counter;
+/** Mismo estado de la lista de contratados: mismos nombres en el mismo orden y el mismo contador. */
+const sameRows = (before: PanelSnapshot, now: PanelSnapshot): boolean =>
+  before.rowNames.length === now.rowNames.length && before.rowNames.every((name, index) => name === now.rowNames[index]) && before.counter === now.counter;
+
+/** Duración con la que se observa una ausencia o una permanencia (no basta una instantánea: una reacción tardía la dejaría pasar). */
+export const HOLD_CHECK_MS = 1_000;
+
+/**
+ * La lista de contratados NO cambia durante `ms`: se observa el estado `before` (ya asentado) con instantáneas sucesivas. Si cambia en
+ * cualquier instante, la comprobación falla y se anota cuándo.
+ */
+export const unchangedFor = async (page: Page, selectors: PanelSelectors, before: PanelSnapshot, ms: number = HOLD_CHECK_MS): Promise<Check> => {
+  const held = await holdsFor(async () => sameRows(before, await panelSnapshot(page, selectors, performance.now())), ms);
   const describe = (snap: PanelSnapshot): string => `${snap.rowNames.join(', ') || '(ninguno)'} (${snap.counter ?? 'sin contador'})`;
-  return check(same, 'la lista de contratados no cambia', same ? 'la lista de contratados no cambia' : `antes ${describe(before)}; después ${describe(after)}`);
+  return check(held.held, `la lista de contratados no cambia durante ${ms} ms`, held.held ? `la lista de contratados no cambia durante ${ms} ms (${describe(before)})` : `la lista cambió a los ${held.brokeAtMs} ms`);
 };
 
 export interface SearchSnapshot {
@@ -351,6 +367,8 @@ export interface SearchSnapshot {
   readonly listVisible: boolean;
   /** Nombres de las opciones visibles, en orden. */
   readonly options: readonly string[];
+  /** Textos hoja de cada opción visible (nombre y NIF), en el mismo orden que `options`. */
+  readonly optionLeaves: readonly (readonly string[])[];
   /** Texto del aviso de la búsqueda (`null` si no se ve el bloque). */
   readonly status: string | null;
   /** La ficha de proveedor se ve. */
@@ -379,6 +397,14 @@ const readSearch = (selectors: SearchSelectors): Omit<SearchSnapshot, 'atMs'> =>
       list === null
         ? []
         : Array.from(list.querySelectorAll(selectors.option)).map((option) => option.getAttribute('aria-label') ?? (option.firstElementChild?.textContent ?? '').trim()),
+    optionLeaves:
+      list === null
+        ? []
+        : Array.from(list.querySelectorAll(selectors.option)).map((option) =>
+            Array.from(option.querySelectorAll('*'))
+              .filter((child) => child.children.length === 0)
+              .map((child) => (child.textContent ?? '').trim()),
+          ),
     status: status === null ? null : (status.textContent ?? '').trim(),
     fichaVisible: ficha !== null && visible(ficha),
     active: activeElement === null ? null : (activeElement.getAttribute('aria-label') ?? (activeElement.firstElementChild?.textContent ?? '').trim()),
@@ -387,7 +413,7 @@ const readSearch = (selectors: SearchSelectors): Omit<SearchSnapshot, 'atMs'> =>
 
 /** Una instantánea del buscador: una sola llamada a la página. */
 export const searchSnapshot = async (page: Page, selectors: SearchSelectors, since: number): Promise<SearchSnapshot> => {
-  const read = await safe(() => page.evaluate(readSearch, selectors), { value: null, listVisible: false, options: [], status: null, fichaVisible: false, active: null });
+  const read = await safe(() => page.evaluate(readSearch, selectors), { value: null, listVisible: false, options: [], optionLeaves: [], status: null, fichaVisible: false, active: null });
   return { atMs: Math.round(performance.now() - since), ...read };
 };
 
@@ -474,28 +500,28 @@ export const delaySuppliers = (page: Page, match: Match, ms: number): Promise<un
     return route.continue();
   });
 
-/** Control de los fallos provocados: se suelta (`release`) cuando la fila ya ha visto el aviso, y dice cuántas peticiones llegaron. */
+/** Control de las peticiones provocadas: cuántas llegaron a la coincidencia, cuántas se respondieron con el error y cuántas se dejaron pasar. */
 export interface FaultControl {
-  /** Deja de fallar: desde ahora las peticiones que cumplen la coincidencia llegan al servidor. */
-  readonly release: () => void;
-  /** Peticiones que cumplen la coincidencia y cuántas se respondieron con el error provocado. */
-  readonly counts: () => { readonly matched: number; readonly failed: number };
+  readonly counts: () => { readonly matched: number; readonly failed: number; readonly passed: number };
 }
 
 /**
- * Responde `status` a las peticiones que cumplan `match` mientras la prueba no las suelte. Así no depende de cuántas peticiones haga la
- * sección (en desarrollo, React repite el efecto y una sola petición fallida podría perderse): todas fallan hasta que la fila ve el aviso.
- * Lleva cabeceras CORS: la web llama a la API desde otro origen, y sin ellas el navegador daría un fallo de red y no el código de la historia.
+ * Responde `status` a las peticiones que cumplan `match`: a las `times` primeras (la historia dice «la primera petición») o, con
+ * `times` = 'always', a todas. Las demás llegan al servidor. Lleva cabeceras CORS: la web llama a la API desde otro origen, y sin ellas
+ * el navegador daría un fallo de red y no el código de la historia. Los conteos van a la evidencia de la fila.
  */
-export const injectFailures = async (page: Page, match: Match, status: number): Promise<FaultControl> => {
-  let failing = true;
+export const injectFailures = async (page: Page, match: Match, status: number, times: number | 'always'): Promise<FaultControl> => {
   let matched = 0;
   let failed = 0;
+  let passed = 0;
   await page.route(suppliersRoute(match), async (route: Route) => {
     const request = route.request();
     if (request.method() !== 'GET') return route.continue();
     matched += 1;
-    if (!failing) return route.continue();
+    if (times !== 'always' && failed >= times) {
+      passed += 1;
+      return route.continue();
+    }
     failed += 1;
     const origin = request.headers().origin ?? '*';
     return route.fulfill({
@@ -505,16 +531,20 @@ export const injectFailures = async (page: Page, match: Match, status: number): 
       body: JSON.stringify({ statusCode: status, error: 'Error', message: 'Error provocado por la prueba' }),
     });
   });
-  return {
-    release: () => {
-      failing = false;
-    },
-    counts: () => ({ matched, failed }),
-  };
+  return { counts: () => ({ matched, failed, passed }) };
 };
 
-/** Lo que dice la evidencia de los fallos provocados (para distinguir «no llegó la petición» de «la app no mostró el aviso»). */
+/** Lo que dice la evidencia de las peticiones provocadas (para distinguir «no llegó la petición» de «la app no mostró el aviso»). */
 export const faultEvidence = (faults: FaultControl): Readonly<Record<string, unknown>> => ({ peticionesProvocadas: faults.counts() });
+
+/** Cuenta las navegaciones del marco principal (también las que no recargan la página) desde ahora; se lee con `count()`. */
+export const countNavigations = (page: Page): { readonly count: () => number } => {
+  let navigations = 0;
+  page.on('framenavigated', (frame) => {
+    if (frame === page.mainFrame()) navigations += 1;
+  });
+  return { count: () => navigations };
+};
 
 // --- Comprobaciones compartidas ----------------------------------------------------------------------------------------------------------
 
@@ -522,6 +552,7 @@ export const faultEvidence = (faults: FaultControl): Readonly<Record<string, unk
 export const fichaChecks = async (page: Page, name: string, nif: string, correo: string, estado: string): Promise<readonly Check[]> => [
   await seenCheck(fichaOf(page).getByText(`Ficha de proveedor: ${name}`, { exact: true }), `la ficha de proveedor de ${name}`, `la ficha de proveedor de ${name}`),
   await textCheck(page.getByTestId(PROVEEDORES_TESTIDS.SUPPLIER_DETAIL_NIF), nif, 'el NIF'),
+  await seenCheck(fichaOf(page).getByText('Correo de contacto', { exact: true }), 'la etiqueta «Correo de contacto»', 'la etiqueta «Correo de contacto»'),
   await textCheck(page.getByTestId(PROVEEDORES_TESTIDS.SUPPLIER_DETAIL_EMAIL), correo, 'el «Correo de contacto»'),
   await textCheck(page.getByTestId(PROVEEDORES_TESTIDS.SUPPLIER_DETAIL_BADGE), estado, 'el estado'),
 ];

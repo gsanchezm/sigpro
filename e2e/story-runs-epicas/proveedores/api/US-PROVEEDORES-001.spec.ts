@@ -7,12 +7,16 @@ import {
   describeNames,
   type Expected,
   GESTOR,
+  idsOf,
   isListCheck,
   namesCheck,
   namesOf,
   PROGRAMAS,
   QUERIES,
   RESULTADOS,
+  SIX,
+  SIX_IDS,
+  sameList,
   sessionFor,
   suppliersCall,
   suppliersOf,
@@ -57,24 +61,34 @@ const POSICIONES: ReadonlyMap<string, number> = new Map<string, number>([
   ['6', 5],
 ]);
 
+/** Columna «aprobado» → booleano exacto que debe traer la API (`true` o `false`, no su texto). */
+const APROBADO: ReadonlyMap<string, boolean> = new Map<string, boolean>([
+  ['true', true],
+  ['false', false],
+]);
+
 const sixInOrder: ApiRowHandler = async (row) => {
   await resetTenants([TENANT_A]);
   const position = strict('lugar', POSICIONES, cell(row, 'lugar'));
+  const approved = strict('aprobado', APROBADO, cell(row, 'aprobado'));
   const expected = `respuesta 200 con seis proveedores; en el lugar ${cell(row, 'lugar')} ${cell(row, 'nombre')}, con id ${cell(row, 'id')}, NIF ${cell(row, 'nif')} y aprobado ${cell(row, 'aprobado')}`;
   const session = await sessionFor(GESTOR);
   if (session.token === undefined) return preparationFailed(expected, 'gestor@sigpro.test inicia sesión y recibe accessToken', session.last);
   const result = await suppliersCall(TENANT_A, session.token, {});
   const items = suppliersOf(result);
   const item: unknown = items[position];
+  const contactEmail = field(item, 'contactEmail');
   return conclude([
     responseCheck(result, { status: 200 }),
     check(items.length === 6, 'seis proveedores', `${items.length} proveedores`),
     check(textOf(item, 'name') === cell(row, 'nombre'), `en el lugar ${cell(row, 'lugar')} ${cell(row, 'nombre')}`, `en el lugar ${cell(row, 'lugar')} ${item === undefined ? '(ninguno)' : textOf(item, 'name')}`),
     check(textOf(item, 'id') === cell(row, 'id'), `con id ${cell(row, 'id')}`, `con id ${textOf(item, 'id')}`),
     check(textOf(item, 'nif') === cell(row, 'nif'), `con NIF ${cell(row, 'nif')}`, `con NIF ${textOf(item, 'nif')}`),
-    check(textOf(item, 'approved') === cell(row, 'aprobado'), `aprobado ${cell(row, 'aprobado')}`, `aprobado ${textOf(item, 'approved')}`),
-    // La regla nombra también el correo de contacto y la lista de contratos de cada proveedor
-    check(typeof field(item, 'contactEmail') === 'string' && textOf(item, 'contactEmail') !== '', 'trae contactEmail', `contactEmail ${typeof field(item, 'contactEmail') === 'string' ? 'presente' : 'ausente'}`),
+    // El booleano exacto: `approved` debe ser `true` o `false`, no su texto
+    check(field(item, 'approved') === approved, `aprobado ${cell(row, 'aprobado')} (booleano)`, `aprobado ${JSON.stringify(field(item, 'approved'))}`),
+    // La regla nombra también el correo de contacto (presente y texto no vacío) y la lista de contratos de cada proveedor
+    check(contactEmail !== undefined, 'trae contactEmail', `contactEmail ${contactEmail === undefined ? 'ausente' : 'presente'}`),
+    check(typeof contactEmail === 'string' && contactEmail.trim() !== '', 'contactEmail es texto no vacío', `contactEmail ${JSON.stringify(contactEmail)}`),
     check(Array.isArray(field(item, 'contracts')), 'trae contracts', `contracts ${Array.isArray(field(item, 'contracts')) ? 'presente' : 'ausente'}`),
   ]);
 };
@@ -125,11 +139,15 @@ const anyRole: ApiRowHandler = async (row) => {
   if (session.token === undefined) return preparationFailed(expected, `${cell(row, 'cuenta')} inicia sesión y recibe accessToken`, session.last);
   if (session.role !== cell(row, 'rol')) return preparationFailed(expected, `${cell(row, 'cuenta')} inicia sesión con el rol ${cell(row, 'rol')}`, session.last);
   const result = await suppliersCall(who.tenant, session.token, {});
-  const names = namesOf(suppliersOf(result));
+  const items = suppliersOf(result);
+  // Referencia de la misma fila: la lista que recibe el gestor (la historia dice «la misma lista» para todos los roles)
+  const reference = await sessionFor(GESTOR);
+  const referenceIds = reference.token === undefined ? [] : idsOf(suppliersOf(await suppliersCall(TENANT_A, reference.token, {})));
   return conclude([
     responseCheck(result, { status: 200 }),
-    check(names.length === 6, 'seis proveedores', `${names.length} proveedores`),
-    check(names[0] === 'Aeronáutica Levante S.L.', 'el primero es Aeronáutica Levante S.L.', `el primero es ${names[0] ?? '(ninguno)'}`),
+    check(sameList(idsOf(items), SIX_IDS), 'los seis proveedores con los ids s1, s5, s3, s6, s4, s2 en ese orden', `ids ${idsOf(items).join(', ') || '(ninguno)'}`),
+    namesCheck(namesOf(items), SIX),
+    check(referenceIds.length === 6 && sameList(idsOf(items), referenceIds), 'la misma lista que recibe el gestor (mismos ids y orden)', `ids ${idsOf(items).join(', ') || '(ninguno)'} frente a ${referenceIds.join(', ') || '(sin lista del gestor)'}`),
   ]);
 };
 

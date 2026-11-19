@@ -11,7 +11,7 @@ import {
   delaySuppliers,
   literal,
   matchProgram,
-  notSeenCheck,
+  goneFor,
   onWeb,
   openPath,
   panelOf,
@@ -140,8 +140,8 @@ const failedList: BrowserRowHandler = async (row, { page }) => {
   const expected = `en «Proveedores» el título «${ERROR_TITLE}» y el botón «${RETRY}», sin filas ni contador; sigue viendo el campo «Responsable» con Marta Ruiz`;
   const signed = await signIn(page, DEMO.gestor);
   if (signed) return prepFailed(expected, signed);
-  // Todas las peticiones de la lista fallan (la lista no vuelve a pedirse salvo por «Reintentar»)
-  const faults = await injectFailures(page, matchProgram('PRG-001'), status);
+  // La primera petición de la lista responde con el error; las siguientes (si las hubiera) llegan al servidor
+  const faults = await injectFailures(page, matchProgram('PRG-001'), status, 1);
   const opened = await openPath(page, programPath('PRG-001'));
   if (opened) return actionMissing(expected, opened);
   const panel = await settledPanel(page, PANEL_WEB);
@@ -166,25 +166,25 @@ const retryList: BrowserRowHandler = async (row, { page }) => {
   const expected = `al ver el aviso «${ERROR_TITLE}», pulsar «${RETRY}»; en «Proveedores» ve la fila de Aeronáutica Levante S.L. y ya no ve el aviso`;
   const signed = await signIn(page, DEMO.gestor);
   if (signed) return prepFailed(expected, signed);
-  // Los fallos duran hasta que la fila ve el aviso; después se sueltan y «Reintentar» llega al servidor
-  const faults = await injectFailures(page, matchProgram('PRG-001'), status);
+  // La primera petición de la lista responde con el error; «Reintentar» (la segunda) llega al servidor
+  const faults = await injectFailures(page, matchProgram('PRG-001'), status, 1);
   const opened = await openPath(page, programPath('PRG-001'));
   if (opened) return actionMissing(expected, opened);
   const before = await settledPanel(page, PANEL_WEB);
-  faults.release();
   const pressed = await clickOn(panelOf(page).getByRole('button', { name: RETRY, exact: true }), `pulsar «${RETRY}»`);
   if (pressed) return actionMissing(expected, pressed);
   // Se espera a que la lista recargada aparezca (o a que se agote el techo) antes de juzgar
   const after = await waitPanelUntil(page, (snap) => !snap.error && snap.rowNames.includes('Aeronáutica Levante S.L.'), PANEL_WEB);
   const cells = await rowCellsOf(page, 'Aeronáutica Levante S.L.');
+  const alertGone = await goneFor(panelOf(page).getByRole('alert').filter({ hasText: ERROR_TITLE }), `ya no ve el aviso «${ERROR_TITLE}»`, `el aviso «${ERROR_TITLE}»`);
   return conclude(
     [
       check(before.error, `ve el aviso «${ERROR_TITLE}» antes de pulsar`, before.error ? `ve el aviso «${ERROR_TITLE}» antes de pulsar` : 'no ve el aviso antes de pulsar'),
       check(after.rowNames.includes('Aeronáutica Levante S.L.') && cells !== undefined, 've la fila de Aeronáutica Levante S.L.', after.rowNames.includes('Aeronáutica Levante S.L.') ? 've la fila de Aeronáutica Levante S.L.' : 'no ve la fila de Aeronáutica Levante S.L.'),
-      await notSeenCheck(panelOf(page).getByRole('alert').filter({ hasText: ERROR_TITLE }), `ya no ve el aviso «${ERROR_TITLE}»`, `el aviso «${ERROR_TITLE}»`),
+      alertGone,
     ],
     {
-      note: 'Los fallos provocados duran hasta que la fila ve el aviso y después se sueltan: con una sola petición de la sección es lo mismo que «solo la primera responde con error». Las peticiones provocadas van en la evidencia.',
+      note: 'La historia dice «la primera petición» responde con el error: la prueba falla solo la primera petición de la lista y deja pasar las siguientes. Los conteos (provocadas, falladas, dejadas pasar) van en la evidencia.',
       evidence: faultEvidence(faults),
     },
   );

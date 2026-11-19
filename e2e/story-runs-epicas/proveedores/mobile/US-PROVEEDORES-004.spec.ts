@@ -1,7 +1,7 @@
 import type { Page } from '@playwright/test';
 import { DEMO, resetTenants, TENANT_A, type Credentials } from '../../../story-runs/support/prepare';
 import { cell, check, conclude, strict, type Check } from '../../support/checks';
-import { CEILING_MS, pathOf, safe, waitUntil } from '../../support/browser';
+import { CEILING_MS, pathOf, waitUntil } from '../../support/browser';
 import { defineBrowserRows, type BrowserRowHandler, type Outcome } from '../../core/framework';
 import {
   actionMissing,
@@ -17,14 +17,15 @@ import {
   literal,
   matchProgram,
   matchQuery,
-  notSeenCheck,
+  goneFor,
+  countNavigations,
   panelOf,
   prepFailed,
   programPath,
   same,
   seenCheck,
   typeInto,
-  unchangedCheck,
+  unchangedFor,
   waitPanelUntil,
   type SearchSnapshot,
 } from '../web/common';
@@ -88,6 +89,22 @@ const CODIGOS: ReadonlyMap<string, string> = new Map<string, string>([
   ['PRG-013', 'PRG-013'],
 ]);
 
+/** NIF de cada proveedor del seed, como lo fija la tabla de la historia 001 (cada opción del buscador debe mostrar el suyo). */
+const NIF_DE: ReadonlyMap<string, string> = new Map<string, string>([
+  ['Aeronáutica Levante S.L.', 'B11111111'],
+  ['Sistemas Ibéricos S.A.', 'B12222222'],
+  ['Electrónica del Cantábrico', 'B13333333'],
+  ['Optrónica Meseta S.L.', 'B14444444'],
+  ['Cibertáctica Norte', 'B15555555'],
+  ['Logística Marítima Atlas', 'B16666666'],
+]);
+
+/** Una opción muestra su nombre (hoja exacta) y su NIF (hoja exacta) entre sus textos. */
+const optionShowsNameAndNif = (name: string, leaves: readonly string[]): boolean => {
+  const nif = NIF_DE.get(name);
+  return nif !== undefined && leaves.some((leaf) => leaf === name) && leaves.some((leaf) => leaf === nif);
+};
+
 /** Lo que dice la historia de la fila «contenido» → lo que se ve en el panel. */
 interface CardExpect {
   readonly kind: 'tarjeta';
@@ -116,7 +133,6 @@ const ACCIONES: ReadonlyMap<string, string> = new Map<string, string>([
 
 const LISTAS: ReadonlyMap<string, number> = new Map<string, number>([
   ['ve cinco opciones', 5],
-  ['ve cuatro opciones', 4],
   ['ve una opción', 1],
   ['no ve ninguna lista de opciones', 0],
 ]);
@@ -218,8 +234,8 @@ const failedTab: BrowserRowHandler = async (row, { page }) => {
   const expected = `ve el título «${ERROR_TITLE}» y el botón «${RETRY}», y no ve ninguna tarjeta ni el contador`;
   const ready = await readyFor(page, DEMO.gestor, programPath('PRG-001'), expected);
   if (ready) return ready;
-  // Todas las peticiones de la lista fallan (la lista no vuelve a pedirse salvo por «Reintentar»)
-  const faults = await injectFailures(page, matchProgram('PRG-001'), status);
+  // La primera petición de la lista responde con el error; las siguientes (si las hubiera) llegan al servidor
+  const faults = await injectFailures(page, matchProgram('PRG-001'), status, 1);
   const chosen = await withSuppliersTab(page, expected);
   if (chosen) return chosen;
   const panel = await settledMobilePanel(page);
@@ -242,25 +258,25 @@ const retryTab: BrowserRowHandler = async (row, { page }) => {
   const expected = `al ver el aviso «${ERROR_TITLE}», pulsar «${RETRY}»; ve la tarjeta de Aeronáutica Levante S.L. y ya no ve el aviso`;
   const ready = await readyFor(page, DEMO.gestor, programPath('PRG-001'), expected);
   if (ready) return ready;
-  // Los fallos duran hasta que la fila ve el aviso; después se sueltan y «Reintentar» llega al servidor
-  const faults = await injectFailures(page, matchProgram('PRG-001'), status);
+  // La primera petición de la lista responde con el error; «Reintentar» (la segunda) llega al servidor
+  const faults = await injectFailures(page, matchProgram('PRG-001'), status, 1);
   const chosen = await withSuppliersTab(page, expected);
   if (chosen) return chosen;
   const before = await settledMobilePanel(page);
-  faults.release();
   const pressed = await clickOn(panelOf(page).getByRole('button', { name: RETRY, exact: true }), `pulsar «${RETRY}»`);
   if (pressed) return actionMissing(expected, pressed);
   // Se espera a que la lista recargada aparezca (o a que se agote el techo) antes de juzgar
   await waitPanelUntil(page, (snap) => !snap.error && snap.rowNames.includes('Aeronáutica Levante S.L.'), PANEL_MOVIL);
   const leaves = await leavesOf(cardOf(page, 'Aeronáutica Levante S.L.'));
+  const alertGone = await goneFor(panelOf(page).getByRole('alert').filter({ hasText: ERROR_TITLE }), `ya no ve el aviso «${ERROR_TITLE}»`, `el aviso «${ERROR_TITLE}»`);
   return conclude(
     [
       check(before.error, `ve el aviso «${ERROR_TITLE}» antes de pulsar`, before.error ? `ve el aviso «${ERROR_TITLE}» antes de pulsar` : 'no ve el aviso antes de pulsar'),
       check(leaves.length > 0, 've la tarjeta de Aeronáutica Levante S.L.', leaves.length > 0 ? 've la tarjeta de Aeronáutica Levante S.L.' : 'no ve la tarjeta de Aeronáutica Levante S.L.'),
-      await notSeenCheck(panelOf(page).getByRole('alert').filter({ hasText: ERROR_TITLE }), `ya no ve el aviso «${ERROR_TITLE}»`, `el aviso «${ERROR_TITLE}»`),
+      alertGone,
     ],
     {
-      note: 'Los fallos provocados duran hasta que la fila ve el aviso y después se sueltan: con una sola petición de la sección es lo mismo que «solo la primera responde con error». Las peticiones provocadas van en la evidencia.',
+      note: 'La historia dice «la primera petición» responde con el error: la prueba falla solo la primera petición de la lista y deja pasar las siguientes. Los conteos (provocadas, falladas, dejadas pasar) van en la evidencia.',
       evidence: faultEvidence(faults),
     },
   );
@@ -302,10 +318,15 @@ const countAndNoticeMobile: BrowserRowHandler = async (row, { page }) => {
   if (opened) return opened;
   const snap = await waitMobileSearch(page, (current) => current.status === aviso && (count === 0 ? !current.listVisible : current.listVisible && current.options.length === count));
   const listOk = count === 0 ? !snap.listVisible : snap.listVisible && snap.options.length === count;
-  return conclude([
+  // Una sola letra: la longitud mínima de la búsqueda es una decisión pendiente (001); la fila no afirma ningún mínimo
+  const note = text.length === 1 ? 'Una sola letra: la longitud mínima de la búsqueda es una decisión pendiente (001); la fila no afirma ningún mínimo.' : undefined;
+  return conclude(
+    [
     check(listOk, cell(row, 'lista'), count === 0 ? (snap.listVisible ? `ve una lista con ${snap.options.length} opciones` : 'no ve ninguna lista de opciones') : `ve ${snap.listVisible ? snap.options.length : 0} opciones`),
     check(snap.status === aviso, `el aviso dice ${aviso}`, `el aviso dice ${snap.status ?? '(no se ve)'}`),
-  ]);
+    ],
+    note === undefined ? {} : { note },
+  );
 };
 
 // --- Esquema 7: sin texto, la lista enseña los cinco primeros proveedores por nombre -----------------------------------------
@@ -324,6 +345,12 @@ const firstFiveMobile: BrowserRowHandler = async (row, { page }) => {
   return conclude([
     check(snap.options[position] === cell(row, 'opcion'), `la opción ${cell(row, 'lugar')} es ${cell(row, 'opcion')}`, `la opción ${cell(row, 'lugar')} es ${snap.options[position] ?? '(no se ve)'}`),
     check(!snap.options.includes('Sistemas Ibéricos S.A.'), 'no ve «Sistemas Ibéricos S.A.» en la lista', snap.options.includes('Sistemas Ibéricos S.A.') ? 've «Sistemas Ibéricos S.A.» en la lista' : 'no ve «Sistemas Ibéricos S.A.» en la lista'),
+    // La regla: cada opción muestra el nombre y el NIF del proveedor (NIF de la historia 001)
+    check(
+      snap.options.length > 0 && snap.options.every((name, index) => optionShowsNameAndNif(name, snap.optionLeaves[index] ?? [])),
+      'cada opción muestra su nombre y su NIF',
+      snap.options.length === 0 ? '(sin opciones)' : snap.options.map((name, index) => (optionShowsNameAndNif(name, snap.optionLeaves[index] ?? []) ? `${name} con su NIF` : `${name} sin su NIF`)).join('; '),
+    ),
   ]);
 };
 
@@ -337,7 +364,8 @@ const failedSearchMobile: BrowserRowHandler = async (row, { page }) => {
   if (ready) return ready;
   const chosen = await withSuppliersTab(page, expected);
   if (chosen) return chosen;
-  const faults = await injectFailures(page, matchQuery('fall'), status);
+  // Todas las peticiones de «fall» responden con el error (la historia dice «responda», no «la primera»)
+  const faults = await injectFailures(page, matchQuery('fall'), status, 'always');
   const typed = await openSearch(page, 'fall', expected);
   if (typed) return typed;
   const snap = await waitMobileSearch(page, (current) => current.status === SEARCH_ERROR);
@@ -365,12 +393,11 @@ const tapSupplier: BrowserRowHandler = async (row, { page }) => {
   if (picked) return picked;
   const snap = await waitMobileSearch(page, fichaShown(proveedor));
   const ficha = await fichaChecks(page, proveedor, cell(row, 'nif'), cell(row, 'correo'), cell(row, 'estado'));
-  const after = await settledMobilePanel(page);
   return conclude([
     check(snap.value === proveedor, `el campo muestra ${proveedor}`, `el campo muestra ${snap.value ?? '(sin leer)'}`),
     check(!snap.listVisible, 'la lista se cierra', snap.listVisible ? 'la lista sigue abierta' : 'la lista se cierra'),
     ...ficha,
-    unchangedCheck(before, after),
+    await unchangedFor(page, PANEL_MOVIL, before),
   ]);
 };
 
@@ -403,17 +430,20 @@ const contractCodeLink: BrowserRowHandler = async (row, { page }) => {
   const picked = await pickByTap(page, 'Levante', 'Aeronáutica Levante S.L.', expected);
   if (picked) return picked;
   await waitMobileSearch(page, fichaShown('Aeronáutica Levante S.L.'));
-  // El historial del navegador se lee antes y después del toque (evidencia: distingue el toque aunque la ruta ya sea la misma)
-  const historyBefore = await safe(() => page.evaluate(() => window.history.length), 0);
+  // Las navegaciones del marco principal (también las que no recargan la página) se cuentan desde antes del toque
+  const navigations = countNavigations(page);
   const pressed = await clickOn(contractLink(page, codigo), `tocar el código ${codigo}`);
   if (pressed) return actionMissing(expected, pressed);
   const arrived = await waitUntil(async () => pathOf(page) === programPath(codigo), CEILING_MS);
-  const historyAfter = await safe(() => page.evaluate(() => window.history.length), 0);
-  // Con PRG-001 la página ya está en esa ruta: la comprobación de la ruta no distingue el toque
-  const note = codigo === 'PRG-001' ? 'Con PRG-001 la página ya está en /programs/PRG-001: la comprobación de la ruta no distingue el toque; el historial del navegador (en la evidencia) sí.' : undefined;
+  // Con PRG-001 la página ya está en esa ruta: la comprobación de la ruta no distingue el toque, y el enlace de la ficha no tiene destino
+  // legible (es un botón de la app móvil). El número de navegaciones va en la evidencia como única señal del toque.
+  const note =
+    codigo === 'PRG-001'
+      ? 'La fila no distingue el toque: la ruta ya es la de destino (PRG-001) y el enlace móvil no expone su destino. El número de navegaciones va en la evidencia.'
+      : undefined;
   return conclude([check(arrived.reached, `llega a ${programPath(codigo)}`, `llega a ${pathOf(page)}`)], {
     ...(note === undefined ? {} : { note }),
-    evidence: { historialAntes: historyBefore, historialDespues: historyAfter },
+    evidence: { navegacionesDespuesDelToque: navigations.count() },
   });
 };
 
@@ -434,11 +464,10 @@ const removeChoiceMobile: BrowserRowHandler = async (row, { page }) => {
   const removed = await clickOn(page.getByRole('button', { name: REMOVE, exact: true }), `tocar «${REMOVE}»`);
   if (removed) return actionMissing(expected, removed);
   const snap: SearchSnapshot = await waitMobileSearch(page, (current) => current.value === '' && !current.fichaVisible);
-  const after = await settledMobilePanel(page);
   return conclude([
     check(snap.value === '', 'el campo «Proveedor del tenant» queda vacío', `el campo tiene «${snap.value ?? '(sin leer)'}»`),
     check(!snap.fichaVisible, 'no ve ninguna ficha de proveedor', snap.fichaVisible ? 've una ficha de proveedor' : 'no ve ninguna ficha de proveedor'),
-    unchangedCheck(before, after),
+    await unchangedFor(page, PANEL_MOVIL, before),
   ]);
 };
 
