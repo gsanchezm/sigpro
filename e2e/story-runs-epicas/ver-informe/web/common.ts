@@ -7,6 +7,9 @@ import { check, sleep, type Check } from '../../support/checks';
 import { outcome, type BrowserRowHandler, type Outcome } from '../../core/framework';
 import { isPdf, pdfLines } from '../api/pdf';
 
+// Estos ayudantes viven en api/common.ts (los usa también la API); aquí se reexportan para las filas web y móviles.
+export { codesOfPdf, listed, sameSet } from '../api/common';
+
 // Piezas comunes de las filas web de EP-VER-INFORME (escritorio 1440 px; el ancho de la historia 004 E6 lo fija la fila). Los
 // localizadores son de rol y de nombre; los ids de prueba solo donde la pantalla no ofrece otro rastro (recuento, barra, detalle).
 // Toda acción sobre un elemento de la historia pasa por `interact`: si falla, la nota dice si el elemento no existe, si lo tapa
@@ -33,8 +36,8 @@ export const onWeb =
     return { ...result, note: result.note === undefined ? COOKIE_NOTE : `${result.note} ${COOKIE_NOTE}` };
   };
 
-/** Fija SOLO la preferencia de cookies: el aviso tapa zonas de la página y no es una sesión. */
-const fixCookiePreference = (): void => {
+/** Fija SOLO la preferencia de cookies: el aviso tapa zonas de la página y no es una sesión. Lo usan la web y la app móvil (Expo web). */
+export const fixCookiePreference = (): void => {
   try {
     localStorage.setItem('sigpro.cookies', 'accepted');
   } catch {
@@ -94,13 +97,25 @@ export const armToasts = (page: Page): Promise<void> =>
     undefined,
   );
 
-/** Registro de avisos de la página desde la última «armada». */
-export const toastLog = (page: Page): Promise<readonly ToastEntry[]> =>
-  safe(() => page.evaluate((key: string) => ((window as unknown as Record<string, unknown>)[key] as ToastEntry[] | undefined) ?? [], TOAST_KEY), []);
+/**
+ * Registro de avisos de la página desde la última «armada». `undefined` si no se puede leer: una lectura fallida NO es «ningún
+ * aviso» (no cuenta como cumplida ni como incumplida la afirmación «no aparece»).
+ */
+export const toastLog = (page: Page): Promise<readonly ToastEntry[] | undefined> =>
+  safe(
+    () =>
+      page.evaluate((key: string) => {
+        const log = (window as unknown as Record<string, unknown>)[key];
+        return Array.isArray(log) ? (log as ToastEntry[]) : null;
+      }, TOAST_KEY).then((log) => log ?? undefined),
+    undefined,
+  );
 
-/** Texto del registro, en una frase: `tono «título» / «cuerpo»`, o «(ninguno)». */
-export const describeToasts = (log: readonly ToastEntry[]): string =>
-  log.length === 0 ? '(ninguno)' : log.map((entry) => `${entry.tone} «${entry.title}»${entry.body === '' ? '' : ` / «${entry.body}»`}`).join(' | ');
+/** Texto del registro, en una frase: `tono «título» / «cuerpo»`, «(ninguno)» o «(registro de avisos no legible)». */
+export const describeToasts = (log: readonly ToastEntry[] | undefined): string => {
+  if (log === undefined) return '(registro de avisos no legible)';
+  return log.length === 0 ? '(ninguno)' : log.map((entry) => `${entry.tone} «${entry.title}»${entry.body === '' ? '' : ` / «${entry.body}»`}`).join(' | ');
+};
 
 /**
  * Espera (con techo de red) a que aparezca un aviso con ese título; devuelve el primero y lo que hay en el registro. La historia
@@ -108,9 +123,9 @@ export const describeToasts = (log: readonly ToastEntry[]): string =>
  */
 export const toastShown = async (page: Page, title: string): Promise<{ readonly entry?: ToastEntry; readonly observed: string }> => {
   const matches = (entry: ToastEntry): boolean => entry.title === title;
-  await waitUntil(async () => (await toastLog(page)).some(matches), WAIT_MS);
+  await waitUntil(async () => ((await toastLog(page)) ?? []).some(matches), WAIT_MS);
   const log = await toastLog(page);
-  return { entry: log.find(matches), observed: describeToasts(log) };
+  return { entry: log?.find(matches), observed: describeToasts(log) };
 };
 
 // --- Descargas ---------------------------------------------------------------------------------------------------------------------
@@ -352,8 +367,36 @@ export const actionFailed = (expected: string, blocked: Blocked): Outcome =>
 /** Pulsar un elemento localizado en la página. */
 export const clickIn = (locate: (page: Page) => Locator, label: string): WebAction => (page) => interact(locate(page), label, (element) => element.click(ACTION));
 
-/** Marcar una casilla (la historia dice «marca»; las casillas empiezan sin marcar). */
-export const checkIn = (locate: (page: Page) => Locator, label: string): WebAction => (page) => interact(locate(page), label, (element) => element.click(ACTION));
+/** ¿Está marcada una casilla? (`checked` del control, o `aria-checked` en las casillas que no son un input). `undefined` si no se lee. */
+export const checkedOf = (target: Locator): Promise<boolean | undefined> =>
+  safe(
+    () =>
+      target.first().evaluate(
+        (element) => (element as HTMLInputElement).checked === true || element.getAttribute('aria-checked') === 'true',
+        undefined,
+        { timeout: READ_MS },
+      ),
+    undefined,
+  );
+
+/**
+ * Marcar una casilla (la historia dice «marca»). Si no está marcada, se pulsa; después se LEE que quedó marcada: si no, la acción
+ * falla con diagnóstico (no se da por hecho que el clic la marcó).
+ */
+export const checkIn =
+  (locate: (page: Page) => Locator, label: string): WebAction =>
+  async (page) => {
+    const target = locate(page);
+    const before = await checkedOf(target);
+    if (before === undefined) return { message: `no se pudo leer la casilla de «${label}»`, note: 'la casilla no se pudo leer en el plazo (no aparece o no es una casilla)' };
+    if (before === false) {
+      const clicked = await interact(target, label, (element) => element.click(ACTION));
+      if (clicked !== undefined) return clicked;
+    }
+    const after = await checkedOf(target);
+    if (after !== true) return { message: `la casilla de «${label}» no queda marcada (lectura: ${after === undefined ? 'sin leer' : 'desmarcada'})`, note: 'la casilla existe pero no queda marcada tras el clic' };
+    return undefined;
+  };
 
 /** Escribir un texto en un campo (la historia dice qué se escribe en cada campo). */
 export const fillIn = (locate: (page: Page) => Locator, label: string, text: string): WebAction => (page) => interact(locate(page), `escribir «${text}» en «${label}»`, (element) => element.fill(text, ACTION));
@@ -402,12 +445,6 @@ export const toastCheck = (reading: { readonly entry?: ToastEntry; readonly obse
 /** Códigos de caso de un texto (`TC-001`, `TC-010`…), en orden de aparición y sin repetir. */
 export const codesIn = (text: string): readonly string[] => [...new Set(text.match(/TC-\d{3}/g) ?? [])];
 
-/** Códigos de caso de las fichas del PDF (la línea de cada ficha empieza por su código y « · »). */
-export const codesOfPdf = (lines: readonly string[] | undefined): readonly string[] => (lines ?? []).map((line) => /^(TC-\d{3}) · /.exec(line)?.[1]).filter((code): code is string => code !== undefined);
-
-/** Dos listas de códigos son el mismo conjunto (sin importar el orden). */
-export const sameSet = (actual: readonly string[], expected: readonly string[]): boolean => actual.length === expected.length && [...actual].sort().join(',') === [...expected].sort().join(',');
-
 /** Códigos de los casos que muestra la lista ahora (una lectura del DOM: `testcase-row-TC-001`, sin los menús), o `undefined` si no se lee. */
 export const visibleCodes = (scope: Locator): Promise<readonly string[] | undefined> =>
   safe(
@@ -423,9 +460,6 @@ export const visibleCodes = (scope: Locator): Promise<readonly string[] | undefi
       ),
     undefined,
   );
-
-/** Texto de los códigos que espera la fila (o «(ninguno)»), para la nota y el observado. */
-export const listed = (codes: readonly string[] | undefined): string => (codes === undefined ? '(no se pudo leer)' : codes.length === 0 ? '(ninguno)' : codes.join(', '));
 
 /** Una lista de comprobaciones se queda en el resultado de la fila; si una es incumplida, la nota dice en qué. */
 export const quietCheck = (count: number, expected: string): Check => check(count === 0, expected, `${count} descarga(s)`);

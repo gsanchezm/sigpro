@@ -8,16 +8,19 @@ import {
   actionFailed,
   armToasts,
   clickIn,
+  codesOfPdf,
   detailReportButton,
   exactTextCheck,
   failNextReport,
   firstDownload,
   linesOfPdf,
+  listed,
   onWeb,
   openPath,
   pdfLineCheck,
   quietCheck,
   quietWindow,
+  sameSet,
   signIn,
   toastCheck,
   toastShown,
@@ -30,6 +33,9 @@ import {
 
 const SELECTION_NAME = 'informe-verificacion-seleccion.pdf';
 const COUNT_LINE = 'Casos de prueba: 1 · Ejecutados: 1 · Sin ejecutar: 0';
+/** Decisión pendiente de la historia 002 (la 005 la usa en su Ejemplo): el nombre de la selección de un solo caso. */
+const SINGLE_CASE_NAME_PENDING =
+  'Decisión pendiente de la historia 002: el nombre de la selección de un solo caso. Se juzga contra el Ejemplo (informe-verificacion-seleccion.pdf), que es lo que la historia afirma hoy.';
 
 /** Resultado del último caso con la etiqueta que muestra la ficha. */
 const RESULT_CELLS: ReadonlyMap<string, string> = new Map<string, string>([
@@ -70,12 +76,17 @@ const detailDownloads: BrowserRowHandler = async (row, { page }) => {
   if (pressed !== undefined) return actionFailed(expected, pressed);
   const file = await firstDownload(downloads);
   const toast = await toastShown(page, 'Informe generado');
-  return done([
-    check(file?.name === SELECTION_NAME, `se descarga el archivo «${SELECTION_NAME}»`, `se descarga «${file?.name ?? '(ninguna descarga)'}»`),
-    pdfLineCheck(linesOfPdf(file?.bytes), COUNT_LINE, 'Casos de prueba:'),
-    pdfLineCheck(linesOfPdf(file?.bytes), fichaLine, 'Último resultado:'),
-    toastCheck(toast, 'Informe generado', SELECTION_NAME),
-  ]);
+  const fichas = codesOfPdf(linesOfPdf(file?.bytes));
+  return done(
+    [
+      check(file?.name === SELECTION_NAME, `se descarga el archivo «${SELECTION_NAME}»`, `se descarga «${file?.name ?? '(ninguna descarga)'}»`),
+      pdfLineCheck(linesOfPdf(file?.bytes), COUNT_LINE, 'Casos de prueba:'),
+      pdfLineCheck(linesOfPdf(file?.bytes), fichaLine, 'Último resultado:'),
+      check(sameSet(fichas, [caso]), `el PDF trae solo el caso ${caso}`, `el PDF trae ${listed(fichas)}`),
+      toastCheck(toast, 'Informe generado', SELECTION_NAME),
+    ],
+    { reading: SINGLE_CASE_NAME_PENDING },
+  );
 };
 
 // --- Esquema 2: si la petición del informe falla, aparece el aviso de error y no se descarga nada ----------------------------------

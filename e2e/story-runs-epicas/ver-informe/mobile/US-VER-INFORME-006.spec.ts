@@ -4,6 +4,7 @@ import { cell, check, preparationFailedWeb, strict, type Check } from '../../sup
 import { safe, waitUntil } from '../../support/browser';
 import { TENANT_A, resetTenants } from '../../../story-runs/support/prepare';
 import { CASE_CELLS, done, numberOf } from '../api/common';
+import { SEED_CASES } from '../api/seed-cases';
 import {
   NETWORK_CAUSE,
   TRACE_READING,
@@ -45,6 +46,7 @@ import {
   markCard,
   notDelivered,
   onExpoWeb,
+  onExpoWebAddress,
   openRoute,
   reportButton,
   reportState,
@@ -61,6 +63,15 @@ import {
 const REASON = 'No hay casos de prueba para el informe';
 const SELECTION_NAME = 'informe-verificacion-seleccion.pdf';
 const ALL_CASES = 25;
+/** La primera página de la lista (diez casos, por código): lo que marca «Seleccionar todos los casos de la página». Viene del seed. */
+const FIRST_PAGE = SEED_CASES.slice(0, 10).map((testCase) => testCase.code);
+/** Reglas sin fila en esta historia (se anotan, no se juzgan aquí). */
+const RULES_WITHOUT_ROW =
+  'Reglas sin fila (no se comprueban aquí): la barra dice «<n> seleccionados», «Quitar selección» vacía la marca, y desactivar «Seleccionar», cambiar un filtro o el orden vacía la selección.';
+const BUSY_RULE = 'Regla sin fila: mientras se prepara un informe su botón está ocupado y no se lanza otro (no se comprueba aquí).';
+/** Decisión pendiente de la historia 002 (la 006 la usa en sus Ejemplos): el nombre de la selección de un solo caso. */
+const SINGLE_CASE_NAME_PENDING =
+  'Decisión pendiente de la historia 002: el nombre de la selección de un solo caso. Se juzga contra el Ejemplo (informe-verificacion-seleccion.pdf), que es lo que la historia afirma hoy.';
 
 /** Opción del desplegable «Programa» y los casos que trae su alcance (el seed: 25 en total y 9 en PRG-002). */
 interface ProgramChoice {
@@ -76,7 +87,7 @@ const PROGRAM_CELLS: ReadonlyMap<string, ProgramChoice> = new Map<string, Progra
 
 const CONDITION_CELLS: ReadonlyMap<string, string> = new Map<string, string>([['elige PRG-004 en el filtro «Programa»', 'PRG-004']]);
 
-/** Selección de la lista: la acción marca casos nombrados (con su código en el texto) o «todos los de la página» (se leen de la lista). */
+/** Selección de la lista: la acción marca casos nombrados (con su código en el texto) o «todos los de la página» (la primera página del seed). */
 const SELECTION_CELLS: ReadonlyMap<string, WebAction> = new Map<string, WebAction>([
   ['pulsa «Seleccionar», marca «Seleccionar TC-001» y «Seleccionar TC-010»', inOrder(toggleSelect, markCard('TC-001'), markCard('TC-010'))],
   ['pulsa «Seleccionar» y marca «Seleccionar todos los casos de la página»', inOrder(toggleSelect, clickIn(selectAllButton, 'marcar «Seleccionar todos los casos de la página»'))],
@@ -108,7 +119,7 @@ const DETAIL_CELLS: ReadonlyMap<string, Detail> = new Map<string, Detail>([
 /** Causa de la nota del fallo de red: solo si el aviso muestra el «network error» de la traza. */
 const causeOf = (body: string | undefined): string | undefined => (body !== undefined && body.includes('network error') ? NETWORK_CAUSE : undefined);
 
-/** Códigos de casos de la lista que se ven ahora (tarjetas de la app móvil, sin los menús). */
+/** Códigos de casos que muestran las tarjetas de la lista ahora (sin los menús), o `undefined` si no se leen. */
 const shownCodes = (page: Page): Promise<readonly string[] | undefined> => visibleCodes(listRoot(page));
 
 // --- Esquema 1: el botón de la lista descarga el informe del programa filtrado o de todos los casos -----------------------------
@@ -135,9 +146,9 @@ const listDownloads: BrowserRowHandler = async (row, { page }) => {
   await armAll(page);
   const pressed = await pressWhenEnabled(reportButton, 'pulsar «Descargar informe PDF»', page);
   if (pressed !== undefined) return actionFailed(expected, pressed);
-  const delivery = await firstDelivery(page);
+  const reading = await firstDelivery(page);
   const toast = await toastShown(page, 'Informe generado');
-  return done([deliveredCheck(delivery), toastCheck(toast, 'Informe generado', nombre)]);
+  return done([deliveredCheck(reading), toastCheck(toast, 'Informe generado', nombre)], { reading: BUSY_RULE });
 };
 
 // --- Esquema 2: sin casos en la vista, el botón está deshabilitado y lo dice ----------------------------------------------------
@@ -162,7 +173,8 @@ const emptyViewDisabled: BrowserRowHandler = async (row, { page }) => {
       check(visible === REASON, `se lee «${REASON}» como texto visible`, visible === undefined ? `no se lee ningún motivo visible${state?.dataReason === undefined ? '' : ` (solo data-reason «${state.dataReason}»)`}` : `se lee «${visible}»`),
     ],
     {
-      reading: 'El motivo se lee como texto visible del elemento del motivo (testid verification-report-reason), que es lo que la historia llama «debajo de él». El data-reason del botón se anota como evidencia y no cuenta como lectura.',
+      reading:
+        'El motivo se lee como texto visible del elemento del motivo (testid verification-report-reason), que es lo que la historia llama «debajo de él». El data-reason del botón se anota como evidencia y no cuenta como lectura.',
       evidence: { dataReason: state?.dataReason ?? '(ausente)' },
     },
   );
@@ -180,22 +192,23 @@ const selectionDelivers: BrowserRowHandler = async (row, { page }) => {
   if (signed !== undefined) return preparationFailedWeb(expected, signed);
   const listedAt = await openRoute(page, '/verification', 'list');
   if (listedAt !== undefined) return preparationFailedWeb(expected, listedAt);
-  // Los casos que debe cubrir el informe: los que nombra la acción, o los que muestran las tarjetas antes de marcar («todos»)
+  // Los casos que debe cubrir el informe: los que nombra la acción, o («todos los de la página») los diez primeros del seed
   const named = codesIn(cell(row, 'seleccion'));
-  const shownBefore = await shownCodes(page);
-  if (named.length === 0 && (shownBefore === undefined || shownBefore.length === 0)) {
-    return preparationFailedWeb(expected, 'no se pudo leer qué casos muestra la lista antes de marcar «todos» (sin casos en la lista o sin leer)');
-  }
-  const wanted = named.length > 0 ? named : (shownBefore ?? []);
+  const wanted = named.length > 0 ? named : FIRST_PAGE;
+  const shownBefore = named.length === 0 ? await shownCodes(page) : undefined;
   await armAll(page);
   const blocked = await inOrder(seleccion, clickIn(bulkReportButton, 'pulsar «Informe de la selección»'))(page);
   if (blocked !== undefined) return actionFailed(expected, blocked);
-  const delivery = await firstDelivery(page);
+  const reading = await firstDelivery(page);
   const toast = await toastShown(page, 'Informe generado');
-  const lines = linesOfPdf(bytesOf(delivery));
+  const lines = linesOfPdf(bytesOf(reading.first));
   const pdfCodes = codesOfPdf(lines);
   const coverage: Check = check(sameSet(pdfCodes, wanted), `el PDF cubre los casos ${listed(wanted)}`, `el PDF cubre ${listed(pdfCodes)}`);
-  return done([deliveredCheck(delivery), pdfLineCheck(lines, countLine, 'Casos de prueba:'), coverage, toastCheck(toast, 'Informe generado', SELECTION_NAME)]);
+  const pageCheck: Check[] =
+    named.length === 0 ? [check(sameSet(shownBefore ?? [], FIRST_PAGE), `la lista muestra los diez primeros casos (${listed(FIRST_PAGE)})`, `la lista muestra ${listed(shownBefore)}`)] : [];
+  return done([deliveredCheck(reading), pdfLineCheck(lines, countLine, 'Casos de prueba:'), coverage, ...pageCheck, toastCheck(toast, 'Informe generado', SELECTION_NAME)], {
+    reading: RULES_WITHOUT_ROW,
+  });
 };
 
 // --- Esquema 4: el menú de una tarjeta y el detalle descargan el informe de un caso --------------------------------------------
@@ -214,12 +227,14 @@ const cardOrDetailReport: BrowserRowHandler = async (row, { page }) => {
   await armAll(page);
   const blocked = await accion(caso)(page);
   if (blocked !== undefined) return actionFailed(expected, blocked);
-  const delivery = await firstDelivery(page);
+  const reading = await firstDelivery(page);
   const toast = await toastShown(page, 'Informe generado');
-  const lines = linesOfPdf(bytesOf(delivery));
+  const lines = linesOfPdf(bytesOf(reading.first));
   const pdfCodes = codesOfPdf(lines);
   const coverage: Check = check(sameSet(pdfCodes, [caso]), `el PDF cubre solo el caso ${caso}`, `el PDF cubre ${listed(pdfCodes)}`);
-  return done([deliveredCheck(delivery), pdfLineCheck(lines, countLine, 'Casos de prueba:'), coverage, toastCheck(toast, 'Informe generado', SELECTION_NAME)]);
+  return done([deliveredCheck(reading), pdfLineCheck(lines, countLine, 'Casos de prueba:'), coverage, toastCheck(toast, 'Informe generado', SELECTION_NAME)], {
+    reading: SINGLE_CASE_NAME_PENDING,
+  });
 };
 
 // --- Esquema 5: si la petición del informe falla, aparece el aviso de error y no se entrega nada ----------------------------
@@ -255,7 +270,7 @@ defineBrowserRows({
     [1, onExpoWeb(listDownloads)],
     [2, onExpoWeb(emptyViewDisabled)],
     [3, onExpoWeb(selectionDelivers)],
-    [4, onExpoWeb(cardOrDetailReport)],
+    [4, onExpoWebAddress(cardOrDetailReport)],
     [5, onExpoWeb(failedDelivery)],
   ]),
 });

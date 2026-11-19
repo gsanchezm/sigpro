@@ -1,5 +1,6 @@
 import { defineApiRows, type ApiRowHandler } from '../../core/framework';
 import { cell, check, parseResponse, preparationFailed, responseCheck, strict } from '../../support/checks';
+import { errorCode } from '../../../story-runs/support/api';
 import { DEMO, TENANT_A, TENANT_B, resetTenants } from '../../../story-runs/support/prepare';
 import {
   ACCOUNT_CELLS,
@@ -54,7 +55,8 @@ const withoutValidToken: ApiRowHandler = async (row) => {
   let refreshToken: string | undefined;
   if (kind === 'refresh') {
     const session = await signedIn(GESTOR, true);
-    if (session.refreshToken === undefined) return preparationFailed(expectedText, 'gestor@sigpro.test inicia sesión y obtiene su refreshToken', session.result);
+    // Solo el estado y el código: el cuerpo del inicio de sesión lleva tokens y no entra en la evidencia
+    if (session.refreshToken === undefined) return preparationFailed(expectedText, 'gestor@sigpro.test inicia sesión y obtiene su refreshToken', { status: session.result.status, body: { code: errorCode(session.result) ?? null }, ms: session.result.ms });
     refreshToken = session.refreshToken;
   }
   const token = kind === 'inventado' ? INVENTED_TOKEN : refreshToken;
@@ -112,7 +114,10 @@ const anyAccount: ApiRowHandler = async (row) => {
       pdfCheck(reply),
       lineCheck(reply.lines, expectedLine, 'Último resultado - Superados:'),
     ],
-    { evidence: evidenceOf(reply) },
+    {
+      evidence: evidenceOf(reply),
+      reading: 'Qué roles descargan el informe es una decisión pendiente de la historia («Decisiones pendientes»): la fila juzga lo que existe hoy, que es que las cuatro clases de cuenta lo reciben.',
+    },
   );
 };
 

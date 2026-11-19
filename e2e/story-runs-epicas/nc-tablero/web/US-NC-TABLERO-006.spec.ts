@@ -101,13 +101,16 @@ const cardReader = (code: string): CardView => {
   };
   const lines = card === null ? [] : ((card as HTMLElement).innerText ?? '').split('\n').map((line) => line.trim()).filter((line) => line !== '');
   const srOnly = document.querySelector(`[data-testid="nc-card-comments-${code}"] .sr-only`);
-  const visible = document.querySelector(`[data-testid="nc-card-comments-${code}"] [aria-hidden="true"]`);
+  // El número visible es el <span aria-hidden> del contador (el icono también lleva aria-hidden, pero es un <svg>: se excluye)
+  const visible = document.querySelector(`[data-testid="nc-card-comments-${code}"] span[aria-hidden="true"]`);
+  const box = visible === null ? undefined : visible.getBoundingClientRect();
+  const shown = box !== undefined && box.width > 0 && box.height > 0;
   return {
     present: card !== null,
     severity: textOf(`nc-card-severity-${code}`),
     program: lines.find((line) => /^PRG-\d{3}$/.test(line)),
     comments: srOnly === null ? undefined : (srOnly.textContent ?? '').trim(),
-    visibleNumber: visible === null ? undefined : (visible.textContent ?? '').trim(),
+    visibleNumber: visible === null || !shown ? undefined : (visible.textContent ?? '').trim(),
   };
 };
 

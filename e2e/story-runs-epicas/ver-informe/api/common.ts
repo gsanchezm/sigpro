@@ -3,6 +3,7 @@ import { DEMO, TENANT_A, TENANT_B, type Credentials } from '../../../story-runs/
 import { check, conclude, preparationFailed, type Check } from '../../support/checks';
 import { type Outcome } from '../../core/framework';
 import { isPdf, pdfLines } from './pdf';
+import { SEED_CASES } from './seed-cases';
 
 // Piezas comunes de los manejadores de API de EP-VER-INFORME. El informe no es JSON: el cuerpo llega como bytes, así que aquí se
 // hace la petición con `fetch` directo (el `call` del piloto lee el cuerpo como texto y lo rompería). Las cifras que la historia
@@ -89,6 +90,22 @@ export const numberOf = (text: string): number => {
   return Number(text);
 };
 
+/**
+ * Casos que debe traer el informe según la consulta, leídos del seed (apps/api/src/seed/data.ts: el caso n es del programa
+ * PRG-(floor((n-1)/9)+1)): con `codes` (no vacío) manda la selección y `program` se ignora; si no, el programa; si no, todos.
+ * Los espacios alrededor de cada código o del programa no cuentan.
+ */
+export const expectedCodes = (scope: ScopeQuery): readonly string[] => {
+  const codes = (scope.codes ?? '')
+    .split(',')
+    .map((code) => code.trim())
+    .filter((code) => code !== '');
+  if (codes.length > 0) return codes;
+  const program = (scope.program ?? '').trim();
+  if (program !== '') return SEED_CASES.filter((testCase) => testCase.programCode === program).map((testCase) => testCase.code);
+  return SEED_CASES.map((testCase) => testCase.code);
+};
+
 /** Consulta de la URL del informe: solo los parámetros que la fila trae, con su codificación real. */
 export const queryOf = (scope: ScopeQuery): string => {
   const params = new URLSearchParams();
@@ -122,6 +139,8 @@ export interface Reply {
   readonly disposition: string | undefined;
   readonly filename: string | undefined;
   readonly pdf: boolean;
+  /** Un PDF completo: empieza por %PDF- y termina en su marca %%EOF (un archivo truncado no lo cumple). */
+  readonly complete: boolean;
   readonly bytes: Buffer;
   readonly body: unknown;
   readonly lines: readonly string[];
@@ -141,6 +160,7 @@ export const reportReply = async (headers: Readonly<Record<string, string>>, que
     disposition,
     filename: filenameOf(disposition),
     pdf,
+    complete: pdf && bytes.toString('latin1').trimEnd().endsWith('%%EOF'),
     bytes,
     body: pdf ? undefined : parseJson(bytes.toString('utf8')),
     lines: pdf ? pdfLines(bytes) : [],
@@ -205,8 +225,22 @@ export const signedInWith = async (tenant: string, email: string, password: stri
 
 // --- Comprobaciones de la respuesta del informe ----------------------------------------------------------------------------------
 
-/** Un PDF (cabecera `%PDF-`). */
-export const pdfCheck = (reply: Reply): Check => check(reply.pdf, 'un PDF', reply.pdf ? `un PDF (Content-Type ${reply.contentType})` : `no es un PDF (Content-Type ${reply.contentType})`);
+/** Un PDF completo (cabecera `%PDF-` y marca final `%%EOF`). Un archivo truncado no cuenta como informe. */
+export const pdfCheck = (reply: Reply): Check =>
+  check(
+    reply.pdf && reply.complete,
+    'un PDF completo (con %%EOF)',
+    reply.pdf ? (reply.complete ? `un PDF completo (Content-Type ${reply.contentType})` : 'un PDF sin %%EOF (truncado)') : `no es un PDF (Content-Type ${reply.contentType})`,
+  );
+
+/** Códigos de caso de las fichas del PDF, en el orden en que aparecen (la línea de cada ficha empieza por su código y « · »). */
+export const codesOfPdf = (lines: readonly string[] | undefined): readonly string[] => (lines ?? []).map((line) => /^(TC-\d{3}) · /.exec(line)?.[1]).filter((code): code is string => code !== undefined);
+
+/** Dos listas de códigos son el mismo conjunto (sin importar el orden). */
+export const sameSet = (actual: readonly string[], expected: readonly string[]): boolean => actual.length === expected.length && [...actual].sort().join(',') === [...expected].sort().join(',');
+
+/** Texto de una lista de códigos para el observado o el esperado: «TC-001, TC-010», «(ninguno)» o «(no se pudo leer)». */
+export const listed = (codes: readonly string[] | undefined): string => (codes === undefined ? '(no se pudo leer)' : codes.length === 0 ? '(ninguno)' : codes.join(', '));
 
 /** Ningún PDF en la respuesta (un error no trae el informe). */
 export const noPdfCheck = (reply: Reply): Check => check(!reply.pdf, 'ningún PDF', reply.pdf ? `trae un PDF (Content-Type ${reply.contentType})` : `ningún PDF (Content-Type ${reply.contentType})`);

@@ -5,7 +5,7 @@ import { ACTION, CEILING_MS, runSteps, safe, waitUntil, type Step } from '../../
 import { type Check } from '../../support/checks';
 import { type BrowserRowHandler, type Outcome } from '../../core/framework';
 import { isPdf } from '../api/pdf';
-import { READ_MS, TOAST_KEY, WAIT_MS, armToasts, clickIn, inOrder, interact, recordToasts, type WebAction } from '../web/common';
+import { READ_MS, TOAST_KEY, WAIT_MS, armToasts, clickIn, fixCookiePreference, inOrder, interact, recordToasts, type WebAction } from '../web/common';
 
 // Piezas comunes de las filas de la app móvil de EP-VER-INFORME. La app móvil se prueba como web de Expo (390 × 844; NO es nativo):
 // la entrega del PDF (iOS y Android abren la hoja de compartir) se observa en Expo web, donde la app abre el archivo en una pestaña
@@ -24,15 +24,25 @@ const REASON_TESTID = MOVIL_VERIFICATION_TESTIDS.REPORT_REASON;
 /** Abrir una dirección de la app (/verification, /verification/TC-019) se aproxima con una carga completa de la página en Expo web. */
 export const DIRECT_APPROXIMATION =
   'Abrir una dirección de la app se aproxima con una carga completa de la página en Expo web, que recupera la sesión guardada; en iOS o Android sería un enlace profundo.';
+/** Preferencia de cookies fijada también en la app móvil (el aviso de cookies no es parte de lo que la historia describe). */
+export const MOBILE_COOKIE_NOTE = 'La prueba fija la preferencia de cookies (sigpro.cookies = accepted) igual que en la web, pero la app móvil no tiene aviso de cookies (ningún archivo de apps/mobile/src lo lee): la preferencia no tiene efecto aquí.';
 
-/** Añade a cada resultado de la fila la salvedad de plataforma y las aproximaciones de la entrega y de las direcciones. */
+const withNotes = (result: Outcome, extra: readonly string[]): Outcome => {
+  const note = [result.note, EXPO_NOTE, DELIVERY_APPROXIMATION, MOBILE_COOKIE_NOTE, ...extra].filter((part): part is string => part !== undefined && part !== '').join(' ');
+  return { ...result, note };
+};
+
+/** Añade a cada resultado de la fila la salvedad de plataforma, la aproximación de la entrega y la preferencia de cookies. */
 export const onExpoWeb =
   (handler: BrowserRowHandler): BrowserRowHandler =>
-  async (row, fixtures) => {
-    const result: Outcome = await handler(row, fixtures);
-    const note = [result.note, EXPO_NOTE, DELIVERY_APPROXIMATION, DIRECT_APPROXIMATION].filter((part): part is string => part !== undefined && part !== '').join(' ');
-    return { ...result, note };
-  };
+  async (row, fixtures) =>
+    withNotes(await handler(row, fixtures), []);
+
+/** Igual que `onExpoWeb`, para las filas que abren una dirección de la app (la pantalla se nombra por su ruta). */
+export const onExpoWebAddress =
+  (handler: BrowserRowHandler): BrowserRowHandler =>
+  async (row, fixtures) =>
+    withNotes(await handler(row, fixtures), [DIRECT_APPROXIMATION]);
 
 /** Se ejecuta en el navegador antes de cargar la app: registra cada `window.open` con un `blob:` y sus bytes. No usa variables de fuera. */
 export const recordDeliveries = (key: string): void => {
@@ -68,9 +78,31 @@ export interface Delivery {
   readonly error?: string;
 }
 
-/** Entregas registradas desde la última armada, en orden. */
-export const deliveriesOf = (page: Page): Promise<readonly Delivery[]> =>
-  safe(() => page.evaluate((key: string) => (((window as unknown as Record<string, unknown>)[key] as Delivery[] | undefined) ?? []), DELIVERY_KEY), []);
+/** Entregas registradas desde la última armada, en orden. `undefined` si el registro no se puede leer (no es «ninguna entrega»). */
+export const deliveriesOf = (page: Page): Promise<readonly Delivery[] | undefined> =>
+  safe(
+    () =>
+      page
+        .evaluate((key: string) => {
+          const log = (window as unknown as Record<string, unknown>)[key];
+          return Array.isArray(log) ? (log as Delivery[]) : null;
+        }, DELIVERY_KEY)
+        .then((log) => log ?? undefined),
+    undefined,
+  );
+
+/** Lo que se lee del registro de entregas: si se pudo leer, cuántas entregas hay y la primera. */
+export interface DeliveryReading {
+  readonly readable: boolean;
+  readonly count: number;
+  readonly first?: Delivery;
+}
+
+export const readDeliveries = async (page: Page): Promise<DeliveryReading> => {
+  const log = await deliveriesOf(page);
+  if (log === undefined) return { readable: false, count: 0 };
+  return { readable: true, count: log.length, ...(log[0] === undefined ? {} : { first: log[0] }) };
+};
 
 /** Vacía el registro de entregas justo antes de la acción que se prueba. */
 export const armDeliveries = (page: Page): Promise<void> =>
@@ -83,14 +115,13 @@ export const armDeliveries = (page: Page): Promise<void> =>
     undefined,
   );
 
-/** Espera (con techo de red) a la primera entrega y a que se lean sus bytes. Devuelve la entrega, o `undefined` si no hay. */
-export const firstDelivery = async (page: Page): Promise<Delivery | undefined> => {
+/** Espera (con techo de red) a la primera entrega y a que se lean sus bytes. Devuelve la lectura del registro. */
+export const firstDelivery = async (page: Page): Promise<DeliveryReading> => {
   await waitUntil(async () => {
-    const log = await deliveriesOf(page);
-    const first = log[0];
+    const first = (await deliveriesOf(page))?.[0];
     return first !== undefined && (first.base64 !== undefined || first.error !== undefined);
   }, WAIT_MS);
-  return (await deliveriesOf(page))[0];
+  return readDeliveries(page);
 };
 
 /** Bytes de una entrega como texto PDF (latin1, sin decodificar UTF-8). `undefined` si no hay bytes legibles. */
@@ -107,6 +138,7 @@ export const isDeliveredPdf = (delivery: Delivery | undefined): boolean => {
 /** Preparación de cada fila: la app en /login con alumno01 en «Tenant de trabajo», gestor@sigpro.test y «Entrar». Termina en /programs. */
 export const signIn = (page: Page): Promise<string | undefined> => {
   const steps: Step[] = [
+    ['fijar la preferencia de cookies', () => page.context().addInitScript(fixCookiePreference)],
     ['instalar el registro de avisos', () => page.context().addInitScript(recordToasts, TOAST_KEY)],
     ['instalar el registro de entregas', () => page.context().addInitScript(recordDeliveries, DELIVERY_KEY)],
     ['fijar el ancho de la ventana', () => page.setViewportSize({ width: 390, height: 844 })],
@@ -219,22 +251,26 @@ export const armAll = async (page: Page): Promise<void> => {
   await armDeliveries(page);
 };
 
-/** Comprobación de la entrega: un PDF abierto como blob, en una pestaña nueva. */
-export const deliveredCheck = (delivery: Delivery | undefined): Check => {
-  if (delivery === undefined) return { ok: false, expected: 'se entrega el informe (un PDF abierto en una pestaña nueva)', observed: 'no se abrió ninguna pestaña con el informe' };
+/** Comprobación de la entrega: un PDF abierto como blob, en una pestaña nueva. Un registro no legible no cuenta como «no entregado». */
+export const deliveredCheck = (reading: DeliveryReading): Check => {
+  const expected = 'se entrega el informe (un PDF abierto en una pestaña nueva)';
+  if (!reading.readable) return { ok: false, expected, observed: 'el registro de entregas no se pudo leer (no es «ninguna pestaña»)' };
+  const delivery = reading.first;
+  if (delivery === undefined) return { ok: false, expected, observed: 'no se abrió ninguna pestaña con el informe' };
   const bytes = bytesOf(delivery);
   const kind = delivery.url.startsWith('blob:') ? 'blob:' : 'otra dirección';
   const pdf = bytes !== undefined && isPdf(bytes);
   return {
     ok: kind === 'blob:' && pdf,
-    expected: 'se entrega el informe (un PDF abierto en una pestaña nueva)',
+    expected,
     observed: `se abre una pestaña con ${kind}, ${bytes === undefined ? 'sin bytes legibles' : `${bytes.length} bytes, ${pdf ? 'PDF' : 'no es PDF'}`}${delivery.error === undefined ? '' : ` (error al leer: ${delivery.error})`}`,
   };
 };
 
-/** Ningún archivo entregado en la ventana de observación. */
+/** Ningún archivo entregado en la ventana de observación. Un registro no legible NO es «ninguna entrega»: no cumple. */
 export const notDelivered = async (page: Page): Promise<Check> => {
-  const count = (await deliveriesOf(page)).length;
-  return { ok: count === 0, expected: 'no se entrega ningún informe', observed: count === 0 ? 'no se entrega ningún informe' : `se abren ${count} pestaña(s) con un informe` };
+  const reading = await readDeliveries(page);
+  if (!reading.readable) return { ok: false, expected: 'no se entrega ningún informe', observed: 'el registro de entregas no se pudo leer (no cuenta como «ninguna entrega»)' };
+  return { ok: reading.count === 0, expected: 'no se entrega ningún informe', observed: `${reading.count} pestaña(s) con un informe (registro leído)` };
 };
 

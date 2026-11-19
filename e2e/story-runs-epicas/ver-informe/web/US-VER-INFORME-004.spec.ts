@@ -4,6 +4,7 @@ import { cell, check, preparationFailedWeb, strict, type Check } from '../../sup
 import { safe, waitUntil } from '../../support/browser';
 import { TENANT_A, resetTenants } from '../../../story-runs/support/prepare';
 import { done, numberOf } from '../api/common';
+import { SEED_CASES } from '../api/seed-cases';
 import {
   NETWORK_CAUSE,
   READ_MS,
@@ -64,6 +65,17 @@ const EMPTY_COUNT = '0–0 de 0';
 const REPORT_NAME = 'informe-verificacion.pdf';
 const SELECTION_NAME = 'informe-verificacion-seleccion.pdf';
 const ALL_CASES = 25;
+/** La primera página de la lista (diez casos, por código): los que marca «Seleccionar todos los casos de la página». Viene del seed. */
+const FIRST_PAGE = SEED_CASES.slice(0, 10).map((testCase) => testCase.code);
+
+/** Reglas que la historia enuncia y que ninguna fila de este Esquema comprueba (se anotan, no se juzgan aquí). */
+const RULES_WITHOUT_ROW =
+  'Reglas sin fila (no se comprueban aquí): la barra dice «<n> seleccionados», «Quitar selección» vacía la marca, y cambiar filtro, orden o página vacía la selección marcada.';
+/** Decisión pendiente de la historia 002 (sigue en la 004 por su Ejemplo): el nombre de la selección de un solo caso. */
+const SINGLE_CASE_NAME_PENDING =
+  'Decisión pendiente de la historia 002: el nombre de la selección de un solo caso. Se juzga contra el Ejemplo (informe-verificacion-seleccion.pdf), que es lo que la historia afirma hoy.';
+/** Cambiar el filtro vacía la selección: esta fila cambia el filtro sin tener nada marcado. */
+const FILTER_RULE = 'Regla sin fila: cambiar el filtro de programa o de resultado vacía la selección marcada (aquí no hay selección).';
 
 // --- Mapas de las celdas (un texto que no conocen LANZA) ---------------------------------------------------------------------------
 
@@ -113,7 +125,7 @@ const PRESENTATION_CELLS: ReadonlyMap<string, 'sin casillas ni menú' | 'con cas
 
 /**
  * Acciones de la selección y del menú de fila: cada una termina pulsando el botón de descarga que nombra la historia. Los casos que
- * marca una acción sin código explícito («todos los casos de la página») se leen de la lista antes de marcar.
+ * marca una acción sin código explícito («todos los casos de la página») son los de la primera página del seed.
  */
 const SELECTION_CELLS: ReadonlyMap<string, WebAction> = new Map<string, WebAction>([
   [
@@ -134,14 +146,22 @@ const SELECTION_CELLS: ReadonlyMap<string, WebAction> = new Map<string, WebActio
   ],
 ]);
 
-/** Lectura del DOM de la lista en una sola evaluación: casillas, menús, filas y la posición del botón de informe. */
+/**
+ * Lectura del DOM de la lista en UNA sola evaluación: casillas, menús, filas, el botón de informe (texto, visibilidad, posición) y el
+ * título de la pantalla (solo se muestra en escritorio).
+ */
 interface Presentation {
   readonly checkboxes: number;
   readonly menus: number;
   readonly rows: number;
+  readonly tc001Checkbox: number;
+  readonly tc001Menu: number;
   readonly headerText: string | null;
+  readonly headerVisible: boolean;
   readonly headerTop: number | null;
+  readonly headerLeft: number | null;
   readonly rowTop: number | null;
+  readonly titleRight: number | null;
 }
 
 const presentationNow = (page: Page): Promise<Presentation | undefined> =>
@@ -150,15 +170,26 @@ const presentationNow = (page: Page): Promise<Presentation | undefined> =>
       verificationRoot(page).evaluate(
         (root) => {
           const rowSelector = '[data-testid^="testcase-row-"]:not([data-testid^="testcase-row-menu-"])';
-          const headerButton = Array.from(root.querySelectorAll('button')).find((button) => button.textContent?.trim() === 'Descargar informe PDF');
+          const shown = (element: Element): boolean => {
+            const box = element.getBoundingClientRect();
+            const style = getComputedStyle(element);
+            return box.width > 0 && box.height > 0 && style.visibility !== 'hidden' && style.display !== 'none';
+          };
+          const headerButton = Array.from(root.querySelectorAll('button')).find((button) => button.textContent?.trim() === 'Descargar informe PDF') ?? null;
+          const title = root.querySelector('h1');
           const firstRow = root.querySelector(rowSelector);
           return {
             checkboxes: root.querySelectorAll('input[type="checkbox"][aria-label^="Seleccionar TC-"]').length,
             menus: root.querySelectorAll('button[aria-label^="Acciones para TC-"]').length,
             rows: root.querySelectorAll(rowSelector).length,
+            tc001Checkbox: root.querySelectorAll('input[type="checkbox"][aria-label="Seleccionar TC-001"]').length,
+            tc001Menu: root.querySelectorAll('button[aria-label="Acciones para TC-001"]').length,
             headerText: headerButton?.textContent?.trim() ?? null,
+            headerVisible: headerButton !== null && shown(headerButton),
             headerTop: headerButton?.getBoundingClientRect().top ?? null,
+            headerLeft: headerButton?.getBoundingClientRect().left ?? null,
             rowTop: firstRow?.getBoundingClientRect().top ?? null,
+            titleRight: title !== null && shown(title) ? title.getBoundingClientRect().right : null,
           };
         },
         undefined,
@@ -166,6 +197,9 @@ const presentationNow = (page: Page): Promise<Presentation | undefined> =>
       ),
     undefined,
   );
+
+/** Un número de píxeles para el observado (o «(sin medir)»). */
+const px = (value: number | null): string => (value === null ? '(sin medir)' : `${Math.round(value)} px`);
 
 /** Nota del fallo de red: la causa solo si el aviso muestra el «network error» de la traza. */
 const causeOf = (body: string | undefined): string | undefined => (body !== undefined && body.includes('network error') ? NETWORK_CAUSE : undefined);
@@ -197,10 +231,10 @@ const headerDownloads: BrowserRowHandler = async (row, { page }) => {
   if (pressed !== undefined) return actionFailed(expected, pressed);
   const file = await firstDownload(downloads);
   const toast = await toastShown(page, 'Informe generado');
-  return done([
-    check(file?.name === nombre, `se descarga el archivo «${nombre}»`, `se descarga «${file?.name ?? '(ninguna descarga)'}»`),
-    toastCheck(toast, 'Informe generado', nombre),
-  ]);
+  return done(
+    [check(file?.name === nombre, `se descarga el archivo «${nombre}»`, `se descarga «${file?.name ?? '(ninguna descarga)'}»`), toastCheck(toast, 'Informe generado', nombre)],
+    { reading: FILTER_RULE },
+  );
 };
 
 // --- Esquema 2: la búsqueda y el filtro de resultado no cambian el alcance del informe ---------------------------------------
@@ -227,11 +261,14 @@ const searchAndResultKeepScope: BrowserRowHandler = async (row, { page }) => {
   const pressed = await pressWhenEnabled(reportButton, 'pulsar «Descargar informe PDF»', page);
   if (pressed !== undefined) return actionFailed(expected, pressed);
   const file = await firstDownload(downloads);
-  return done([
-    check(rows === visibles, `la lista muestra ${visibles} casos de prueba`, `la lista muestra ${rows} casos de prueba`),
-    check(file?.name === REPORT_NAME, `se descarga el archivo «${REPORT_NAME}»`, `se descarga «${file?.name ?? '(ninguna descarga)'}»`),
-    pdfLineCheck(linesOfPdf(file?.bytes), countLine, 'Casos de prueba:'),
-  ]);
+  return done(
+    [
+      check(rows === visibles, `la lista muestra ${visibles} casos de prueba`, `la lista muestra ${rows} casos de prueba`),
+      check(file?.name === REPORT_NAME, `se descarga el archivo «${REPORT_NAME}»`, `se descarga «${file?.name ?? '(ninguna descarga)'}»`),
+      pdfLineCheck(linesOfPdf(file?.bytes), countLine, 'Casos de prueba:'),
+    ],
+    { reading: FILTER_RULE },
+  );
 };
 
 // --- Esquema 3: sin casos en la vista, «Descargar informe PDF» está deshabilitado con su explicación -----------------------------
@@ -295,13 +332,10 @@ const selectionReports: BrowserRowHandler = async (row, { page }) => {
   if (signed !== undefined) return preparationFailedWeb(expected, signed);
   const listedAt = await openPath(page, '/verification', 'list');
   if (listedAt !== undefined) return preparationFailedWeb(expected, listedAt);
-  // Los casos que debe cubrir el informe: los que nombra la acción, o los que muestra la lista antes de marcar («todos»)
+  // Los casos que debe cubrir el informe: los que nombra la acción, o («todos los de la página») los diez primeros del seed
   const named = codesIn(cell(row, 'accion'));
-  const shownBefore = await visibleCodes(verificationRoot(page));
-  if (named.length === 0 && (shownBefore === undefined || shownBefore.length === 0)) {
-    return preparationFailedWeb(expected, 'no se pudo leer qué casos muestra la lista antes de marcar «todos» (sin casos en la lista o sin leer)');
-  }
-  const wanted = named.length > 0 ? named : (shownBefore ?? []);
+  const wanted = named.length > 0 ? named : FIRST_PAGE;
+  const shownBefore = named.length === 0 ? await visibleCodes(verificationRoot(page)) : undefined;
   const downloads = watchDownloads(page);
   await armToasts(page);
   const blocked = await accion(page);
@@ -310,12 +344,18 @@ const selectionReports: BrowserRowHandler = async (row, { page }) => {
   const toast = await toastShown(page, 'Informe generado');
   const pdfCodes = codesOfPdf(linesOfPdf(file?.bytes));
   const coverage: Check = check(sameSet(pdfCodes, wanted), `el PDF cubre los casos ${listed(wanted)}`, `el PDF cubre ${listed(pdfCodes)}`);
-  return done([
-    check(file?.name === SELECTION_NAME, `se descarga el archivo «${SELECTION_NAME}»`, `se descarga «${file?.name ?? '(ninguna descarga)'}»`),
-    pdfLineCheck(linesOfPdf(file?.bytes), countLine, 'Casos de prueba:'),
-    coverage,
-    toastCheck(toast, 'Informe generado', SELECTION_NAME),
-  ]);
+  const pageCheck: Check[] =
+    named.length === 0 ? [check(sameSet(shownBefore ?? [], FIRST_PAGE), `la lista muestra los diez primeros casos (${listed(FIRST_PAGE)})`, `la lista muestra ${listed(shownBefore)}`)] : [];
+  return done(
+    [
+      check(file?.name === SELECTION_NAME, `se descarga el archivo «${SELECTION_NAME}»`, `se descarga «${file?.name ?? '(ninguna descarga)'}»`),
+      pdfLineCheck(linesOfPdf(file?.bytes), countLine, 'Casos de prueba:'),
+      coverage,
+      ...pageCheck,
+      toastCheck(toast, 'Informe generado', SELECTION_NAME),
+    ],
+    { reading: [named.length === 1 ? SINGLE_CASE_NAME_PENDING : undefined, RULES_WITHOUT_ROW].filter((part): part is string => part !== undefined).join(' ') },
+  );
 };
 
 // --- Esquema 6: la presentación de la lista según el ancho de la ventana -----------------------------------------------------
@@ -331,29 +371,36 @@ const presentationByWidth: BrowserRowHandler = async (row, { page }) => {
   if (listedAt !== undefined) return preparationFailedWeb(expected, listedAt);
   const view = await presentationNow(page);
   if (view === undefined) return preparationFailedWeb(expected, 'no se pudo leer la lista de casos');
-  const sawTc001Checkbox = (await checkboxOf(page, 'TC-001').count()) === 1;
-  const sawTc001Menu = (await rowMenuButton(page, 'TC-001').count()) === 1;
-  const headerReads = view.headerText === 'Descargar informe PDF' && view.headerTop !== null && view.rowTop !== null && view.headerTop < view.rowTop;
   const cards = view.rows > 0;
   const presentationChecks: Check[] =
     presentacion === 'sin casillas ni menú'
       ? [check(cards && view.checkboxes === 0 && view.menus === 0, 'ni casillas ni menú en las tarjetas (y hay tarjetas)', `casillas ${view.checkboxes}, menús ${view.menus}, tarjetas ${view.rows}`)]
       : [
           check(cards && view.checkboxes === view.rows && view.menus === view.rows, 'una casilla y un menú en cada fila', `casillas ${view.checkboxes}, menús ${view.menus}, filas ${view.rows}`),
-          check(sawTc001Checkbox && sawTc001Menu, 'la casilla «Seleccionar TC-001» y el botón «Acciones para TC-001»', `casilla TC-001 ${sawTc001Checkbox ? 'sí' : 'no'}, menú TC-001 ${sawTc001Menu ? 'sí' : 'no'}`),
+          check(view.tc001Checkbox === 1 && view.tc001Menu === 1, 'la casilla «Seleccionar TC-001» y el botón «Acciones para TC-001»', `casilla TC-001 ${view.tc001Checkbox}, menú TC-001 ${view.tc001Menu}`),
         ];
+  const above = view.headerTop !== null && view.rowTop !== null && view.headerTop < view.rowTop;
+  const headerOk = view.headerText === 'Descargar informe PDF' && view.headerVisible && above;
+  // A 1023 px el título no se muestra (VerificationPage.tsx: «!mobile ? h1»): ahí no hay con qué comparar la posición horizontal
+  const rightOfTitle = view.titleRight === null || (view.headerLeft !== null && view.headerLeft >= view.titleRight);
   return done(
     [
       ...presentationChecks,
       check(
-        headerReads,
-        '«Descargar informe PDF» en la cabecera, por encima de la lista',
-        `botón «${view.headerText ?? '(sin texto)'}» a ${view.headerTop === null ? '(sin medir)' : Math.round(view.headerTop)} px del borde, primera fila a ${view.rowTop === null ? '(sin medir)' : Math.round(view.rowTop)} px`,
+        headerOk,
+        '«Descargar informe PDF» visible en la cabecera, por encima de la lista',
+        `botón «${view.headerText ?? '(sin texto)'}» ${view.headerVisible ? 'visible' : 'no visible'}, arriba ${px(view.headerTop)}, primera fila ${px(view.rowTop)}`,
+      ),
+      check(
+        rightOfTitle,
+        '«Descargar informe PDF» a la derecha del título',
+        view.titleRight === null ? 'el título no se muestra a este ancho: no hay título con el que comparar' : `botón a ${px(view.headerLeft)}, el título acaba a ${px(view.titleRight)}`,
       ),
     ],
     {
-      reading: '«En la cabecera» se mide como: el botón queda por encima de la primera fila de la lista y a la vista. La historia no fija la posición exacta.',
-      evidence: { ancho, casillas: view.checkboxes, menus: view.menus, filas: view.rows },
+      reading:
+        '«En la cabecera» se mide como: el botón queda visible, por encima de la primera fila de la lista y, si el título se muestra, a su derecha (Regla de la historia). La historia no fija la posición exacta. A 1023 px el título no se muestra y la posición horizontal no se compara.',
+      evidence: { ancho, casillas: view.checkboxes, menus: view.menus, filas: view.rows, visible: view.headerVisible },
     },
   );
 };
