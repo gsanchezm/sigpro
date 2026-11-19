@@ -1,7 +1,7 @@
 import type { Page } from '@playwright/test';
 import { DEMO, resetTenants, TENANT_A } from '../../../story-runs/support/prepare';
 import { ACTION, holdsFor, quoted, waitUntil, HOLD_MS, CEILING_MS } from '../../support/browser';
-import { cell, check, conclude, strict, type Check } from '../../support/checks';
+import { cell, check, conclude, preparationFailed, strict, type Check } from '../../support/checks';
 import { defineBrowserRows, type BrowserRowHandler } from '../../core/framework';
 import { adminSession, isOk, duplicatePrg001, type Change } from '../api/common';
 import {
@@ -126,7 +126,7 @@ const progressBar: BrowserRowHandler = async (row, { page }) => {
   const admin = await adminSession(TENANT_A);
   if (admin.token === undefined) return prepFailedReason(expected, 'alumno01@sigpro.lab no inicia sesión (administración)');
   const done = await prepare(admin.token);
-  if (done !== undefined && !isOk(done)) return prepFailedReason(expected, `${cell(row, 'cambio')} responde ${done.status}`);
+  if (done !== undefined && !isOk(done)) return preparationFailed(expected, cell(row, 'cambio'), done);
   const opened = await signIn(page, DEMO.gestor);
   if (opened) return prepFailed(expected, opened);
   const block = summaryBlock(page);

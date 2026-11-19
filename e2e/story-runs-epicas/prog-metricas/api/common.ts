@@ -59,6 +59,10 @@ export const adminSession = (tenant: string): Promise<Session> => {
 /** ¿Respondió 2xx? (las preparaciones se comprueban así). */
 export const isOk = (result: ApiResult): boolean => result.status >= 200 && result.status < 300;
 
+/** Evidencia de una respuesta que no es 2xx: estado y cuerpo recortado (en un error no hay tokens). Vacía si la respuesta fue 2xx. */
+export const notOkEvidence = (result: ApiResult): Readonly<Record<string, unknown>> =>
+  isOk(result) ? {} : { respuestaNo2xx: { status: result.status, cuerpo: JSON.stringify(result.body ?? null).slice(0, 400) } };
+
 /** Lista de `items` de una respuesta (vacía si no es una lista). */
 export const itemsOf = (result: ApiResult): readonly unknown[] => {
   const items = field(result.body, 'items');

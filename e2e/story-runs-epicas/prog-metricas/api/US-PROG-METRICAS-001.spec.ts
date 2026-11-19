@@ -12,6 +12,7 @@ import {
   kpiChecksOf,
   kpiCheck,
   kpiTextOf,
+  notOkEvidence,
   resetTenants,
   sessionAs,
   summaryOf,
@@ -33,7 +34,7 @@ const eachRole: ApiRowHandler = async (row) => {
   const session = await sessionAs(TENANT_A, { email, password: cell(row, 'contraseña') });
   if (session.token === undefined) return preparationFailed(expected, `${email} inicia sesión en alumno01 con la contraseña de la fila`, session.last);
   const result = await summaryOf(session.token);
-  return conclude([responseCheck(result, { status: 200 }), ...kpiChecksOf(result, row)]);
+  return conclude([responseCheck(result, { status: 200 }), ...kpiChecksOf(result, row)], { evidence: notOkEvidence(result) });
 };
 
 // --- Esquema 2: cada cambio en los programas mueve solo las cifras que le corresponden ----------------------------------------
@@ -47,7 +48,7 @@ const afterProgramChange: ApiRowHandler = async (row) => {
   const done = await change(admin.token);
   if (done !== undefined && !isOk(done)) return preparationFailed(expected, cell(row, 'cambio'), done);
   const result = await summaryOf(admin.token);
-  return conclude(kpiChecksOf(result, row));
+  return conclude(kpiChecksOf(result, row), { evidence: notOkEvidence(result) });
 };
 
 // --- Esquema 3: el resumen exige un accessToken válido ------------------------------------------------------------------------
@@ -69,7 +70,7 @@ const requiresToken: ApiRowHandler = async (row) => {
   if (!isOk(seeded) || totalAll !== 24) return preparationFailed(expected, `existen 24 programas (totalAll ${String(totalAll)})`, seeded);
   const header = strict('cabecera', CREDENTIALS, cell(row, 'cabecera'));
   const result = await summaryOf(header);
-  return conclude([responseCheck(result, parseResponse(cell(row, 'respuesta')))]);
+  return conclude([responseCheck(result, parseResponse(cell(row, 'respuesta')))], { evidence: notOkEvidence(result) });
 };
 
 // --- Esquema 4: el resumen cuenta solo los programas del tenant del token -----------------------------------------------------
@@ -90,7 +91,7 @@ const tenantOfToken: ApiRowHandler = async (row) => {
   if (mine.token === undefined) return preparationFailed(expected, 'alumno01@sigpro.lab inicia sesión', mine.last);
   const tenant = strict('cabecera', TENANT_OF_HEADER, cell(row, 'cabecera'));
   const result = await summaryOf(mine.token, tenant);
-  return conclude([responseCheck(result, { status: 200 }), kpiCheck(result, 'activePrograms', 12), kpiCheck(result, 'programsTotal', 24)]);
+  return conclude([responseCheck(result, { status: 200 }), kpiCheck(result, 'activePrograms', 12), kpiCheck(result, 'programsTotal', 24)], { evidence: notOkEvidence(result) });
 };
 
 // --- Esquema 5: una transición de una NC cambia ncOpen solo si deja de estar abierta ----------------------------------------
@@ -104,7 +105,7 @@ const afterNcChange: ApiRowHandler = async (row) => {
   const done = await change(admin.token);
   if (done !== undefined && !isOk(done)) return preparationFailed(expected, cell(row, 'cambio'), done);
   const result = await summaryOf(admin.token);
-  return conclude(kpiChecksOf(result, row));
+  return conclude(kpiChecksOf(result, row), { evidence: notOkEvidence(result) });
 };
 
 defineApiRows({

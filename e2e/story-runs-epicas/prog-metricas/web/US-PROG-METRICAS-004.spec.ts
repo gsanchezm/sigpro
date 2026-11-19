@@ -2,7 +2,7 @@ import type { Locator } from '@playwright/test';
 import { call } from '../../../story-runs/support/api';
 import { resetTenants, TENANT_A, DEMO } from '../../../story-runs/support/prepare';
 import { ACTION, CEILING_MS, HOLD_MS, holdsFor, waitUntil } from '../../support/browser';
-import { cell, check, conclude, strict, type Check } from '../../support/checks';
+import { cell, check, conclude, preparationFailed, strict, type Check } from '../../support/checks';
 import { defineBrowserRows, type BrowserRowHandler, type Outcome } from '../../core/framework';
 import { ADMIN_ALUMNO01, adminSession, isOk } from '../api/common';
 import {
@@ -29,13 +29,15 @@ import {
 // token de su administrador; gestor@sigpro.test (o alumno01@sigpro.lab en el Esquema 3) entra y tiene la lista abierta con 8 NC
 // abiertas; los cambios de NC se hacen con el token de alumno01@sigpro.lab, sin recargar la página del gestor. Como la lista no tiene
 // indicador de conexión, la conexión en vivo y los eventos `mission:event` se observan en el WebSocket de la página.
+// Las peticiones de NC (registrar, cambiar la gravedad, cambiar de estado) son el disparador que cada Esquema da por hecho: si la API
+// no las acepta, la fila no llega a su estado y se registra como fallo de preparación, con la respuesta de la API en la evidencia.
 
 const NC_LABEL = 'NC abiertas';
-/** Gravedades válidas de una NC (la celda `gravedad` debe ser una de ellas). */
-const SEVERITIES: ReadonlyMap<string, true> = new Map<string, true>([
-  ['minor', true],
-  ['major', true],
-  ['critical', true],
+/** Gravedades válidas de una NC: el texto de la celda es también el valor que la API espera (`minor`, `major`, `critical`). */
+const SEVERITIES: ReadonlyMap<string, string> = new Map<string, string>([
+  ['minor', 'minor'],
+  ['major', 'major'],
+  ['critical', 'critical'],
 ]);
 
 /**
@@ -76,13 +78,11 @@ const newNc: BrowserRowHandler = async (row, { page }) => {
     token: admin.token,
     body: { programCode: 'PRG-002', severity, description: 'Desviación de prueba en la ejecución' },
   });
+  if (!isOk(created)) return preparationFailed(expected, `POST /api/nc registra una NC en PRG-002 con severidad ${cell(row, 'gravedad')}`, created);
   const arrived = await eventArrived(live, before);
   await waitUntil(async () => (await readCard(block, NC_LABEL)).value === '9', CEILING_MS);
   const reading = await readCard(block, NC_LABEL);
-  return conclude(
-    [check(isOk(created), 'POST /api/nc registra la NC (respuesta 2xx)', `POST /api/nc responde ${created.status}`), valueCheck(reading, '9')],
-    { evidence: { eventosRecibidos: live.events(), evento: arrived.reached, lineaAuxiliar: reading.aux ?? '(sin leer)' } },
-  );
+  return conclude([valueCheck(reading, '9')], { evidence: { eventosRecibidos: live.events(), evento: arrived.reached, lineaAuxiliar: reading.aux ?? '(sin leer)' } });
 };
 
 // --- Esquema 2: cambiar la gravedad de una NC abierta no cambia la cifra ----------------------------------------------------
@@ -102,16 +102,13 @@ const severityChange: BrowserRowHandler = async (row, { page }) => {
   if (admin.token === undefined) return prepFailedReason(expected, 'alumno01@sigpro.lab no inicia sesión (administración)');
   const before = live.events().length;
   const patched = await call('PATCH', `/nc/${code}`, { tenant: TENANT_A, token: admin.token, body: { severity } });
+  if (!isOk(patched)) return preparationFailed(expected, `PATCH /api/nc/${code} cambia la gravedad a ${cell(row, 'gravedad')}`, patched);
   const arrived = await eventArrived(live, before);
   // Tras el evento (si llega), la cifra se observa durante un tiempo fijo: «sigue mostrando 8»
   const held = await holdsFor(async () => (await readCard(block, NC_LABEL)).value === '8', HOLD_MS);
   const reading = await readCard(block, NC_LABEL);
   return conclude(
-    [
-      check(isOk(patched), `PATCH /api/nc/${code} cambia la gravedad (respuesta 2xx)`, `PATCH /api/nc/${code} responde ${patched.status}`),
-      valueCheck(reading, '8'),
-      check(held.held, `la cifra sigue en 8 durante ${HOLD_MS / 1000} s`, held.held ? 'la cifra sigue en 8' : 'la cifra cambió'),
-    ],
+    [valueCheck(reading, '8'), check(held.held, `la cifra sigue en 8 durante ${HOLD_MS / 1000} s`, held.held ? 'la cifra sigue en 8' : 'la cifra cambió')],
     { evidence: { eventosRecibidos: live.events(), evento: arrived.reached } },
   );
 };
@@ -165,13 +162,11 @@ const transitionNc: BrowserRowHandler = async (row, { page }) => {
   if (admin.token === undefined) return prepFailedReason(expected, 'alumno01@sigpro.lab no inicia sesión (administración)');
   const before = live.events().length;
   const sent = await call('POST', `/nc/${code}/transition`, { tenant: TENANT_A, token: admin.token, body });
+  if (!isOk(sent)) return preparationFailed(expected, `POST /api/nc/${code}/transition con el cuerpo de la fila`, sent);
   const arrived = await eventArrived(live, before);
   await waitUntil(async () => (await readCard(block, NC_LABEL)).value === '7', CEILING_MS);
   const reading = await readCard(block, NC_LABEL);
-  return conclude(
-    [check(isOk(sent), `POST /api/nc/${code}/transition responde 2xx`, `POST /api/nc/${code}/transition responde ${sent.status}`), valueCheck(reading, '7')],
-    { evidence: { eventosRecibidos: live.events(), evento: arrived.reached } },
-  );
+  return conclude([valueCheck(reading, '7')], { evidence: { eventosRecibidos: live.events(), evento: arrived.reached } });
 };
 
 defineBrowserRows({

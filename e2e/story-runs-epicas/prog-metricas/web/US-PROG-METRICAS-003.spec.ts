@@ -1,6 +1,6 @@
 import { DEMO, resetTenants, TENANT_A } from '../../../story-runs/support/prepare';
 import { CEILING_MS, holdsFor, quoted, waitUntil } from '../../support/browser';
-import { cell, check, conclude, strict, type Check } from '../../support/checks';
+import { cell, check, conclude, preparationFailed, strict, type Check } from '../../support/checks';
 import { defineBrowserRows, type BrowserRowHandler } from '../../core/framework';
 import { ADMIN_ALUMNO01, adminSession, archiveActive, removeAll, type Failed } from '../api/common';
 import {
@@ -137,7 +137,7 @@ const stateCard: BrowserRowHandler = async (row, { page }) => {
   const admin = await adminSession(TENANT_A);
   if (admin.token === undefined) return prepFailedReason(expected, 'alumno01@sigpro.lab no inicia sesión (administración)');
   const prepared = await change(admin.token);
-  if (prepared !== undefined) return prepFailedReason(expected, `${prepared.step} → respuesta ${prepared.result.status}`);
+  if (prepared !== undefined) return preparationFailed(expected, prepared.step, prepared.result);
   const opened = await signIn(page, DEMO.gestor);
   if (opened) return prepFailed(expected, opened);
   const block = summaryBlock(page);

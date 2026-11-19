@@ -1,7 +1,7 @@
 import type { Page } from '@playwright/test';
 import { DEMO, resetTenants, TENANT_A } from '../../../story-runs/support/prepare';
 import { ACTION, CEILING_MS, HOLD_MS, holdsFor, quoted, waitUntil } from '../../support/browser';
-import { cell, check, conclude, strict, type Check } from '../../support/checks';
+import { cell, check, conclude, preparationFailed, strict, type Check } from '../../support/checks';
 import { defineBrowserRows, type BrowserRowHandler } from '../../core/framework';
 import { ADMIN_ALUMNO01, adminSession, removeAll, type Failed } from '../api/common';
 import {
@@ -184,7 +184,7 @@ const zeroCards: BrowserRowHandler = async (row, { page }) => {
   const admin = await adminSession(TENANT_A);
   if (admin.token === undefined) return prepFailedReason(expected, 'alumno01@sigpro.lab no inicia sesión (administración)');
   const removed: Failed | undefined = await removeAll(admin.token);
-  if (removed !== undefined) return prepFailedReason(expected, `${removed.step} → respuesta ${removed.result.status}`);
+  if (removed !== undefined) return preparationFailed(expected, removed.step, removed.result);
   const opened = await signInTo(page, DEMO.gestor);
   if (opened) return prepFailed(expected, opened);
   if (!(await waitListSettled(page))) return prepFailedReason(expected, 'la lista de programas no aparece');
