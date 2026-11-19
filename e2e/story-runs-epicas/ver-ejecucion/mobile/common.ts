@@ -130,17 +130,18 @@ export const lockedOf = (target: Locator): Promise<boolean | undefined> =>
 export const attemptClick = (target: Locator): Promise<void> => safe(() => target.first().click({ force: true, timeout: READ_MS }), undefined).then(() => undefined);
 
 /**
- * La imagen ampliada de la hoja está CARGADA (no solo presente): si es una `img`, debe estar completa con ancho natural; si es un
- * fondo de imagen, debe tener una imagen de fondo y un tamaño visible. `false` si no carga o no se ve.
+ * La imagen ampliada de la hoja está CARGADA, no solo presente. react-native-web 0.21 pinta `Image` como un `View` externo (que lleva
+ * el testid), un `View` interno con el `background-image` y un `<img>` oculto con el mismo `src` (`dist/exports/Image/index.js`).
+ * La señal de carga es ese `<img>` interno: `complete` y `naturalWidth > 0`. El `src` es una `data:` URI, así que no hay petición de
+ * red que observar. `false` si no hay `<img>` interno, si no ha terminado de cargar o si la imagen no decodifica.
  */
 export const zoomImageLoaded = (page: Page): Promise<boolean> =>
   safe(
     () =>
       page.getByTestId(MOVIL_VERIFICATION_TESTIDS.EVIDENCE_ZOOM_IMAGE).first().evaluate(
-        (element) => {
-          if (element instanceof HTMLImageElement) return element.complete && element.naturalWidth > 0;
-          const style = getComputedStyle(element);
-          return style.backgroundImage !== 'none' && element.getBoundingClientRect().width > 0;
+        (root) => {
+          const inner = root.querySelector('img');
+          return inner !== null && inner.complete && inner.naturalWidth > 0;
         },
         undefined,
         { timeout: READ_MS },

@@ -92,10 +92,13 @@ const ampliar: BrowserRowHandler = async (row, { page }) => {
   await waitUntil(() => zoomImageLoaded(page));
   const zoomed = await zoomImageLoaded(page);
   const zoomShown = await isVisible(page.getByTestId(MOVIL_VERIFICATION_TESTIDS.EVIDENCE_ZOOM_IMAGE));
-  return mobileVerdict([
-    check(sheet, `se abre una hoja titulada «${name}»`, sheet ? `hoja titulada «${name}» visible` : 'ninguna hoja con ese título'),
-    check(zoomShown && zoomed, 'la hoja muestra la imagen ampliada cargada', `imagen ampliada ${zoomShown ? 'visible' : 'no visible'}, ${zoomed ? 'cargada' : 'sin cargar'}`),
-  ]);
+  return mobileVerdict(
+    [
+      check(sheet, `se abre una hoja titulada «${name}»`, sheet ? `hoja titulada «${name}» visible` : 'ninguna hoja con ese título'),
+      check(zoomShown && zoomed, 'la hoja muestra la imagen ampliada cargada', `imagen ampliada ${zoomShown ? 'visible' : 'no visible'}, ${zoomed ? 'cargada' : 'sin cargar'}`),
+    ],
+    { note: 'La carga se lee en el <img> interno que react-native-web añade a Image (src data: URI, sin petición de red); depende de esa estructura de la librería.' },
+  );
 };
 
 // --- E3: una evidencia PDF se muestra con su distintivo y sin miniatura de imagen --------------------------------------------------
