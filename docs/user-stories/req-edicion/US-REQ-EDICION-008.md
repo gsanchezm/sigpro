@@ -5,7 +5,7 @@ epica: EP-REQ-EDICION
 titulo: "[Web] Dar de alta un requisito desde «Nuevo requisito»"
 etiquetas: [web]
 relacionadas: [US-REQ-EDICION-001, US-REQ-EDICION-002, US-REQ-EDICION-012, US-REQ-ARBOL-003]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["/programs/:code/requirements"]
 permisos: [requirement.create]
 ---

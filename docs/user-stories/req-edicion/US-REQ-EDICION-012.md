@@ -5,7 +5,7 @@ epica: EP-REQ-EDICION
 titulo: "[Móvil] Dar de alta un requisito desde la lista"
 etiquetas: [movil]
 relacionadas: [US-REQ-EDICION-002, US-REQ-EDICION-008, US-REQ-EDICION-016, US-REQ-ARBOL-009]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["/programs/:code/requirements"]
 permisos: [requirement.create]
 ---

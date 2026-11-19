@@ -5,7 +5,7 @@ epica: EP-REQ-EDICION
 titulo: "[API] Permisos de alta, edición, reordenación y borrado por rol"
 etiquetas: [api]
 relacionadas: [US-REQ-EDICION-001, US-REQ-EDICION-003, US-REQ-EDICION-004, US-REQ-EDICION-005]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["POST /api/requirements", "PATCH /api/requirements/:code", "POST /api/requirements/:code/move", "DELETE /api/requirements/:code"]
 permisos: [requirement.create, requirement.edit, requirement.delete]
 ---

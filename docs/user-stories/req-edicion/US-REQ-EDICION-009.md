@@ -5,7 +5,7 @@ epica: EP-REQ-EDICION
 titulo: "[Web] Editar un requisito en su panel y en su fila"
 etiquetas: [web]
 relacionadas: [US-REQ-EDICION-003, US-REQ-EDICION-010, US-REQ-EDICION-013, US-REQ-ARBOL-003]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["/programs/:code/requirements"]
 permisos: [requirement.edit]
 ---

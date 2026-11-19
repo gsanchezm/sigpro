@@ -5,7 +5,7 @@ epica: EP-REQ-EDICION
 titulo: "[Móvil] Eliminar un requisito desde la hoja"
 etiquetas: [movil]
 relacionadas: [US-REQ-EDICION-004, US-REQ-EDICION-011, US-REQ-EDICION-013, US-REQ-ARBOL-009]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["/programs/:code/requirements"]
 permisos: [requirement.delete]
 ---

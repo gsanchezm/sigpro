@@ -5,7 +5,7 @@ epica: EP-REQ-EDICION
 titulo: "[Web] Eliminar un requisito con su confirmación"
 etiquetas: [web]
 relacionadas: [US-REQ-EDICION-004, US-REQ-EDICION-009, US-REQ-EDICION-015, US-REQ-ARBOL-003]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["/programs/:code/requirements"]
 permisos: [requirement.delete]
 ---

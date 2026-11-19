@@ -5,7 +5,7 @@ epica: EP-REQ-EDICION
 titulo: "[API] Dar de alta un requisito en borrador"
 etiquetas: [api]
 relacionadas: [US-REQ-EDICION-002, US-REQ-EDICION-006, US-REQ-EDICION-008, US-REQ-EDICION-012, US-REQ-ARBOL-001]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["POST /api/requirements"]
 permisos: [requirement.create]
 ---

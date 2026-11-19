@@ -5,7 +5,7 @@ epica: EP-REQ-EDICION
 titulo: "[Móvil] Editar un requisito en la hoja"
 etiquetas: [movil]
 relacionadas: [US-REQ-EDICION-003, US-REQ-EDICION-009, US-REQ-EDICION-014, US-REQ-EDICION-015, US-REQ-ARBOL-009]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["/programs/:code/requirements"]
 permisos: [requirement.edit]
 ---

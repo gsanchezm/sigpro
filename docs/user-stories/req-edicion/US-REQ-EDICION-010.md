@@ -5,7 +5,7 @@ epica: EP-REQ-EDICION
 titulo: "[Web] Reordenar con Subir, Bajar, el teclado y arrastrando"
 etiquetas: [web]
 relacionadas: [US-REQ-EDICION-005, US-REQ-EDICION-007, US-REQ-EDICION-009, US-REQ-ARBOL-003]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["/programs/:code/requirements"]
 permisos: [requirement.edit]
 ---

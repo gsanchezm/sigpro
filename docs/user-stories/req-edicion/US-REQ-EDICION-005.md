@@ -5,7 +5,7 @@ epica: EP-REQ-EDICION
 titulo: "[API] Reordenar un requisito entre sus hermanos"
 etiquetas: [api]
 relacionadas: [US-REQ-EDICION-003, US-REQ-EDICION-010, US-REQ-EDICION-014, US-REQ-EDICION-007]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["POST /api/requirements/:code/move"]
 permisos: [requirement.edit]
 ---

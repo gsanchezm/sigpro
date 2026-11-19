@@ -5,7 +5,7 @@ epica: EP-REQ-EDICION
 titulo: "[Móvil] Mover un requisito con «Mover a…»"
 etiquetas: [movil]
 relacionadas: [US-REQ-EDICION-005, US-REQ-EDICION-010, US-REQ-EDICION-007, US-REQ-ARBOL-009]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["/programs/:code/requirements"]
 permisos: [requirement.edit]
 ---

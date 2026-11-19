@@ -5,7 +5,7 @@ epica: EP-REQ-EDICION
 titulo: "[API] Editar un requisito y devolverlo a borrador al cambiar el texto"
 etiquetas: [api]
 relacionadas: [US-REQ-EDICION-001, US-REQ-EDICION-009, US-REQ-EDICION-013]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["PATCH /api/requirements/:code"]
 permisos: [requirement.edit]
 ---

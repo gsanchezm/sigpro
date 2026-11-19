@@ -5,7 +5,7 @@ epica: EP-REQ-EDICION
 titulo: "[API] Borrar un requisito con sus descendientes y sus enlaces"
 etiquetas: [api]
 relacionadas: [US-REQ-EDICION-006, US-REQ-EDICION-011, US-REQ-EDICION-015]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["DELETE /api/requirements/:code"]
 permisos: [requirement.delete]
 ---

@@ -5,7 +5,7 @@ epica: EP-REQ-EDICION
 titulo: "[API] Rechazar un alta con sus motivos"
 etiquetas: [api]
 relacionadas: [US-REQ-EDICION-001, US-REQ-EDICION-008, US-REQ-EDICION-012]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["POST /api/requirements"]
 ---
 
