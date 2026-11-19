@@ -1,7 +1,7 @@
 import { TENANT_A, resetTenants } from '../../../story-runs/support/prepare';
 import { ACCESO_TESTIDS } from '../../../../packages/shared/src/testids';
-import { ACTION, attrOf, isDisabled, noSessionCheck, pathOf, runSteps, waitUntil } from '../../support/browser';
-import { cell, check, conclude, preparationFailedWeb, sleep, strict } from '../../support/checks';
+import { ACTION, attrOf, isDisabled, noSessionCheck, pathOf, waitUntil } from '../../support/browser';
+import { cell, check, conclude, sleep, strict } from '../../support/checks';
 import { defineBrowserRows, type BrowserRowHandler } from '../../core/framework';
 import {
   LOCAL_MS,
@@ -15,9 +15,12 @@ import {
   fieldValue,
   interceptForgot,
   isAbove,
+  messageOf,
   onLoginForm,
   onPrograms,
   openForgot,
+  preparationMissedWeb,
+  runStepsLogged,
   sampleUntilReleased,
   sentNotice,
   submitButton,
@@ -25,6 +28,7 @@ import {
   unknownEmail,
   visibilityOf,
   watchForgot,
+  type BusyReading,
 } from './common';
 
 // US-RECUPERAR-005 — Envío de la petición en la web: aviso de éxito, botón ocupado y fallo sin aviso de éxito. Preparación de cada fila:
@@ -45,11 +49,12 @@ const sends: BrowserRowHandler = async (row, { page }) => {
   const email = strict('correo', SENT_EMAILS, cell(row, 'correo'))();
   const expected = `ve el aviso «${SENT_NOTICE}» encima del campo «Correo electrónico»; sigue en /forgot sin sesión iniciada con ${cell(row, 'correo')} escrito; la petición se envía una vez`;
   const opened = await openForgot(page);
-  if (opened) return preparationFailedWeb(expected, opened);
+  if (opened) return preparationMissedWeb(expected, opened);
   const watch = watchForgot(page);
-  const failure = await runSteps(submitSteps(page, email));
+  const failure = await runStepsLogged(submitSteps(page, email));
   if (failure) return actionMissing(expected, failure);
-  const shown = await waitUntil(async () => (await visibilityOf(sentNotice(page))) === 'visible');
+  const shown = await waitUntil(async () => (await messageOf(sentNotice(page))) === SENT_NOTICE);
+  const text = await messageOf(sentNotice(page));
   const notice = await boxOf(sentNotice(page));
   const field = await boxOf(emailField(page));
   const value = await fieldValue(emailField(page));
@@ -57,7 +62,7 @@ const sends: BrowserRowHandler = async (row, { page }) => {
   await sleep(OBSERVE_MS);
   const sent = watch.count();
   return conclude([
-    check(shown.reached, `ve el aviso «${SENT_NOTICE}»`, shown.reached ? `ve el aviso «${SENT_NOTICE}»` : 'no ve el aviso de éxito'),
+    check(shown.reached, `ve el aviso «${SENT_NOTICE}»`, shown.reached ? `ve el aviso «${text ?? ''}»` : `ve «${text ?? '(nada legible)'}» en lugar del aviso`),
     check(isAbove(notice, field), 'el aviso queda encima del campo «Correo electrónico»', isAbove(notice, field) ? 'el aviso queda encima del campo' : 'el aviso no queda encima del campo'),
     check(pathOf(page) === '/forgot' && value === email, `sigue en /forgot con ${cell(row, 'correo')} escrito`, `ruta ${pathOf(page)}; ve en «Correo electrónico» ${value ?? '(no legible)'}`),
     check(sent === 1, 'la petición se envía una vez', `peticiones enviadas: ${sent}`),
@@ -75,37 +80,53 @@ const DELAYS: ReadonlyMap<string, number> = new Map<string, number>([
 const busy: BrowserRowHandler = async (row, { page }) => {
   await resetTenants([TENANT_A]);
   const delay = strict('espera', DELAYS, cell(row, 'espera'));
-  const expected = `durante la espera «Enviar enlace» está deshabilitado con «${PROCESSING}» y con indicador de carga; al llegar la respuesta ve el aviso «${SENT_NOTICE}»; la petición se envía una vez`;
+  const expected = `durante la espera «Enviar enlace» está deshabilitado con «${PROCESSING}» y con indicador de carga, y el aviso de éxito no aparece; al llegar la respuesta ve el aviso «${SENT_NOTICE}»; la petición se envía una vez, también si se pulsa Enter en el campo durante la espera`;
   const opened = await openForgot(page);
-  if (opened) return preparationFailedWeb(expected, opened);
-  const typed = await runSteps([['escribir «Correo electrónico»', () => emailField(page).fill('gestor@sigpro.test', ACTION)]]);
-  if (typed) return preparationFailedWeb(expected, typed);
+  if (opened) return preparationMissedWeb(expected, opened);
+  const typed = await runStepsLogged([['escribir «Correo electrónico»', () => emailField(page).fill('gestor@sigpro.test', ACTION)]]);
+  if (typed) return preparationMissedWeb(expected, typed);
   // La prueba retrasa la respuesta del POST: se fija el retardo y el resto de la red sigue igual
   const gate = await interceptForgot(page, { kind: 'delay', ms: delay });
   const watch = watchForgot(page);
   const control = submitButton(page);
-  const failure = await runSteps([['pulsar «Enviar enlace»', () => control.click(ACTION)]]);
+  const failure = await runStepsLogged([['pulsar «Enviar enlace»', () => control.click(ACTION)]]);
   if (failure) return actionMissing(expected, failure);
   // «Ocupado» = deshabilitado, con la explicación «Procesando…» en `title` y el indicador de carga visible
   const busyNow = async (): Promise<boolean> =>
     (await isDisabled(control)) && (await attrOf(control, 'title')) === PROCESSING && (await visibilityOf(control.getByTestId(ACCESO_TESTIDS.SPINNER))) === 'visible';
+  const readBusy = async (): Promise<BusyReading> => ({ busy: await busyNow(), noticeHidden: (await visibilityOf(sentNotice(page))) === 'hidden' });
   const appeared = await waitUntil(busyNow, LOCAL_MS);
+  // Se guarda en un objeto para que las lecturas posteriores no se estrechen a sus valores iniciales
+  const probe = { enterPressed: false, afterEnter: -1 };
   const samples = appeared.reached
-    ? await sampleUntilReleased(gate, busyNow, delay + 5_000, async () => {
-        // Una pulsación forzada durante la espera: si el control no estuviera de verdad deshabilitado, saldría otro POST
+    ? await sampleUntilReleased(gate, readBusy, { busy: false, noticeHidden: false }, delay + 5_000, async () => {
+        // Pulsación forzada del control y Enter en el campo durante la espera: el envío no debe repetirse (en la web el envío es un formulario)
         await control.click({ force: true, timeout: 500 }).catch(() => undefined);
+        probe.enterPressed = await emailField(page).press('Enter', ACTION).then(
+          () => true,
+          () => false,
+        );
+        await sleep(300);
+        probe.afterEnter = watch.count();
       })
     : [];
-  const notice = await waitUntil(async () => (await visibilityOf(sentNotice(page))) === 'visible');
+  const notice = await waitUntil(async () => (await messageOf(sentNotice(page))) === SENT_NOTICE);
+  const shownText = await messageOf(sentNotice(page));
   const sent = watch.count();
   return conclude([
     check(
-      appeared.reached && samples.length >= 3 && samples.every(Boolean),
+      appeared.reached && samples.length >= 3 && samples.every((sample) => sample.busy),
       `durante la espera «Enviar enlace» está deshabilitado con «${PROCESSING}» y con indicador de carga`,
-      `muestras con el control ocupado: ${samples.filter(Boolean).length} de ${samples.length}`,
+      `muestras con el control ocupado: ${samples.filter((sample) => sample.busy).length} de ${samples.length}`,
     ),
-    check(notice.reached, `al llegar la respuesta ve el aviso «${SENT_NOTICE}»`, notice.reached ? `ve el aviso «${SENT_NOTICE}»` : 'no ve el aviso de éxito'),
-    check(sent === 1, 'la petición se envía una vez, también con la pulsación forzada durante la espera', `peticiones enviadas: ${sent}`),
+    check(
+      samples.length > 0 && samples.every((sample) => sample.noticeHidden),
+      'durante la espera el aviso de éxito no aparece',
+      `muestras con el aviso oculto: ${samples.filter((sample) => sample.noticeHidden).length} de ${samples.length}`,
+    ),
+    check(probe.enterPressed && probe.afterEnter === 1, 'pulsar Enter en el campo durante la espera no envía otra petición', `Enter ${probe.enterPressed ? 'pulsado' : 'no pulsado'}; peticiones tras Enter: ${probe.afterEnter}`),
+    check(notice.reached, `al llegar la respuesta ve el aviso «${SENT_NOTICE}»`, notice.reached ? `ve el aviso «${shownText ?? ''}»` : `ve «${shownText ?? '(nada legible)'}» en lugar del aviso`),
+    check(sent === 1, 'la petición se envía una vez, también con la pulsación forzada y Enter durante la espera', `peticiones enviadas: ${sent}`),
   ]);
 };
 
@@ -121,11 +142,11 @@ const fails: BrowserRowHandler = async (row, { page }) => {
   const status = strict('estado', STATUSES, cell(row, 'estado'));
   const expected = `no ve el aviso «${SENT_NOTICE}»; «Enviar enlace» vuelve a estar disponible; sigue en /forgot sin sesión iniciada; la petición se envía una vez`;
   const opened = await openForgot(page);
-  if (opened) return preparationFailedWeb(expected, opened);
+  if (opened) return preparationMissedWeb(expected, opened);
   const watch = watchForgot(page);
   // La prueba responde el error del servidor a POST /api/auth/forgot; el resto de la red sigue igual
   const gate = await interceptForgot(page, { kind: 'status', status });
-  const failure = await runSteps(submitSteps(page, 'gestor@sigpro.test'));
+  const failure = await runStepsLogged(submitSteps(page, 'gestor@sigpro.test'));
   if (failure) return actionMissing(expected, failure);
   const answered = await waitUntil(async () => gate.answered());
   // Tras la respuesta, el control vuelve a estar habilitado y sin «Procesando…»

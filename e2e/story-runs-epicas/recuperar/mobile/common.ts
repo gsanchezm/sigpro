@@ -1,13 +1,28 @@
 import type { Locator, Page } from '@playwright/test';
 import { TENANT_A } from '../../../story-runs/support/prepare';
 import { ACCESO_DYNAMIC_TESTIDS, ACCESO_TESTIDS } from '../../../../packages/shared/src/testids';
-import { ACTION, attrOf, isDisabled, linesOf, pathOf, runSteps, safe, textOf } from '../../support/browser';
+import { ACTION, attrOf, isDisabled, linesOf, pathOf, safe, textOf } from '../../support/browser';
+import { check, type Check } from '../../support/checks';
 import type { BrowserRowHandler } from '../../core/framework';
-import { FORGOT_LINK, enabledOf, visibilityOf } from '../web/common';
+import {
+  FORGOT_HINT,
+  FORGOT_LINK,
+  FORGOT_TITLE,
+  MOBILE_TRIM_NOTE,
+  PLACEHOLDER,
+  REMEMBER,
+  boxOf,
+  enabledOf,
+  inOrder,
+  messageOf,
+  runStepsLogged,
+  visibilityOf,
+} from '../web/common';
 
 // Piezas comunes de las filas de la app móvil de EP-RECUPERAR. La app se ejecuta como web de Expo a 390 × 844: NO es iOS ni Android
 // nativo. Todo localizador es de ROL (excluye lo oculto: Expo web conserva en el DOM las pantallas de la pila que ya no se ven) y los
-// avisos que no tienen rol propio (el de cada campo, el de éxito y los emergentes) se localizan por su id de prueba.
+// avisos que no tienen rol propio (el de cada campo, el de éxito y los emergentes) se localizan por su id de prueba; el texto de cada uno
+// se compara con el de la historia, no solo su presencia.
 
 /** Salvedad de plataforma: el veredicto de una fila móvil vale para Expo web, no para iOS ni Android nativo. */
 export const EXPO_NOTE = 'El veredicto vale para Expo web (390 × 844): no se ha comprobado en iOS ni en Android nativo.';
@@ -15,7 +30,7 @@ export const EXPO_NOTE = 'El veredicto vale para Expo web (390 × 844): no se ha
 export const KEYBOARD_NOTE = 'La tecla de envío del teclado se aproxima con la tecla Enter pulsada en el campo «Correo electrónico» de Expo web (dispara el mismo onSubmitEditing); no es el teclado del sistema.';
 /** Aproximación declarada: «volver a la pantalla anterior» es la navegación atrás del navegador en Expo web. */
 export const BACK_NOTE = 'Volver a la pantalla anterior se aproxima con la navegación atrás del navegador en Expo web; no es el botón atrás de Android ni de iOS.';
-/** Aproximación declarada: abrir /forgot directamente es una carga completa de la página en Expo web. */
+/** Aproximación declarada: abrir /forgot directamente es una carga completa de la página en Expo web (también en las filas que la usan). */
 export const DIRECT_NOTE = 'Abrir /forgot directamente se aproxima con una carga completa de la página en Expo web (la app recupera la sesión y el tenant guardados); en nativo sería un enlace profundo.';
 
 /** Añade a cada resultado la salvedad de plataforma (la de Expo web), como las filas de EP-MFA y EP-REGISTRO. */
@@ -25,6 +40,9 @@ export const onExpoWeb =
     const result = await handler(row, fixtures);
     return { ...result, note: result.note === undefined ? EXPO_NOTE : `${result.note} ${EXPO_NOTE}` };
   };
+
+/** Nota de plataforma solo si el texto escrito tiene espacios en los extremos (el campo puede ser de tipo correo en Expo web). */
+export const typedMobileNote = (typed: string): { readonly note?: string } => (typed === typed.trim() ? {} : { note: MOBILE_TRIM_NOTE });
 
 // --- Localizadores de rol y de id de prueba -----------------------------------------------------------------------------------
 
@@ -41,13 +59,16 @@ export const sendButton = (page: Page): Locator => buttonNamed(page, 'Enviar enl
 export const backButton = (page: Page): Locator => buttonNamed(page, 'Volver al inicio de sesión');
 export const loginHeading = (page: Page): Locator => heading1(page, 'Iniciar sesión');
 export const programsHeading = (page: Page): Locator => heading1(page, 'Programas');
-export const forgotHeading = (page: Page): Locator => heading1(page, 'Recuperar contraseña');
+export const forgotHeading = (page: Page): Locator => heading1(page, FORGOT_TITLE);
 /** Aviso de éxito: su contenedor tiene el id de prueba del aviso (la app no le da un nombre accesible propio). */
 export const sentNotice = (page: Page): Locator => page.getByTestId(ACCESO_TESTIDS.FORGOT_SENT);
 /** Aviso de error bajo el campo «Correo electrónico». */
 export const fieldError = (page: Page): Locator => page.getByTestId(ACCESO_TESTIDS.FORGOT_EMAIL_ERROR);
 /** Avisos emergentes de error (`toast-danger`): el primer renglón es el título y el resto, la traza. */
 export const dangerToasts = (page: Page): Locator => page.getByTestId(ACCESO_DYNAMIC_TESTIDS.TOAST('danger'));
+
+/** Primer renglón (el texto) del aviso de éxito cuando está visible; `undefined` si no está o no se puede leer. */
+export const sentNoticeText = (page: Page): Promise<string | undefined> => messageOf(sentNotice(page));
 
 // --- Pantallas y estado del botón ---------------------------------------------------------------------------------------------
 
@@ -65,8 +86,7 @@ export const sendBusy = async (page: Page): Promise<boolean> => (await attrOf(se
  * «Enviar enlace» disponible: habilitado (`isEnabled`) y sin `aria-busy` verdadero. Un atributo que no está puesto cuenta como «no ocupado»;
  * una lectura que falla no cuenta como disponible.
  */
-export const sendAvailable = async (page: Page): Promise<boolean> =>
-  (await enabledOf(sendButton(page))) === true && (await attrOf(sendButton(page), 'aria-busy')) !== 'true';
+export const sendAvailable = async (page: Page): Promise<boolean> => (await enabledOf(sendButton(page))) === true && (await attrOf(sendButton(page), 'aria-busy')) !== 'true';
 
 /** Primer renglón de cada aviso de error que hay en pantalla (el título). */
 export const dangerTitles = async (page: Page): Promise<readonly string[]> => {
@@ -77,11 +97,35 @@ export const dangerTitles = async (page: Page): Promise<readonly string[]> => {
   return titles;
 };
 
+/**
+ * Lo que la historia dice de la pantalla /forgot de la app: título, texto, orden de campo y botones, placeholder mientras el campo está
+ * vacío, y sin contraseña ni «Mantener la sesión». Con `emptyField` se comprueba el placeholder.
+ */
+export const screenChecksMobile = async (page: Page, emptyField: boolean): Promise<readonly Check[]> => {
+  const title = await visibilityOf(forgotHeading(page));
+  const hint = await visibilityOf(page.getByText(FORGOT_HINT, { exact: true }));
+  const order = inOrder(await boxOf(emailBox(page)), await boxOf(sendButton(page)), await boxOf(backButton(page)));
+  const password = await visibilityOf(passwordBox(page));
+  const remember = await visibilityOf(page.getByText(REMEMBER, { exact: true }));
+  const checks: Check[] = [
+    check(title === 'visible', `título «${FORGOT_TITLE}»`, `título ${title}`),
+    check(hint === 'visible', `texto «${FORGOT_HINT}»`, `texto ${hint}`),
+    check(order, 'el formulario tiene, en orden, «Correo electrónico», «Enviar enlace» y «Volver al inicio de sesión»', order ? 'en ese orden' : 'otro orden o algún elemento ausente o ilegible'),
+    check(password === 'hidden', 'no pide la contraseña', `campo de contraseña ${password}`),
+    check(remember === 'hidden', 'no muestra la casilla «Mantener la sesión en este equipo»', `casilla ${remember}`),
+  ];
+  if (emptyField) {
+    const placeholder = await attrOf(emailBox(page), 'placeholder');
+    checks.push(check(placeholder === PLACEHOLDER, `muestra «${PLACEHOLDER}» mientras el campo está vacío`, `ejemplo del campo: ${placeholder ?? '(ninguno)'}`));
+  }
+  return checks;
+};
+
 // --- Navegación ----------------------------------------------------------------------------------------------------------------
 
 /** Va a /login y escribe alumno01 en «Tenant de trabajo» (un solo `fill`: el campo vuelve a `demo` si queda vacío). */
 export const openLoginWithTenant = (page: Page): Promise<string | undefined> =>
-  runSteps([
+  runStepsLogged([
     ['abrir /login', () => page.goto('/login', ACTION)],
     ['ver el título «Iniciar sesión»', () => loginHeading(page).waitFor(ACTION)],
     ['escribir alumno01 en «Tenant de trabajo»', () => tenantBox(page).fill(TENANT_A, ACTION)],
@@ -89,14 +133,14 @@ export const openLoginWithTenant = (page: Page): Promise<string | undefined> =>
 
 /** Carga directa de /forgot, sin sesión (contexto nuevo). */
 export const openForgotDirect = (page: Page): Promise<string | undefined> =>
-  runSteps([
+  runStepsLogged([
     ['abrir /forgot', () => page.goto('/forgot', ACTION)],
     ['ver el título «Recuperar contraseña»', () => forgotHeading(page).waitFor(ACTION)],
   ]);
 
 /** Inicia sesión en la propia app (con la cuenta y la contraseña de la fila) y espera a /programs. */
 export const signInMobile = (page: Page, email: string, password: string): Promise<string | undefined> =>
-  runSteps([
+  runStepsLogged([
     ['abrir /login', () => page.goto('/login', ACTION)],
     ['ver el título «Iniciar sesión»', () => loginHeading(page).waitFor(ACTION)],
     ['escribir alumno01 en «Tenant de trabajo»', () => tenantBox(page).fill(TENANT_A, ACTION)],

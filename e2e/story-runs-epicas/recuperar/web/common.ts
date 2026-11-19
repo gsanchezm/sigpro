@@ -2,14 +2,15 @@ import type { Locator, Page, Request, Route } from '@playwright/test';
 import { uniqueEmail } from '../../../story-runs/support/api';
 import { TENANT_A } from '../../../story-runs/support/prepare';
 import { ACCESO_TESTIDS } from '../../../../packages/shared/src/testids';
-import { ACTION, isVisible, linesOf, pathOf, runSteps, safe, textOf, type Step } from '../../support/browser';
-import { sleep } from '../../support/checks';
+import { ACTION, isVisible, linesOf, pathOf, safe, textOf, type Step } from '../../support/browser';
+import { check, sleep, type Check } from '../../support/checks';
 import { outcome, type Outcome } from '../../core/framework';
 
 // Piezas comunes de las filas web (/forgot a 1440 px) y de las filas de la app móvil servida como web de Expo (EP-RECUPERAR). Los
-// localizadores son de rol y de etiqueta («Correo electrónico», «Enviar enlace»…). Los de prueba (testids de testids.ts) solo donde la
-// pantalla no ofrece otro rastro: el aviso bajo el campo, que no tiene rol propio. Las lecturas no lanzan y distinguen tres casos:
-// visible, oculto y no legible; una lectura no legible nunca cuenta como «no visible» ni como cumplida.
+// localizadores son de rol y de etiqueta; los de prueba solo donde no hay otro rastro (el aviso bajo el campo). Las lecturas no lanzan y
+// distinguen visible, oculto y no legible: una lectura no legible nunca cuenta como «no visible» ni como cumplida. Cuando una acción de
+// Playwright falla, la falla conserva las tres primeras líneas del error (la llamada y su motivo) para la nota: así se distingue un fallo
+// de la app de uno del manejador. Las respuestas simuladas se fijan en la prueba; el resto de la red es real.
 
 export const LOGIN_PATH = '/login';
 export const FORGOT_PATH = '/forgot';
@@ -23,14 +24,24 @@ export const REQUIRED = 'Campo obligatorio';
 export const BAD_EMAIL = 'Introduce un correo válido';
 export const PROCESSING = 'Procesando…';
 export const FORGOT_LINK = '¿Olvidaste la contraseña?';
+export const FORGOT_TITLE = 'Recuperar contraseña';
+export const FORGOT_HINT = 'Te enviaremos un enlace de un solo uso válido durante 30 minutos.';
+export const REMEMBER = 'Mantener la sesión en este equipo';
+export const PLACEHOLDER = 'nombre@organizacion.es';
 
 /** Tolerancia de la prueba para una reacción local de la pantalla (la historia no fija plazos). */
 export const LOCAL_MS = 1_000;
 /** Ventana ÚNICA con la que se observa que algo NO ocurre: una por fila, nunca varias en serie. */
 export const OBSERVE_MS = 1_000;
 
-/** Salvedad de plataforma: el campo de correo de la web es de tipo correo y el navegador recorta los espacios antes de la app. */
-export const EMAIL_NOTE = 'el campo de correo es de tipo correo y el navegador recorta los espacios de los extremos: la app solo recibe el texto ya recortado (en un teclado nativo no ocurre)';
+/**
+ * Limitación declarada: el campo de correo es de tipo correo, así que el navegador recorta los espacios de los extremos antes de que
+ * la app los reciba. La fila NO prueba el recorte de la app; la evidencia guarda el tipo y el valor realmente leídos del campo.
+ */
+export const EMAIL_NOTE = 'el campo de correo es de tipo correo: el navegador recorta los espacios de los extremos antes de que la app los reciba, así que esta fila no prueba el recorte de la app (la evidencia guarda el tipo y el valor leídos del campo)';
+
+/** Limitación equivalente en Expo web, donde el campo de correo puede convertirse en un campo de tipo correo. */
+export const MOBILE_TRIM_NOTE = 'en Expo web el campo de correo puede ser de tipo correo: si lo es, el navegador recorta los espacios antes que la app y esta fila no prueba el recorte de la app (la evidencia guarda el tipo y el valor leídos del campo)';
 
 // --- Localizadores ----------------------------------------------------------------------------------------------------------
 
@@ -77,7 +88,7 @@ export const fieldValue = async (target: Locator): Promise<string | undefined> =
 /** Primer renglón del texto de un elemento visible; `undefined` si no está visible o no se puede leer. */
 export const messageOf = async (target: Locator): Promise<string | undefined> => ((await visibilityOf(target)) === 'visible' ? linesOf(await textOf(target))[0] : undefined);
 
-/** Si un botón está habilitado; `undefined` si la lectura no es fiable. */
+/** Si un control está habilitado; `undefined` si la lectura no es fiable. */
 export const enabledOf = async (target: Locator): Promise<boolean | undefined> => {
   try {
     if ((await target.count()) !== 1) return undefined;
@@ -87,7 +98,7 @@ export const enabledOf = async (target: Locator): Promise<boolean | undefined> =
   }
 };
 
-/** Tipo EFECTIVO de un campo (propiedad del elemento): en la web, el del campo de correo es `email`. */
+/** Tipo EFECTIVO de un campo (propiedad del elemento); en un campo de correo es `email`. */
 export const effectiveType = (target: Locator): Promise<string | undefined> =>
   safe(() => target.evaluate((element) => (element instanceof HTMLInputElement ? element.type : 'no es un campo de entrada'), undefined, { timeout: 500 }), undefined);
 
@@ -114,7 +125,13 @@ export const isAbove = (upper: Box | undefined, lower: Box | undefined): boolean
 /** `lower` queda por debajo de `upper`: su borde superior no sube por encima del inferior de `upper`. */
 export const isBelow = (lower: Box | undefined, upper: Box | undefined): boolean => lower !== undefined && upper !== undefined && lower.y >= upper.y + upper.height - 1;
 
-// --- Peticiones POST a /api/auth/forgot ---------------------------------------------------------------------------------------
+/** Las cajas van en el orden dado de arriba abajo; si alguna no se puede leer, no se cumple. */
+export const inOrder = (...boxes: readonly (Box | undefined)[]): boolean => {
+  const defined = boxes.filter((box): box is Box => box !== undefined);
+  return defined.length === boxes.length && defined.every((box, index) => index === 0 || (defined[index - 1]?.y ?? Number.POSITIVE_INFINITY) < box.y);
+};
+
+// --- Peticiones POST a /api/auth/forgot ------------------------------------------------------------------------------------
 
 const bodyOf = (request: Request): unknown => {
   try {
@@ -156,7 +173,7 @@ export const watchForgot = (page: Page): ForgotWatch => {
 export type ForgotPlan = { readonly kind: 'delay'; readonly ms: number } | { readonly kind: 'status'; readonly status: number } | { readonly kind: 'abort' };
 
 export interface Gate {
-  /** La respuesta retrasada ya se ha dejado pasar (la lectura posterior ya no es «durante la espera»). */
+  /** La respuesta retrasada ya se ha dejado pasar (las lecturas posteriores ya no son «durante la espera»). */
   readonly released: () => boolean;
   /** La respuesta (la real, la simulada o el corte) ya se ha entregado al navegador. */
   readonly answered: () => boolean;
@@ -194,16 +211,22 @@ export const interceptForgot = async (page: Page, plan: ForgotPlan): Promise<Gat
   return { released: () => released, answered: () => answered };
 };
 
+/** Lo que se observa mientras la respuesta está retenida: el control ocupado y el aviso de éxito todavía sin aparecer. */
+export interface BusyReading {
+  readonly busy: boolean;
+  readonly noticeHidden: boolean;
+}
+
 /**
  * Muestrea `read` mientras la respuesta retrasada no se ha liberado. «Durante la espera» es una condición mantenida: una lectura que
- * cruza la liberación no cuenta. `onFirst` se ejecuta una vez, tras la primera muestra válida (p. ej. un intento de pulsación forzada).
+ * cruza la liberación no cuenta. `onFirst` se ejecuta una vez, tras la primera muestra válida (pulsaciones forzadas o Enter en el campo).
  */
-export const sampleUntilReleased = async (gate: Gate, read: () => Promise<boolean>, maxMs: number, onFirst: () => Promise<void>): Promise<readonly boolean[]> => {
-  const samples: boolean[] = [];
+export const sampleUntilReleased = async <T>(gate: Gate, read: () => Promise<T>, fallback: T, maxMs: number, onFirst: () => Promise<void>): Promise<readonly T[]> => {
+  const samples: T[] = [];
   const started = performance.now();
   while (!gate.released() && performance.now() - started < maxMs) {
     const waiting = !gate.released();
-    const reading = await safe(read, false);
+    const reading = await safe(read, fallback);
     if (waiting && !gate.released()) {
       samples.push(reading);
       if (samples.length === 1) await onFirst();
@@ -211,6 +234,71 @@ export const sampleUntilReleased = async (gate: Gate, read: () => Promise<boolea
     await sleep(50);
   }
   return samples;
+};
+
+// --- Pasos con la llamada de Playwright en la nota ----------------------------------------------------------------------------
+
+/** Las tres primeras líneas no vacías del error de Playwright (la llamada y su motivo). */
+const callLogOf = (error: unknown): string =>
+  (error instanceof Error ? error.message : String(error))
+    .split('\n')
+    .map((line) => line.trim())
+    .filter((line) => line !== '')
+    .slice(0, 3)
+    .join(' | ');
+
+/** Como `runSteps` de support/browser (que no se toca), pero la falla conserva las tres primeras líneas del error de Playwright. */
+export const runStepsLogged = async (steps: readonly Step[]): Promise<string | undefined> => {
+  for (const [what, action] of steps) {
+    try {
+      await action();
+    } catch (error) {
+      return `no se pudo ${what}: ${callLogOf(error)}`;
+    }
+  }
+  return undefined;
+};
+
+// --- Resultados -----------------------------------------------------------------------------------------------------------
+
+/** La acción de la fila no se pudo hacer: la pantalla no ofrece lo que la historia nombra; la llamada de Playwright va en la nota. */
+export const actionMissing = (expected: string, failure: string): Outcome =>
+  outcome(false, expected, failure, { note: `La historia nombra un elemento que la pantalla no ofrece. Llamada de Playwright: ${failure}` });
+
+/** La preparación de la fila no produjo lo que la historia da por hecho: discrepa con el motivo en la nota (no es error del arnés). */
+export const preparationMissedWeb = (expected: string, reason: string): Outcome =>
+  outcome(false, expected, `la preparación no se cumplió: ${reason}`, {
+    note: `No se pudo reproducir el estado inicial que da por hecho la historia; la app no hace lo que la preparación describe. Detalle: ${reason}`,
+  });
+
+/** Nota de plataforma solo si el texto escrito tiene espacios en los extremos. */
+export const typedNote = (typed: string): { readonly note?: string } => (typed === typed.trim() ? {} : { note: EMAIL_NOTE });
+
+/** Correo nuevo de «(correo sin cuenta)»: `nadie-<marca>@sigpro.test`, distinto en cada llamada. */
+export const unknownEmail = (): string => uniqueEmail('nadie');
+
+/** Pasos para escribir en «Correo electrónico» y pulsar «Enviar enlace». */
+export const submitSteps = (page: Page, typed: string): Step[] => [
+  ['escribir «Correo electrónico»', () => emailField(page).fill(typed, ACTION)],
+  ['pulsar «Enviar enlace»', () => submitButton(page).click(ACTION)],
+];
+
+// --- Reglas de la pantalla /forgot (web) --------------------------------------------------------------------------------------
+
+/** Lo que la historia dice de la pantalla: título, texto, orden de campo y botones, y sin contraseña ni «Mantener la sesión». */
+export const screenChecksWeb = async (page: Page): Promise<readonly Check[]> => {
+  const title = await visibilityOf(page.getByRole('heading', { name: FORGOT_TITLE, exact: true }));
+  const hint = await visibilityOf(page.getByText(FORGOT_HINT, { exact: true }));
+  const order = inOrder(await boxOf(emailField(page)), await boxOf(submitButton(page)), await boxOf(backButton(page)));
+  const password = await visibilityOf(passwordField(page));
+  const remember = await visibilityOf(page.getByText(REMEMBER, { exact: true }));
+  return [
+    check(title === 'visible', `título «${FORGOT_TITLE}»`, `título ${title}`),
+    check(hint === 'visible', `texto «${FORGOT_HINT}»`, `texto ${hint}`),
+    check(order, 'el formulario tiene, en orden, «Correo electrónico», «Enviar enlace» y «Volver al inicio de sesión»', order ? 'en ese orden' : 'otro orden o algún elemento ausente o ilegible'),
+    check(password === 'hidden', 'no pide la contraseña', `campo de contraseña ${password}`),
+    check(remember === 'hidden', 'no muestra la casilla «Mantener la sesión en este equipo»', `casilla ${remember}`),
+  ];
 };
 
 // --- Navegación y estado de la pantalla -------------------------------------------------------------------------------------
@@ -221,20 +309,20 @@ export const onForgot = async (page: Page): Promise<boolean> => pathOf(page) ===
 export const onPrograms = async (page: Page): Promise<boolean> => pathOf(page) === PROGRAMS_PATH && (await isVisible(programsHeading(page)));
 
 export const openLogin = (page: Page): Promise<string | undefined> =>
-  runSteps([
+  runStepsLogged([
     ['abrir /login?tenant=alumno01', () => page.goto(LOGIN_URL, ACTION)],
     ['ver el título «Iniciar sesión»', () => loginHeading(page).waitFor(ACTION)],
   ]);
 
 export const openForgot = (page: Page): Promise<string | undefined> =>
-  runSteps([
+  runStepsLogged([
     ['abrir /forgot?tenant=alumno01', () => page.goto(FORGOT_URL, ACTION)],
     ['ver el campo «Correo electrónico»', () => emailField(page).waitFor(ACTION)],
   ]);
 
-/** Inicia sesión en la propia pantalla de acceso (con la cuenta y la contraseña de la fila) y espera a /programs. */
+/** Inicia sesión en la propia pantalla de acceso (con la cuenta y la contraseña de la fila) y espera la llegada a /programs. */
 export const signInFromLogin = (page: Page, email: string, password: string): Promise<string | undefined> =>
-  runSteps([
+  runStepsLogged([
     ['abrir /login?tenant=alumno01', () => page.goto(LOGIN_URL, ACTION)],
     ['ver el título «Iniciar sesión»', () => loginHeading(page).waitFor(ACTION)],
     ['escribir el correo', () => emailField(page).fill(email, ACTION)],
@@ -243,19 +331,3 @@ export const signInFromLogin = (page: Page, email: string, password: string): Pr
     // Como en REGISTRO: la llegada se espera por la ruta (el encabezado y el banner pueden coincidir y el `waitFor` estricto lanzaría)
     ['llegar a /programs', () => page.waitForURL(/\/programs/, ACTION)],
   ]);
-
-/** La salida prevista de la historia no se pudo hacer: la pantalla no ofrece lo que la historia nombra. */
-export const actionMissing = (expected: string, failure: string): Outcome =>
-  outcome(false, expected, failure, { note: 'La historia nombra un elemento que la pantalla no ofrece.' });
-
-/** Nota de plataforma solo si el texto escrito tiene espacios en los extremos (el navegador los recorta en el campo de tipo correo). */
-export const typedNote = (typed: string): { readonly note?: string } => (typed === typed.trim() ? {} : { note: EMAIL_NOTE });
-
-/** Correo nuevo de «(correo sin cuenta)»: `nadie-<marca>@sigpro.test`, distinto en cada llamada. */
-export const unknownEmail = (): string => uniqueEmail('nadie');
-
-/** Pasos para escribir en un campo de correo y pulsar «Enviar enlace»; la fila añade lo que espera. */
-export const submitSteps = (page: Page, typed: string): Step[] => [
-  ['escribir «Correo electrónico»', () => emailField(page).fill(typed, ACTION)],
-  ['pulsar «Enviar enlace»', () => submitButton(page).click(ACTION)],
-];
