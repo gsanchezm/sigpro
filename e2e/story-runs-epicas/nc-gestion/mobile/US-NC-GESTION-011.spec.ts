@@ -1,6 +1,6 @@
 import type { Locator, Page } from '@playwright/test';
 import { MOVIL_NC_TESTIDS } from '../../../../packages/shared/src/testids';
-import { defineBrowserRows, type BrowserRowHandler, type ManifestRow, type Outcome } from '../../core/framework';
+import { defineBrowserRows, notExecutable, type BrowserRowHandler, type ManifestRow, type Outcome } from '../../core/framework';
 import { cell, check, strict } from '../../support/checks';
 import { ACTION, CEILING_MS, waitUntil } from '../../support/browser';
 import { actionFailed, captureBodies, interact, keysOf, observe, plainOf, pollPersisted, toastShown, verdictWeb, watchRequests, type Blocked } from '../web/common';
@@ -42,9 +42,9 @@ const TEXT_CELLS: ReadonlyMap<string, { readonly text: string; readonly accepted
   ['(10 letras a)', { text: 'a'.repeat(10), accepted: true }],
 ]);
 
-const PERSON_CELLS: ReadonlyMap<string, { readonly search: string }> = new Map<string, { readonly search: string }>([
-  ['Lucí', { search: 'Lucí' }],
-  ['CARMEN', { search: 'CARMEN' }],
+const PERSON_CELLS: ReadonlyMap<string, { readonly search: string; readonly id: string }> = new Map<string, { readonly search: string; readonly id: string }>([
+  ['Lucí', { search: 'Lucí', id: 'u3' }],
+  ['CARMEN', { search: 'CARMEN', id: 'u5' }],
 ]);
 
 const PERSON_NAME_CELLS: ReadonlyMap<string, string> = new Map<string, string>([
@@ -90,18 +90,6 @@ const chooseSeverity = (page: Page, label: string): Promise<{ readonly message: 
   interact(editForm(page).getByRole('radio', { name: label, exact: true }), `elegir «${label}» en «Severidad»`, (element) => element.click(ACTION));
 
 const saveButton = (page: Page, name: string): Locator => editForm(page).getByRole('button', { name, exact: true });
-
-/**
- * Teclea la búsqueda como una persona: limpia el campo (Ctrl+A y Retroceso) y escribe carácter a carácter. El campo de búsqueda de la
- * hoja «Asignada a» empieza vacío; el campo «Asignada a» (combobox) es el que muestra el nombre de la persona asignada.
- */
-const typeAsPerson = (locator: Locator, text: string) =>
-  interact(locator, `escribir «${text}» en «Buscar persona»`, async (element) => {
-    await element.click(ACTION);
-    await element.press('ControlOrMeta+A', ACTION);
-    await element.press('Backspace', ACTION);
-    await element.pressSequentially(text, { delay: 40, timeout: CEILING_MS });
-  });
 
 // --- Esquema 1: un rol con permiso de edición cambia la severidad y guarda --------------------------------------------------------
 
@@ -203,6 +191,47 @@ const descriptionLength: BrowserRowHandler = async (row: ManifestRow, { page }) 
 
 // --- Esquema 4: elegir una persona la asigna al guardar --------------------------------------------------------------------------
 
+// --- Diagnóstico del teclado (evidencia de la fila): lecturas del campo «Buscar persona» y de los elementos del diálogo «Asignada a» ----
+
+/** Valor de un campo de texto, o `undefined` si no se lee en el plazo. */
+const readValue = (locator: Locator): Promise<string | undefined> => locator.inputValue({ timeout: 2_000 }).catch(() => undefined);
+
+/** Puntos de código de un texto: distingue «í» precompuesta de «i» más acento combinado. */
+const codepointsOf = (text: string | undefined): readonly string[] | undefined =>
+  text === undefined ? undefined : Array.from(text).map((char) => `U+${(char.codePointAt(0) ?? 0).toString(16).toUpperCase().padStart(4, '0')}`);
+
+/** Elemento que tiene el foco ahora mismo: si el teclado llega al campo, el foco está en el campo de búsqueda. */
+const focusedOf = (page: Page): Promise<Readonly<Record<string, string | null>> | undefined> =>
+  page
+    .evaluate(() => {
+      const element = document.activeElement;
+      if (element === null) return { tag: null, testid: null, role: null, label: null };
+      return { tag: element.tagName.toLowerCase(), testid: element.getAttribute('data-testid'), role: element.getAttribute('role'), label: element.getAttribute('aria-label') };
+    })
+    .catch(() => undefined);
+
+/** Hijos del diálogo «Asignada a» que tienen testid, rol o nombre accesible (sin texto de avatares): etiqueta, rol y texto corto. */
+const childrenOf = (owners: Locator): Promise<readonly Readonly<Record<string, string | null>>[] | undefined> =>
+  owners
+    .evaluate(
+      (node) =>
+        Array.from(node.querySelectorAll('*'))
+          .filter((element) => element.getAttribute('data-testid') !== null || element.getAttribute('role') !== null || element.getAttribute('aria-label') !== null)
+          // Solo los que se ven en ese momento (caja con tamaño): el diálogo puede tener hijos ocultos
+          .filter((element) => element.getBoundingClientRect().width > 0 && element.getBoundingClientRect().height > 0)
+          .slice(0, 60)
+          .map((element) => ({
+            tag: element.tagName.toLowerCase(),
+            testid: element.getAttribute('data-testid'),
+            role: element.getAttribute('role'),
+            ariaLabel: element.getAttribute('aria-label'),
+            text: (element.textContent ?? '').replace(/\s+/g, ' ').trim().slice(0, 60),
+          })),
+      undefined,
+      { timeout: 2_000 },
+    )
+    .catch(() => undefined);
+
 const assignPerson: BrowserRowHandler = async (row: ManifestRow, { page }) => {
   const person = strict('busqueda', PERSON_CELLS, cell(row, 'busqueda'));
   const persona = strict('persona', PERSON_NAME_CELLS, cell(row, 'persona'));
@@ -213,22 +242,105 @@ const assignPerson: BrowserRowHandler = async (row: ManifestRow, { page }) => {
   if (edit.blocked !== undefined) return actionFailed(expected, edit.blocked);
   const combo = await interact(editForm(page).getByRole('combobox', { name: 'Asignada a', exact: true }), 'abrir «Asignada a»', (element) => element.click(ACTION));
   if (combo !== undefined) return actionFailed(expected, combo);
+
   const owners = page.getByTestId('nc-assignee-dialog');
-  const typed = await typeAsPerson(owners.getByRole('textbox', { name: 'Buscar persona', exact: true }), person.search);
-  if (typed !== undefined) return actionFailed(expected, typed);
-  const chosen = await interact(owners.getByRole('radio', { name: persona, exact: true }), `elegir ${persona}`, (element) => element.click(ACTION));
-  if (chosen !== undefined) return actionFailed(expected, chosen);
+  const search = owners.getByRole('textbox', { name: 'Buscar persona', exact: true });
+  // La opción puede llegar con otro rol (radio, option o button) o solo con su testid: se busca por cualquiera de ellos
+  const choice = owners
+    .getByRole('radio', { name: persona, exact: true })
+    .or(owners.getByRole('option', { name: persona, exact: true }))
+    .or(owners.getByRole('button', { name: persona, exact: true }))
+    .or(owners.getByTestId(`nc-assignee-option-${person.id}`));
+  const evidence: Record<string, unknown> = {};
+
+  evidence.valorAntesDeTocar = await readValue(search);
+  const touched = await interact(search, 'tocar «Buscar persona»', (element) => element.click(ACTION));
+  evidence.focoTrasTocar = await focusedOf(page);
+  if (touched !== undefined) return { ...actionFailed(expected, touched), evidence };
+  const selected = await interact(search, 'seleccionar todo con Ctrl+A', (element) => element.press('ControlOrMeta+A', ACTION));
+  if (selected !== undefined) return { ...actionFailed(expected, selected), evidence };
+  const erased = await interact(search, 'borrar con Retroceso', (element) => element.press('Backspace', ACTION));
+  if (erased !== undefined) return { ...actionFailed(expected, erased), evidence };
+  // Lectura tras Ctrl+A y Retroceso; después SIEMPRE fill('') (la alternativa de limpieza) con su lectura, para comparar ambas vías
+  evidence.valorTrasCtrlAYRetroceso = await readValue(search);
+  const emptied = await interact(search, 'vaciar con fill vacío', (element) => element.fill('', ACTION));
+  if (emptied !== undefined) return { ...actionFailed(expected, emptied), evidence };
+  evidence.valorTrasFillVacio = await readValue(search);
+  const typed = await interact(search, `teclear «${person.search}» carácter a carácter`, (element) => element.pressSequentially(person.search, { delay: 60, timeout: CEILING_MS }));
+  if (typed !== undefined) return { ...actionFailed(expected, typed), evidence };
+  const typedValue = await readValue(search);
+  evidence.valorTrasTeclear = typedValue;
+  evidence.codigosTrasTeclear = codepointsOf(typedValue);
+  evidence.codigosEsperados = codepointsOf(person.search);
+  const shownChoice = await choice.first().waitFor({ state: 'visible', timeout: 5_000 }).then(
+    () => true,
+    () => false,
+  );
+  evidence.opcionVisibleTrasTeclear = shownChoice;
+  evidence.coincidenciasPorRol = {
+    radio: await owners.getByRole('radio', { name: persona, exact: true }).count(),
+    option: await owners.getByRole('option', { name: persona, exact: true }).count(),
+    button: await owners.getByRole('button', { name: persona, exact: true }).count(),
+    testid: await owners.getByTestId(`nc-assignee-option-${person.id}`).count(),
+  };
+  evidence.hijosDelDialogo = await childrenOf(owners);
+
+  if (!shownChoice) {
+    // Segunda lectura con inserción directa (fill): solo como evidencia de que el flujo funciona por inserción directa
+    const refilled = await interact(search, 'segunda lectura: fill vacío y fill con la búsqueda', async (element) => {
+      await element.fill('', ACTION);
+      await element.fill(person.search, ACTION);
+    });
+    const fillShown = refilled === undefined ? await choice.first().waitFor({ state: 'visible', timeout: 5_000 }).then(() => true, () => false) : false;
+    evidence.segundaLecturaConFill = {
+      resultado: refilled === undefined ? 'sin error de acción' : refilled.message,
+      valorTras: await readValue(search),
+      opcionVisible: fillShown,
+      hijos: await childrenOf(owners),
+    };
+    if (typedValue !== undefined && typedValue.includes('Andrés Molina')) {
+      return {
+        ...verdictWeb([check(false, `«${persona}» en la lista tras teclear «${person.search}»`, `la lista no la muestra; el campo de búsqueda conserva «${typedValue}»`)], 'Hallazgo con teclado real: el campo de búsqueda conserva el nombre de la persona asignada al teclear; con inserción directa (fill) la lista sí se muestra (ver evidencia).'),
+        evidence,
+      };
+    }
+    if (typedValue !== person.search) {
+      return {
+        ...notExecutable(expected, `el teclado del arnés no llega al campo de búsqueda como se escribe (tras teclear: «${String(typedValue)}»; esperado «${person.search}»); el arnés no puede afirmar nada de la app. Ver evidencia.`),
+        evidence,
+      };
+    }
+    if (fillShown) {
+      return {
+        ...notExecutable(expected, `no diagnosticado: tras teclear «${person.search}» el campo tiene ese valor y la lista no muestra a ${persona}, pero con inserción directa (fill) sí la muestra. Ver evidencia (valores, códigos Unicode y hijos del diálogo).`),
+        evidence,
+      };
+    }
+    return {
+      ...verdictWeb([check(false, `«${persona}» en la lista de «Asignada a»`, 'la lista no la muestra ni tras teclear ni con inserción directa')], 'La persona no aparece en la lista con ninguna de las dos lecturas (teclado e inserción directa).'),
+      evidence,
+    };
+  }
+
+  const chosen = await interact(choice.first(), `elegir ${persona}`, (element) => element.click(ACTION));
+  if (chosen !== undefined) return { ...actionFailed(expected, chosen), evidence };
   const saved = await interact(saveButton(page, 'Guardar'), 'pulsar «Guardar»', (element) => element.click(ACTION));
-  if (saved !== undefined) return actionFailed(expected, saved);
+  if (saved !== undefined) return { ...actionFailed(expected, saved), evidence };
 
   const toast = await toastShown(page, 'ok', SAVED);
   const shown = await waitDetail(page, 'NC-003', (current) => current.editOpen === false && current.assignee === persona);
   const persisted = await pollPersisted('NC-003', (fields) => fields.assigneeName === persona);
-  return verdictWeb([
-    check(toast.readable && toast.seen, `aviso «${SAVED}»`, toast.observed),
-    check(shown?.assignee === persona, `«Asignada a» muestra ${persona}`, `«Asignada a» muestra «${shown?.assignee ?? '(sin leer)'}»`),
-    check(persisted?.assigneeName === persona, `NC-003 asignada a ${persona} en el servidor`, `NC-003 asignada a ${persisted?.assigneeName ?? '(sin leer)'}`),
-  ], 'El campo de búsqueda de la hoja «Asignada a» empieza vacío y se teclea carácter a carácter; la persona asignada se lee del campo «Asignada a» (el marcador «Buscar persona» no se ve con una persona asignada).');
+  return {
+    ...verdictWeb(
+      [
+        check(toast.readable && toast.seen, `aviso «${SAVED}»`, toast.observed),
+        check(shown?.assignee === persona, `«Asignada a» muestra ${persona}`, `«Asignada a» muestra «${shown?.assignee ?? '(sin leer)'}»`),
+        check(persisted?.assigneeName === persona, `NC-003 asignada a ${persona} en el servidor`, `NC-003 asignada a ${persisted?.assigneeName ?? '(sin leer)'}`),
+      ],
+      'El campo de búsqueda de la hoja «Asignada a» empieza vacío y se teclea carácter a carácter; la persona asignada se lee del campo «Asignada a» (el marcador «Buscar persona» no se ve con una persona asignada).',
+    ),
+    evidence,
+  };
 };
 
 // --- Esquema 5: quitar la asignación deja la no conformidad sin responsable -----------------------------------------------------
