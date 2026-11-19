@@ -5,7 +5,7 @@ epica: EP-VER-EJECUCION
 titulo: "[Web] Ver el historial de ejecuciones con sus evidencias y descargarlas"
 etiquetas: [web]
 relacionadas: [US-VER-EJECUCION-004, US-VER-EJECUCION-005, US-VER-EJECUCION-006, US-VER-EJECUCION-010]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["/verification/:code"]
 ---
 

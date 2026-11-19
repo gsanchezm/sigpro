@@ -5,7 +5,7 @@ epica: EP-VER-EJECUCION
 titulo: "[Móvil] Elegir evidencias con los botones de imagen y de PDF"
 etiquetas: [movil]
 relacionadas: [US-VER-EJECUCION-003, US-VER-EJECUCION-006, US-VER-EJECUCION-008, US-VER-EJECUCION-011, US-VER-EJECUCION-012]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["/verification/:code"]
 ---
 

@@ -5,7 +5,7 @@ epica: EP-VER-EJECUCION
 titulo: "[Móvil] Ver el historial, ampliar una imagen y descargar una evidencia"
 etiquetas: [movil]
 relacionadas: [US-VER-EJECUCION-004, US-VER-EJECUCION-007, US-VER-EJECUCION-008, US-VER-EJECUCION-011, US-VER-EJECUCION-012]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["/verification/:code"]
 ---
 

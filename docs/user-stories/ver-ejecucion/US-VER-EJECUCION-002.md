@@ -5,7 +5,7 @@ epica: EP-VER-EJECUCION
 titulo: "[API] Registrar una ejecución con su resultado, sus notas y su efecto en el caso"
 etiquetas: [api]
 relacionadas: [US-VER-EJECUCION-001, US-VER-EJECUCION-003, US-VER-EJECUCION-004, US-VER-EJECUCION-005, US-VER-EJECUCION-008]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["POST /api/test-cases/:code/runs"]
 ---
 

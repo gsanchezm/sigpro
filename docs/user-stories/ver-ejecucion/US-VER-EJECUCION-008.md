@@ -5,7 +5,7 @@ epica: EP-VER-EJECUCION
 titulo: "[Móvil] Registrar una ejecución desde el detalle del caso"
 etiquetas: [movil]
 relacionadas: [US-VER-EJECUCION-001, US-VER-EJECUCION-002, US-VER-EJECUCION-005, US-VER-EJECUCION-009, US-VER-EJECUCION-010]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["/verification/:code"]
 permisos: [testrun.execute]
 ---

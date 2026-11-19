@@ -5,7 +5,7 @@ epica: EP-VER-EJECUCION
 titulo: "[Web] Elegir evidencias antes de enviar: tipo, tamaño, cantidad y quitarlas"
 etiquetas: [web]
 relacionadas: [US-VER-EJECUCION-003, US-VER-EJECUCION-005, US-VER-EJECUCION-007, US-VER-EJECUCION-009]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["/verification/:code"]
 ---
 

@@ -5,7 +5,7 @@ epica: EP-VER-EJECUCION
 titulo: "[API] Solo quien tiene el permiso registra ejecuciones, y el orden de los rechazos"
 etiquetas: [api]
 relacionadas: [US-VER-EJECUCION-002, US-VER-EJECUCION-003, US-VER-EJECUCION-005, US-VER-EJECUCION-008]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["POST /api/test-cases/:code/runs"]
 permisos: [testrun.execute]
 ---

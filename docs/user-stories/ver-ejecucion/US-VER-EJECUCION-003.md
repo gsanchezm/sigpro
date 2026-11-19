@@ -5,7 +5,7 @@ epica: EP-VER-EJECUCION
 titulo: "[API] Validar las evidencias de una ejecución: tipo real, tamaño y cantidad"
 etiquetas: [api]
 relacionadas: [US-VER-EJECUCION-001, US-VER-EJECUCION-002, US-VER-EJECUCION-004, US-VER-EJECUCION-006]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["POST /api/test-cases/:code/runs"]
 ---
 

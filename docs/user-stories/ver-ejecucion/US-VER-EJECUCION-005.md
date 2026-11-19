@@ -5,7 +5,7 @@ epica: EP-VER-EJECUCION
 titulo: "[Web] Registrar una ejecución desde el detalle del caso"
 etiquetas: [web]
 relacionadas: [US-VER-EJECUCION-001, US-VER-EJECUCION-002, US-VER-EJECUCION-003, US-VER-EJECUCION-006, US-VER-EJECUCION-007, US-VER-EJECUCION-008]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["/verification/:code"]
 permisos: [testrun.execute]
 ---
