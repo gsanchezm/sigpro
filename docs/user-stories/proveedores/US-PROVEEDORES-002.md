@@ -5,7 +5,7 @@ epica: EP-PROVEEDORES
 titulo: "[Web] Ver los proveedores contratados en el Resumen de un programa"
 etiquetas: [web]
 relacionadas: [US-PROVEEDORES-001, US-PROVEEDORES-003, US-PROVEEDORES-004, US-PROG-DETALLE-002]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["/programs/:code"]
 ---
 

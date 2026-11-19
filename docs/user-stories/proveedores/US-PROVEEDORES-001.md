@@ -5,7 +5,7 @@ epica: EP-PROVEEDORES
 titulo: "[API] Listar los proveedores del tenant con sus contratos y filtrarlos por nombre, NIF o programa"
 etiquetas: [api]
 relacionadas: [US-PROVEEDORES-002, US-PROVEEDORES-003, US-PROVEEDORES-004]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["GET /api/suppliers"]
 ---
 

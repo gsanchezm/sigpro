@@ -5,7 +5,7 @@ epica: EP-PROVEEDORES
 titulo: "[Web] Buscar un proveedor del tenant desde el Resumen de un programa y ver su ficha"
 etiquetas: [web]
 relacionadas: [US-PROVEEDORES-001, US-PROVEEDORES-002, US-PROVEEDORES-004, US-PROG-DETALLE-002]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["/programs/:code"]
 ---
 
