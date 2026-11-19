@@ -111,6 +111,6 @@ Característica: Detalle de un requisito en la web
 ## Fuera de alcance
 - Cambiar el título, la prioridad, las etiquetas o la descripción, y guardar esos cambios: EP-REQ-EDICION.
 - El flujo de aprobación del detalle y sus botones de transición: EP-REQ-FLUJO.
-- Enlazar o desenlazar casos de prueba desde el detalle y la matriz de trazabilidad: EP-REQ-TRAZA.
+- Enlazar o desenlazar casos de prueba con un requisito (la API y la matriz de trazabilidad): EP-REQ-TRAZA. El panel de detalle solo muestra los casos enlazados.
 - Los casos de prueba, sus ejecuciones y sus evidencias, y las no conformidades en su propia pantalla: las épicas de Verificación y de No conformidades, todavía sin escribir.
 - El árbol, su búsqueda y su orden desde los que se abre el detalle: esta misma épica (EP-REQ-ARBOL), en las historias de la web sobre el árbol y la búsqueda.
