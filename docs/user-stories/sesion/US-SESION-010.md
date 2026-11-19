@@ -5,7 +5,7 @@ epica: EP-SESION
 titulo: "[Móvil] Llevar al acceso cuando no hay sesión o no se puede renovar"
 etiquetas: [movil]
 relacionadas: [US-SESION-007, US-SESION-009, US-SESION-011, US-LOGIN-013, US-LOGIN-016]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["/programs", "/programs/:code", "/nc", "/profile"]
 ---
 

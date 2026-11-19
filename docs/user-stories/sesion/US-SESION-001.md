@@ -5,7 +5,7 @@ epica: EP-SESION
 titulo: "[API] Renovar la sesión con el refreshToken"
 etiquetas: [api]
 relacionadas: [US-SESION-002, US-SESION-003, US-SESION-004, US-SESION-006, US-LOGIN-001, US-LOGIN-004]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["POST /api/auth/refresh"]
 ---
 

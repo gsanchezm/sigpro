@@ -5,7 +5,7 @@ epica: EP-SESION
 titulo: "[API] Identificar la sesión en GET /api/auth/me y rechazar las peticiones sin token válido"
 etiquetas: [api]
 relacionadas: [US-SESION-001, US-SESION-002, US-SESION-004, US-LOGIN-001, US-MFA-001]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["GET /api/auth/me"]
 ---
 

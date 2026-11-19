@@ -5,7 +5,7 @@ epica: EP-SESION
 titulo: "[Móvil] Renovar la sesión sin cambiar de pantalla cuando caduca el acceso"
 etiquetas: [movil]
 relacionadas: [US-SESION-001, US-SESION-004, US-SESION-006, US-SESION-010, US-LOGIN-013]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["/programs", "/nc"]
 ---
 

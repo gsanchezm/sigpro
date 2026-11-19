@@ -5,7 +5,7 @@ epica: EP-SESION
 titulo: "[Web] Llevar al acceso cuando no hay sesión o no se puede renovar"
 etiquetas: [web]
 relacionadas: [US-SESION-002, US-SESION-006, US-SESION-008, US-SESION-010, US-LOGIN-007, US-LOGIN-008]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["/programs", "/programs/:code", "/nc", "/profile"]
 ---
 

@@ -5,7 +5,7 @@ epica: EP-SESION
 titulo: "[API] Rechazar la renovación de una cuenta bloqueada o desactivada"
 etiquetas: [api]
 relacionadas: [US-SESION-001, US-SESION-003, US-SESION-005, US-LOGIN-002, US-LOGIN-003]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["POST /api/auth/refresh"]
 ---
 

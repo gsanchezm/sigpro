@@ -5,7 +5,7 @@ epica: EP-SESION
 titulo: "[API] Duración de los tokens: 900 segundos de acceso y 7 días o 12 horas de renovación"
 etiquetas: [api]
 relacionadas: [US-SESION-001, US-SESION-003, US-SESION-005, US-LOGIN-001, US-MFA-001]
-verificacion: codigo
+verificacion: ejecutada
 ---
 
 ## Historia

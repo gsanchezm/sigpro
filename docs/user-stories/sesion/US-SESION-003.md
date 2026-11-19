@@ -5,7 +5,7 @@ epica: EP-SESION
 titulo: "[API] Rechazar la renovación con un token que no sirve o con un cuerpo inválido"
 etiquetas: [api]
 relacionadas: [US-SESION-001, US-SESION-002, US-SESION-004, US-MFA-001, US-LOGIN-004]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["POST /api/auth/refresh"]
 ---
 
