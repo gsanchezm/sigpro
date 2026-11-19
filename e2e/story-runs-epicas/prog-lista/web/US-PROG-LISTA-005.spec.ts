@@ -1,18 +1,20 @@
 import { resetTenants, TENANT_A } from '../../../story-runs/support/prepare';
-import { ACTION, isVisible, quoted, runSteps, textOf, waitUntil } from '../../support/browser';
-import { check, cell, conclude, preparationFailedWeb, strict } from '../../support/checks';
+import { ACTION, isVisible, quoted, textOf, waitUntil } from '../../support/browser';
+import { cell, check, conclude, preparationFailedWeb, strict } from '../../support/checks';
 import { defineBrowserRows, type BrowserRowHandler } from '../../core/framework';
 import {
+  actionFailed,
   actionMissing,
-  afterListResponse,
   ariaSortOf,
   cardOf,
   cellsOf,
   columnIndex,
   countCheck,
   headerOf,
+  interactAndAwait,
   type Layout,
   listedCodes,
+  onWeb,
   openPath,
   recountText,
   rowOf,
@@ -32,7 +34,20 @@ const SENSE: ReadonlyMap<string, { readonly aria: string; readonly arrow: string
 /** Valor de una celda de la historia: «Activo» (con comillas) o un valor tal cual. */
 const plainOf = (text: string): string => (text.startsWith('«') ? quoted(text) : text);
 
+/** Qué se mira en la tarjeta del responsive: el estado (badge) o la fecha de inicio. */
+const DATO: ReadonlyMap<string, 'estado' | 'fecha'> = new Map<string, 'estado' | 'fecha'>([
+  ['el estado', 'estado'],
+  ['la fecha de inicio', 'fecha'],
+]);
+
 const DESKTOP: Layout = 'escritorio';
+
+/**
+ * Aviso de conflicto para las filas de «Código»: la Regla dice que pulsar la cabecera ordena de forma ascendente, y el Ejemplo y la
+ * app (la columna ya está activa en ascendente por defecto) dan descendente tras la primera pulsación.
+ */
+const CONFLICT_NOTE =
+  'Con el orden por defecto (código ascendente) la columna «Código» ya es la activa: pulsarla una vez la ordena de forma descendente y dos veces, de forma ascendente (la Regla de la historia se corrigió durante la ejecución para decirlo).';
 
 // --- Esquema 1: la fila de un programa muestra sus datos en cada columna -----------------------------------------------------
 
@@ -62,19 +77,23 @@ const sortByHeader: BrowserRowHandler = async (row, { page }) => {
   const expected = `la primera fila es ${first} y la flecha de la columna marca el sentido ${senseText}`;
   const opened = await signIn(page, DESKTOP);
   if (opened) return preparationFailedWeb(expected, opened);
-  for (let index = 0; index < times; index += 1) {
-    const clicked = await runSteps([[`pulsar la cabecera ${column}`, () => afterListResponse(page, () => headerOf(page, column).getByRole('button').click(ACTION))]]);
-    if (clicked) return actionMissing(expected, clicked);
+  for (let index = 1; index <= times; index += 1) {
+    const clicked = await interactAndAwait(page, headerOf(page, column).getByRole('button'), `pulsar la cabecera ${column}`, (element) => element.click(ACTION), index);
+    if (clicked !== undefined) return actionFailed(expected, clicked);
   }
   // La respuesta del último clic ya llegó; se espera a que la tabla refleje ese orden (cabecera y primera fila)
   await waitUntil(async () => (await ariaSortOf(page, column)) === sense.aria && (await listedCodes(page, DESKTOP))[0] === first);
   const observedFirst = (await listedCodes(page, DESKTOP))[0];
   const observedAria = await ariaSortOf(page, column);
   const glyph = (await textOf(headerOf(page, column).getByRole('button'))) ?? '';
-  return conclude([
-    check(observedFirst === first, `la primera fila es ${first}`, `la primera fila es ${observedFirst ?? '(ninguna)'}`),
-    check(observedAria === sense.aria && glyph.includes(sense.arrow), `la flecha de ${column} marca el sentido ${senseText}`, `la cabecera de ${column} tiene aria-sort ${observedAria ?? '(sin atributo)'} y la flecha «${glyph.trim()}»`),
-  ]);
+  const conflict = column === 'Código';
+  return conclude(
+    [
+      check(observedFirst === first, `la primera fila es ${first}`, `la primera fila es ${observedFirst ?? '(ninguna)'}`),
+      check(observedAria === sense.aria && glyph.includes(sense.arrow), `la flecha de ${column} marca el sentido ${senseText}`, `la cabecera de ${column} tiene aria-sort ${observedAria ?? '(sin atributo)'} y la flecha «${glyph.trim()}»`),
+    ],
+    conflict ? { note: CONFLICT_NOTE } : {},
+  );
 };
 
 // --- Esquema 3: la lista entra ordenada por código ascendente ----------------------------------------------------------------
@@ -106,13 +125,15 @@ const defaultOrder: BrowserRowHandler = async (row, { page }) => {
 const cardField: BrowserRowHandler = async (row, { page }) => {
   await resetTenants([TENANT_A]);
   const dato = cell(row, 'dato');
+  const kind = strict('dato', DATO, dato);
   const value = plainOf(cell(row, 'valor'));
   const expected = `la tarjeta muestra ${dato} como ${value}`;
   const opened = await signIn(page, 'responsive');
   if (opened) return preparationFailedWeb(expected, opened);
   const card = cardOf(page, 'PRG-001');
+  await waitUntil(() => isVisible(card));
   const seen = await isVisible(card.getByText(value, { exact: true }));
-  return conclude([check(seen, expected, seen ? `la tarjeta muestra ${value}` : `la tarjeta de PRG-001 no muestra ${value}`)]);
+  return conclude([check(seen, expected, seen ? `la tarjeta muestra ${value} (${kind})` : `la tarjeta de PRG-001 no muestra ${value} (${kind})`)]);
 };
 
 defineBrowserRows({
@@ -120,9 +141,9 @@ defineBrowserRows({
   surface: 'web',
   tenants: [TENANT_A],
   handlers: new Map<number, BrowserRowHandler>([
-    [1, rowValue],
-    [2, sortByHeader],
-    [3, defaultOrder],
-    [4, cardField],
+    [1, onWeb(rowValue)],
+    [2, onWeb(sortByHeader)],
+    [3, onWeb(defaultOrder)],
+    [4, onWeb(cardField)],
   ]),
 });

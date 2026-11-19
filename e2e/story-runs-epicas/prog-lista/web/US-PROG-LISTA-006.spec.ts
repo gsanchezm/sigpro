@@ -1,18 +1,21 @@
 import type { Page } from '@playwright/test';
 import { resetTenants, TENANT_A } from '../../../story-runs/support/prepare';
-import { ACTION, quoted, runSteps, waitUntil } from '../../support/browser';
+import { ACTION, quoted, waitUntil } from '../../support/browser';
 import { cell, check, conclude, preparationFailedWeb, strict } from '../../support/checks';
+
 import { defineBrowserRows, type BrowserRowHandler } from '../../core/framework';
 import {
+  actionFailed,
   actionMissing,
-  afterListResponse,
   buttonState,
   codesOf,
   countCheck,
+  interactAndAwait,
   LAYOUTS,
   listCheck,
   listedCodes,
   nextButton,
+  onWeb,
   openPath,
   pageButton,
   prevButton,
@@ -51,8 +54,8 @@ const nextPage: BrowserRowHandler = async (row, { page }) => {
   const opened = await signIn(page, layout);
   if (opened) return preparationFailedWeb(expected, opened);
   for (let clicks = 0; clicks < times; clicks += 1) {
-    const clicked = await runSteps([['pulsar «Página siguiente»', () => afterListResponse(page, () => nextButton(page).click(ACTION))]]);
-    if (clicked) return actionMissing(expected, clicked);
+    const clicked = await interactAndAwait(page, nextButton(page), 'pulsar «Página siguiente»', (element) => element.click(ACTION), clicks + 1);
+    if (clicked !== undefined) return actionFailed(expected, clicked);
     // Cada clic avanza una página sobre la que ya se ve: se espera a su primera fila antes del siguiente
     await waitUntil(async () => (await listedCodes(page, layout))[0] === firstOfPage(clicks + 2));
   }
@@ -68,11 +71,11 @@ const pageNumber: BrowserRowHandler = async (row, { page }) => {
   const expected = `la lista muestra desde ${cell(row, 'primera')} hasta ${cell(row, 'ultima')} y «Página anterior» está ${cell(row, 'anterior')}`;
   const opened = await signIn(page, 'escritorio');
   if (opened) return preparationFailedWeb(expected, opened);
-  const pressed = await runSteps([[`pulsar el número ${cell(row, 'pagina')} de la paginación`, () => afterListResponse(page, () => pageButton(page, Number(cell(row, 'pagina'))).click(ACTION))]]);
-  if (pressed) return actionMissing(expected, pressed);
+  const number = Number(cell(row, 'pagina'));
+  const pressed = await interactAndAwait(page, pageButton(page, number), `pulsar el número ${number} de la paginación`, (element) => element.click(ACTION));
+  if (pressed !== undefined) return actionFailed(expected, pressed);
   const shown = await waitForList(page, 'escritorio', expectedCodes);
-  const anterior = strict('anterior', ENABLED, cell(row, 'anterior'));
-  return conclude([listCheck(shown.codes, expectedCodes), await buttonState(prevButton(page), anterior, 'Página anterior')]);
+  return conclude([listCheck(shown.codes, expectedCodes), await buttonState(prevButton(page), strict('anterior', ENABLED, cell(row, 'anterior')), 'Página anterior')]);
 };
 
 // --- Esquema 3: los botones de página se deshabilitan en los extremos -------------------------------------------------------
@@ -115,9 +118,9 @@ defineBrowserRows({
   surface: 'web',
   tenants: [TENANT_A],
   handlers: new Map<number, BrowserRowHandler>([
-    [1, nextPage],
-    [2, pageNumber],
-    [3, edgeButtons],
-    [4, addressPage],
+    [1, onWeb(nextPage)],
+    [2, onWeb(pageNumber)],
+    [3, onWeb(edgeButtons)],
+    [4, onWeb(addressPage)],
   ]),
 });

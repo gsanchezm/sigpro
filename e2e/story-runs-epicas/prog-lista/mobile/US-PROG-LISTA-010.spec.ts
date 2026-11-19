@@ -1,12 +1,10 @@
 import type { Page } from '@playwright/test';
 import { resetTenants, TENANT_A } from '../../../story-runs/support/prepare';
-import { ACTION, isVisible, runSteps, textOf, waitUntil } from '../../support/browser';
-
+import { ACTION, isVisible, textOf, waitUntil } from '../../support/browser';
 import { cell, check, conclude, preparationFailedWeb, strict } from '../../support/checks';
 import { defineBrowserRows, type BrowserRowHandler } from '../../core/framework';
 import {
-  actionMissing,
-  afterListResponse,
+  actionFailed,
   cardCount,
   codesOf,
   countCheck,
@@ -15,6 +13,7 @@ import {
   emptyBlock,
   errorAlert,
   failPrograms,
+  interactAndAwait,
   listCheck,
   listedCodes,
   loadingState,
@@ -27,6 +26,7 @@ import {
   statusChoice,
   strictSeen,
   waitForList,
+  type Blocked,
 } from './common';
 
 // US-PROG-LISTA-010 — Estados de carga, vacío y error de la lista de programas en la app móvil (web de Expo a 390 px). Preparación de
@@ -42,14 +42,18 @@ const ESPERA: ReadonlyMap<string, number> = new Map<string, number>([
 /** La respuesta que la historia hace fallar: solo «un error 500» (la prueba responde 500 a la petición). */
 const FAILED_RESPONSE: ReadonlyMap<string, number> = new Map<string, number>([['un error 500', 500]]);
 
-/** Filtros de la historia que dejan la lista sin coincidencias (un texto, o un estado y un texto). */
-const EMPTY_FILTERS: ReadonlyMap<string, (page: Page) => Promise<void>> = new Map<string, (page: Page) => Promise<void>>([
-  ['escribe zzzz-no-existe en «Buscar programas»', (page) => afterListResponse(page, () => searchBox(page).fill('zzzz-no-existe', ACTION))],
+/** Filtros de la historia que dejan la lista sin coincidencias (un texto, o un estado y un texto). Cada paso espera su respuesta. */
+const EMPTY_FILTERS: ReadonlyMap<string, (page: Page) => Promise<Blocked | undefined>> = new Map<string, (page: Page) => Promise<Blocked | undefined>>([
+  [
+    'escribe zzzz-no-existe en «Buscar programas»',
+    (page) => interactAndAwait(page, searchBox(page), 'escribir «zzzz-no-existe» en «Buscar programas»', (element) => element.fill('zzzz-no-existe', ACTION)),
+  ],
   [
     'elige «Cancelado» en el grupo «Estado» y escribe radar en «Buscar programas»',
     async (page) => {
-      await afterListResponse(page, () => statusChoice(page, 'Cancelado').click(ACTION));
-      await afterListResponse(page, () => searchBox(page).fill('radar', ACTION));
+      const chosen = await interactAndAwait(page, statusChoice(page, 'Cancelado'), 'elegir «Cancelado» en el grupo «Estado»', (element) => element.click(ACTION));
+      if (chosen !== undefined) return chosen;
+      return interactAndAwait(page, searchBox(page), 'escribir «radar» en «Buscar programas»', (element) => element.fill('radar', ACTION));
     },
   ],
 ]);
@@ -98,8 +102,8 @@ const emptyFilter: BrowserRowHandler = async (row, { page }) => {
   const expected = 've el título «Sin programas», el mensaje «Ningún programa coincide con los filtros aplicados.» y el botón «Limpiar filtros»';
   const opened = await signIn(page);
   if (opened) return preparationFailedWeb(expected, opened);
-  const applied = await runSteps([[`aplicar ${cell(row, 'filtro')}`, () => apply(page)]]);
-  if (applied) return actionMissing(expected, applied);
+  const applied = await apply(page);
+  if (applied !== undefined) return actionFailed(expected, applied);
   await waitUntil(() => isVisible(emptyBlock(page)));
   const block = emptyBlock(page);
   return conclude([
@@ -125,16 +129,19 @@ const failedFirst: BrowserRowHandler = async (row, { page }) => {
   const seenAlert = await seenCheck(alert, 'el aviso «No se pudieron cargar los programas»', 'el aviso');
   const seenRetry = await seenCheck(alert.getByRole('button', { name: 'Reintentar', exact: true }), 'el botón «Reintentar»', 'el botón');
   const cardsBefore = await cardCount(page);
-  const pressed = await runSteps([['pulsar «Reintentar»', () => afterListResponse(page, () => alert.getByRole('button', { name: 'Reintentar', exact: true }).click(ACTION))]]);
-  if (pressed) return actionMissing(expected, pressed);
+  const pressed = await interactAndAwait(page, alert.getByRole('button', { name: 'Reintentar', exact: true }), 'pulsar «Reintentar»', (element) => element.click(ACTION), 1);
+  if (pressed !== undefined) return actionFailed(expected, pressed);
   const shown = await waitForList(page, FIRST_TEN, '1–10 de 24');
-  return conclude([
-    seenAlert,
-    seenRetry,
-    check(cardsBefore === 0, 'ninguna tarjeta', `${cardsBefore} tarjetas`),
-    listCheck(shown.codes, FIRST_TEN),
-    countCheck(shown.count, '1–10 de 24'),
-  ], { note: DIRECT_APPROXIMATION });
+  return conclude(
+    [
+      seenAlert,
+      seenRetry,
+      check(cardsBefore === 0, 'ninguna tarjeta', `${cardsBefore} tarjetas`),
+      listCheck(shown.codes, FIRST_TEN),
+      countCheck(shown.count, '1–10 de 24'),
+    ],
+    { note: DIRECT_APPROXIMATION },
+  );
 };
 
 // --- Esquema 4: un fallo al pedir más programas conserva los vistos y ofrece reintentar ----------------------------------
@@ -147,8 +154,8 @@ const failedMore: BrowserRowHandler = async (row, { page }) => {
   if (opened) return preparationFailedWeb(expected, opened);
   // La página 2 falla la primera vez; la página 1 ya está cargada
   await failPrograms(page, 1, (url) => url.searchParams.get('page') === '2');
-  const pressedMore = await runSteps([['pulsar «Cargar más»', () => afterListResponse(page, () => loadMoreButton(page).click(ACTION))]]);
-  if (pressedMore) return actionMissing(expected, pressedMore);
+  const pressedMore = await interactAndAwait(page, loadMoreButton(page), 'pulsar «Cargar más»', (element) => element.click(ACTION), 1);
+  if (pressedMore !== undefined) return actionFailed(expected, pressedMore);
   const alert = errorAlert(page);
   await waitUntil(() => isVisible(alert));
   const keptCodes = await listedCodes(page);
@@ -156,8 +163,8 @@ const failedMore: BrowserRowHandler = async (row, { page }) => {
   const seenRetry = await seenCheck(alert.getByRole('button', { name: 'Reintentar', exact: true }), 'el botón «Reintentar»', 'el botón');
   const moreShown = await strictSeen(loadMoreButton(page));
   const moreHidden = check(!moreShown, '«Cargar más» no aparece', moreShown ? '«Cargar más» aparece' : '«Cargar más» no aparece');
-  const pressedRetry = await runSteps([['pulsar «Reintentar»', () => afterListResponse(page, () => alert.getByRole('button', { name: 'Reintentar', exact: true }).click(ACTION))]]);
-  if (pressedRetry) return actionMissing(expected, pressedRetry);
+  const pressedRetry = await interactAndAwait(page, alert.getByRole('button', { name: 'Reintentar', exact: true }), 'pulsar «Reintentar»', (element) => element.click(ACTION), 2);
+  if (pressedRetry !== undefined) return actionFailed(expected, pressedRetry);
   const shown = await waitForList(page, FIRST_TWENTY, '1–20 de 24');
   return conclude([
     listCheck(keptCodes, FIRST_TEN),

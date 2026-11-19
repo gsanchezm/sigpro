@@ -1,15 +1,16 @@
 import type { Page } from '@playwright/test';
 import { resetTenants, TENANT_A } from '../../../story-runs/support/prepare';
-import { ACTION, attrOf, quoted, runSteps, valueOf, waitUntil } from '../../support/browser';
+import { ACTION, attrOf, quoted, valueOf, waitUntil } from '../../support/browser';
 import { cell, check, conclude, preparationFailedWeb, strict } from '../../support/checks';
 import { defineBrowserRows, type BrowserRowHandler } from '../../core/framework';
 import {
+  actionFailed,
   actionMissing,
-  afterListResponse,
   clearButton,
   codesOf,
   countCheck,
   DIRECT_APPROXIMATION,
+  interactAndAwait,
   listCheck,
   listedCodes,
   loadMoreButton,
@@ -22,13 +23,14 @@ import {
   strictSeen,
   valueCheck,
   waitForList,
+  type Blocked,
 } from './common';
 
 // US-PROG-LISTA-008 — Ver la lista de programas en tarjetas con búsqueda, estado y «Cargar más» (app móvil, web de Expo a 390 px).
 // Preparación de cada fila: reinicio de alumno01 con el token de su administrador; gestor@sigpro.test inicia sesión en la app con
 // alumno01 en «Tenant de trabajo» y llega a /programs. El veredicto vale para Expo web, no para iOS ni Android nativo.
 
-/** Recuento de la primera carga y de cada «Cargar más»: diez programas por carga, sobre 24. */
+/** Diez programas por carga, sobre 24. */
 const TOTAL = 24;
 const PER_LOAD = 10;
 
@@ -38,10 +40,10 @@ const BUTTON: ReadonlyMap<string, boolean> = new Map<string, boolean>([
   ['no aparece', false],
 ]);
 
-/** Filtro de cada Esquema 5: un estado en el grupo «Estado» o un texto en el buscador. */
-const FILTERS: ReadonlyMap<string, (page: Page) => Promise<void>> = new Map<string, (page: Page) => Promise<void>>([
-  ['«En pausa» en el grupo «Estado»', (page) => afterListResponse(page, () => statusChoice(page, 'En pausa').click(ACTION))],
-  ['el texto gestión en «Buscar programas»', (page) => afterListResponse(page, () => searchBox(page).fill('gestión', ACTION))],
+/** Filtro de cada Esquema 5: un estado en el grupo «Estado» o un texto en el buscador (cada uno espera su respuesta). */
+const FILTERS: ReadonlyMap<string, (page: Page) => Promise<Blocked | undefined>> = new Map<string, (page: Page) => Promise<Blocked | undefined>>([
+  ['«En pausa» en el grupo «Estado»', (page) => interactAndAwait(page, statusChoice(page, 'En pausa'), 'elegir «En pausa» en el grupo «Estado»', (element) => element.click(ACTION))],
+  ['el texto gestión en «Buscar programas»', (page) => interactAndAwait(page, searchBox(page), 'escribir «gestión» en «Buscar programas»', (element) => element.fill('gestión', ACTION))],
 ]);
 
 // --- Esquema 1: «Cargar más» añade los programas siguientes -----------------------------------------------------------------
@@ -56,8 +58,8 @@ const loadMore: BrowserRowHandler = async (row, { page }) => {
   const opened = await signIn(page);
   if (opened) return preparationFailedWeb(expected, opened);
   for (let clicks = 1; clicks <= times; clicks += 1) {
-    const clicked = await runSteps([['pulsar «Cargar más»', () => afterListResponse(page, () => loadMoreButton(page).click(ACTION))]]);
-    if (clicked) return actionMissing(expected, clicked);
+    const clicked = await interactAndAwait(page, loadMoreButton(page), 'pulsar «Cargar más»', (element) => element.click(ACTION), clicks);
+    if (clicked !== undefined) return actionFailed(expected, clicked);
     // Tras cada carga se ven diez programas más (sin pasar de 24): se espera a que estén en pantalla
     await waitUntil(async () => (await listedCodes(page)).length === Math.min(PER_LOAD * (clicks + 1), TOTAL));
   }
@@ -83,8 +85,8 @@ const statusFilter: BrowserRowHandler = async (row, { page }) => {
   const expected = `ve ${cell(row, 'codigos')} y el recuento ${cell(row, 'recuento')}`;
   const opened = await signIn(page);
   if (opened) return preparationFailedWeb(expected, opened);
-  const chosen = await runSteps([[`elegir ${cell(row, 'estado')} en el grupo «Estado»`, () => afterListResponse(page, () => statusChoice(page, label).click(ACTION))]]);
-  if (chosen) return actionMissing(expected, chosen);
+  const chosen = await interactAndAwait(page, statusChoice(page, label), `elegir ${cell(row, 'estado')} en el grupo «Estado»`, (element) => element.click(ACTION));
+  if (chosen !== undefined) return actionFailed(expected, chosen);
   const shown = await waitForList(page, expectedCodes, expectedCount);
   return conclude([listCheck(shown.codes, expectedCodes), countCheck(shown.count, expectedCount)]);
 };
@@ -98,8 +100,8 @@ const searchText: BrowserRowHandler = async (row, { page }) => {
   const expected = `ve ${cell(row, 'codigos')} y el recuento ${cell(row, 'recuento')}`;
   const opened = await signIn(page);
   if (opened) return preparationFailedWeb(expected, opened);
-  const typed = await runSteps([[`escribir ${cell(row, 'texto')} en «Buscar programas»`, () => afterListResponse(page, () => searchBox(page).fill(cell(row, 'texto'), ACTION))]]);
-  if (typed) return actionMissing(expected, typed);
+  const typed = await interactAndAwait(page, searchBox(page), `escribir ${cell(row, 'texto')} en «Buscar programas»`, (element) => element.fill(cell(row, 'texto'), ACTION));
+  if (typed !== undefined) return actionFailed(expected, typed);
   const shown = await waitForList(page, expectedCodes, expectedCount);
   return conclude([listCheck(shown.codes, expectedCodes), countCheck(shown.count, expectedCount)]);
 };
@@ -127,10 +129,10 @@ const clearAll: BrowserRowHandler = async (row, { page }) => {
   const expected = 've el recuento «1–10 de 24» y ningún filtro aplicado';
   const opened = await signIn(page);
   if (opened) return preparationFailedWeb(expected, opened);
-  const prepared = await runSteps([[`aplicar ${cell(row, 'filtro')}`, () => apply(page)]]);
-  if (prepared) return preparationFailedWeb(expected, prepared);
-  const cleared = await runSteps([['pulsar «Limpiar filtros»', () => afterListResponse(page, () => clearButton(page).click(ACTION))]]);
-  if (cleared) return actionMissing(expected, cleared);
+  const prepared = await apply(page);
+  if (prepared !== undefined) return preparationFailedWeb(expected, prepared.message);
+  const cleared = await interactAndAwait(page, clearButton(page), 'pulsar «Limpiar filtros»', (element) => element.click(ACTION));
+  if (cleared !== undefined) return actionFailed(expected, cleared);
   await waitUntil(async () => (await recountText(page)) === '1–10 de 24');
   const count = await recountText(page);
   const search = await valueOf(searchBox(page));

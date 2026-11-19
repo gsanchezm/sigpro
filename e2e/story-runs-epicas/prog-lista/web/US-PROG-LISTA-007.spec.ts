@@ -1,21 +1,24 @@
 import { resetTenants, TENANT_A } from '../../../story-runs/support/prepare';
-import { ACTION, attrOf, isVisible, runSteps, waitUntil } from '../../support/browser';
+import { ACTION, attrOf, isVisible, waitUntil } from '../../support/browser';
 import { cell, check, conclude, preparationFailedWeb, strict } from '../../support/checks';
 import { defineBrowserRows, type BrowserRowHandler } from '../../core/framework';
 import {
-  actionMissing,
+  actionFailed,
   codesOf,
-  type Layout,
   countCheck,
   delayPrograms,
   emptyBlock,
   failPrograms,
+  interact,
+  type Layout,
   LAYOUTS,
   listCheck,
   listedCodes,
+  onWeb,
   recountText,
   signIn,
   skeletonRows,
+  strictSeen,
   typeSearch,
   visibleCheck,
   waitForList,
@@ -26,25 +29,30 @@ import {
 // de GET /api/programs los provoca la prueba DESPUÉS de entrar y ANTES de abrir la lista (así el propio inicio de sesión no consume
 // la primera petición). Solo se toca la petición GET de /api/programs.
 
-const PROGRAMS_FIRST_TEN = ['PRG-001', 'PRG-002', 'PRG-003', 'PRG-004', 'PRG-005', 'PRG-006', 'PRG-007', 'PRG-008', 'PRG-009', 'PRG-010'];
+const PROGRAMS_FIRST_TEN = codesOf('PRG-001 a PRG-010');
 const DELAY_MS = 3_000;
 
 /** Los Esquemas 1, 3 y 4 solo existen en escritorio: la celda se traduce con un mapa de un solo diseño (cualquier otro texto lanza). */
 const DESKTOP_ONLY: ReadonlyMap<string, Layout> = new Map<string, Layout>([['escritorio', 'escritorio']]);
+
+/** Celda «carga»: lo que se ve mientras espera (filas de carga y tabla ocupada). */
+const CARGA: ReadonlyMap<string, { readonly rows: string; readonly busy: string }> = new Map([
+  ['filas de carga y la tabla marcada como ocupada', { rows: 'filas de carga', busy: 'tabla marcada como ocupada' }],
+]);
 
 // --- Esquema 1: mientras llega la respuesta se ven filas de carga y después los programas --------------------------------
 
 const loadingRows: BrowserRowHandler = async (row, { page }) => {
   await resetTenants([TENANT_A]);
   const layout = strict('diseño', DESKTOP_ONLY, cell(row, 'diseno'));
-  const expected = 've filas de carga y la tabla marcada como ocupada mientras espera y, al llegar la respuesta, los programas PRG-001 a PRG-010';
+  const carga = strict('carga', CARGA, cell(row, 'carga'));
+  const expected = `ve ${cell(row, 'carga')} mientras espera y, al llegar la respuesta, los programas PRG-001 a PRG-010`;
   const opened = await signIn(page, layout);
   if (opened) return preparationFailedWeb(expected, opened);
   await delayPrograms(page, DELAY_MS);
-  // Abre /programs con la respuesta retrasada: mientras espera, deben verse las filas de carga
+  // Abre /programs con la respuesta retrasada. Se mira durante la espera (con el techo por defecto): si se ven las filas de carga, se
+  // anota el aria-busy de la tabla en ese mismo momento. Si los datos llegaron antes de verlas, la comprobación no se cumple.
   await page.goto('/programs', { timeout: 10_000 });
-  // Se mira durante la espera (con el techo por defecto): si se ven las filas de carga, se anota el aria-busy de la tabla en ese
-  // mismo momento. Si los datos llegaron antes de verlas, la comprobación no se cumple.
   const seen: { skeleton: boolean; busy?: string } = { skeleton: false };
   await waitUntil(async () => {
     if (await isVisible(skeletonRows(page))) {
@@ -55,8 +63,8 @@ const loadingRows: BrowserRowHandler = async (row, { page }) => {
   });
   const shown = await waitForList(page, layout, PROGRAMS_FIRST_TEN);
   return conclude([
-    check(seen.skeleton, 've filas de carga mientras espera', seen.skeleton ? 've filas de carga mientras espera' : 'no ve filas de carga mientras espera'),
-    check(seen.busy === 'true', 'la tabla marcada como ocupada', `la tabla tiene aria-busy ${seen.busy ?? '(sin leer)'}`),
+    check(seen.skeleton, `ve ${carga.rows} mientras espera`, seen.skeleton ? `ve ${carga.rows} mientras espera` : `no ve ${carga.rows} mientras espera`),
+    check(seen.busy === 'true', carga.busy, `la tabla tiene aria-busy ${seen.busy ?? '(sin leer)'}`),
     listCheck(shown.codes, PROGRAMS_FIRST_TEN),
   ]);
 };
@@ -69,8 +77,8 @@ const emptyFilter: BrowserRowHandler = async (row, { page }) => {
   const expected = 've el título «Sin programas», el mensaje «Ningún programa coincide con los filtros aplicados.» y el botón «Limpiar filtros»';
   const opened = await signIn(page, layout);
   if (opened) return preparationFailedWeb(expected, opened);
-  const typed = await runSteps([['escribir zzzz-no-existe en el buscador de la lista', () => typeSearch(page, layout, 'zzzz-no-existe')]]);
-  if (typed) return actionMissing(expected, typed);
+  const typed = await typeSearch(page, layout, 'zzzz-no-existe');
+  if (typed) return actionFailed(expected, typed);
   await waitUntil(() => isVisible(emptyBlock(page)));
   const block = emptyBlock(page);
   return conclude([
@@ -92,11 +100,16 @@ const failedList: BrowserRowHandler = async (row, { page }) => {
   await page.goto('/programs', { timeout: 10_000 });
   const alert = page.getByRole('alert').filter({ hasText: 'No se pudieron cargar los programas' });
   await waitUntil(() => isVisible(alert));
-  const shown = await listedCodes(page, 'escritorio');
+  const shown = await listedCodes(page, layout);
+  const busy = await attrOf(page.getByRole('table'), 'aria-busy');
+  const emptyShown = await strictSeen(emptyBlock(page));
   return conclude([
     await visibleCheck(alert, 'el aviso «No se pudieron cargar los programas»'),
     await visibleCheck(alert.getByRole('button', { name: 'Reintentar', exact: true }), 'el botón «Reintentar»'),
     listCheck(shown, []),
+    // Un listado vacío no es un error: la tabla no está cargando y no se ve el bloque «Sin programas»
+    check(busy === 'false', 'la tabla no está cargando', `la tabla tiene aria-busy ${busy ?? '(sin leer)'}`),
+    check(!emptyShown, 'no se ve el bloque «Sin programas» (es un error, no un listado vacío)', emptyShown ? 'se ve el bloque «Sin programas»' : 'no se ve el bloque «Sin programas»'),
   ]);
 };
 
@@ -113,15 +126,14 @@ const retryRecovers: BrowserRowHandler = async (row, { page }) => {
   await page.goto('/programs', { timeout: 10_000 });
   const alert = page.getByRole('alert').filter({ hasText: 'No se pudieron cargar los programas' });
   await waitUntil(() => isVisible(alert));
-  const retry = alert.getByRole('button', { name: 'Reintentar', exact: true });
-  const pressed = await runSteps([['pulsar «Reintentar»', () => retry.click(ACTION)]]);
-  if (pressed) return actionMissing(expected, pressed);
   // El aviso «Datos recargados» dura 3 s: se mira en cuanto se pulsa, antes de esperar a la respuesta
+  const pressed = await interact(page, alert.getByRole('button', { name: 'Reintentar', exact: true }), 'pulsar «Reintentar»', (element) => element.click(ACTION));
+  if (pressed !== undefined) return actionFailed(expected, pressed);
   const toast = await waitUntil(() => isVisible(page.getByText('Datos recargados', { exact: true })), 2_000);
-  const shown = await waitForList(page, 'escritorio', PROGRAMS_FIRST_TEN, '1–10 de 24');
+  const shown = await waitForList(page, layout, PROGRAMS_FIRST_TEN, '1–10 de 24');
   return conclude([
     check(toast.reached, 've el aviso «Datos recargados»', toast.reached ? 've el aviso «Datos recargados»' : 'no ve el aviso «Datos recargados»'),
-    listCheck(shown.codes, codesOf('PRG-001 a PRG-010')),
+    listCheck(shown.codes, PROGRAMS_FIRST_TEN),
     countCheck(shown.count ?? (await recountText(page)), '1–10 de 24'),
   ]);
 };
@@ -131,9 +143,9 @@ defineBrowserRows({
   surface: 'web',
   tenants: [TENANT_A],
   handlers: new Map<number, BrowserRowHandler>([
-    [1, loadingRows],
-    [2, emptyFilter],
-    [3, failedList],
-    [4, retryRecovers],
+    [1, onWeb(loadingRows)],
+    [2, onWeb(emptyFilter)],
+    [3, onWeb(failedList)],
+    [4, onWeb(retryRecovers)],
   ]),
 });

@@ -125,7 +125,11 @@ const firstProgram: ApiRowHandler = async (row) => {
     check(first !== undefined, 'un primer programa en items', first === undefined ? 'items vacío' : 'un primer programa en items'),
     ...FIRST_FIELDS.map(([cellKey, apiKey]) => textFieldCheck(first, apiKey, cell(row, cellKey), apiKey)),
     // Campos que la regla de la historia nombra y la fila no lee: deben estar presentes
-    ...PRESENT_FIELDS.map((key) => check(field(first, key) !== undefined, `trae ${key}`, field(first, key) === undefined ? `sin ${key}` : `trae ${key}`)),
+    ...PRESENT_FIELDS.map((key) => {
+      const value = field(first, key);
+      const present = value !== undefined && value !== null;
+      return check(present, `trae ${key}`, present ? `trae ${key}` : `sin ${key}`);
+    }),
   ]);
 };
 

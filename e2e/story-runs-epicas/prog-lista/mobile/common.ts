@@ -3,12 +3,16 @@ import { DEMO, TENANT_A } from '../../../story-runs/support/prepare';
 import { MOVIL_PROGRAMS_TESTIDS, MOVIL_TESTIDS, PROGRAMAS_TESTIDS } from '../../../../packages/shared/src/testids';
 import { ACTION, CEILING_MS, isVisible, runSteps, safe, waitUntil } from '../../support/browser';
 import { check, sleep, type Check } from '../../support/checks';
-import { outcome, type BrowserRowHandler, type Outcome } from '../../core/framework';
+import type { BrowserRowHandler } from '../../core/framework';
 
 // Piezas comunes de las filas de la app móvil de EP-PROG-LISTA. La app se ejecuta como web de Expo a 390 × 844: NO es iOS ni
 // Android nativo. Todo localizador es de ROL (excluye lo oculto) salvo donde la pantalla no ofrece otro rastro (el recuento, el
 // bloque vacío, el estado de carga y el contenedor de tarjetas llevan su id de testids.ts). Las lecturas de presencia son estrictas:
 // si un elemento es ambiguo lanzan, y un fallo de lectura nunca cuenta como «no aparece» ni «ninguna tarjeta».
+// Las acciones sobre elementos usan el envoltorio de la web (`interact`/`interactAndAwait`): si fallan, la nota distingue «no existe»
+// de «existe pero otro elemento lo tapa».
+
+export { actionFailed, actionMissing, codesOf, interact, interactAndAwait, type Blocked } from '../web/common';
 
 /** Salvedad de plataforma: el veredicto de una fila móvil vale para Expo web, no para iOS ni Android nativo. */
 export const EXPO_NOTE = 'El veredicto vale para Expo web (390 × 844): no se ha comprobado en iOS ni en Android nativo.';
@@ -16,9 +20,6 @@ export const EXPO_NOTE = 'El veredicto vale para Expo web (390 × 844): no se ha
 /** Aproximación declarada: abrir una dirección (carga completa de la página) no es un enlace profundo ni una navegación interna. */
 export const DIRECT_APPROXIMATION =
   'Abrir una dirección de la app se aproxima con una carga completa de la página en Expo web, que recupera la sesión guardada; en iOS o Android sería un enlace profundo o una navegación interna.';
-
-/** Un paso de la historia que la pantalla no ofrece: discrepancia (la historia manda), no error del arnés. */
-export const actionMissing = (expected: string, failure: string): Outcome => outcome(false, expected, failure, { note: 'La historia nombra un elemento que la pantalla no ofrece.' });
 
 /** Añade a cada resultado de la fila la salvedad de plataforma. */
 export const onExpoWeb =
@@ -58,6 +59,14 @@ export const errorAlert = (page: Page): Locator => page.getByRole('alert').filte
 
 // --- Sesión y espera ------------------------------------------------------------------------------------------------------
 
+/** La pantalla de programas está montada y ya no muestra «Cargando…» (la primera página llegó). */
+export const waitSettled = async (page: Page): Promise<boolean> =>
+  (await waitUntil(async () => (await isVisible(programsHeading(page))) && !(await isVisible(loadingState(page))))).reached;
+
+const settledOrThrow = async (page: Page): Promise<void> => {
+  if (!(await waitSettled(page))) throw new Error('la lista de programas no aparece');
+};
+
 /** Inicio de sesión en la app (sin inyectar nada): alumno01 en «Tenant de trabajo», gestor@sigpro.test y llegar a /programs. */
 export const signIn = (page: Page): Promise<string | undefined> =>
   runSteps([
@@ -78,42 +87,10 @@ export const openPath = (page: Page, path: string): Promise<string | undefined> 
     ['ver la lista de programas', () => settledOrThrow(page)],
   ]);
 
-/** La pantalla de programas está montada y ya no muestra «Cargando…» (la primera página llegó). */
-export const waitSettled = async (page: Page): Promise<boolean> =>
-  (await waitUntil(async () => (await isVisible(programsHeading(page))) && !(await isVisible(loadingState(page))))).reached;
-
-const settledOrThrow = async (page: Page): Promise<void> => {
-  if (!(await waitSettled(page))) throw new Error('la lista de programas no aparece');
-};
-
-/** Espera la respuesta de GET /api/programs que provoca la acción (la lista ya está al día cuando vuelve). */
-export const afterListResponse = async (page: Page, act: () => Promise<unknown>): Promise<void> => {
-  const response = page.waitForResponse((reply) => new URL(reply.url()).pathname === '/api/programs' && reply.request().method() === 'GET', { timeout: CEILING_MS }).catch(() => undefined);
-  await act();
-  await response;
-};
-
-// --- Lectura de la lista ---------------------------------------------------------------------------------------------------
+// --- Lectura de la lista --------------------------------------------------------------------------------------------------
 
 const CARD_LINK = /^PRG-\d{3} · /;
 const CODE = /^PRG-\d{3}/;
-
-/** Códigos de una celda de la historia: «(ninguno)», «(ningún programa)», un rango «PRG-001 a PRG-010» o una lista. Otra forma lanza. */
-const EMPTY_CODES: ReadonlySet<string> = new Set(['(ninguno)', '(ningún programa)']);
-const RANGE = /^(PRG-\d{3}) a (PRG-\d{3})$/;
-const CODE_ONLY = /^PRG-\d{3}$/;
-export const codesOf = (text: string): readonly string[] => {
-  if (EMPTY_CODES.has(text)) return [];
-  const range = RANGE.exec(text);
-  if (range?.[1] !== undefined && range[2] !== undefined) {
-    const from = Number(range[1].slice(4));
-    const to = Number(range[2].slice(4));
-    return Array.from({ length: to - from + 1 }, (_, index) => `PRG-${String(from + index).padStart(3, '0')}`);
-  }
-  const list = text.split(', ');
-  if (!list.every((code) => CODE_ONLY.test(code))) throw new Error(`celda sin interpretación: códigos «${text}»`);
-  return list;
-};
 
 /** Códigos de las tarjetas que se ven, en orden (el enlace de cada tarjeta empieza por el código). */
 export const listedCodes = async (page: Page): Promise<readonly string[]> => {
@@ -135,6 +112,9 @@ export const recountText = (page: Page): Promise<string | undefined> => safe(asy
 
 export const sameCodes = (actual: readonly string[], expected: readonly string[]): boolean => actual.length === expected.length && actual.every((code, index) => code === expected[index]);
 
+/** Texto de una lista de códigos para los mensajes («(ningún programa)» si está vacía). */
+const describe = (codes: readonly string[]): string => (codes.length === 0 ? '(ningún programa)' : codes.join(', '));
+
 /** Espera (con techo) a que se vean `codes` y, si se da, el recuento; devuelve lo que se ve al final. */
 export const waitForList = async (page: Page, codes: readonly string[], count?: string): Promise<{ readonly codes: readonly string[]; readonly count: string | undefined }> => {
   await waitUntil(async () => sameCodes(await listedCodes(page), codes) && (count === undefined || (await recountText(page)) === count));
@@ -143,12 +123,12 @@ export const waitForList = async (page: Page, codes: readonly string[], count?: 
 
 /** «Entonces» de la lista: los códigos visibles son exactamente los esperados (o ninguno). */
 export const listCheck = (shown: readonly string[], expected: readonly string[]): Check =>
-  check(sameCodes(shown, expected), `ve ${expected.length === 0 ? '(ningún programa)' : expected.join(', ')}`, `ve ${shown.length === 0 ? '(ningún programa)' : shown.join(', ')}`);
+  check(sameCodes(shown, expected), `ve ${describe(expected)}`, `ve ${describe(shown)}`);
 
 /** «Entonces» del recuento. */
 export const countCheck = (count: string | undefined, expected: string): Check => check(count === expected, `el recuento «${expected}»`, `el recuento «${count ?? '(sin recuento)'}»`);
 
-/** Visibilidad de un elemento: lectura fallida = no visible (la condición no se da por cumplida). */
+/** Visibilidad de un elemento con lectura estricta: una ambigüedad lanza; un elemento ausente no se ve. */
 export const seenCheck = async (target: Locator, expected: string, label: string): Promise<Check> => {
   const seen = await strictSeen(target);
   return check(seen, expected, seen ? `${label} visible` : `${label} no visible`);
