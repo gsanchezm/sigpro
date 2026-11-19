@@ -15,6 +15,9 @@ const CHANGES: ReadonlyMap<string, readonly boolean[]> = new Map<string, readonl
   ['active false y después active true', [false, true]],
 ]);
 
+/** El 423 account_locked lo fija US-LOGIN-002 (EP-LOGIN): aquí se comprueba como parte de la cadena de fallos que la fila da por hecha. */
+const LOCK_NOTE = 'El código 423 account_locked lo fija US-LOGIN-002 (EP-LOGIN); aquí se comprueba como parte de la cadena de fallos que da por hecha esta fila, no como el Esquema de bloqueo de EP-LOGIN.';
+
 const FAILURES: ReadonlyMap<string, number> = new Map<string, number>([
   ['4', 4],
   ['5', 5],
@@ -62,14 +65,22 @@ const lockedByFailures: ApiRowHandler = async (row) => {
   const session = sessionOf(started);
   if (!session) return preparationFailed(expected, 'gestor@sigpro.test inicia sesión con remember true y guarda su refreshToken', started);
   const attempts = await failGestor(count);
+  // Cada fallo anterior al último responde 401 invalid_credentials (la cuenta sigue activa); el último, el 5.º, bloquea con 423
+  const earlier = attempts.slice(0, count - 1);
+  const earlierCheck = check(
+    earlier.every((result) => result.status === 401 && errorCode(result) === 'invalid_credentials'),
+    `los fallos 1 a ${count - 1} responden 401 invalid_credentials`,
+    `los fallos 1 a ${count - 1} responden ${earlier.map((result) => attemptText(result)).join(', ')}`,
+  );
   const last = attempts[count - 1];
-  // La regla de bloqueo que la fila da por hecha: el 5.º fallo bloquea (423 account_locked) y con 4 la cuenta sigue activa
-  const blockRule =
+  const lastCheck =
     count === 5
-      ? check(last?.status === 423 && errorCode(last) === 'account_locked', 'el 5.º fallo bloquea la cuenta (423 account_locked)', `el 5.º fallo responde ${attemptText(last)}`)
-      : check(last !== undefined && last.status !== 423, 'con 4 fallos la cuenta sigue activa (el 4.º no bloquea)', `el 4.º fallo responde ${attemptText(last)}`);
+      ? check(last?.status === 423 && errorCode(last) === 'account_locked', 'el 5.º fallo responde 423 account_locked (la cuenta queda bloqueada)', `el 5.º fallo responde ${attemptText(last)}`)
+      : check(last?.status === 401 && errorCode(last) === 'invalid_credentials', 'el 4.º fallo responde 401 invalid_credentials (la cuenta sigue activa)', `el 4.º fallo responde ${attemptText(last)}`);
+  // La renovación se comprueba según su celda («respuesta»): con 4 fallos, 200; con 5, 401 invalid_token
   const renewed = await refresh(session.refreshToken, TENANT_A);
-  return conclude([blockRule, ...strict('respuesta', RESPONSES, expected)(renewed)], {
+  return conclude([earlierCheck, lastCheck, ...strict('respuesta', RESPONSES, expected)(renewed)], {
+    note: LOCK_NOTE,
     evidence: { fallos: count, respuestasDeFallo: attempts.map((result) => attemptText(result)) },
   });
 };

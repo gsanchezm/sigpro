@@ -1,8 +1,12 @@
 import { field, sessionOf, type ApiResult } from '../../../story-runs/support/api';
 import { DEMO, TENANT_A, TENANT_B, resetTenants, type Credentials } from '../../../story-runs/support/prepare';
-import { cell, check, conclude, preparationFailed, responseCheck, strict, type Check } from '../../support/checks';
+import { cell, check, conclude, preparationFailed, responseCheck, sleep, strict, type Check } from '../../support/checks';
 import { defineApiRows, type ApiRowHandler } from '../../support/framework';
-import { ACCESS_TTL_S, hasTokens, issuedSince, loginAs, noMfaCheck, patchUser, refresh, shortText, userOf, userShapeOk } from './common';
+import { ACCESS_TTL_S, hasTokens, iatOf, loginAs, noMfaCheck, patchUser, refresh, shortText, userOf, userShapeOk } from './common';
+
+/** Espera entre el inicio de sesión y la renovación: `iat` va en segundos, y sin esta espera los dos tokens podrían tener el mismo `iat`. */
+const LOGIN_TO_RENEWAL_MS = 1_100;
+const PREP_NOTE = `Preparación: se espera ${LOGIN_TO_RENEWAL_MS / 1000} s entre el inicio de sesión y la renovación, porque el iat va en segundos; así el accessToken renovado tiene un iat distinto del que dio el inicio de sesión.`;
 
 // US-SESION-001 — Renovar la sesión con el refreshToken (API). Preparación de cada fila: reinicio de alumno01 y, en la propia fila,
 // gestor@sigpro.test (u otra cuenta) inicia sesión y guarda su refreshToken. Las filas que cambian el rol lo hacen con
@@ -45,9 +49,14 @@ const renewsSession: ApiRowHandler = async (row) => {
   const started = await loginAs(strict('cuenta', ACCOUNTS, account), strict('inicio', LOGIN_MODES, mode));
   const session = sessionOf(started);
   if (!session) return preparationFailed(expected, `${account} inicia sesión ${mode}`, started);
-  const sinceMs = Date.now();
+  await sleep(LOGIN_TO_RENEWAL_MS);
+  const requestedAtMs = Date.now();
   const renewed = await refresh(session.refreshToken, TENANT_A);
   const user = userOf(renewed.body);
+  // El accessToken renovado debe tener un iat posterior al del inicio de sesión y no anterior al segundo en que se pidió la renovación
+  const loginIat = iatOf(session.accessToken);
+  const renewedIat = iatOf(field(renewed.body, 'accessToken'));
+  const issuedNow = loginIat !== undefined && renewedIat !== undefined && renewedIat > loginIat && renewedIat >= Math.floor(requestedAtMs / 1000);
   return conclude([
     responseCheck(renewed, { status: 200 }),
     check(user.email === account && user.role === role && user.tenant === TENANT_A, `trae el usuario ${account} con el rol ${role} y el tenant alumno01`, `trae el usuario ${shortText(user.email)} con el rol ${shortText(user.role)} y el tenant ${shortText(user.tenant)}`),
@@ -55,9 +64,13 @@ const renewsSession: ApiRowHandler = async (row) => {
     check(field(renewed.body, 'expiresIn') === ACCESS_TTL_S, `expiresIn ${ACCESS_TTL_S}`, `expiresIn ${shortText(field(renewed.body, 'expiresIn'))}`),
     // Reglas que la fila da por hechas: los seis campos de `user`, tokens emitidos en esta renovación y ninguna petición de segundo paso
     check(userShapeOk(user), 'user con id, name, email, role, mfa y tenant', userShapeOk(user) ? 'user con los seis campos' : 'user incompleto'),
-    check(issuedSince(field(renewed.body, 'accessToken'), sinceMs), 'el accessToken se emitió en esta renovación', 'el accessToken no es de esta renovación'),
+    check(
+      issuedNow,
+      'el accessToken se emitió en esta renovación (iat posterior al del inicio de sesión)',
+      issuedNow ? `el accessToken se emitió en esta renovación (iat ${String(renewedIat)} > ${String(loginIat)})` : `el accessToken no es de esta renovación (iat ${shortText(renewedIat)}; inicio de sesión ${shortText(loginIat)})`,
+    ),
     noMfaCheck(renewed.body),
-  ]);
+  ], { note: PREP_NOTE });
 };
 
 // --- Esquema 2: la renovación devuelve el rol actual de la cuenta -----------------------------------------------------------

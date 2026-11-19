@@ -1,8 +1,14 @@
 import { field, sessionOf, type ApiResult } from '../../../story-runs/support/api';
 import { DEMO, TENANT_A, resetTenants } from '../../../story-runs/support/prepare';
-import { cell, check, conclude, preparationFailed, responseCheck, strict, type Check } from '../../support/checks';
+import { cell, check, conclude, preparationFailed, responseCheck, sleep, strict, type Check } from '../../support/checks';
 import { defineApiRows, type ApiRowHandler } from '../../support/framework';
-import { ACCESS_TTL_S, accessAge, agedPreparationFailed, hasTokens, lifetimeOf, loadAged, loginAs, me, meUserOf, refresh, shortText, type AgedSet } from './common';
+import { ACCESS_TTL_S, accessAge, agedNotExecutable, hasTokens, iatOf, issuedAgo, lifetimeOf, loadAged, loginAs, me, meUserOf, refresh, shortText, tokensRecent, type AgedSet } from './common';
+
+/** Antigüedad máxima (segundos) de los tokens que devuelve una renovación para contar como «emitidos ahora». */
+const FRESH_MAX_S = 5;
+/** Espera antes de renovar: `iat` va en segundos, y sin ella la renovación podría llevar el mismo `iat` que el inicio de sesión. */
+const RENEW_AFTER_MS = 1_100;
+const RENEW_PREP_NOTE = `Preparación: se espera ${RENEW_AFTER_MS / 1000} s entre el inicio de sesión y la renovación, porque el iat va en segundos.`;
 
 // US-SESION-004 — Duración de los tokens (API). Esquemas 1 y 2: los plazos se leen de las propias reclamaciones (`exp - iat`) del token
 // recién emitido; no hace falta esperar nada. Esquema 3 (catorce y dieciséis minutos): NO espera dentro de la prueba. Los tokens salen
@@ -61,14 +67,32 @@ const renewalLifetimes: ApiRowHandler = async (row) => {
   const started = await loginAs(DEMO.gestor, remember);
   const session = sessionOf(started);
   if (!session) return preparationFailed(expected, `gestor@sigpro.test inicia sesión con remember ${String(remember)}`, started);
+  await sleep(RENEW_AFTER_MS);
   const renewed = await refresh(session.refreshToken, TENANT_A);
   const newAccess = textOf(renewed.body, 'accessToken');
   const newRefresh = textOf(renewed.body, 'refreshToken');
-  return conclude([
-    responseCheck(renewed, { status: 200 }),
-    check(lifetimeOf(newRefresh) === duration, `el refreshToken de la renovación dura ${duration} s desde su emisión`, `el refreshToken de la renovación dura ${shortText(lifetimeOf(newRefresh))} s`),
-    check(lifetimeOf(newAccess) === ACCESS_TTL_S, `su accessToken dura ${ACCESS_TTL_S} s desde su emisión`, `su accessToken dura ${shortText(lifetimeOf(newAccess))} s`),
-  ]);
+  // «El plazo cuenta desde esa renovación»: el refreshToken devuelto es posterior al del inicio de sesión y se emitió ahora
+  const loginIat = iatOf(session.refreshToken);
+  const renewedIat = iatOf(newRefresh);
+  const countsFromRenewal = loginIat !== undefined && renewedIat !== undefined && renewedIat > loginIat;
+  return conclude(
+    [
+      responseCheck(renewed, { status: 200 }),
+      check(lifetimeOf(newRefresh) === duration, `el refreshToken de la renovación dura ${duration} s desde su emisión`, `el refreshToken de la renovación dura ${shortText(lifetimeOf(newRefresh))} s`),
+      check(lifetimeOf(newAccess) === ACCESS_TTL_S, `su accessToken dura ${ACCESS_TTL_S} s desde su emisión`, `su accessToken dura ${shortText(lifetimeOf(newAccess))} s`),
+      check(
+        countsFromRenewal,
+        'el refreshToken renovado se emitió después del inicio de sesión (el plazo cuenta desde esta renovación)',
+        countsFromRenewal ? `iat ${String(renewedIat)} > ${String(loginIat)}` : `iat ${shortText(renewedIat)}; inicio de sesión ${shortText(loginIat)}`,
+      ),
+      check(
+        tokensRecent(renewed.body, FRESH_MAX_S),
+        `los tokens devueltos se emitieron ahora (hace como mucho ${FRESH_MAX_S} s)`,
+        `accessToken emitido hace ${shortText(issuedAgo(newAccess))} s; refreshToken emitido hace ${shortText(issuedAgo(newRefresh))} s`,
+      ),
+    ],
+    { note: RENEW_PREP_NOTE },
+  );
 };
 
 // --- Esquema 3: el accessToken caduca a los 900 segundos y el refreshToken sigue renovando -----------------------------------
@@ -99,7 +123,19 @@ const RESPONSES: ReadonlyMap<string, (result: ApiResult) => readonly Check[]> = 
     (result) => [responseCheck(result, { status: 200 }), check(meUserOf(result.body).email === DEMO.gestor.email, 'el correo gestor@sigpro.test', `el correo ${shortText(meUserOf(result.body).email)}`)],
   ],
   ['401 invalid_token', (result) => [responseCheck(result, { status: 401, code: 'invalid_token' })]],
-  ['200 con un accessToken y un refreshToken', (result) => [responseCheck(result, { status: 200 }), check(hasTokens(result.body), 'trae un accessToken y un refreshToken', hasTokens(result.body) ? 'trae accessToken y refreshToken' : 'falta accessToken o refreshToken')]],
+  [
+    '200 con un accessToken y un refreshToken',
+    (result) => [
+      responseCheck(result, { status: 200 }),
+      check(hasTokens(result.body), 'trae un accessToken y un refreshToken', hasTokens(result.body) ? 'trae accessToken y refreshToken' : 'falta accessToken o refreshToken'),
+      // La renovación con el token de dieciséis minutos devuelve tokens emitidos ahora (no los del archivo)
+      check(
+        tokensRecent(result.body, FRESH_MAX_S),
+        `los tokens devueltos se emitieron ahora (hace como mucho ${FRESH_MAX_S} s)`,
+        `accessToken emitido hace ${shortText(issuedAgo(field(result.body, 'accessToken')))} s; refreshToken emitido hace ${shortText(issuedAgo(field(result.body, 'refreshToken')))} s`,
+      ),
+    ],
+  ],
 ]);
 
 const round = (seconds: number | undefined): number | undefined => (seconds === undefined || !Number.isFinite(seconds) ? undefined : Math.round(seconds));
@@ -114,19 +150,19 @@ const agedToken: ApiRowHandler = async (row) => {
   // Reinicio de alumno01 antes de la fila (la historia lo pide); los tokens son sin estado y siguen valiendo tras él
   await resetTenants([TENANT_A]);
   const loaded = loadAged();
-  if (loaded.file === undefined) return agedPreparationFailed(expected, loaded.reason ?? 'archivo de tokens no disponible', {});
+  if (loaded.file === undefined) return agedNotExecutable(expected, loaded.reason ?? 'archivo de tokens no disponible', {});
   const set = loaded.file[rule.slot];
   const ageBefore = accessAge(set.accessToken);
   const evidence = { juego: rule.slot, emitidoEl: set.issuedAt, edadAntesSegundos: round(ageBefore) };
   if (ageBefore === undefined || !rule.holds(ageBefore)) {
-    return agedPreparationFailed(expected, `la edad medida del accessToken es ${shortText(round(ageBefore))} s; la historia exige ${rule.requirement}`, evidence);
+    return agedNotExecutable(expected, `la edad medida del accessToken es ${shortText(round(ageBefore))} s antes de la petición; la historia exige ${rule.requirement}`, evidence);
   }
   const result = await send(set);
   const ageAfter = accessAge(set.accessToken);
   const measured = { ...evidence, edadDespuesSegundos: round(ageAfter) };
   // La edad se mide también después de la petición: si el token ya no tenía la edad exigida cuando se usó, la fila no es válida
   if (ageAfter === undefined || !rule.holds(ageAfter)) {
-    return agedPreparationFailed(expected, `la petición se midió a ${shortText(round(ageAfter))} s, fuera de ${rule.requirement}`, measured);
+    return agedNotExecutable(expected, `la edad medida del accessToken es ${shortText(round(ageAfter))} s después de la petición; la historia exige ${rule.requirement}`, measured);
   }
   return conclude(strict('respuesta', RESPONSES, cell(row, 'respuesta'))(result), { evidence: measured, note: AGED_NOTE });
 };

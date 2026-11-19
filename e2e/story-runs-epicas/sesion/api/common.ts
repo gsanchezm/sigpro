@@ -3,8 +3,8 @@ import { resolve } from 'node:path';
 import { API_URL, adminToken, call, decodeJwt, field, login, sessionOf, type ApiResult, type JwtClaims, type Session } from '../../../story-runs/support/api';
 import { DEMO, TENANT_A, failedLogins, type Credentials } from '../../../story-runs/support/prepare';
 import { RESULTS_ROOT } from '../../../story-runs/support/evidence';
-import { check, preparationFailed, type Check } from '../../support/checks';
-import type { Outcome } from '../../core/framework';
+import { check, type Check } from '../../support/checks';
+import { notExecutable, type Outcome } from '../../core/framework';
 
 // Piezas comunes de los manejadores de API de EP-SESION. Todas las filas usan el tenant alumno01 salvo que la celda pida otra
 // cabecera `x-tenant`. Los tokens se leen con `decodeJwt` (sin verificar la firma): sirve para medir su plazo (`exp - iat`) y su
@@ -49,15 +49,28 @@ export const lifetimeOf = (token: string | undefined): number | undefined => {
   return claims.exp - claims.iat;
 };
 
-/** ¿Lo emitió la API desde `sinceMs`? Compara en segundos (el `iat` del token), así que no depende de si dos tokens son distintos. */
-export const issuedSince = (token: unknown, sinceMs: number): boolean => {
-  if (typeof token !== 'string') return false;
+/** `iat` (segundos desde la época) de un token de texto, o `undefined` si no se puede leer. */
+export const iatOf = (token: unknown): number | undefined => {
+  if (typeof token !== 'string') return undefined;
   const claims = claimsOf(token);
-  return claims !== undefined && typeof claims.iat === 'number' && claims.iat >= Math.floor(sinceMs / 1000);
+  return claims !== undefined && typeof claims.iat === 'number' ? claims.iat : undefined;
 };
 
 /** Antigüedad de un token en segundos, medida ahora desde su `iat`. */
 export const ageOf = (iat: number): number => Date.now() / 1000 - iat;
+
+/** Segundos desde la emisión de un token de texto (redondeados), o `undefined` si no tiene `iat` legible. */
+export const issuedAgo = (token: unknown): number | undefined => {
+  const iat = iatOf(token);
+  return iat === undefined ? undefined : Math.round(ageOf(iat));
+};
+
+/** Los accessToken y refreshToken que trae el cuerpo se emitieron hace como mucho `maxAgeSeconds` (iat reciente). */
+export const tokensRecent = (body: unknown, maxAgeSeconds: number): boolean =>
+  ['accessToken', 'refreshToken'].every((key) => {
+    const age = issuedAgo(field(body, key));
+    return age !== undefined && age <= maxAgeSeconds;
+  });
 
 /** Edad de un accessToken en segundos (o `undefined` si el token no se puede decodificar). */
 export const accessAge = (token: string): number | undefined => {
@@ -186,15 +199,10 @@ export const loadAged = (): { readonly file?: AgedFile; readonly reason?: string
 };
 
 /**
- * Preparación de una fila de antigüedad que no se cumple: los tokens del archivo no tienen la edad que la historia da por hecho. Se
- * devuelve con `preparationFailed` y la edad medida en la evidencia; la nota aclara que el problema es de la preparación, no de la app.
+ * La fila no se pudo ejecutar con los tokens del archivo: el archivo falta o no se lee, o la antigüedad medida no está en la ventana que
+ * la historia da por hecho. Es `notExecutable` (no `discrepa`): no hay una petición válida que juzgar. `reason` lleva la edad medida.
  */
-export const agedPreparationFailed = (expected: string, reason: string, evidence: Readonly<Record<string, unknown>>): Outcome => {
-  const failed = preparationFailed(expected, 'tokens con antigüedad del archivo de la fila', { status: 0, body: evidence, ms: 0 });
-  return {
-    ...failed,
-    observed: `la preparación no se cumplió: ${reason}`,
-    note: 'Fallo de la preparación de la fila (la antigüedad de los tokens no es la que la historia da por hecho), no un hallazgo sobre la app.',
-    evidence,
-  };
-};
+export const agedNotExecutable = (expected: string, reason: string, evidence: Readonly<Record<string, unknown>>): Outcome => ({
+  ...notExecutable(expected, `fila no ejecutada: ${reason}. No es un hallazgo sobre la app: los tokens con antigüedad del archivo no sirven para esta fila.`),
+  evidence,
+});

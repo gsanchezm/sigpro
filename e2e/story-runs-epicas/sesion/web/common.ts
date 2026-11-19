@@ -1,7 +1,7 @@
 import type { Locator, Page, Response } from '@playwright/test';
 import { DEMO, TENANT_A, resetTenants } from '../../../story-runs/support/prepare';
 import { ACCESO_TESTIDS, NC_DYNAMIC_TESTIDS, PROGRAMAS_DYNAMIC_TESTIDS } from '../../../../packages/shared/src/testids';
-import { ACTION, CEILING_MS, isVisible, noSessionCheck, pathOf, safe, type Step } from '../../support/browser';
+import { ACTION, CEILING_MS, isVisible, noSessionCheck, pathOf, type Step } from '../../support/browser';
 import type { Check } from '../../support/checks';
 import { outcome, type Outcome } from '../../core/framework';
 import { field } from '../../../story-runs/support/api';
@@ -69,25 +69,46 @@ export const onProgramsPage = async (page: Page): Promise<boolean> => pathOf(pag
 
 // --- Sesión guardada en el navegador -----------------------------------------------------------------------------------------
 
+/** Lo que hay guardado de la sesión: en qué almacén y qué refreshToken lleva (solo para comparar; nunca va a la evidencia). */
+export interface StoredSession {
+  readonly local: boolean;
+  readonly session: boolean;
+  readonly refreshToken: string | undefined;
+}
+
 /**
- * ¿Dónde guarda la web la sesión renovada? Con «Mantener la sesión» va a localStorage; sin ella, a sessionStorage. Se busca la entrada
- * que lleva el refreshToken sin nombrar la clave (no depende de un detalle de la app). Nunca devuelve el token.
+ * ¿Dónde guarda la app la sesión? Con «Mantener la sesión» va a localStorage; sin ella, a sessionStorage. Se busca la entrada JSON que
+ * lleva un `refreshToken` de texto, sin nombrar la clave. Devuelve `undefined` si la lectura falla: un fallo de lectura NO cuenta como
+ * «almacén vacío».
  */
-export const storedSession = (page: Page): Promise<{ readonly local: boolean; readonly session: boolean }> =>
-  safe(
-    () =>
-      page.evaluate(() => {
-        const holds = (store: Storage): boolean => {
+export const storedSession = async (page: Page): Promise<StoredSession | undefined> => {
+  try {
+    return await page.evaluate((): { readonly local: boolean; readonly session: boolean; readonly refreshToken: string | undefined } => {
+      const refreshOf = (store: Storage): string | undefined => {
+        for (const key of Object.keys(store)) {
+          const raw = store.getItem(key) ?? '';
           try {
-            return Object.keys(store).some((key) => (store.getItem(key) ?? '').includes('refreshToken'));
+            const parsed = JSON.parse(raw) as unknown;
+            if (typeof parsed === 'object' && parsed !== null && typeof (parsed as { refreshToken?: unknown }).refreshToken === 'string') {
+              return (parsed as { refreshToken: string }).refreshToken;
+            }
           } catch {
-            return false;
+            // Una entrada que no es JSON no es la sesión: se sigue buscando
           }
-        };
-        return { local: holds(window.localStorage), session: holds(window.sessionStorage) };
-      }),
-    { local: false, session: false },
-  );
+        }
+        return undefined;
+      };
+      const local = refreshOf(window.localStorage);
+      const session = refreshOf(window.sessionStorage);
+      return { local: local !== undefined, session: session !== undefined, refreshToken: local ?? session };
+    });
+  } catch {
+    return undefined;
+  }
+};
+
+/** El almacén no guarda ninguna sesión (lectura hecha y vacía). */
+export const storageEmpty = (stored: StoredSession | undefined): boolean => stored !== undefined && !stored.local && !stored.session;
 
 // --- Tráfico y rutas: lo que hace la web cuando el acceso caduca ----------------------------------------------------------------
 
@@ -99,25 +120,42 @@ export interface TrafficEntry {
   readonly injected: boolean;
 }
 
+/** Una petición que sale de la página: qué es y con qué cabecera `Authorization` (el accessToken que lleva). */
+export interface RequestEntry {
+  readonly method: string;
+  readonly path: string;
+  readonly authorization: string | undefined;
+}
+
 export interface Traffic {
   /** Respuestas de la API y del 401 simulado, en orden. */
   readonly entries: TrafficEntry[];
+  /** Peticiones que sale de la página, en orden (se cuentan por recurso, no el total). */
+  readonly requests: RequestEntry[];
   /** Rutas del documento principal por las que pasa la pestaña (también las navegaciones sin recarga). */
   readonly visited: string[];
 }
 
-/** Empieza a registrar las respuestas y las rutas visitadas. Hay que llamarla después de iniciar sesión. */
+/** Empieza a registrar las respuestas, las peticiones y las rutas visitadas. Hay que llamarla después de iniciar sesión. */
 export const watchTraffic = (page: Page): Traffic => {
   const entries: TrafficEntry[] = [];
+  const requests: RequestEntry[] = [];
   const visited: string[] = [];
+  page.on('request', (request) => {
+    requests.push({ method: request.method(), path: pathOfUrl(request.url()), authorization: request.headers()['authorization'] });
+  });
   page.on('response', (response: Response) => {
     entries.push({ method: response.request().method(), path: pathOfUrl(response.url()), status: response.status(), injected: false });
   });
   page.on('framenavigated', (frame) => {
     if (frame === page.mainFrame()) visited.push(pathOfUrl(frame.url()));
   });
-  return { entries, visited };
+  return { entries, requests, visited };
 };
+
+/** Peticiones de un método y ruta concretos desde la posición `from` del registro (cuenta por recurso). */
+export const requestsTo = (traffic: Traffic, from: number, method: string, path: string): RequestEntry[] =>
+  traffic.requests.slice(from).filter((request) => request.method === method && request.path === path);
 
 /**
  * Responde 401 `invalid_token` UNA sola vez a la primera `GET /api/nc` que haga la página (la lista de no conformidades). Las demás
@@ -145,29 +183,82 @@ export const injectNcUnauthorizedOnce = async (page: Page, traffic: Traffic): Pr
   return { fired: () => fired };
 };
 
-/** Respuesta 200 de la renovación, que se espera en segundo plano (se consume después de la acción). */
-export const refreshReply = (page: Page): Promise<unknown> =>
-  page
-    .waitForResponse((reply) => pathOfUrl(reply.url()) === '/api/auth/refresh' && reply.status() === 200, { timeout: CEILING_MS })
-    .then(async (reply): Promise<unknown> => (await reply.json()) as unknown)
-    .catch(() => undefined);
-
 /** Plazo (`exp - iat`) del refreshToken de la respuesta de renovación; `undefined` si no hay respuesta o no trae token. */
 export const renewedRefreshLifetime = (body: unknown): number | undefined => {
   const token = field(body, 'refreshToken');
   return typeof token === 'string' ? lifetimeOf(token) : undefined;
 };
 
+/** Traza que va a la evidencia: las últimas 40 respuestas (no solo unas pocas, para poder leer la secuencia completa). */
+const TRAIL_LENGTH = 40;
+
 /**
  * Secuencia que la historia exige: la lista responde 401 (simulado), la web pide la renovación (200) y repite la lista (200). Solo se
- * afirma el orden, no el número total de peticiones.
+ * afirma el orden; el recuento de cada recurso lo comprueba cada fila con `requestsTo`.
  */
 export const renewalSequence = (entries: readonly TrafficEntry[]): { readonly ok: boolean; readonly observed: string } => {
   const injectedAt = entries.findIndex((entry) => entry.injected);
   const refreshAt = entries.findIndex((entry, index) => index > injectedAt && entry.path === '/api/auth/refresh' && entry.status === 200);
   const retryAt = entries.findIndex((entry, index) => refreshAt >= 0 && index > refreshAt && entry.path === '/api/nc' && entry.method === 'GET' && entry.status === 200);
-  const trail = entries.slice(-8).map((entry) => `${entry.method} ${entry.path} ${entry.status}${entry.injected ? ' (simulado)' : ''}`).join(' → ');
+  const trail = entries.slice(-TRAIL_LENGTH).map((entry) => `${entry.method} ${entry.path} ${entry.status}${entry.injected ? ' (simulado)' : ''}`).join(' → ');
   return { ok: injectedAt >= 0 && refreshAt >= 0 && retryAt >= 0, observed: trail === '' ? '(sin peticiones registradas)' : trail };
+};
+
+/** Respuesta de la renovación que dispara el arranque (estado y cuerpo). `undefined` si no llegó respuesta a tiempo. */
+export interface RenewalReply {
+  readonly status: number;
+  readonly body: unknown;
+}
+
+/**
+ * Espera la primera respuesta de `POST /api/auth/refresh` (de cualquier estado). Hay que LLAMARLA ANTES de la acción que la provoca
+ * (recargar, abrir de nuevo): así no se pierde la respuesta si llega durante la acción.
+ */
+export const renewalResponse = (page: Page): Promise<RenewalReply | undefined> =>
+  page
+    .waitForResponse((reply) => pathOfUrl(reply.url()) === '/api/auth/refresh', { timeout: CEILING_MS })
+    .then(async (reply): Promise<RenewalReply> => {
+      const body = (await reply.json().catch(() => undefined)) as unknown;
+      return { status: reply.status(), body };
+    })
+    .catch(() => undefined);
+
+/** Marcadores de datos de la app: si alguno aparece en el texto visible de la página, la pantalla muestra datos. */
+export const DATA_MARKERS: readonly string[] = ['PRG-001', 'NC-001', 'REQ-001'];
+
+/**
+ * Vigila, desde la PRIMERA carga de cada documento, si algún marcador de datos llega a verse en la página. Se registra en un script
+ * inyectado (no depende de la interacción): así una pantalla que muestra datos un instante antes de redirigir queda registrada.
+ * Hay que llamarla ANTES de la navegación que se observa.
+ */
+export const watchDataLeaks = async (page: Page, markers: readonly string[] = DATA_MARKERS): Promise<void> => {
+  await page.addInitScript({
+    content: `(() => {
+  const markers = ${JSON.stringify(markers)};
+  const leaks = [];
+  Object.defineProperty(window, '__sigproLeaks', { value: leaks, configurable: true });
+  const scan = () => {
+    const text = document.body ? document.body.innerText : '';
+    for (const marker of markers) {
+      if (text.includes(marker) && !leaks.includes(marker)) leaks.push(marker);
+    }
+  };
+  new MutationObserver(scan).observe(document, { subtree: true, childList: true, characterData: true });
+  document.addEventListener('DOMContentLoaded', scan);
+})();`,
+  });
+};
+
+/** Marcadores que llegaron a verse en la página observada (`undefined` si la lectura falla: no cuenta como «ninguno»). */
+export const dataLeaks = async (page: Page): Promise<readonly string[] | undefined> => {
+  try {
+    return await page.evaluate((): string[] => {
+      const seen = (window as unknown as { __sigproLeaks?: string[] }).__sigproLeaks;
+      return seen === undefined ? [] : [...seen];
+    });
+  } catch {
+    return undefined;
+  }
 };
 
 // --- Preparación de la sesión y cambios de estado ----------------------------------------------------------------------------

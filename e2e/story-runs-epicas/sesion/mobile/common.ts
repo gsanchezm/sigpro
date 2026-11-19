@@ -1,9 +1,9 @@
-import type { Locator, Page } from '@playwright/test';
+import type { BrowserContext, Locator, Page } from '@playwright/test';
 import { TENANT_A, type Credentials } from '../../../story-runs/support/prepare';
 import { NC_DYNAMIC_TESTIDS, PROGRAMAS_DYNAMIC_TESTIDS } from '../../../../packages/shared/src/testids';
 import { ACTION, CEILING_MS, isVisible, pathOf } from '../../support/browser';
 import type { BrowserRowHandler, Outcome } from '../../core/framework';
-import { visibilityOf, runStepsLogged } from '../web/common';
+import { REMEMBER, renewalResponse, runStepsLogged, visibilityOf, type RenewalReply } from '../web/common';
 
 // Piezas comunes de las filas de la app móvil de EP-SESION. La app se ejecuta como web de Expo a 390 × 844: NO es iOS ni Android nativo.
 // Los localizadores son de rol («tab», «textbox», «heading» de nivel 1, «listitem» con el código); el id de prueba solo como respaldo
@@ -74,3 +74,40 @@ export const tapTab = (page: Page, label: string, key: string): Promise<string |
 
 /** Dirección de la app abierta con una carga completa (la pestaña `page`), para las filas de «abrir <ruta>». */
 export const openDirect = (page: Page, route: string): Promise<string | undefined> => runStepsLogged([[`abrir ${route} en la app`, () => page.goto(route, { timeout: CEILING_MS })]]);
+
+/** Resultado de volver a abrir la app: la página nueva, la renovación que dispara el arranque y, si falló la carga, el motivo. */
+export interface Reopened {
+  readonly page: Page;
+  readonly renewal: Promise<RenewalReply | undefined>;
+  readonly failure?: string;
+}
+
+/**
+ * «Cerrar la app y volver a abrirla»: se cierra la página anterior y se abre otra del MISMO contexto en la raíz (el almacenamiento con la
+ * sesión y el tenant guardados se conserva). La respuesta de la renovación se registra antes de abrir la raíz.
+ */
+export const reopenApp = async (context: BrowserContext, previous: Page): Promise<Reopened> => {
+  const next = await context.newPage();
+  const renewal = renewalResponse(next);
+  await previous.close();
+  const failure = await runStepsLogged([['volver a abrir la app (su raíz)', () => next.goto('/', { timeout: CEILING_MS })]]);
+  return { page: next, renewal, ...(failure === undefined ? {} : { failure }) };
+};
+
+/** Borra el almacenamiento de la prueba y abre /login: la pantalla de acceso sin sesión guardada (la casilla no debe aparecer). */
+export const openAccessWithoutSession = (page: Page): Promise<string | undefined> =>
+  runStepsLogged([
+    ['borrar el almacenamiento de la prueba', () => page.evaluate(() => {
+      localStorage.clear();
+      sessionStorage.clear();
+    })],
+    ['abrir /login', () => page.goto('/login', { timeout: CEILING_MS })],
+    ['ver el título «Iniciar sesión»', () => loginHeading(page).waitFor(ACTION)],
+  ]);
+
+/** La pantalla de acceso no ofrece la casilla «Mantener la sesión en este equipo» (ni como control ni como texto visible). */
+export const accessHasNoRememberBox = async (page: Page): Promise<{ readonly absent: boolean; readonly observed: string }> => {
+  const box = await visibilityOf(page.getByRole('checkbox', { name: REMEMBER, exact: true }));
+  const text = await visibilityOf(page.getByText(REMEMBER, { exact: true }));
+  return { absent: box === 'hidden' && text === 'hidden', observed: `casilla ${box}; texto ${text}` };
+};
