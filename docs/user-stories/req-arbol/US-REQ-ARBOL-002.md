@@ -147,5 +147,5 @@ Característica: Detalle de un requisito por la API
 - Crear, editar, borrar y reordenar requisitos: EP-REQ-EDICION.
 - Los estados del requisito, sus transiciones y sus permisos: EP-REQ-FLUJO.
 - Enlazar y desenlazar casos de prueba, y la matriz `GET /api/programs/:code/traceability`: EP-REQ-TRAZA.
-- Los casos de prueba y sus ejecuciones, y las no conformidades como entidades: las épicas de Verificación y de No conformidades, todavía sin escribir.
+- Los casos de prueba y sus ejecuciones, y las no conformidades como entidades: las épicas EP-VER-CASOS, EP-VER-EJECUCION y EP-VER-INFORME (Verificación) y EP-NC-TABLERO y EP-NC-GESTION (No conformidades).
 - Cómo se obtienen los tokens, el segundo factor y la renovación de la sesión: EP-LOGIN, EP-MFA y EP-SESION.

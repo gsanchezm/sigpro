@@ -74,7 +74,7 @@ Característica: Efectos de un paso de estado por la API
 ```
 
 ## Fuera de alcance
-- La pantalla del registro de auditoría (filtros, búsqueda, paginación por cursor): la épica de Auditoría, todavía sin redactar.
+- La pantalla del registro de auditoría (filtros, búsqueda, paginación por cursor): EP-AUDITORIA.
 - El aislamiento de datos entre tenants más allá de este flujo: la épica transversal de multi-tenant.
 - La lectura del requisito en el árbol y en el detalle: EP-REQ-ARBOL.
 - Editar el texto de un requisito y su vuelta a borrador: EP-REQ-EDICION.

@@ -51,7 +51,7 @@ Característica: Navegación desde un requisito y cambio de programa en la app m
 - Qué ficha de no conformidad se abre desde la hoja de detalle en el móvil, y por qué ruta. No está decidido.
 
 ## Fuera de alcance
-- Los casos de prueba, sus ejecuciones y sus evidencias, y las no conformidades en su propia pantalla: las épicas de Verificación y de No conformidades, todavía sin escribir.
+- Los casos de prueba, sus ejecuciones y sus evidencias, y las no conformidades en su propia pantalla: las épicas EP-VER-CASOS, EP-VER-EJECUCION y EP-VER-INFORME (Verificación) y EP-NC-TABLERO y EP-NC-GESTION (No conformidades).
 - Enlazar o desenlazar casos desde el requisito, y la matriz de trazabilidad: EP-REQ-TRAZA.
 - La lista de programas y la ficha del programa: EP-PROG-LISTA y EP-PROG-DETALLE.
 - Los enlaces desde la pantalla de requisitos de la web: esta misma épica (EP-REQ-ARBOL), en la historia de la web sobre el detalle.

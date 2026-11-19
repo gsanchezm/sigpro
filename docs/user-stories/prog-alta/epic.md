@@ -38,5 +38,5 @@ API, web y móvil común a iOS y Android. No hay aquí un comportamiento propio 
 - Archivar, duplicar, eliminar, exportar y la selección múltiple de programas: EP-PROG-GESTION.
 - La lista de programas, sus filtros, su orden y su paginación: EP-PROG-LISTA.
 - El detalle de un programa, sus pestañas, sus hitos y sus proveedores: EP-PROG-DETALLE.
-- Requisitos del programa (`/programs/:code/requirements`): otra épica de requisitos, todavía sin escribir en `docs/user-stories/`.
+- Requisitos del programa (`/programs/:code/requirements`): EP-REQ-ARBOL.
 - El inicio de sesión de quien crea o edita un programa: EP-LOGIN.

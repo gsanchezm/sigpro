@@ -106,5 +106,5 @@ Característica: Páginas legales y ayuda en la app móvil
 - El pie de la pantalla de acceso y la entrada a estas páginas desde «Más»: US-LEGAL-AYUDA-004 de esta misma épica.
 - El idioma y el tema de la cabecera de estas páginas: épicas «Idioma: español e inglés» (`i18n`) y «Tema claro y oscuro» (`tema`).
 - El botón atrás del sistema en Android desde estas páginas: se escribirá como historia `[Android]` si se decide.
-- El resto de opciones de «Más» (búsqueda, documentos, auditoría, administración y perfil): épica de navegación de la app móvil, todavía sin escribir.
+- El resto de opciones de «Más» (búsqueda, documentos, auditoría, administración y perfil): EP-NAVEGACION.
 - El comportamiento de los atajos de teclado N, / y Esc: ninguna épica escrita lo cubre todavía.

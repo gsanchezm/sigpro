@@ -34,5 +34,5 @@ API, web de escritorio y diseño responsive, y app móvil común a iOS y Android
 - La lectura del árbol, de las cifras y del detalle de un requisito, sin sus botones de transición: EP-REQ-ARBOL.
 - Crear, editar, borrar y reordenar requisitos. Editar el título o la descripción de un requisito lo devuelve a borrador: EP-REQ-EDICION.
 - Enlazar casos de prueba y la matriz de trazabilidad: EP-REQ-TRAZA.
-- La pantalla del registro de auditoría (filtros, búsqueda y paginación): la épica de Auditoría, todavía sin redactar.
+- La pantalla del registro de auditoría (filtros, búsqueda y paginación): EP-AUDITORIA.
 - El inicio de sesión y el segundo factor con los que se llega a los requisitos: EP-LOGIN y EP-MFA.

@@ -35,6 +35,6 @@ API, web y app móvil común a iOS y Android. No hay aquí un comportamiento pro
 - Los proveedores del programa: EP-PROVEEDORES.
 - El alta, la edición, el archivado, la duplicación y el borrado del propio programa: EP-PROG-ALTA y EP-PROG-GESTION.
 - El avance que se muestra en la lista de programas y en las tarjetas de métricas: EP-PROG-LISTA y EP-PROG-METRICAS.
-- El aviso de hito cumplido en el panel de misión y el registro de auditoría de los cambios de hitos: épicas todavía sin redactar.
+- El aviso de hito cumplido en el panel de misión y el registro de auditoría de los cambios de hitos: EP-MISION-KPI y EP-MISION-FEED (panel de misión) y EP-AUDITORIA (registro de auditoría).
 - El inicio de sesión y la renovación de la sesión: EP-LOGIN y EP-SESION.
 - El aislamiento de datos entre tenants más allá de los 404 de programas e hitos que describen las historias de la API: EP-MULTITENANT-PERMISOS.

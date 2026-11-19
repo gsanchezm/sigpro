@@ -148,4 +148,4 @@ Característica: Matriz de trazabilidad de un programa por la API
 - El listado de requisitos en forma de árbol, `GET /api/programs/:code/requirements`: EP-REQ-ARBOL.
 - Enlazar y desenlazar casos (`PUT` y `DELETE` sobre `/api/requirements/:code/tests/:testCaseCode`): esta misma épica, en sus historias de la API de enlace.
 - La pantalla de la matriz en la web y en la app móvil: esta misma épica, en sus historias de la pantalla.
-- La ficha del caso de prueba y sus ejecuciones: las épicas de Verificación, todavía sin escribir.
+- La ficha del caso de prueba y sus ejecuciones: EP-VER-CASOS y EP-VER-EJECUCION.

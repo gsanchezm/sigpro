@@ -38,6 +38,6 @@ API, web y móvil común a iOS y Android. No hay aquí un comportamiento propio 
 - Crear, editar, borrar y reordenar requisitos, incluido «Mover a…» y arrastrar la fila, y los atajos que abren el alta o la edición: EP-REQ-EDICION.
 - Las transiciones de estado (aprobar, verificar, validar y volver a borrador), sus permisos y los botones del flujo de aprobación: EP-REQ-FLUJO.
 - Enlazar y desenlazar casos de prueba, la matriz de trazabilidad (pestaña «Matriz de trazabilidad») y `GET /api/programs/:code/traceability`: EP-REQ-TRAZA.
-- Los casos de prueba y sus ejecuciones, y las no conformidades como entidades (su alta, su tablero y sus transiciones): las épicas de Verificación y de No conformidades, todavía sin escribir.
+- Los casos de prueba y sus ejecuciones, y las no conformidades como entidades (su alta, su tablero y sus transiciones): las épicas EP-VER-CASOS, EP-VER-EJECUCION y EP-VER-INFORME (Verificación) y EP-NC-TABLERO y EP-NC-GESTION (No conformidades).
 - El inicio de sesión, la renovación de la sesión y el segundo factor con los que se llega a la pantalla: EP-LOGIN, EP-SESION y EP-MFA.
 - La lista de programas y la ficha del programa desde la que se llega a los requisitos: EP-PROG-LISTA y EP-PROG-DETALLE.

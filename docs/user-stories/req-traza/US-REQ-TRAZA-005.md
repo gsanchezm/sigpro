@@ -112,4 +112,4 @@ Característica: Matriz de trazabilidad en la web
 ## Fuera de alcance
 - Marcar y desmarcar cruces desde la matriz: esta misma épica, en la historia de la web sobre cambios.
 - El árbol de requisitos, el detalle de un requisito y las cifras del programa: EP-REQ-ARBOL.
-- La ficha del caso de prueba al que llega la cabecera, y sus ejecuciones: las épicas de Verificación, todavía sin escribir.
+- La ficha del caso de prueba al que llega la cabecera, y sus ejecuciones: EP-VER-CASOS y EP-VER-EJECUCION.

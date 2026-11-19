@@ -30,7 +30,7 @@ API, web y móvil común a iOS y Android. No hay aquí un comportamiento propio 
 - El listado de requisitos en forma de árbol, `GET /api/programs/:code/requirements`, la búsqueda, el filtro, las cifras del programa y el detalle de un requisito, con su bloque de casos enlazados y no conformidades, que solo se lee: EP-REQ-ARBOL.
 - Crear, editar, reordenar y borrar requisitos: EP-REQ-EDICION.
 - Las transiciones de estado y el flujo de aprobación: EP-REQ-FLUJO.
-- Los casos de prueba, su ficha en `/verification/:code` y sus ejecuciones: las épicas de Verificación, todavía sin escribir.
-- El registro de auditoría donde quedan estos cambios: su épica, todavía sin escribir.
+- Los casos de prueba, su ficha en `/verification/:code` y sus ejecuciones: EP-VER-CASOS y EP-VER-EJECUCION.
+- El registro de auditoría donde quedan estos cambios: EP-AUDITORIA.
 - Enlazar un caso desde el panel de detalle de un requisito: hoy ese panel solo muestra los casos enlazados, y el enlace se hace desde la matriz. Ninguna historia de esta épica lo describe desde el detalle.
 - Cómo se obtienen los tokens de acceso y la renovación de la sesión: EP-LOGIN y EP-SESION.

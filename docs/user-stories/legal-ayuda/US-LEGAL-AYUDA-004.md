@@ -70,7 +70,7 @@ Característica: Entrada a la ayuda y a las páginas legales en la app móvil
 ```
 
 ## Fuera de alcance
-- El resto de opciones de «Más» (búsqueda, documentos, auditoría, administración y perfil): épica de navegación de la app móvil, todavía sin escribir.
+- El resto de opciones de «Más» (búsqueda, documentos, auditoría, administración y perfil): EP-NAVEGACION.
 - El contenido de las páginas y su enlace de retorno: US-LEGAL-AYUDA-003 de esta misma épica.
 - El formulario de la pantalla de acceso y sus avisos: épica de Inicio y cierre de sesión. El panel «Usuarios de prueba»: épica de la API de plataforma y configuración.
 - Los enlaces «condiciones de uso» y «política de privacidad» de la casilla de condiciones del formulario de solicitud: épica de Solicitud de acceso y reenvío de la verificación.

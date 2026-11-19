@@ -118,4 +118,4 @@ Característica: Páginas legales y ayuda en la web
 - La versión de estas páginas en la app móvil: US-LEGAL-AYUDA-003 de esta misma épica.
 - El pie de la pantalla de acceso, con sus enlaces a estas páginas: US-LEGAL-AYUDA-002 de esta misma épica.
 - Los enlaces «condiciones de uso» y «política de privacidad» de la casilla de condiciones del formulario de solicitud: épica de Solicitud de acceso y reenvío de la verificación.
-- El contenido de la página `/lab` a la que lleva «Ir a /lab» (su FAQ y su reinicio de datos): épica de la página del laboratorio, todavía sin escribir.
+- El contenido de la página `/lab` a la que lleva «Ir a /lab» (su FAQ y su reinicio de datos): EP-CAOS-RESET.

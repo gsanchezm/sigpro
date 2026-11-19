@@ -52,7 +52,7 @@ Característica: Pasos válidos del flujo de estados por la API
 - Los pasos que no existen (409) y los que el rol no puede dar (403): en esta misma épica, en sus historias de la API.
 - Los datos del requisito que se leen en el árbol y en el detalle: EP-REQ-ARBOL.
 - Editar el título o la descripción, que devuelve el requisito a borrador por otra vía: EP-REQ-EDICION.
-- El registro de auditoría como pantalla: la épica de Auditoría, todavía sin redactar.
+- El registro de auditoría como pantalla: EP-AUDITORIA.
 
 ## Decisiones pendientes
 - Si un programa archivado (estado «Cerrado») admite pasos de estado de sus requisitos. Hoy la API no lo comprueba: el paso se acepta igual que en un programa activo. Ni el plan ni las decisiones del proyecto lo fijan, así que ningún ejemplo de esta historia lo afirma ni lo excluye.

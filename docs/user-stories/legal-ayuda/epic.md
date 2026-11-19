@@ -32,5 +32,5 @@ Todas las historias son vigentes. Ninguna lleva `no-implementada`: en la web, co
 - Los enlaces «condiciones de uso» y «política de privacidad» de la casilla de condiciones del formulario de solicitud: épica de Solicitud de acceso y reenvío de la verificación.
 - La FAQ de la página `/lab`: no está en la ayuda, sino en la página del laboratorio, que todavía no tiene épica escrita.
 - El comportamiento de los atajos de teclado N, / y Esc fuera del texto de la ayuda: ninguna épica escrita lo cubre todavía.
-- Las demás opciones de «Más» (búsqueda, documentos, auditoría, administración y perfil): épica de navegación de la app móvil, todavía sin escribir.
+- Las demás opciones de «Más» (búsqueda, documentos, auditoría, administración y perfil): EP-NAVEGACION.
 - El botón atrás del sistema en Android desde estas páginas: se escribirá como historia `[Android]` si se decide.

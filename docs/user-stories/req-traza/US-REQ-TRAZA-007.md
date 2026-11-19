@@ -101,5 +101,5 @@ Característica: Matriz de trazabilidad en la app móvil
 ## Fuera de alcance
 - Las mismas acciones desde la web: US-REQ-TRAZA-005 y US-REQ-TRAZA-006 de esta misma épica.
 - El árbol de requisitos, el detalle de un requisito y las cifras del programa: EP-REQ-ARBOL.
-- La ficha del caso de prueba y sus ejecuciones: las épicas de Verificación, todavía sin escribir.
+- La ficha del caso de prueba y sus ejecuciones: EP-VER-CASOS y EP-VER-EJECUCION.
 - Las peticiones de enlace y desenlace de la API: esta misma épica, en sus historias de la API.
