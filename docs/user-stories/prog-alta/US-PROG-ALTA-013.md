@@ -96,7 +96,7 @@ Característica: Edición de un programa en la app móvil
 - Las reglas de nombre, fechas y propietario cuando se edita por la API: EP-PROG-ALTA, historia de validación de la edición por la API.
 - El detalle del programa al que lleva «Guardar y cerrar», con sus pestañas: EP-PROG-DETALLE.
 - Los mismos avisos y accesos en la web: EP-PROG-ALTA, historia de avisos y accesos de la edición en la web.
-- Los hitos y los proveedores de un programa, que se editan desde sus pestañas: EP-PROG-DETALLE.
+- Los hitos de un programa (EP-HITOS) y la lectura de sus proveedores (EP-PROVEEDORES): no se editan desde el asistente de alta ni desde la edición del programa.
 
 ## Decisiones pendientes
 - Si el aviso superior «422 · …» debe desaparecer cuando la persona corrige el campo que falla. Hoy sigue visible hasta el siguiente envío. No está decidido.
