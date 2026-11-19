@@ -1,6 +1,6 @@
-import type { Locator } from '@playwright/test';
 import { resetTenants, TENANT_A } from '../../../story-runs/support/prepare';
-import { ACTION, CEILING_MS, isVisible, pathOf, waitUntil } from '../../support/browser';
+import { DETALLE_TESTIDS } from '../../../../packages/shared/src/testids';
+import { ACTION, CEILING_MS, pathOf, waitUntil } from '../../support/browser';
 import { cell, check, conclude, strict } from '../../support/checks';
 import { defineBrowserRows, type BrowserRowHandler } from '../../core/framework';
 import {
@@ -11,19 +11,18 @@ import {
   delayDetail,
   ERROR_TITLE,
   failDetail,
-  loadingOf,
+  LOADING_XPATH,
   NOT_FOUND_TITLE,
   notSeenCheck,
   onWeb,
   openPath,
   prepFailed,
   prepFailedText,
-  progressBarOf,
   runSteps,
-  seen,
   seenCheck,
   signIn,
-  stateBadgeOf,
+  type SnapshotSpec,
+  watchLoading,
 } from './common';
 
 // US-PROG-DETALLE-003 — Carga, aviso de no encontrado, error de la ficha y volver a Programas (web). Preparación de cada fila: reinicio de
@@ -32,6 +31,15 @@ import {
 
 const NAME = 'Sistema de mando táctico Ártemis';
 const NAME_HEADING = { level: 1, name: NAME, exact: true } as const;
+
+/** Lo que se lee en cada instantánea de la carga (web): el indicador, y los datos de la ficha que no deben verse mientras carga. */
+const SNAPSHOT: SnapshotSpec = {
+  loadingXPath: LOADING_XPATH,
+  articleTestId: DETALLE_TESTIDS.PROGRAM_DETAIL,
+  code: 'PRG-001',
+  dataTestIds: [DETALLE_TESTIDS.PROGRAM_DETAIL, DETALLE_TESTIDS.PROGRAM_DETAIL_STATE_BADGE, DETALLE_TESTIDS.PROGRAM_DETAIL_PROGRESS, DETALLE_TESTIDS.PROGRAM_DETAIL_TABS],
+  dataTexts: [NAME, 'Marta Ruiz'],
+};
 
 // --- Esquema 1: la ficha muestra la carga hasta que llega el programa -----------------------------------------------------------------------
 
@@ -47,34 +55,34 @@ const loadingUntilArrival: BrowserRowHandler = async (row, { page }) => {
   const signed = await signIn(page, DESKTOP_WIDTH);
   if (signed) return prepFailed(expected, signed);
   await delayDetail(page, 'PRG-001', ms);
+  // Referencia de tiempo: el goto. La demora ya está fijada en la ruta.
+  const since = performance.now();
   const went = await runSteps([['abrir /programs/PRG-001', () => page.goto('/programs/PRG-001', { timeout: CEILING_MS })]]);
   if (went) return actionMissing(expected, went);
 
-  // Se mira durante la espera (con el techo por defecto). Mientras el indicador de carga se ve, no debe verse ningún dato del programa:
-  // ni su código, ni su nombre, ni otro dato de la ficha. Si el nombre llega antes de ver la carga, la comprobación no se cumple.
-  const watched = { loading: false, leaked: new Set<string>() };
+  // Una lectura atómica del DOM por iteración: indicador, texto y datos en el MISMO instante. Fuga real = indicador y datos en la misma
+  // instantánea. Una instantánea sin indicador (tras haberlo visto) es el fin de la espera, no una fuga.
+  const watch = await watchLoading(page, SNAPSHOT, since);
   const name = page.getByRole('heading', NAME_HEADING);
-  const probes: ReadonlyMap<string, Locator> = new Map<string, Locator>([
-    ['el nombre', name],
-    ['el código PRG-001', page.getByText('PRG-001', { exact: true })],
-    ['el estado', stateBadgeOf(page)],
-    ['la barra «Progreso»', progressBarOf(page)],
-    ['el responsable Marta Ruiz', page.getByText('Marta Ruiz', { exact: true })],
-    ['la ficha', articleOf(page)],
-  ]);
-  await waitUntil(async () => {
-    if (await isVisible(loadingOf(page))) {
-      watched.loading = true;
-      for (const [label, probe] of probes) if ((await seen(probe)) === true) watched.leaked.add(label);
-    }
-    return (await seen(name)) === true;
-  });
-  const leaked = [...watched.leaked];
-  return conclude([
-    check(watched.loading, 'mientras espera ve el indicador de carga', watched.loading ? 've el indicador de carga' : 'no ve el indicador de carga'),
-    check(leaked.length === 0, 'mientras espera no ve el código, el nombre ni otro dato de la ficha', leaked.length === 0 ? 'no ve datos del programa' : `ve ${leaked.join(', ')}`),
-    await seenCheck(name, `al llegar la respuesta ve el nombre ${NAME}`, `el nombre ${NAME}`),
-  ]);
+  const arrived = await seenCheck(name, `al llegar la respuesta ve el nombre ${NAME}`, `el nombre ${NAME}`);
+  const leakNote = watch.leak === undefined ? 'en ninguna instantánea con indicador se ve un dato de la ficha' : `en la instantánea de ${watch.leak.atMs} ms, con indicador, se ven: ${watch.leak.present.join(', ')}`;
+  return conclude(
+    [
+      check(watch.withIndicator !== undefined, 'mientras espera ve el indicador de carga', watch.withIndicator ? `ve el indicador a los ${watch.withIndicator.atMs} ms` : 'no ve el indicador de carga'),
+      check(watch.leak === undefined, 'mientras espera no ve el código, el nombre ni otro dato de la ficha', leakNote),
+      arrived,
+    ],
+    {
+      evidence: {
+        demoraFijadaMs: ms,
+        instantaneas: watch.snapshots,
+        primeraConIndicador: watch.withIndicator,
+        primeraSinIndicador: watch.withoutIndicator,
+        codigoFueraDeLaFicha: watch.withIndicator?.codeOutsideArticle ?? '(sin indicador)',
+        nota: 'El código fuera de la ficha son las migas de la cabecera de la app (AppShell, nav.ts breadcrumbsFor): no es un dato de la ficha.',
+      },
+    },
+  );
 };
 
 // --- Esquema 2: un código que no es un programa del tenant muestra el aviso de no encontrado -----------------------------------------------

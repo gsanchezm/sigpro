@@ -15,6 +15,8 @@ import {
   sessionOfAccount,
   shapeChecks,
   noProgramData,
+  traceIdOf,
+  withoutTraceId,
 } from './common';
 
 // US-PROG-DETALLE-001 — Consultar el detalle de un programa del tenant (API). Preparación de cada fila: reinicio de alumno01 con el token de
@@ -142,21 +144,28 @@ const isolation: ApiRowHandler = async (row) => {
   const header = strict('cabecera', ISOLATION_HEADER, cell(row, 'cabecera'));
   const wanted = strict('respuesta', ISOLATION_RESPONSE, cell(row, 'respuesta'));
   const result = await getProgram('PRG-025', token, header);
-  // 404: estado, código y mensaje, sin datos anidados, y el cuerpo ENTERO igual al de un código que no existe (PRG-000, mismo token y cabecera)
+  // 404: estado, código y mensaje, sin datos anidados, y el cuerpo igual al de un código que no existe (PRG-000, mismo token y cabecera),
+  // SALVO el traceId: id aleatorio por petición (detalle técnico visible, que la historia no compara). Los dos traceId van a la evidencia.
   const checks: Check[] = [];
+  let evidence: Readonly<Record<string, unknown>> | undefined;
   if (wanted.status === 404) {
     const missing = await getProgram('PRG-000', token, header);
-    const same = missing.status === result.status && canonicalJson(missing.body) === canonicalJson(result.body);
+    const same = missing.status === result.status && canonicalJson(withoutTraceId(missing.body)) === canonicalJson(withoutTraceId(result.body));
     checks.push(
       notFoundCheck(result),
       noProgramData(result),
-      check(same, 'el cuerpo es igual que el de un código que no existe (PRG-000)', same ? 'cuerpo igual al de PRG-000' : `cuerpo distinto: ${canonicalJson(result.body)} frente a ${canonicalJson(missing.body)}`),
+      check(
+        same,
+        'el cuerpo es igual que el de un código que no existe (PRG-000), salvo el traceId',
+        same ? 'cuerpo igual al de PRG-000, salvo el traceId' : `cuerpo distinto: ${canonicalJson(withoutTraceId(result.body))} frente a ${canonicalJson(withoutTraceId(missing.body))}`,
+      ),
     );
+    evidence = { traceIdPrograma: traceIdOf(result.body) ?? '(sin traceId)', traceIdReferencia: traceIdOf(missing.body) ?? '(sin traceId)' };
   } else {
     checks.push(responseCheck(result, { status: wanted.status }));
   }
   if (wanted.name !== undefined) checks.push(fieldCheck(result.body, 'name', wanted.name), ...shapeChecks(result.body));
-  return conclude(checks);
+  return conclude(checks, evidence === undefined ? {} : { evidence });
 };
 
 // --- Esquema 6: sin una sesión de acceso válida no se devuelve el programa ----------------------------------------------------------------

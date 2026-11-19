@@ -246,10 +246,8 @@ export const alertOf = (page: Page): Locator => page.getByTestId(DETALLE_TESTIDS
  * app (`App.tsx`, sin barras) y el cargador de proveedores (`SuppliersPanel.tsx`, dentro del artículo de la ficha, así que aparece con
  * el programa ya cargado y nunca mientras espera).
  */
-export const loadingOf = (page: Page): Locator =>
-  page.locator(
-    'xpath=//*[@role="status"][@aria-busy="true"][not(ancestor::article)][span[contains(concat(" ", normalize-space(@class), " "), " skeleton ")]]',
-  );
+export const LOADING_XPATH = '//*[@role="status"][@aria-busy="true"][not(ancestor::article)][span[contains(concat(" ", normalize-space(@class), " "), " skeleton ")]]';
+export const loadingOf = (page: Page): Locator => page.locator(`xpath=${LOADING_XPATH}`);
 /** Título de la página (la h1 de la ficha o del aviso). */
 export const titleOf = (page: Page): Locator => page.getByRole('heading', { level: 1 });
 /** Insignia de estado de la cabecera. */
@@ -357,3 +355,116 @@ export const failDetail = (page: Page, code: string, status: number, times: numb
 /** Lo que muestran las dos formas de error de la ficha (la misma sección de alerta). */
 export const NOT_FOUND_TITLE = 'No se encontró el programa';
 export const ERROR_TITLE = 'Ha ocurrido un error inesperado';
+
+// --- Lectura atómica del DOM durante la carga --------------------------------------------------------------------------------------------------
+
+/** Qué leer en UNA sola ejecución del DOM (una instantánea): el indicador de carga y los datos del programa. */
+export interface SnapshotSpec {
+  /** XPath del indicador de carga (web: el bloque sin id de prueba). */
+  readonly loadingXPath?: string;
+  /** Id de prueba del indicador de carga (móvil). */
+  readonly loadingTestId?: string;
+  /** Id de prueba del artículo de la ficha: lo que está dentro cuenta como «la ficha»; lo de fuera, como migas o subtítulo. */
+  readonly articleTestId: string;
+  /** Ids de prueba de datos del programa que NO deben verse mientras carga. */
+  readonly dataTestIds: readonly string[];
+  /** Textos exactos de datos del programa (hojas visibles) que NO deben verse mientras carga. */
+  readonly dataTexts: readonly string[];
+  /** Código del programa: solo cuenta como dato si está DENTRO de la ficha. */
+  readonly code: string;
+}
+
+/** Una instantánea: si el indicador se ve y qué datos se ven, en el mismo instante. `atMs` son los ms desde la referencia de la fila. */
+export interface Snapshot {
+  readonly atMs: number;
+  readonly loading: boolean;
+  readonly loadingText?: string;
+  /** Datos del programa visibles EN ESTA instantánea (vacío si no hay ninguno). */
+  readonly present: readonly string[];
+  /** Veces que el código aparece visible fuera de la ficha (migas, subtítulo): se anota, no cuenta como dato de la ficha. */
+  readonly codeOutsideArticle: number;
+}
+
+/**
+ * Se ejecuta en el navegador, en una sola llamada: lee el indicador, su texto y los datos visibles a la vez. No usa nada de fuera (se
+ * serializa con la función). Las hojas son elementos sin hijos cuyo texto se compara exacto.
+ */
+const readDom = (spec: SnapshotSpec): Omit<Snapshot, 'atMs'> => {
+  const visible = (element: Element): boolean => {
+    const box = element.getBoundingClientRect();
+    const style = getComputedStyle(element);
+    return box.width > 0 && box.height > 0 && style.visibility !== 'hidden' && style.display !== 'none';
+  };
+  const leaves = Array.from(document.querySelectorAll('body *')).filter((element) => element.children.length === 0 && visible(element));
+  const article = document.querySelector(`[data-testid="${spec.articleTestId}"]`);
+  const inArticle = (element: Element): boolean => article !== null && article.contains(element);
+
+  const loaders: Element[] = [];
+  if (spec.loadingXPath !== undefined) {
+    const found = document.evaluate(spec.loadingXPath, document, null, XPathResult.ORDERED_NODE_SNAPSHOT_TYPE, null);
+    for (let index = 0; index < found.snapshotLength; index += 1) {
+      const node = found.snapshotItem(index);
+      if (node instanceof Element && visible(node)) loaders.push(node);
+    }
+  }
+  if (spec.loadingTestId !== undefined) {
+    for (const node of Array.from(document.querySelectorAll(`[data-testid="${spec.loadingTestId}"]`))) if (visible(node)) loaders.push(node);
+  }
+  const loading = loaders.length > 0;
+  const first = loaders[0];
+  const loadingText = first === undefined ? undefined : first instanceof HTMLElement ? first.innerText.trim() : (first.textContent ?? '').trim();
+
+  const present: string[] = [];
+  for (const testId of spec.dataTestIds) {
+    if (Array.from(document.querySelectorAll(`[data-testid="${testId}"]`)).some(visible)) present.push(testId);
+  }
+  for (const text of spec.dataTexts) {
+    if (leaves.some((leaf) => (leaf.textContent ?? '').trim() === text)) present.push(`«${text}»`);
+  }
+  let codeOutsideArticle = 0;
+  for (const leaf of leaves) {
+    if ((leaf.textContent ?? '').trim() !== spec.code) continue;
+    if (inArticle(leaf)) present.push(`código ${spec.code} en la ficha`);
+    else codeOutsideArticle += 1;
+  }
+  return { loading, loadingText, present, codeOutsideArticle };
+};
+
+/** Una instantánea del DOM: una sola llamada a la página; el resultado es coherente porque se lee en un mismo instante del navegador. */
+export const snapshotDom = async (page: Page, spec: SnapshotSpec, since: number): Promise<Snapshot> => {
+  const read = await page.evaluate(readDom, spec);
+  return { atMs: Math.round(performance.now() - since), ...read };
+};
+
+/** Resultado de vigilar la carga: la primera instantánea con indicador, la primera sin él (fin de la espera) y la primera fuga real. */
+export interface LoadingWatch {
+  readonly withIndicator?: Snapshot;
+  readonly withoutIndicator?: Snapshot;
+  /** Instantánea en la que se ven a la vez el indicador y datos del programa: fuga real. */
+  readonly leak?: Snapshot;
+  readonly snapshots: number;
+}
+
+/**
+ * Vigila la carga con instantáneas sucesivas. Espera a ver el indicador (con techo) y, a partir de ahí, termina en la primera instantánea sin
+ * él: esa es el fin de la espera, no una fuga. Sin esperas por elemento: cada iteración es una sola lectura del DOM.
+ */
+export const watchLoading = async (page: Page, spec: SnapshotSpec, since: number, ceilingMs: number = CEILING_MS): Promise<LoadingWatch> => {
+  const deadline = performance.now() + ceilingMs;
+  let snapshots = 0;
+  let withIndicator: Snapshot | undefined;
+  let withoutIndicator: Snapshot | undefined;
+  let leak: Snapshot | undefined;
+  while (withoutIndicator === undefined && performance.now() < deadline) {
+    const snap = await snapshotDom(page, spec, since);
+    snapshots += 1;
+    if (snap.loading) {
+      withIndicator ??= snap;
+      if (snap.present.length > 0) leak ??= snap;
+    } else if (withIndicator !== undefined) {
+      withoutIndicator = snap;
+    }
+    if (withoutIndicator === undefined) await sleep(50);
+  }
+  return { withIndicator, withoutIndicator, leak, snapshots };
+};

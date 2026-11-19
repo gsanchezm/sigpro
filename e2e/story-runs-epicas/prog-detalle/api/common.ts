@@ -135,6 +135,23 @@ const sortKeys = (value: unknown): unknown => {
   return value;
 };
 
+/**
+ * `traceId` del cuerpo de error: la API pone un id aleatorio por petición (el filtro de excepciones). Es el detalle técnico visible, que la
+ * historia no afirma ni compara: por eso la comparación de cuerpos se hace sin él.
+ */
+export const traceIdOf = (body: unknown): string | undefined => {
+  const value = field(body, 'traceId');
+  return typeof value === 'string' ? value : undefined;
+};
+
+/** Copia del cuerpo sin su `traceId` (el cuerpo original no se modifica). */
+export const withoutTraceId = (body: unknown): unknown => {
+  if (typeof body !== 'object' || body === null || Array.isArray(body)) return body;
+  const copy: Record<string, unknown> = { ...(body as Record<string, unknown>) };
+  delete copy.traceId;
+  return copy;
+};
+
 /** Igualdad por TIPO y valor: un texto con su texto; un número solo con su número entero escrito; un booleano con «true» o «false». */
 export const sameValue = (actual: unknown, expected: string): boolean => {
   if (typeof actual === 'string') return actual === expected;

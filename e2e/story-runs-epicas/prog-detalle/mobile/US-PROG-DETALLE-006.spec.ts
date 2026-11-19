@@ -1,5 +1,6 @@
-import type { Locator, Page } from '@playwright/test';
+import type { Page } from '@playwright/test';
 import { DEMO, resetTenants, TENANT_A } from '../../../story-runs/support/prepare';
+import { DETALLE_TESTIDS, MOVIL_PROGRAMS_TESTIDS } from '../../../../packages/shared/src/testids';
 import { ACTION, CEILING_MS, pathOf, waitUntil } from '../../support/browser';
 import { cell, check, conclude, strict } from '../../support/checks';
 import { defineBrowserRows, type BrowserRowHandler } from '../../core/framework';
@@ -13,23 +14,17 @@ import {
   runSteps,
   seen,
   seenCheck,
-  textOne,
+  type SnapshotSpec,
   type StepFailure,
+  watchLoading,
 } from '../web/common';
 import {
   articleOf,
   backButton,
-  budgetOf,
-  datesOf,
-  descriptionOf,
   DETAIL_TITLE,
   DIRECT_APPROXIMATION,
   errorOf,
-  ownerOf,
-  progressBarOf,
-  stateBadgeOf,
   heading1,
-  loadingOf,
   notFoundOf,
   onExpoWeb,
   openDetail,
@@ -47,6 +42,23 @@ import {
 const NAME = 'Sistema de mando táctico Ártemis';
 const DETAIL = '/programs/PRG-001';
 
+/** Lo que se lee en cada instantánea de la carga (móvil): «Cargando…» y los datos de la ficha que no deben verse mientras carga. */
+const SNAPSHOT: SnapshotSpec = {
+  loadingTestId: MOVIL_PROGRAMS_TESTIDS.PROGRAM_DETAIL_LOADING,
+  articleTestId: DETALLE_TESTIDS.PROGRAM_DETAIL,
+  code: 'PRG-001',
+  dataTestIds: [
+    DETALLE_TESTIDS.PROGRAM_DETAIL,
+    DETALLE_TESTIDS.PROGRAM_DETAIL_STATE_BADGE,
+    DETALLE_TESTIDS.PROGRAM_DETAIL_PROGRESS,
+    MOVIL_PROGRAMS_TESTIDS.PROGRAM_DETAIL_OWNER,
+    MOVIL_PROGRAMS_TESTIDS.PROGRAM_DETAIL_DATES,
+    MOVIL_PROGRAMS_TESTIDS.PROGRAM_DETAIL_BUDGET,
+    MOVIL_PROGRAMS_TESTIDS.PROGRAM_DETAIL_DESCRIPTION,
+  ],
+  dataTexts: [NAME],
+};
+
 // --- Esquema 1: la ficha muestra «Cargando…» hasta que llega el programa --------------------------------------------------------------------
 
 const WAIT: ReadonlyMap<string, number> = new Map<string, number>([
@@ -61,40 +73,41 @@ const loadingUntilArrival: BrowserRowHandler = async (row, { page }) => {
   const signed = await signIn(page, DEMO.gestor);
   if (signed) return prepFailed(expected, signed);
   await delayDetail(page, 'PRG-001', ms);
+  // Referencia de tiempo: el goto (la demora ya está fijada en la ruta)
+  const since = performance.now();
   const went = await runSteps([['abrir /programs/PRG-001', () => page.goto(DETAIL, { timeout: CEILING_MS })]]);
   if (went) return actionMissing(expected, went);
 
-  // Se mira durante la espera (con el techo por defecto). Mientras se ve «Cargando…» no debe verse el nombre ni ningún otro dato del
-  // programa. El código NO cuenta: el subtítulo de la pantalla muestra el código pedido mientras carga (ProgramDetailScreen.tsx:46) y la
-  // regla móvil solo prohíbe el nombre.
-  const watched: { loading: boolean; text?: string; leaked: Set<string> } = { loading: false, leaked: new Set<string>() };
+  // Una lectura atómica del DOM por iteración: «Cargando…», su texto y los datos del programa en el MISMO instante. Fuga real = «Cargando…»
+  // y datos a la vez. El código NO es un dato de esta comprobación: el subtítulo de la pantalla muestra el código pedido mientras carga
+  // (ProgramDetailScreen.tsx:46) y la regla móvil solo prohíbe el nombre; se anota en la evidencia (codigoFueraDeLaFicha).
+  const watch = await watchLoading(page, SNAPSHOT, since);
   const name = heading1(page, NAME);
-  const probes: ReadonlyMap<string, Locator> = new Map<string, Locator>([
-    ['el nombre', name],
-    ['el responsable', ownerOf(page)],
-    ['las fechas', datesOf(page)],
-    ['el presupuesto', budgetOf(page)],
-    ['la descripción', descriptionOf(page)],
-    ['el estado', stateBadgeOf(page)],
-    ['la barra «Progreso»', progressBarOf(page)],
-    ['la ficha', articleOf(page)],
-  ]);
-  await waitUntil(async () => {
-    if ((await seen(loadingOf(page))) === true) {
-      watched.loading = true;
-      watched.text ??= await textOne(loadingOf(page));
-      for (const [label, probe] of probes) if ((await seen(probe)) === true) watched.leaked.add(label);
-    }
-    return (await seen(name)) === true;
-  });
-  const leaked = [...watched.leaked];
+  const arrived = await seenCheck(name, `al llegar la respuesta ve el nombre ${NAME}`, `el nombre ${NAME}`);
+  const loadingText = watch.withIndicator?.loadingText;
+  const leakNote =
+    watch.leak === undefined ? 'en ninguna instantánea con «Cargando…» se ve el nombre ni un dato del programa' : `en la instantánea de ${watch.leak.atMs} ms, con «Cargando…», se ven: ${watch.leak.present.join(', ')}`;
   return conclude(
     [
-      check(watched.loading && watched.text === 'Cargando…', 'mientras espera ve «Cargando…»', watched.loading ? `ve «${watched.text ?? '(sin leer)'}»` : 'no ve «Cargando…»'),
-      check(leaked.length === 0, 'mientras espera no ve el nombre del programa ni sus datos', leaked.length === 0 ? 'no ve datos del programa' : `ve ${leaked.join(', ')}`),
-      await seenCheck(name, `al llegar la respuesta ve el nombre ${NAME}`, `el nombre ${NAME}`),
+      check(
+        watch.withIndicator !== undefined && loadingText === 'Cargando…',
+        'mientras espera ve «Cargando…»',
+        watch.withIndicator ? `ve «${loadingText ?? '(sin leer)'}» a los ${watch.withIndicator.atMs} ms` : 'no ve «Cargando…»',
+      ),
+      check(watch.leak === undefined, 'mientras espera no ve el nombre del programa ni sus datos', leakNote),
+      arrived,
     ],
-    { note: DIRECT_APPROXIMATION },
+    {
+      note: DIRECT_APPROXIMATION,
+      evidence: {
+        demoraFijadaMs: ms,
+        instantaneas: watch.snapshots,
+        primeraConIndicador: watch.withIndicator,
+        primeraSinIndicador: watch.withoutIndicator,
+        codigoFueraDeLaFicha: watch.withIndicator?.codeOutsideArticle ?? '(sin indicador)',
+        nota: 'El código fuera de la ficha es el subtítulo de la pantalla (pedido por la URL); no es un dato del programa para esta fila.',
+      },
+    },
   );
 };
 
