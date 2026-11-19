@@ -5,7 +5,7 @@ epica: EP-PROG-METRICAS
 titulo: "[Web] Cuatro tarjetas y subtítulo de la lista de programas"
 etiquetas: [web]
 relacionadas: [US-PROG-METRICAS-001, US-PROG-METRICAS-005, US-PROG-LISTA-002]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["/programs"]
 ---
 

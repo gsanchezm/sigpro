@@ -5,7 +5,7 @@ epica: EP-PROG-METRICAS
 titulo: "[Móvil] Cuatro tarjetas y subtítulo de la lista de programas"
 etiquetas: [movil]
 relacionadas: [US-PROG-METRICAS-001, US-PROG-METRICAS-002, US-PROG-METRICAS-003, US-PROG-LISTA-008]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["/programs"]
 ---
 

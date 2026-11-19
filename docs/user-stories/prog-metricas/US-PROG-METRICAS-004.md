@@ -5,7 +5,7 @@ epica: EP-PROG-METRICAS
 titulo: "[Web] NC abiertas al día: eventos en vivo y eliminación de un programa"
 etiquetas: [web]
 relacionadas: [US-PROG-METRICAS-002, US-PROG-METRICAS-003, US-PROG-METRICAS-005]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["/programs"]
 ---
 

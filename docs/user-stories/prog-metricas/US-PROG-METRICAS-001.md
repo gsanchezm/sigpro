@@ -5,7 +5,7 @@ epica: EP-PROG-METRICAS
 titulo: "[API] Indicadores de programas en el resumen de misión"
 etiquetas: [api]
 relacionadas: [US-PROG-METRICAS-002, US-PROG-METRICAS-005]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["GET /api/mission/summary"]
 ---
 

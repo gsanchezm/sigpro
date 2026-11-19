@@ -5,7 +5,7 @@ epica: EP-PROG-METRICAS
 titulo: "[Web] Carga, error, vacío y actualización de las cifras de programas"
 etiquetas: [web]
 relacionadas: [US-PROG-METRICAS-001, US-PROG-METRICAS-002, US-PROG-METRICAS-005]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["/programs"]
 ---
 
