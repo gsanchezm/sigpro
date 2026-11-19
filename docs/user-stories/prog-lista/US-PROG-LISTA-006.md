@@ -5,7 +5,7 @@ epica: EP-PROG-LISTA
 titulo: "[Web] Paginar la lista de programas de 10 en 10"
 etiquetas: [web]
 relacionadas: [US-PROG-LISTA-001, US-PROG-LISTA-005, US-PROG-LISTA-008]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["/programs"]
 ---
 

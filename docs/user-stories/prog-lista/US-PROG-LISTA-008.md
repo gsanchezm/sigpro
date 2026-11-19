@@ -5,7 +5,7 @@ epica: EP-PROG-LISTA
 titulo: "[Móvil] Ver la lista de programas en tarjetas con búsqueda, estado y «Cargar más»"
 etiquetas: [movil]
 relacionadas: [US-LOGIN-012, US-PROG-LISTA-001, US-PROG-LISTA-004, US-PROG-LISTA-006, US-PROG-LISTA-009, US-PROG-LISTA-010]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["/programs"]
 ---
 

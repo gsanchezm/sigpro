@@ -5,7 +5,7 @@ epica: EP-PROG-LISTA
 titulo: "[Móvil] Ver los estados de carga, vacío y error de la lista de programas"
 etiquetas: [movil]
 relacionadas: [US-PROG-LISTA-007, US-PROG-LISTA-008, US-LOGIN-012]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["/programs"]
 ---
 

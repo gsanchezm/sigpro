@@ -5,7 +5,7 @@ epica: EP-PROG-LISTA
 titulo: "[API] Listar los programas en páginas de 10 con su total y su forma"
 etiquetas: [api]
 relacionadas: [US-LOGIN-001, US-PROG-LISTA-002, US-PROG-LISTA-003, US-PROG-LISTA-008]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["GET /api/programs"]
 ---
 

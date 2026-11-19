@@ -5,7 +5,7 @@ epica: EP-PROG-LISTA
 titulo: "[API] Filtrar la lista por estado, fechas, responsable y texto"
 etiquetas: [api]
 relacionadas: [US-PROG-LISTA-001, US-PROG-LISTA-003, US-PROG-LISTA-004, US-PROG-LISTA-008]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["GET /api/programs"]
 ---
 

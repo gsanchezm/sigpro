@@ -5,7 +5,7 @@ epica: EP-PROG-LISTA
 titulo: "[Web] Filtrar y buscar en la lista de programas"
 etiquetas: [web]
 relacionadas: [US-PROG-LISTA-002, US-PROG-LISTA-005, US-PROG-LISTA-006, US-PROG-LISTA-009, US-LOGIN-007]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["/programs"]
 ---
 

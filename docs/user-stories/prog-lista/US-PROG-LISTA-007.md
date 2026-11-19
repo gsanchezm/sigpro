@@ -5,7 +5,7 @@ epica: EP-PROG-LISTA
 titulo: "[Web] Ver los estados de carga, vacío y error de la lista de programas"
 etiquetas: [web]
 relacionadas: [US-PROG-LISTA-001, US-PROG-LISTA-005, US-PROG-LISTA-010]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["/programs"]
 ---
 

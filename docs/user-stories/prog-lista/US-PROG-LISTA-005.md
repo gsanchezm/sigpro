@@ -5,7 +5,7 @@ epica: EP-PROG-LISTA
 titulo: "[Web] Ver la lista de programas en tabla o en tarjetas y ordenarla por columna"
 etiquetas: [web]
 relacionadas: [US-PROG-LISTA-001, US-PROG-LISTA-003, US-PROG-LISTA-004, US-PROG-LISTA-006, US-LOGIN-007]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["/programs"]
 ---
 

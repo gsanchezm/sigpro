@@ -5,7 +5,7 @@ epica: EP-PROG-LISTA
 titulo: "[API] Ordenar la lista por columna y mantener el orden entre páginas"
 etiquetas: [api]
 relacionadas: [US-PROG-LISTA-001, US-PROG-LISTA-002, US-PROG-LISTA-005]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["GET /api/programs"]
 ---
 
