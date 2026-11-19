@@ -5,7 +5,7 @@ epica: EP-NC-GESTION
 titulo: "[Web] Abrir una no conformidad desde el formulario de alta"
 etiquetas: [web]
 relacionadas: [US-NC-GESTION-001, US-NC-GESTION-002, US-NC-GESTION-010, US-NC-TABLERO-006]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["/nc"]
 permisos: [nc.create]
 ---

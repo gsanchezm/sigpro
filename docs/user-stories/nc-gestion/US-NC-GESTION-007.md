@@ -5,7 +5,7 @@ epica: EP-NC-GESTION
 titulo: "[Web] Editar la severidad, la descripción y la asignación en el detalle de una no conformidad"
 etiquetas: [web]
 relacionadas: [US-NC-GESTION-003, US-NC-GESTION-006, US-NC-GESTION-011, US-NC-GESTION-008, US-NC-TABLERO-009]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["/nc/:code"]
 permisos: [nc.edit]
 ---

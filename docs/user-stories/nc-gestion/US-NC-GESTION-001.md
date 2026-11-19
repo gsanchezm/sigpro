@@ -5,7 +5,7 @@ epica: EP-NC-GESTION
 titulo: "[API] Dar de alta una no conformidad con código NC-NNN"
 etiquetas: [api]
 relacionadas: [US-NC-GESTION-002, US-NC-GESTION-006, US-NC-GESTION-010]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["POST /api/nc"]
 permisos: [nc.create]
 ---

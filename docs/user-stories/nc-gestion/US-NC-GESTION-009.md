@@ -5,7 +5,7 @@ epica: EP-NC-GESTION
 titulo: "[Web] Cerrar una no conformidad con el comentario de cierre"
 etiquetas: [web]
 relacionadas: [US-NC-GESTION-005, US-NC-GESTION-012, US-NC-GESTION-008, US-NC-TABLERO-008, US-NC-TABLERO-009]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["/nc/:code"]
 permisos: [nc.close]
 ---

@@ -5,7 +5,7 @@ epica: EP-NC-GESTION
 titulo: "[Web] Comentar una no conformidad en su hilo de comentarios"
 etiquetas: [web]
 relacionadas: [US-NC-GESTION-004, US-NC-GESTION-012, US-NC-GESTION-009]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["/nc/:code"]
 permisos: [nc.comment]
 ---

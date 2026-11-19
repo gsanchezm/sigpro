@@ -5,7 +5,7 @@ epica: EP-NC-GESTION
 titulo: "[API] Editar la severidad, la descripción o la asignación de una no conformidad"
 etiquetas: [api]
 relacionadas: [US-NC-GESTION-001, US-NC-GESTION-002, US-NC-GESTION-007, US-NC-GESTION-011]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["PATCH /api/nc/:code"]
 permisos: [nc.edit]
 ---

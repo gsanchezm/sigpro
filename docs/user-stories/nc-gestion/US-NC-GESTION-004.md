@@ -5,7 +5,7 @@ epica: EP-NC-GESTION
 titulo: "[API] Añadir un comentario a una no conformidad"
 etiquetas: [api]
 relacionadas: [US-NC-GESTION-008, US-NC-GESTION-012, US-NC-GESTION-005]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["POST /api/nc/:code/comments"]
 permisos: [nc.comment]
 ---

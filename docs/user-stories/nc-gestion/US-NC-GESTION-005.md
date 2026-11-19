@@ -5,7 +5,7 @@ epica: EP-NC-GESTION
 titulo: "[API] Cerrar una no conformidad con un comentario de cierre de al menos 20 caracteres"
 etiquetas: [api]
 relacionadas: [US-NC-GESTION-009, US-NC-GESTION-012, US-NC-GESTION-004, US-NC-TABLERO-003, US-NC-TABLERO-004, US-NC-TABLERO-005]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["POST /api/nc/:code/transition"]
 permisos: [nc.close]
 ---

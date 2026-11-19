@@ -5,7 +5,7 @@ epica: EP-NC-GESTION
 titulo: "[Móvil] Comentar y cerrar una no conformidad desde su detalle"
 etiquetas: [movil]
 relacionadas: [US-NC-GESTION-004, US-NC-GESTION-005, US-NC-GESTION-008, US-NC-GESTION-009, US-NC-TABLERO-011]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["/nc"]
 permisos: [nc.comment, nc.close]
 ---

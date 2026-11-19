@@ -5,7 +5,7 @@ epica: EP-NC-GESTION
 titulo: "[Móvil] Editar la severidad, la descripción y la asignación desde el detalle"
 etiquetas: [movil]
 relacionadas: [US-NC-GESTION-003, US-NC-GESTION-007, US-NC-GESTION-010, US-NC-GESTION-013]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["/nc"]
 permisos: [nc.edit]
 ---

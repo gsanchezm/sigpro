@@ -5,7 +5,7 @@ epica: EP-NC-GESTION
 titulo: "[Móvil] Abrir una no conformidad desde el diálogo de alta"
 etiquetas: [movil]
 relacionadas: [US-NC-GESTION-001, US-NC-GESTION-002, US-NC-GESTION-006, US-NC-GESTION-011, US-NC-TABLERO-010]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["/nc"]
 permisos: [nc.create]
 ---

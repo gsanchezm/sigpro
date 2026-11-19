@@ -5,7 +5,7 @@ epica: EP-NC-GESTION
 titulo: "[API] Rechazar el alta de una no conformidad con motivos de validación"
 etiquetas: [api]
 relacionadas: [US-NC-GESTION-001, US-NC-GESTION-006, US-NC-GESTION-010]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["POST /api/nc"]
 ---
 
