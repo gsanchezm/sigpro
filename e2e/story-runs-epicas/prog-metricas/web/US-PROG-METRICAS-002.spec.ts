@@ -1,14 +1,18 @@
 import type { Page } from '@playwright/test';
 import { DEMO, resetTenants, TENANT_A } from '../../../story-runs/support/prepare';
-import { ACTION, holdsFor, quoted, waitUntil, HOLD_MS, CEILING_MS } from '../../support/browser';
+import { ACTION, CEILING_MS, HOLD_MS, holdsFor, quoted, waitUntil } from '../../support/browser';
 import { cell, check, conclude, preparationFailed, strict, type Check } from '../../support/checks';
 import { defineBrowserRows, type BrowserRowHandler } from '../../core/framework';
-import { adminSession, isOk, duplicatePrg001, type Change } from '../api/common';
+import { adminSession, duplicatePrg001, isOk, type Change } from '../api/common';
 import {
+  actionMissing,
   afterListResponse,
   barCheck,
+  barPainted,
   cardCheck,
+  emptyVisible,
   globalSearch,
+  listedCodes,
   prepFailed,
   prepFailedReason,
   readBar,
@@ -16,14 +20,15 @@ import {
   readCards,
   readSubtitle,
   runSteps,
+  sameCodes,
   signIn,
   statusFilter,
   summaryBlock,
-  waitCardsSettled,
-  actionMissing,
   textCheck,
-  type CardSpec,
+  waitCardsSettled,
+  waitListLoaded,
   type CardReading,
+  type CardSpec,
 } from './common';
 
 // US-PROG-METRICAS-002 — Cuatro tarjetas y subtítulo de la lista de programas (web, escritorio 1440 px). Preparación de cada fila:
@@ -46,6 +51,8 @@ const cardsMatch = (readings: readonly CardReading[], specs: readonly CardSpec[]
     return reading !== undefined && reading.found && reading.value === spec.value && reading.aux === spec.aux;
   });
 
+const listText = (codes: readonly string[]): string => (codes.length === 0 ? '(ninguno)' : codes.join(', '));
+
 // --- Esquema 1: cada tarjeta muestra la cifra del tenant y su línea auxiliar -----------------------------------------------------
 
 const oneCard: BrowserRowHandler = async (row, { page }) => {
@@ -55,33 +62,69 @@ const oneCard: BrowserRowHandler = async (row, { page }) => {
   const opened = await signIn(page, DEMO.gestor);
   if (opened) return prepFailed(expected, opened);
   const block = summaryBlock(page);
+  await waitListLoaded(page);
   await waitCardsSettled(block);
   return conclude([cardCheck(await readCard(block, spec.label), spec)]);
 };
 
 // --- Esquema 2: los filtros de la lista no cambian las cuatro tarjetas --------------------------------------------------------
 
-const FILTERS: ReadonlyMap<string, (page: Page) => Promise<void>> = new Map<string, (page: Page) => Promise<void>>([
-  ['escribe PRG-001 en «Búsqueda global»', (page) => afterListResponse(page, () => globalSearch(page).fill('PRG-001', ACTION))],
-  ['elige «En pausa» en «Estado»', (page) => afterListResponse(page, () => statusFilter(page).selectOption({ label: 'En pausa' }, ACTION))],
-  ['escribe zzz-sin-coincidencias en «Búsqueda global»', (page) => afterListResponse(page, () => globalSearch(page).fill('zzz-sin-coincidencias', ACTION))],
+/** Un filtro de la historia: lo aplica (true si llegó la petición de lista) y dice si cambió la lista. */
+interface FilterStep {
+  readonly act: (page: Page) => Promise<boolean>;
+  readonly applied: (before: readonly string[], after: readonly string[], empty: boolean) => Check;
+}
+
+const FILTERS: ReadonlyMap<string, FilterStep> = new Map<string, FilterStep>([
+  [
+    'escribe PRG-001 en «Búsqueda global»',
+    {
+      act: (page) => afterListResponse(page, () => globalSearch(page).fill('PRG-001', ACTION)),
+      applied: (before, after) =>
+        check(sameCodes(after, ['PRG-001']) && !sameCodes(before, after), 'el filtro deja la lista en PRG-001 (la lista cambia respecto a la lista sin filtro)', `la lista muestra ${listText(after)} (sin filtro: ${listText(before)})`),
+    },
+  ],
+  [
+    'elige «En pausa» en «Estado»',
+    {
+      act: (page) => afterListResponse(page, () => statusFilter(page).selectOption({ label: 'En pausa' }, ACTION)),
+      applied: (before, after) =>
+        check(after.length > 0 && !sameCodes(before, after), 'el filtro «En pausa» cambia la lista a programas (la lista cambia respecto a la lista sin filtro)', `la lista muestra ${listText(after)} (sin filtro: ${listText(before)})`),
+    },
+  ],
+  [
+    'escribe zzz-sin-coincidencias en «Búsqueda global»',
+    {
+      act: (page) => afterListResponse(page, () => globalSearch(page).fill('zzz-sin-coincidencias', ACTION)),
+      applied: (_before, after, empty) => check(empty && after.length === 0, 'el filtro sin coincidencias deja la lista vacía (bloque «Sin programas»)', `bloque vacío ${empty ? 'visible' : 'no visible'}; filas ${listText(after)}`),
+    },
+  ],
 ]);
 
 const filterKeepsCards: BrowserRowHandler = async (row, { page }) => {
   await resetTenants([TENANT_A]);
-  const expected = `las cuatro tarjetas siguen mostrando ${FOUR_CARDS_TEXT}`;
-  const filter = strict('filtro', FILTERS, cell(row, 'filtro'));
+  const expected = `el filtro cambia la lista y las cuatro tarjetas siguen mostrando ${FOUR_CARDS_TEXT}`;
+  const step = strict('filtro', FILTERS, cell(row, 'filtro'));
   const opened = await signIn(page, DEMO.gestor);
   if (opened) return prepFailed(expected, opened);
   const block = summaryBlock(page);
+  await waitListLoaded(page);
   await waitCardsSettled(block);
-  const acted = await runSteps([[`aplicar «${cell(row, 'filtro')}»`, () => filter(page)]]);
+  const before = await listedCodes(page);
+  let replied = false;
+  const acted = await runSteps([[`aplicar «${cell(row, 'filtro')}»`, async () => { replied = await step.act(page); }]]);
   if (acted) return actionMissing(expected, acted);
+  if (!replied) return prepFailedReason(expected, `la lista no pidió datos (GET /api/programs) tras «${cell(row, 'filtro')}» en ${CEILING_MS / 1000} s`);
+  await waitUntil(async () => !sameCodes(await listedCodes(page), before) || (await emptyVisible(page)), CEILING_MS);
+  const after = await listedCodes(page);
+  const applied = step.applied(before, after, await emptyVisible(page));
   // «Siguen mostrando»: se observa durante un tiempo fijo, no solo en el instante en que llega la lista
   const held = await holdsFor(async () => cardsMatch(await readCards(block), FOUR_CARDS), HOLD_MS);
   const readings = await readCards(block);
   const cards: Check[] = FOUR_CARDS.map((spec) => cardCheck(readings.find((item) => item.label === spec.label) ?? { label: spec.label, found: false, value: undefined, aux: undefined }, spec));
-  return conclude([...cards, check(held.held, `las cuatro tarjetas no cambian durante ${HOLD_MS / 1000} s`, held.held ? 'sin cambios' : 'cambian tras el filtro')]);
+  return conclude([applied, ...cards, check(held.held, `las cuatro tarjetas no cambian durante ${HOLD_MS / 1000} s`, held.held ? 'sin cambios' : 'cambian tras el filtro')], {
+    evidence: { listaSinFiltro: before, listaConFiltro: after },
+  });
 };
 
 // --- Esquema 3: el subtítulo cuenta todos los programas y los activos que cumplen la búsqueda --------------------------------
@@ -101,9 +144,12 @@ const subtitleOfSearch: BrowserRowHandler = async (row, { page }) => {
   const opened = await signIn(page, DEMO.gestor);
   if (opened) return prepFailed(expected, opened);
   await waitCardsSettled(summaryBlock(page));
+  await waitListLoaded(page);
   if (text !== undefined) {
-    const typed = await runSteps([[`escribir ${text} en «Búsqueda global»`, () => afterListResponse(page, () => globalSearch(page).fill(text, ACTION))]]);
+    let replied = false;
+    const typed = await runSteps([[`escribir ${text} en «Búsqueda global»`, async () => { replied = await afterListResponse(page, () => globalSearch(page).fill(text, ACTION)); }]]);
     if (typed) return actionMissing(expected, typed);
+    if (!replied) return prepFailedReason(expected, `la lista no pidió datos (GET /api/programs) tras escribir ${text} en «Búsqueda global»`);
   }
   // El subtítulo llega con la lista: se espera (con techo) a que muestre el texto de la historia antes de juzgarlo
   await waitUntil(async () => (await readSubtitle(page)) === subtitle, CEILING_MS);
@@ -131,6 +177,11 @@ const progressBar: BrowserRowHandler = async (row, { page }) => {
   if (opened) return prepFailed(expected, opened);
   const block = summaryBlock(page);
   await waitCardsSettled(block);
+  // La barra puede animar su ancho: se espera (con techo) a que el relleno pintado llegue al porcentaje antes de medirlo
+  await waitUntil(async () => {
+    const reading = await readBar(block, 'Avance medio');
+    return reading.found && reading.valueNow === percent && barPainted(reading, Number(percent));
+  }, CEILING_MS);
   return conclude([barCheck(await readBar(block, 'Avance medio'), percent)]);
 };
 
@@ -145,4 +196,3 @@ defineBrowserRows({
     [4, progressBar],
   ]),
 });
-

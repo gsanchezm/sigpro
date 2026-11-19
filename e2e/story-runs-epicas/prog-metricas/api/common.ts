@@ -106,9 +106,20 @@ export const kpiCheck = (result: ApiResult, kpi: string, expected: number): Chec
   return check(observed === expected, `${kpi} ${expected}`, `${kpi} ${String(observed)}`);
 };
 
-/** Una comprobación por cada cifra que la fila nombra (columna presente), con el número de su celda. */
-export const kpiChecksOf = (result: ApiResult, row: ManifestRow): Check[] =>
-  [...KPI_OF_COLUMN].filter(([column]) => row.cells[column] !== undefined).map(([column, kpi]) => kpiCheck(result, kpi, numberOf(row, column)));
+/** Columnas de la fila que no son cifras (identifican la cuenta, la petición o el cambio previo). Cualquier otra debe ser una cifra conocida. */
+const NON_KPI_COLUMNS: ReadonlySet<string> = new Set(['cuenta', 'contraseña', 'cambio', 'cabecera', 'respuesta']);
+
+/**
+ * Una comprobación por cada cifra que la fila nombra. Una columna que no es cifra conocida LANZA (no se ignora), y una fila sin
+ * ninguna cifra también lanza: nunca puede dar `coincide` con cero comprobaciones.
+ */
+export const kpiChecksOf = (result: ApiResult, row: ManifestRow): Check[] => {
+  const columns = Object.keys(row.cells).filter((column) => !NON_KPI_COLUMNS.has(column));
+  const unknown = columns.filter((column) => !KPI_OF_COLUMN.has(column));
+  if (unknown.length > 0) throw new Error(`columna(s) sin cifra conocida en kpis: ${unknown.join(', ')}: la fila no se puede comparar`);
+  if (columns.length === 0) throw new Error('la fila no nombra ninguna cifra de kpis: no hay nada que comparar');
+  return columns.map((column) => kpiCheck(result, KPI_OF_COLUMN.get(column) ?? column, numberOf(row, column)));
+};
 
 /** Texto de lo que la fila nombra: «programsTotal 24, activePrograms 12…». */
 export const kpiTextOf = (row: ManifestRow): string =>

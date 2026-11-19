@@ -24,7 +24,20 @@ import {
   type CardSpec,
   type SummaryFault,
 } from '../web/common';
-import { afterListResponse, cardAction, cardSeen, mobileSubtitle, onExpoWeb, searchBox, signInTo, statusChoice, summaryBlock, waitListSettled } from './common';
+import {
+  afterListResponse,
+  cardAction,
+  listedCodes,
+  listVisibleWith,
+  mobileSubtitle,
+  onExpoWeb,
+  sameCodes,
+  searchBox,
+  signInTo,
+  statusChoice,
+  summaryBlock,
+  waitListSettled,
+} from './common';
 
 // US-PROG-METRICAS-005 — Cuatro tarjetas y subtítulo de la lista de programas (app móvil, web de Expo a 390 px; NO es nativo).
 // Preparación de cada fila: reinicio de alumno01 con el token de su administrador; después se abre la app sin sesión, se escribe
@@ -48,6 +61,8 @@ const matches = (readings: readonly CardReading[], specs: readonly CardSpec[]): 
     return reading.found && reading.value === spec.value && reading.aux === spec.aux;
   });
 
+const listText = (codes: readonly string[]): string => (codes.length === 0 ? '(ninguno)' : codes.join(', '));
+
 // --- Esquema 1: cada tarjeta muestra la cifra del tenant y su línea auxiliar ---------------------------------------------------
 
 const oneCard: BrowserRowHandler = async (row, { page }) => {
@@ -64,27 +79,55 @@ const oneCard: BrowserRowHandler = async (row, { page }) => {
 
 // --- Esquema 2: los filtros de la lista no cambian las cuatro tarjetas ------------------------------------------------------
 
-const FILTERS: ReadonlyMap<string, (page: Page) => Promise<void>> = new Map<string, (page: Page) => Promise<void>>([
-  ['escribe PRG-001 en «Buscar programas»', (page) => afterListResponse(page, () => searchBox(page).fill('PRG-001', ACTION))],
-  ['elige «En pausa» en «Estado»', (page) => afterListResponse(page, () => statusChoice(page, 'En pausa').click(ACTION))],
+/** Un filtro de la historia: lo aplica (true si llegó la petición de lista) y dice si cambió la lista. */
+interface FilterStep {
+  readonly act: (page: Page) => Promise<boolean>;
+  readonly applied: (before: readonly string[], after: readonly string[]) => Check;
+}
+
+const FILTERS: ReadonlyMap<string, FilterStep> = new Map<string, FilterStep>([
+  [
+    'escribe PRG-001 en «Buscar programas»',
+    {
+      act: (page) => afterListResponse(page, () => searchBox(page).fill('PRG-001', ACTION)),
+      applied: (before, after) =>
+        check(sameCodes(after, ['PRG-001']) && !sameCodes(before, after), 'el filtro deja la lista en PRG-001 (la lista cambia respecto a la lista sin filtro)', `la lista muestra ${listText(after)} (sin filtro: ${listText(before)})`),
+    },
+  ],
+  [
+    'elige «En pausa» en «Estado»',
+    {
+      act: (page) => afterListResponse(page, () => statusChoice(page, 'En pausa').click(ACTION)),
+      applied: (before, after) =>
+        check(after.length > 0 && !sameCodes(before, after), 'el filtro «En pausa» cambia la lista a programas (la lista cambia respecto a la lista sin filtro)', `la lista muestra ${listText(after)} (sin filtro: ${listText(before)})`),
+    },
+  ],
 ]);
 
 const filterKeepsCards: BrowserRowHandler = async (row, { page }) => {
   await resetTenants([TENANT_A]);
-  const expected = `las cuatro tarjetas siguen mostrando ${FOUR_CARDS_TEXT}`;
-  const filter = strict('filtro', FILTERS, cell(row, 'filtro'));
+  const expected = `el filtro cambia la lista y las cuatro tarjetas siguen mostrando ${FOUR_CARDS_TEXT}`;
+  const step = strict('filtro', FILTERS, cell(row, 'filtro'));
   const opened = await signInTo(page, DEMO.gestor);
   if (opened) return prepFailed(expected, opened);
   if (!(await waitListSettled(page))) return prepFailedReason(expected, 'la lista de programas no aparece');
   const block = summaryBlock(page);
   await waitCardsSettled(block);
-  const acted = await runSteps([[`aplicar «${cell(row, 'filtro')}»`, () => filter(page)]]);
+  const before = await listedCodes(page);
+  let replied = false;
+  const acted = await runSteps([[`aplicar «${cell(row, 'filtro')}»`, async () => { replied = await step.act(page); }]]);
   if (acted) return actionMissing(expected, acted);
+  if (!replied) return prepFailedReason(expected, `la lista no pidió datos (GET /api/programs) tras «${cell(row, 'filtro')}» en ${CEILING_MS / 1000} s`);
+  await waitUntil(async () => !sameCodes(await listedCodes(page), before), CEILING_MS);
+  const after = await listedCodes(page);
+  const applied = step.applied(before, after);
   // «Siguen mostrando»: se observa durante un tiempo fijo, no solo en el instante en que llega la lista
   const held = await holdsFor(async () => matches(await readCards(block), FOUR_CARDS), HOLD_MS);
   const readings = await readCards(block);
   const cards: Check[] = FOUR_CARDS.map((spec) => cardCheck(readingOf(readings, spec.label), spec));
-  return conclude([...cards, check(held.held, `las cuatro tarjetas no cambian durante ${HOLD_MS / 1000} s`, held.held ? 'sin cambios' : 'cambian tras el filtro')]);
+  return conclude([applied, ...cards, check(held.held, `las cuatro tarjetas no cambian durante ${HOLD_MS / 1000} s`, held.held ? 'sin cambios' : 'cambian tras el filtro')], {
+    evidence: { listaSinFiltro: before, listaConFiltro: after },
+  });
 };
 
 // --- Esquema 3: el subtítulo cuenta todos los programas y los activos que cumplen el buscador ------------------------------
@@ -104,13 +147,14 @@ const subtitleOfSearch: BrowserRowHandler = async (row, { page }) => {
   if (opened) return prepFailed(expected, opened);
   if (!(await waitListSettled(page))) return prepFailedReason(expected, 'la lista de programas no aparece');
   if (text !== undefined) {
-    const typed = await runSteps([[`escribir ${text} en «Buscar programas»`, () => afterListResponse(page, () => searchBox(page).fill(text, ACTION))]]);
+    let replied = false;
+    const typed = await runSteps([[`escribir ${text} en «Buscar programas»`, async () => { replied = await afterListResponse(page, () => searchBox(page).fill(text, ACTION)); }]]);
     if (typed) return actionMissing(expected, typed);
+    if (!replied) return prepFailedReason(expected, `la lista no pidió datos (GET /api/programs) tras escribir ${text} en «Buscar programas»`);
   }
   // El subtítulo llega con la lista: se espera (con techo) a que muestre el texto de la historia antes de juzgarlo
   await waitUntil(async () => (await mobileSubtitle(page)) === subtitle, CEILING_MS);
-  const observed = await mobileSubtitle(page);
-  return conclude([textCheck(observed, subtitle, 'el subtítulo dice')]);
+  return conclude([textCheck(await mobileSubtitle(page), subtitle, 'el subtítulo dice')]);
 };
 
 // --- Esquema 4: mientras el resumen no llega, las tarjetas muestran puntos suspensivos -----------------------------------
@@ -171,8 +215,10 @@ const failedLoad: BrowserRowHandler = async (row, { page }) => {
   // Se espera (con techo) a que las tarjetas dejen «…»; si no lo hacen, la comprobación de abajo lo recoge como lo observado
   await waitUntil(async () => (await readCards(block)).every((reading) => reading.found && reading.value === FAILED), CEILING_MS + 5_000);
   const readings = await readCards(block);
-  const listed = await cardSeen(page, 'PRG-001');
-  return conclude([...FOUR_CARDS.map((spec) => dashCheck(readingOf(readings, spec.label))), listed], { evidence: { fallo: cell(row, 'fallo'), peticionesResumen: probe.hits() } });
+  const listed = await listVisibleWith(page, 'PRG-001');
+  return conclude([...FOUR_CARDS.map((spec) => dashCheck(readingOf(readings, spec.label))), listed], {
+    evidence: { fallo: cell(row, 'fallo'), peticionesResumen: probe.hits() },
+  });
 };
 
 // --- Esquema 6: sin programas, las tarjetas muestran cero -------------------------------------------------------------------

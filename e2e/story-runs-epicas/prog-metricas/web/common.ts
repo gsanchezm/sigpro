@@ -1,15 +1,16 @@
 import type { Locator, Page } from '@playwright/test';
-import { ACCESO_DYNAMIC_TESTIDS } from '../../../../packages/shared/src/testids';
+import { field } from '../../../story-runs/support/api';
+import { ACCESO_DYNAMIC_TESTIDS, PROGRAMAS_TESTIDS } from '../../../../packages/shared/src/testids';
 import { MISSION_SOCKET_EVENT } from '../../../../packages/shared/src/mission';
-import { ACTION, CEILING_MS, attrOf, isVisible, safe, waitUntil } from '../../support/browser';
+import { ACTION, CEILING_MS, attrOf, safe, waitUntil } from '../../support/browser';
 import { check, sleep, type Check } from '../../support/checks';
 import { outcome, type Outcome } from '../../core/framework';
 import { TENANT_A, type Credentials } from '../../../story-runs/support/prepare';
 
 // Piezas comunes de las filas web de EP-PROG-METRICAS (escritorio 1440 px, por la configuración del proyecto `web`). Los
 // localizadores son de rol y de nombre accesible (región «Resumen de programas», tarjetas con su etiqueta, barra «Avance medio»,
-// menú «Acciones para PRG-001»); el texto de cada tarjeta se lee de sus hijos, no del diseño. Solo el subtítulo y las tarjetas
-// no tienen rol propio: se leen por su posición en el encabezado y en el grupo.
+// menú «Acciones para PRG-001»). El texto de cada tarjeta se lee de sus hijos, no del diseño; las cifras pintadas de la barra se
+// miden en píxeles. Ninguna espera de red se traga: si una petición que la fila necesita no llega, la fila lo dice.
 
 export const LOGIN_URL = `/login?tenant=${TENANT_A}`;
 export const SUMMARY_PATH = '/api/mission/summary';
@@ -80,7 +81,6 @@ export const prepFailed = (expected: string, failure: StepFailure): Outcome =>
 /** Igual, con un motivo que no viene de un paso del navegador. */
 export const prepFailedReason = (expected: string, reason: string): Outcome => outcome(false, expected, `la preparación no se cumplió: ${reason}`, { note: NOT_EVALUATED_NOTE });
 
-
 // --- Inicio de sesión ---------------------------------------------------------------------------------------------------------
 
 /** Fija SOLO la preferencia de cookies (no es una sesión): el aviso de cookies tapa los controles de pie de página. */
@@ -114,12 +114,40 @@ export const summaryBlock = (page: Page): Locator => page.getByRole('region', { 
 export const pageHeading = (page: Page): Locator => page.getByRole('heading', { name: 'Programas', level: 1, exact: true });
 /** Tabla de la lista (escritorio). */
 export const programsTable = (page: Page): Locator => page.getByRole('table');
+/** Bloque «Sin programas» de la lista (id de prueba: es el único contenedor que lo agrupa). */
+export const emptyBlock = (page: Page): Locator => page.getByTestId(PROGRAMAS_TESTIDS.PROGRAMS_EMPTY);
 /** Buscador de la cabecera («Búsqueda global»). */
 export const globalSearch = (page: Page): Locator => page.getByRole('searchbox', { name: 'Búsqueda global', exact: true });
 /** Filtro de estado de la lista. */
 export const statusFilter = (page: Page): Locator => page.getByRole('combobox', { name: 'Estado', exact: true });
 /** Botón ⋯ de la fila de un programa (su nombre accesible es «Acciones para PRG-001»). */
 export const rowActionsButton = (page: Page, code: string): Locator => page.getByRole('button', { name: `Acciones para ${code}`, exact: true });
+
+/** Visible de verdad: exactamente un elemento que se ve. Cero, varios (ambiguo) o no visible cuentan como «no visible». */
+export const strictlyVisible = async (target: Locator): Promise<boolean> => {
+  const found = await safe(() => target.count(), -1);
+  if (found !== 1) return false;
+  return safe(() => target.isVisible(), false);
+};
+
+/** La lista de programas sigue visible (tabla de escritorio). */
+export const listStillVisible = (page: Page): Promise<boolean> => strictlyVisible(programsTable(page));
+/** El bloque «Sin programas» se ve. */
+export const emptyVisible = (page: Page): Promise<boolean> => strictlyVisible(emptyBlock(page));
+
+/** Espera (con techo) a que la lista esté montada: la tabla o el bloque vacío se ven. Devuelve si llegó. */
+export const waitListLoaded = async (page: Page): Promise<boolean> =>
+  (await waitUntil(async () => (await listStillVisible(page)) || (await emptyVisible(page)), CEILING_MS)).reached;
+
+const CODE = /^PRG-\d{3}/;
+/** Códigos de los programas de la tabla que se ven, en el orden de la pantalla. */
+export const listedCodes = (page: Page): Promise<readonly string[]> =>
+  safe(async () => {
+    const texts = await programsTable(page).getByRole('link', { name: CODE }).allTextContents();
+    return texts.map((text) => CODE.exec(text.trim())?.[0]).filter((code): code is string => code !== undefined);
+  }, []);
+
+export const sameCodes = (actual: readonly string[], expected: readonly string[]): boolean => actual.length === expected.length && actual.every((code, index) => code === expected[index]);
 
 // --- Lectura de las tarjetas --------------------------------------------------------------------------------------------------
 
@@ -207,21 +235,41 @@ export interface BarReading {
   readonly found: boolean;
   /** `aria-valuenow` de la barra. */
   readonly valueNow: string | undefined;
-  /** Ancho del relleno (la parte llena de la barra), tal como lo aplica la hoja de estilo. */
+  /** Ancho que pide el estilo del relleno (evidencia: lo que la hoja de estilo declara). */
   readonly fill: string | undefined;
+  /** Ancho PINTADO de la pista (la barra completa), en píxeles. */
+  readonly trackPx: number | undefined;
+  /** Ancho PINTADO del relleno, en píxeles. */
+  readonly paintedPx: number | undefined;
 }
 
+const NO_BAR: BarReading = { found: false, valueNow: undefined, fill: undefined, trackPx: undefined, paintedPx: undefined };
+
 export const readBar = (block: Locator, label: string): Promise<BarReading> =>
-  safe(
-    async () => {
-      const bar = block.getByRole('progressbar', { name: label, exact: true });
-      if ((await bar.count()) !== 1) return { found: false, valueNow: undefined, fill: undefined };
-      const valueNow = await attrOf(bar, 'aria-valuenow');
-      const fill = await bar.evaluate((element) => (element.firstElementChild as HTMLElement | null)?.style.width ?? '', undefined, { timeout: 500 });
-      return { found: true, valueNow, fill };
-    },
-    { found: false, valueNow: undefined, fill: undefined },
+  safe(async () => {
+    const bar = block.getByRole('progressbar', { name: label, exact: true });
+    if ((await bar.count()) !== 1) return NO_BAR;
+    const valueNow = await attrOf(bar, 'aria-valuenow');
+    const fill = await bar.evaluate((element) => (element.firstElementChild as HTMLElement | null)?.style.width ?? '', undefined, { timeout: 500 });
+    const track = await bar.boundingBox({ timeout: 500 }).catch(() => null);
+    const painted = await bar.locator('span').first().boundingBox({ timeout: 500 }).catch(() => null);
+    return { found: true, valueNow, fill, trackPx: track?.width, paintedPx: painted?.width };
+  }, NO_BAR);
+
+/** El relleno pintado llega al porcentaje de la pista, con una tolerancia de ±1 px. */
+export const barPainted = (reading: BarReading, percent: number): boolean =>
+  reading.trackPx !== undefined && reading.paintedPx !== undefined && reading.trackPx > 0 && Math.abs(reading.paintedPx - (reading.trackPx * percent) / 100) <= 1;
+
+/** Barra igual al porcentaje de la historia: `aria-valuenow` y ancho pintado. */
+export const barCheck = (reading: BarReading, percent: string): Check => {
+  const ok = reading.found && reading.valueNow === percent && barPainted(reading, Number(percent));
+  const painted = reading.trackPx === undefined || reading.paintedPx === undefined ? 'sin medir' : `${reading.paintedPx.toFixed(1)} px de ${reading.trackPx.toFixed(1)} px`;
+  return check(
+    ok,
+    `la barra de «Avance medio» está llena hasta el ${percent} % (ancho pintado con ±1 px) y su valor es ${percent}`,
+    reading.found ? `valor ${reading.valueNow ?? '(sin leer)'}; ancho pintado ${painted}; estilo del relleno ${reading.fill ?? '(sin leer)'}` : 'la barra no aparece',
   );
+};
 
 // --- Subtítulo ------------------------------------------------------------------------------------------------------------------
 
@@ -231,7 +279,9 @@ export const readSubtitle = (page: Page): Promise<string | undefined> =>
     async () => {
       const heading = pageHeading(page);
       if ((await heading.count()) !== 1) return undefined;
-      const texts = await heading.locator('xpath=..').evaluate((parent) => Array.from(parent.children, (child) => (child.textContent ?? '').trim()).filter((text) => text !== ''), undefined, { timeout: 500 });
+      const texts = await heading.locator('xpath=..').evaluate((parent) => Array.from(parent.children, (child) => (child.textContent ?? '').trim()).filter((text) => text !== ''), undefined, {
+        timeout: 500,
+      });
       return texts[1];
     },
     undefined,
@@ -285,27 +335,115 @@ export const interceptSummary = async (page: Page, fault: SummaryFault): Promise
   return { firstRequestAt: () => first, lastRequestAt: () => last, hits: () => hits };
 };
 
-/** Espera a la respuesta del resumen que provoca la acción: la tarjeta ya está al día cuando vuelve. */
-export const summaryReply = (page: Page): Promise<unknown> =>
+/** Respuesta del resumen que provoca una acción: estado y las dos cifras de NC del `kpis` que devuelve. */
+export interface SummaryReply {
+  readonly status: number;
+  readonly ncOpen: unknown;
+  readonly ncTotal: unknown;
+}
+
+/**
+ * Espera (con techo) a la primera respuesta GET del resumen que llegue DESPUÉS de crear la espera: se llama antes de la acción.
+ * Devuelve `undefined` si no llega (quien llama decide; no se traga). Lee el `kpis` de esa respuesta como observación.
+ */
+export const summaryReply = (page: Page): Promise<SummaryReply | undefined> =>
   page
     .waitForResponse((reply) => new URL(reply.url()).pathname === SUMMARY_PATH && reply.request().method() === 'GET', { timeout: CEILING_MS })
-    .catch(() => undefined);
+    .then(
+      async (reply) => {
+        const body: unknown = await reply.json().catch(() => undefined);
+        const kpis = field(body, 'kpis');
+        return { status: reply.status(), ncOpen: field(kpis, 'ncOpen'), ncTotal: field(kpis, 'ncTotal') };
+      },
+      () => undefined,
+    );
 
-/** Ejecuta la acción y espera a que llegue la respuesta del resumen que provoca. */
-export const afterSummaryResponse = async (page: Page, act: () => Promise<unknown>): Promise<void> => {
-  const reply = summaryReply(page);
-  await act();
-  await reply;
-};
-
-/** Espera a la respuesta de la lista de programas que provoca la acción (filtro, búsqueda, orden). */
-export const afterListResponse = async (page: Page, act: () => Promise<unknown>): Promise<void> => {
+/**
+ * Ejecuta la acción y devuelve si llegó la petición de LISTA (GET /api/programs) que provoca. Si no llega en el techo, devuelve
+ * `false`: quien llama lo convierte en un fallo con motivo (no se traga el timeout).
+ */
+export const afterListResponse = async (page: Page, act: () => Promise<unknown>): Promise<boolean> => {
   const reply = page
     .waitForResponse((response) => new URL(response.url()).pathname === PROGRAMS_API_PATH && response.request().method() === 'GET', { timeout: CEILING_MS })
-    .catch(() => undefined);
+    .then(
+      () => true,
+      () => false,
+    );
   await act();
-  await reply;
+  return reply;
 };
+
+// --- Recarga de la página ---------------------------------------------------------------------------------------------------------
+
+export interface ReloadVerdict {
+  /** El marcador `window.__sinRecarga` que se puso antes de la acción sigue en la página. */
+  readonly kept: boolean;
+  /** Cargas completas del documento (evento `load`) desde que se puso el marcador. */
+  readonly loads: number;
+  /** Navegaciones del marco principal (`framenavigated`), incluidas las de la aplicación (sin recarga) que cambian la URL. */
+  readonly navigations: number;
+}
+
+export interface ReloadGuard {
+  /** Pone el marcador (número aleatorio) y empieza a contar. Devuelve si el marcador quedó puesto. */
+  readonly arm: () => Promise<boolean>;
+  /** Lee el marcador y los contadores desde el armado. */
+  readonly verdict: () => Promise<ReloadVerdict>;
+}
+
+const MARKER_KEY = '__sinRecarga';
+
+/**
+ * Guarda «sin recargar la página»: el marcador vive en `window`, así que una recarga completa lo borra. Los eventos `load` del
+ * documento principal cuentan las cargas completas; `framenavigated` se registra como evidencia.
+ */
+export const reloadGuard = (page: Page): ReloadGuard => {
+  let armed = false;
+  let marker: number | undefined;
+  let loads = 0;
+  let navigations = 0;
+  page.on('load', () => {
+    if (armed) loads += 1;
+  });
+  page.on('framenavigated', (frame) => {
+    if (armed && frame === page.mainFrame()) navigations += 1;
+  });
+  return {
+    arm: async () => {
+      const stamp = Math.floor(Math.random() * 1_000_000_000) + 1;
+      try {
+        // La clave viaja como argumento: dentro de la función del navegador no existe la constante del módulo
+        await page.evaluate(
+          ([key, value]: [string, number]) => {
+            (window as unknown as Record<string, number>)[key] = value;
+          },
+          [MARKER_KEY, stamp] as [string, number],
+        );
+      } catch {
+        return false;
+      }
+      marker = stamp;
+      armed = true;
+      return true;
+    },
+    verdict: async () => {
+      const seen = await safe(
+        () =>
+          page.evaluate((key: string) => (window as unknown as Record<string, number | undefined>)[key], MARKER_KEY),
+        undefined,
+      );
+      return { kept: marker !== undefined && seen === marker, loads, navigations };
+    },
+  };
+};
+
+/** «Sin recargar»: el marcador sigue y no hubo cargas completas del documento. */
+export const reloadCheck = (verdict: ReloadVerdict): Check =>
+  check(
+    verdict.kept && verdict.loads === 0,
+    'sin recargar la página: el mismo documento tras la acción (el marcador sigue y no hay cargas completas)',
+    verdict.kept ? (verdict.loads === 0 ? 'sin recargar: el marcador sigue en la página' : `la página se recargó: ${verdict.loads} carga(s) completa(s)`) : 'la página se recargó: el marcador desapareció',
+  );
 
 // --- Socket de misión (eventos en vivo) -----------------------------------------------------------------------------------------
 
@@ -356,18 +494,26 @@ export const tapLive = (page: Page): LiveTap => {
 export const toastCount = (page: Page, tone: 'ok' | 'danger' | 'info' | 'warn'): Promise<number> =>
   safe(() => page.getByTestId(ACCESO_DYNAMIC_TESTIDS.TOAST(tone)).count(), -1);
 
-/** La lista de programas sigue visible (tabla de escritorio). */
-export const listStillVisible = (page: Page): Promise<boolean> => isVisible(programsTable(page));
+/** Avisos de error o de advertencia (`danger` y `warn`) en pantalla; -1 si alguna lectura falla. */
+export const warningToastCount = async (page: Page): Promise<number> => {
+  const danger = await toastCount(page, 'danger');
+  const warn = await toastCount(page, 'warn');
+  return danger < 0 || warn < 0 ? -1 : danger + warn;
+};
 
 // --- Menú de acciones de una fila -----------------------------------------------------------------------------------------------
 
-/** Acción del menú ⋯ de una fila; `confirm` indica que el diálogo «Eliminar programa» pide confirmar con «Eliminar». */
-export const rowAction = (page: Page, code: string, item: string, confirm: boolean): Promise<unknown> =>
-  afterSummaryResponse(page, async () => {
-    await rowActionsButton(page, code).click(ACTION);
-    await page.getByRole('menu', { name: `Acciones para ${code}`, exact: true }).getByRole('menuitem', { name: item, exact: true }).click(ACTION);
-    if (confirm) await page.getByRole('alertdialog', { name: 'Eliminar programa', exact: true }).getByRole('button', { name: 'Eliminar', exact: true }).click(ACTION);
-  });
+/**
+ * Acción del menú ⋯ de una fila; `confirm` indica que el diálogo «Eliminar programa» pide confirmar con «Eliminar». La respuesta del
+ * resumen que provoca se espera con techo y se devuelve (o `undefined` si no llegó).
+ */
+export const rowAction = async (page: Page, code: string, item: string, confirm: boolean): Promise<SummaryReply | undefined> => {
+  const reply = summaryReply(page);
+  await rowActionsButton(page, code).click(ACTION);
+  await page.getByRole('menu', { name: `Acciones para ${code}`, exact: true }).getByRole('menuitem', { name: item, exact: true }).click(ACTION);
+  if (confirm) await page.getByRole('alertdialog', { name: 'Eliminar programa', exact: true }).getByRole('button', { name: 'Eliminar', exact: true }).click(ACTION);
+  return reply;
+};
 
 // --- Códigos y celdas ------------------------------------------------------------------------------------------------------------
 
@@ -395,22 +541,9 @@ export const delayMsOf = (text: string): number => {
   return Number(match[1]) * 1_000;
 };
 
-/** Para comprobar un «sin aviso» durante un tiempo fijo: ¿hay algún aviso de ese tono? (-1 cuenta como «no se puede saber»). */
-export const quietCheck = (count: number, what: string): Check =>
-  check(count === 0, `ningún aviso de ${what}`, count < 0 ? 'no se pudo leer los avisos' : `hay ${count} aviso(s) de ${what}`);
-
-/** Lectura de la barra y el relleno de «Avance medio»: `aria-valuenow` igual al porcentaje, y el relleno llega a ese porcentaje. */
-export const barCheck = (bar: BarReading, percent: string): Check =>
-  check(
-    bar.found && bar.valueNow === percent && bar.fill === `${percent}%`,
-    `la barra de «Avance medio» está llena hasta el ${percent} % y su valor es ${percent}`,
-    bar.found ? `la barra tiene valor ${bar.valueNow ?? '(sin leer)'} y relleno ${bar.fill ?? '(sin leer)'}` : 'la barra no aparece',
-  );
-
 /** Un valor de texto exacto (subtítulo, filtro). */
 export const textCheck = (observed: string | undefined, expected: string, what: string): Check =>
   check(observed === expected, `${what} «${expected}»`, `${what} «${observed ?? '(sin leer)'}»`);
 
 /** Helper de los Esquemas: el resultado de conclude() con la nota de discrepancia cuando hay una. */
 export const withNote = (result: Outcome, note: string): Outcome => (result.verdict === 'coincide' ? result : { ...result, note });
-

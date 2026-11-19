@@ -16,16 +16,20 @@ import {
   prepFailed,
   prepFailedReason,
   readCards,
+  reloadCheck,
+  reloadGuard,
   rowAction,
   runSteps,
   signIn,
   summaryBlock,
-  toastCount,
   valueCheck,
   waitCardsSettled,
+  waitListLoaded,
+  warningToastCount,
   type CardReading,
   type CardSpec,
   type SummaryFault,
+  type SummaryReply,
 } from './common';
 
 // US-PROG-METRICAS-003 — Carga, error, vacío y actualización de las cifras de programas (web, escritorio 1440 px). Preparación de
@@ -99,22 +103,24 @@ const FAULTS: ReadonlyMap<string, SummaryFault> = new Map<string, SummaryFault>(
 
 const failedLoad: BrowserRowHandler = async (row, { page }) => {
   await resetTenants([TENANT_A]);
-  const expected = 'las cuatro tarjetas muestran «—» en la cifra y en la línea auxiliar; no aparece ningún aviso emergente de error; la lista de programas sigue visible';
+  const expected = 'las cuatro tarjetas muestran «—» en la cifra y en la línea auxiliar; no aparece ningún aviso emergente de error ni de advertencia; la lista de programas sigue visible';
   const fault = strict('fallo', FAULTS, cell(row, 'fallo'));
   const probe = await interceptSummary(page, fault);
   const opened = await signIn(page, DEMO.gestor);
   if (opened) return prepFailed(expected, opened);
   const block = summaryBlock(page);
+  await waitListLoaded(page);
   // Se espera (con techo) a que las tarjetas dejen «…»; si no lo hacen, la comprobación de abajo lo recoge como lo observado
   await waitUntil(async () => (await readCards(block)).every((reading) => reading.found && reading.value === FAILED), CEILING_MS + 5_000);
   const readings = await readCards(block);
-  const quiet = await holdsFor(async () => (await toastCount(page, 'danger')) === 0, QUIET_MS);
-  await waitUntil(() => listStillVisible(page), CEILING_MS);
+  // «Ningún aviso» se observa durante un tiempo fijo; se cuentan los de error y de advertencia (-1 si no se pudo leer)
+  const quiet = await holdsFor(async () => (await warningToastCount(page)) === 0, QUIET_MS);
+  const warnings = await warningToastCount(page);
   const listed = await listStillVisible(page);
   return conclude(
     [
       ...FOUR_CARDS.map((spec) => dashCheck(readingOf(readings, spec.label))),
-      check(quiet.held, `ningún aviso emergente de error durante ${QUIET_MS / 1000} s`, quiet.held ? 'ningún aviso de error' : 'apareció un aviso de error'),
+      check(quiet.held, `ningún aviso emergente de error ni de advertencia durante ${QUIET_MS / 1000} s`, quiet.held ? 'ningún aviso de error ni de advertencia' : `aparecieron avisos (${warnings < 0 ? 'no se pudo leer' : warnings})`),
       check(listed, 'la lista de programas sigue visible', listed ? 'la lista de programas sigue visible' : 'la lista de programas no se ve'),
     ],
     { evidence: { fallo: cell(row, 'fallo'), peticionesResumen: probe.hits() } },
@@ -141,6 +147,7 @@ const stateCard: BrowserRowHandler = async (row, { page }) => {
   const opened = await signIn(page, DEMO.gestor);
   if (opened) return prepFailed(expected, opened);
   const block = summaryBlock(page);
+  await waitListLoaded(page);
   await waitCardsSettled(block);
   return conclude([cardCheck(readingOf(await readCards(block), spec.label), spec)]);
 };
@@ -161,8 +168,14 @@ const afterListOperation: BrowserRowHandler = async (row, { page }) => {
   const opened = await signIn(page, ADMIN_ALUMNO01);
   if (opened) return prepFailed(expected, opened);
   const block = summaryBlock(page);
+  await waitListLoaded(page);
   await waitCardsSettled(block);
-  const acted = await runSteps([[`pulsar «${cell(row, 'operacion')}»`, () => rowAction(page, 'PRG-001', operation.item, operation.confirm)]]);
+  // Marcador «sin recargar» antes de actuar: una recarga completa lo borra
+  const guard = reloadGuard(page);
+  if (!(await guard.arm())) return prepFailedReason(expected, 'no se pudo poner el marcador «sin recargar» en la página');
+  // Se asigna dentro de la acción: el `as` evita que TypeScript lo estreche a `undefined` antes de leerlo
+  let reply = undefined as SummaryReply | undefined;
+  const acted = await runSteps([[`pulsar «${cell(row, 'operacion')}»`, async () => { reply = await rowAction(page, 'PRG-001', operation.item, operation.confirm); }]]);
   if (acted) return actionMissing(expected, acted);
   // Tras la respuesta del resumen, las cifras se leen con su techo de espera (la pantalla pinta un instante después)
   await waitUntil(async () => {
@@ -170,11 +183,16 @@ const afterListOperation: BrowserRowHandler = async (row, { page }) => {
     return readingOf(readings, 'Programas').value === cell(row, 'programas') && readingOf(readings, 'Activos').value === cell(row, 'activos') && readingOf(readings, 'Avance medio').value === cell(row, 'avance');
   }, CEILING_MS);
   const readings = await readCards(block);
-  return conclude([
-    valueCheck(readingOf(readings, 'Programas'), cell(row, 'programas')),
-    valueCheck(readingOf(readings, 'Activos'), cell(row, 'activos')),
-    valueCheck(readingOf(readings, 'Avance medio'), cell(row, 'avance')),
-  ]);
+  const recarga = await guard.verdict();
+  return conclude(
+    [
+      valueCheck(readingOf(readings, 'Programas'), cell(row, 'programas')),
+      valueCheck(readingOf(readings, 'Activos'), cell(row, 'activos')),
+      valueCheck(readingOf(readings, 'Avance medio'), cell(row, 'avance')),
+      reloadCheck(recarga),
+    ],
+    { evidence: { recarga, respuestaResumenTrasAccion: reply === undefined ? '(no llegó la respuesta del resumen)' : { status: reply.status, ncOpen: reply.ncOpen, ncTotal: reply.ncTotal } } },
+  );
 };
 
 defineBrowserRows({
