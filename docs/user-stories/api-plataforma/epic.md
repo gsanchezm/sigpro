@@ -37,6 +37,6 @@ La historia 009 lleva la etiqueta `no-implementada`: es una capacidad futura, no
 - El reinicio del tenant y el modo caos (`/api/admin/*`): épica EP-CAOS-RESET. Aquí `GET /api/config` solo se describe por su forma pública.
 - El inicio de sesión, sus avisos y la validación del acceso: épica EP-LOGIN.
 - El paso «Verificación en dos pasos»: épica EP-MFA.
-- La pantalla del instructor `/lab`: su lista de endpoints, sus credenciales y su descarga no se describen aquí.
+- La pantalla `/lab`: su lista de endpoints, sus credenciales y su descarga no se describen aquí.
 - El panel de marca de la pantalla de acceso, que muestra el entorno y la versión: no se describe en esta épica.
 - Las respuestas propias de cada módulo (programas, requisitos, documentos y demás): cada una de sus épicas.

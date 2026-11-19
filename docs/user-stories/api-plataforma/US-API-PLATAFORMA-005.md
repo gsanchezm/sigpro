@@ -74,4 +74,4 @@ Característica: Documentación OpenAPI de la API
 
 ## Fuera de alcance
 - El contenido funcional de cada ruta, es decir, qué hace y qué devuelve: cada una de sus épicas.
-- La lista de endpoints de la pantalla del instructor `/lab`: no se describe en esta épica.
+- La lista de endpoints de la pantalla `/lab`: no se describe en esta épica.

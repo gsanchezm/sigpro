@@ -59,7 +59,7 @@ Característica: Contraejemplos y preguntas frecuentes de /lab
       | «¿Por qué mi cuenta aparece bloqueada?» | «Cinco contraseñas incorrectas seguidas bloquean la cuenta (423).» |
       | «¿Cómo apunto mi suite a este entorno?» | «del proyecto de ejemplo» |
       | «¿Qué hace el modo caos?» | «Añade latencia aleatoria, errores 500 en las escrituras» |
-      | «¿Cómo descargo el proyecto de ejemplo?» | «Con el enlace de «Material del curso»» |
+      | «¿Cómo descargo el proyecto de ejemplo?» | (describe: indica el enlace del material de ejemplo) |
 
   Esquema del escenario: Abrir una pregunta pliega la que estaba abierta
     Dado que el tenant alumno01 está recién reiniciado y con el modo caos apagado, y una persona sin sesión iniciada está en /lab con la pregunta «¿Cómo reinicio mis datos?» desplegada
@@ -75,5 +75,5 @@ Característica: Contraejemplos y preguntas frecuentes de /lab
 - El botón de reinicio y su confirmación: historia 009 de esta épica.
 - El modo caos y sus controles: historia 010 de esta épica.
 - Las credenciales y el selector de tenant: historia 008 de esta épica.
-- La lista de endpoints de la API, la descarga del material del curso, la tabla de familias responsive y el estado de la API en esta página: pendiente de asignar a una épica.
+- La lista de endpoints de la API, la descarga del material de ejemplo, la tabla de familias responsive y el estado de la API en esta página: pendiente de asignar a una épica.
 - Los textos alternos de las pantallas de Programas, Requisitos, No conformidades y Perfil: las épicas de cada módulo.

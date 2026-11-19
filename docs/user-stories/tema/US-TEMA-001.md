@@ -16,7 +16,7 @@ para ver la pantalla en el tema que prefiero sin tener que entrar en Perfil.
 - El control «Cambiar tema» no tiene texto visible: muestra un icono de luna mientras el tema es claro y un icono de sol mientras el tema es oscuro.
 - El control está en la cabecera de la aplicación, tanto en el diseño de escritorio como en el responsive; en la cabecera de Acceso (`/login`, `/register` y `/forgot`), y en las páginas `/legal/terms`, `/legal/privacy` y `/help`.
 - Cada pulsación cambia entre el tema claro y el oscuro, y el cambio se ve en la página sin recargarla.
-- El elemento raíz del documento lleva el atributo `data-theme` con el valor `light` en el tema claro y `dark` en el oscuro. El fondo de la página es `#faf8fb` en claro y `#141017` en oscuro.
+- El elemento raíz del documento declara el tema activo: `light` en el tema claro y `dark` en el oscuro. El fondo de la página es `#faf8fb` en claro y `#141017` en oscuro.
 - Preparación de cada fila: se reinicia el tenant `alumno01` con `POST /api/admin/reset` y el token de `alumno01@sigpro.lab` (contraseña `Alumno1234!`). El reinicio no borra la preferencia de tema del navegador, así que cada fila empieza en un navegador nuevo, sin ninguna preferencia de tema guardada. Las filas que necesitan sesión la inician con `gestor@sigpro.test` y `Gestor1234!` en `/login?tenant=alumno01`.
 
 ## Criterios de aceptación
@@ -27,7 +27,7 @@ Característica: Cambio de tema desde el control «Cambiar tema» en la web
     Dado que en el tenant alumno01, recién reiniciado, gestor@sigpro.test ha iniciado sesión con Gestor1234! en /login?tenant=alumno01 y está en /programs en un navegador nuevo con una ventana de <ancho>
     Cuando <accion>
     Entonces el tema es <tema>
-    Y el atributo data-theme del documento vale <valor>
+    Y el elemento raíz del documento declara el tema <valor>
     Y el fondo de la página es <fondo>
 
     Ejemplos:
@@ -42,7 +42,7 @@ Característica: Cambio de tema desde el control «Cambiar tema» en la web
     Dado que en el tenant alumno01, recién reiniciado, una persona sin sesión iniciada abre <ruta> en un navegador nuevo
     Cuando pulsa «Cambiar tema»
     Entonces el tema es oscuro
-    Y el atributo data-theme del documento vale dark
+    Y el elemento raíz del documento declara el tema dark
     Y el fondo de la página es #141017
 
     Ejemplos:

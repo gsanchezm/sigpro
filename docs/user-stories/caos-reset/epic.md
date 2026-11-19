@@ -37,10 +37,10 @@ API, web y móvil. La pantalla /lab existe en la web y no existe en el móvil (h
 
 ## Fuera de alcance
 - `GET /api/config`, `GET /api/config/tenants`, `GET /api/config/test-users` y `GET /api/health`: EP-API-PLATAFORMA. El campo `chaos` de `GET /api/config` sí se comprueba en la historia 006 de esta épica, porque es el estado del caos.
-- La variante de `POST /api/admin/reset` que usa la cabecera de administración global para reiniciar todos los tenants: es infraestructura del instructor (el cron nocturno) y no la usa el alumnado, así que no se describe.
+- La variante de `POST /api/admin/reset` que usa la cabecera de administración global para reiniciar todos los tenants: es infraestructura (el cron nocturno) y no la usa quien trabaja en su tenant, así que no se describe.
 - La pestaña «Usuarios» de Administración, sus endpoints (`GET /api/admin/users`, `PATCH /api/admin/users/:id`) y el diálogo «Información del tenant» de la pestaña «Datos»: EP-ADMIN-USUARIOS.
 - La pestaña «Auditoría» de Administración y `GET /api/audit`: EP-AUDITORIA.
-- La lista de endpoints de /lab, la descarga del material del curso, la tabla de familias de componentes responsive y el estado de la API: pendiente de asignar a una épica.
+- La lista de endpoints de /lab, la descarga del material de ejemplo, la tabla de familias de componentes responsive y el estado de la API: pendiente de asignar a una épica.
 - El aislamiento de datos entre tenants que no pasa por el caos: EP-MULTITENANT-PERMISOS.
 - La renovación, la caducidad y el cierre de sesión: EP-SESION.
 - El «Guardar» alterno de las pantallas de Programas, Requisitos, No conformidades y Perfil: las épicas de cada módulo.

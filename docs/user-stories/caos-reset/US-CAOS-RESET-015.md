@@ -10,7 +10,7 @@ verificacion: no-ejecutable
 
 ## Historia
 Como alumno que prepara las prácticas desde el móvil, quiero abrir en la app la pantalla de laboratorio con las credenciales de demo, el reinicio de datos, el modo caos y los contraejemplos,
-para tener las herramientas del curso a mano sin abrir la web en un ordenador.
+para tener las herramientas de laboratorio a mano sin abrir la web en un ordenador.
 
 ## Reglas
 - Hoy la app móvil no tiene la pantalla de laboratorio: no hay ninguna ruta que la muestre y su ayuda no enlaza a ella. El reinicio de datos y el modo caos del móvil están en Administración.
@@ -32,7 +32,7 @@ Característica: Pantalla de laboratorio en la app móvil
 ```
 
 ## Decisiones pendientes
-- Si la pantalla existe en la app móvil. La decisión de paridad del móvil la deja fuera por ser propia del navegador o del curso, mientras esa misma decisión pide que lo que se puede hacer en la web se pueda hacer en el móvil.
+- Si la pantalla existe en la app móvil. La decisión de paridad del móvil la deja fuera por ser propia del navegador o del laboratorio, mientras esa misma decisión pide que lo que se puede hacer en la web se pueda hacer en el móvil.
 - Cómo se llega a ella: una ruta propia, una entrada en «Más» o un enlace desde la ayuda. Hoy no hay ninguna de las tres.
 - Si sus secciones de reinicio y de modo caos repiten las de Administración o las sustituyen.
 - Qué secciones no tienen sentido en un teléfono (la descarga del proyecto de ejemplo y la tabla de las familias de componentes responsive) y cómo se mostrarían.

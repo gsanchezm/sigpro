@@ -62,7 +62,7 @@ Característica: Raíz, direcciones desconocidas y pantallas privadas en la web
 
 ## Fuera de alcance
 - La pantalla de Acceso, sus campos y su validación: EP-LOGIN, y el alta y la recuperación de la contraseña: EP-REGISTRO y EP-RECUPERAR.
-- La página `/lab`: es pública, y sin sesión muestra su propia cabecera mínima en lugar de llevar a Acceso. Su contenido es de la pantalla del instructor.
+- La página `/lab`: es pública, y sin sesión muestra su propia cabecera mínima en lugar de llevar a Acceso. Su contenido es de EP-CAOS-RESET.
 - La pantalla que se muestra a un rol que escribe la dirección de una sección que no le corresponde: las épicas de cada módulo.
 
 ## Decisiones pendientes

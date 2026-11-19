@@ -72,4 +72,4 @@ Característica: Barra lateral de la web de escritorio
 
 ## Decisiones pendientes
 - La entrada Requisitos lleva siempre a los requisitos de PRG-001, que es el programa del seed. No está decidido si debe llevar a la lista de programas, al último programa visitado u otra pantalla.
-- Si la entrada Lab debe verla cualquier rol, como hoy, o solo quien administra el instructor.
+- Si la entrada Lab debe verla cualquier rol, como hoy, o solo un rol concreto.

@@ -34,4 +34,4 @@ Transversal (idioma por defecto, textos y formatos), web y app móvil común a i
 - Los avisos emergentes y sus textos: épica de avisos (EP-TOASTS).
 - Los avisos de error genéricos (sin conexión o error inesperado del servidor), el acceso con certificado digital o SSO, las cuentas bloqueadas, pendientes o desactivadas como estados de la cuenta: épica de Inicio y cierre de sesión (EP-LOGIN).
 - El segundo paso de verificación como flujo: épica de Verificación en dos pasos (EP-MFA).
-- La pantalla de instructor `/lab`.
+- La pantalla `/lab`.

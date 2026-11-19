@@ -80,4 +80,4 @@ Característica: Listas públicas de tenants y de usuarios de prueba
 ## Fuera de alcance
 - La configuración del tenant con su entorno, su versión y su caos: otra historia de esta épica.
 - La pantalla de acceso que muestra o rellena estas listas: las historias de los paneles de la web y de la app móvil de esta épica.
-- El selector de tenant de la pantalla del instructor `/lab`: no se describe en esta épica. El reinicio de datos, que también está en esa pantalla, es de la épica EP-CAOS-RESET.
+- El selector de tenant de la pantalla `/lab`: no se describe en esta épica. El reinicio de datos, que también está en esa pantalla, es de la épica EP-CAOS-RESET.

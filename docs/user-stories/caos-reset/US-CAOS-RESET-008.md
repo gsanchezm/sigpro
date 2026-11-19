@@ -68,4 +68,4 @@ Característica: Credenciales de demo y tenant de trabajo en /lab
 - El reinicio de datos desde esta página: historia 009 de esta épica.
 - El modo caos desde esta página: historia 010 de esta épica.
 - Los contraejemplos y las preguntas frecuentes: historia 012 de esta épica.
-- La lista de endpoints de la API, la descarga del material del curso, la tabla de familias responsive y el estado de la API en esta página: pendiente de asignar a una épica.
+- La lista de endpoints de la API, la descarga del material de ejemplo, la tabla de familias responsive y el estado de la API en esta página: pendiente de asignar a una épica.

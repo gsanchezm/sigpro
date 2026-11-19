@@ -25,7 +25,7 @@ Característica: Tema inicial y tema conservado en la web
   Esquema del escenario: Sin preferencia guardada la web muestra el tema claro
     Dado que en el tenant alumno01, recién reiniciado, una persona sin sesión iniciada abre <ruta> en un navegador nuevo con el tema del sistema en <tema_sistema>
     Entonces el tema es claro
-    Y el atributo data-theme del documento vale light
+    Y el elemento raíz del documento declara el tema light
 
     Ejemplos:
       | ruta | tema_sistema |
@@ -37,7 +37,7 @@ Característica: Tema inicial y tema conservado en la web
     Dado que en el tenant alumno01, recién reiniciado, una persona sin sesión iniciada está en /login?tenant=alumno01 en un navegador nuevo
     Cuando <accion> y recarga la página
     Entonces el tema es <tema>
-    Y el atributo data-theme del documento vale <valor>
+    Y el elemento raíz del documento declara el tema <valor>
 
     Ejemplos:
       | accion | tema | valor |
@@ -50,7 +50,7 @@ Característica: Tema inicial y tema conservado en la web
     Dado que en el tenant alumno01, recién reiniciado, una persona sin sesión iniciada está en /login?tenant=alumno01 en un navegador nuevo y ha pulsado «Cambiar tema» <pulsaciones>
     Cuando escribe gestor@sigpro.test en «Correo electrónico» y Gestor1234! en «Contraseña», y pulsa «Entrar»
     Entonces llega a /programs con el tema <tema>
-    Y el atributo data-theme del documento vale <valor>
+    Y el elemento raíz del documento declara el tema <valor>
 
     Ejemplos:
       | pulsaciones | tema | valor |

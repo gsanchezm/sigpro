@@ -14,7 +14,7 @@ Como cliente de la API, quiero que una petición mal formada, sin sesión o sobr
 para distinguir un error de mi petición de un paso que el flujo no permite o de un permiso que mi rol no tiene.
 
 ## Reglas
-- El orden de las comprobaciones de `POST /api/requirements/:code/transition` es este: 1.º la sesión (401), 2.º el cuerpo (422), 3.º que el requisito exista en el tenant de la sesión (404), 4.º que el paso exista en la máquina de estados (409) y 5.º que el rol tenga el permiso del paso (403). La primera comprobación que falla responde, y las siguientes no se miran.
+- El orden de las primeras comprobaciones de `POST /api/requirements/:code/transition` es este: 1.º la sesión (401), 2.º el cuerpo (422) y 3.º que el requisito exista en el tenant de la sesión (404). La primera comprobación que falla responde, y las siguientes no se miran. El orden entre el paso inexistente (409) y el permiso del rol (403) cuando ambos fallan no está decidido: ver «Decisiones pendientes».
 - Sin cabecera `Authorization` la respuesta es 401 con el código `missing_token`. Con una cabecera `Authorization` de tipo `Bearer` cuyo token no es un token de acceso válido, la respuesta es 401 con el código `invalid_token`.
 - El cuerpo debe traer `to` con uno de los cuatro estados. Si `to` falta, está vacío, no es texto o no es uno de los cuatro estados (por ejemplo `done`, o `Approved` con mayúscula), la respuesta es 422 con el código `validation_failed` y el motivo `badState` en el campo `to`. Un cuerpo vacío se trata como un `to` que falta.
 - Un código que no es un requisito del tenant responde 404 con el código `requirement_not_found`. El seed trae `REQ-001` a `REQ-040`, así que `REQ-041` no existe en ningún tenant.
@@ -39,14 +39,13 @@ Característica: Errores de la petición de transición por la API
       | {} |
       | (vacío) |
 
-  Esquema del escenario: Un código que no es un requisito del tenant responde 404 o 422, nunca 403
+  Esquema del escenario: Un código que no es un requisito del tenant responde 404 o 422
     Dado que en el tenant alumno01, recién reiniciado, <requisito> no existe y <cuenta> ha iniciado sesión en ese tenant
     Cuando envía POST /api/requirements/<requisito>/transition con el cuerpo <cuerpo>
     Entonces la respuesta es <respuesta>
 
     Ejemplos:
       | requisito | cuenta | cuerpo | respuesta |
-      | REQ-041 | consultor@sigpro.test | {"to": "approved"} | 404 con el código requirement_not_found |
       | REQ-041 | alumno01@sigpro.lab | {"to": "approved"} | 404 con el código requirement_not_found |
       | REQ-041 | gestor@sigpro.test | {"to": "done"} | 422 con el código validation_failed y el motivo badState en el campo to |
 
@@ -60,20 +59,12 @@ Característica: Errores de la petición de transición por la API
       | cabecera | respuesta |
       | (sin cabecera Authorization) | 401 con el código missing_token |
       | Authorization con Bearer seguido de (texto que no es un token) | 401 con el código invalid_token |
-
-  Esquema del escenario: Un paso que el flujo no tiene responde 409 aunque el rol no pudiera darlo
-    Dado que en el tenant alumno01, recién reiniciado, <requisito> está en estado <desde> y <cuenta> ha iniciado sesión en ese tenant
-    Cuando envía POST /api/requirements/<requisito>/transition con el cuerpo {"to": "<hasta>"}
-    Entonces la respuesta es 409 con el código invalid_transition y no 403
-    Y una lectura posterior de <requisito> devuelve el estado <desde>
-
-    Ejemplos:
-      | requisito | desde | cuenta | hasta |
-      | REQ-017 | draft | consultor@sigpro.test | validated |
-      | REQ-002 | verified | gestor@sigpro.test | verified |
 ```
 
 ## Fuera de alcance
 - Los pasos válidos y su permiso, con sus efectos: en esta misma épica, en sus historias de la API.
 - La validación de los formularios de alta y de edición de un requisito: EP-REQ-EDICION.
 - El inicio de sesión que da el token de acceso: EP-LOGIN, y la renovación del token: EP-SESION.
+
+## Decisiones pendientes
+- Qué responde la API cuando fallan a la vez el paso (409 `invalid_transition`) y el permiso del rol (403 `forbidden`) o cuando falla el permiso sobre un requisito que no existe. `docs/DECISIONS.md` fija 403 antes que 409 para las no conformidades «como en Requisitos»; el código de requisitos comprueba hoy el paso antes que el permiso y busca el requisito antes que el permiso. No está decidido cuál es el orden correcto, así que ninguna fila lo afirma.

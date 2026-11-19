@@ -17,7 +17,7 @@ para saber en qué entorno y con qué versión trabajo, si la aplicación ofrece
 - `GET /api/config` es público: no necesita la cabecera `Authorization`, y un token que no es válido no cambia la respuesta.
 - `tenant` es el valor de la cabecera `x-tenant` sin los espacios del principio y del final. Sin cabecera, o con la cabecera vacía, es `demo`.
 - Un tenant que no existe no da error: la respuesta es 200, `tenant` trae el valor recibido y el caos aparece en cero, igual que en un tenant sin caos.
-- `env` es el valor de la variable `APP_ENV` del entorno, tal cual. Con la configuración local por defecto vale `dev`; en el entorno del curso, `staging`.
+- `env` es el valor de la variable `APP_ENV` del entorno, tal cual. Con la configuración local por defecto vale `dev`; en el entorno desplegado, `staging`.
 - `version` vale `0.1.0`.
 - `testUsers` vale `true`, salvo cuando `APP_ENV` vale `production`: entonces vale `false`.
 - `chaos` trae `latencyMs` (entero de 0 a 5000), `errorRate` (número de 0 a 1) y `flakyLabels` (booleano), con los valores del tenant indicado. Sin caos activo, `latencyMs` y `errorRate` valen 0 y `flakyLabels` vale `false`.
