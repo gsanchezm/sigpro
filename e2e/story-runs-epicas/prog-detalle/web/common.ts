@@ -50,7 +50,11 @@ export const literal = (text: string): string => {
   return match?.[1] ?? text.trim();
 };
 
-/** El espacio de no ruptura de los importes (`450.000 €`) se lee como espacio: es tipografía, no texto distinto. */
+/**
+ * Igualdad de texto. SOLO por tipografía: U+00A0 (espacio de no ruptura) y U+202F (espacio estrecho de no ruptura) se leen como espacio,
+ * porque `Intl` (es-ES) los pone en los importes y la historia escribe espacio normal. No relaja ninguna otra diferencia: mayúsculas,
+ * signos, tildes y espacios repetidos se comparan tal cual.
+ */
 export const same = (actual: string, expected: string): boolean => actual.replace(/[\u00a0\u202f]/g, ' ') === expected.replace(/[\u00a0\u202f]/g, ' ');
 
 // --- Pasos con su causa ----------------------------------------------------------------------------------------------------------------
@@ -127,10 +131,14 @@ export const seen = async (target: Locator): Promise<boolean | undefined> => {
   }
 };
 
-/** Texto visible de un único elemento (`undefined` si no hay exactamente uno o no se puede leer). */
+/**
+ * Texto visible de un único elemento. `undefined` si no hay exactamente uno, si no se ve (un nodo oculto tiene `innerText` pero no es
+ * un dato que la persona vea) o si no se puede leer.
+ */
 export const textOne = async (target: Locator): Promise<string | undefined> => {
   try {
     if ((await target.count()) !== 1) return undefined;
+    if (!(await target.isVisible({ timeout: 1_000 }))) return undefined;
     return (await target.innerText({ timeout: 1_000 })).trim();
   } catch {
     return undefined;
@@ -233,11 +241,15 @@ export const articleOf = (page: Page): Locator => page.getByTestId(DETALLE_TESTI
 /** Aviso de la ficha: «No se encontró el programa» o «Ha ocurrido un error inesperado» (la misma sección de alerta). */
 export const alertOf = (page: Page): Locator => page.getByTestId(DETALLE_TESTIDS.PROGRAM_DETAIL_NOT_FOUND);
 /**
- * Indicador de carga de la ficha: el bloque `role="status"` con `aria-busy="true"` y sus barras `span.skeleton` (no tiene id de prueba).
- * Se acota a ese bloque: la pantalla de arranque de la app (`App.tsx`, sin barras) y el cargador de proveedores (dentro del resumen,
- * que solo existe con la ficha cargada) tienen el mismo rol y no son el indicador de la ficha.
+ * Indicador de carga de la ficha (`ProgramDetailPage.tsx`, sin id de prueba): un `role="status"` con `aria-busy="true"` cuyas barras son
+ * `span.skeleton` y que NO está dentro del artículo de la ficha. Quedan fuera dos bloques con el mismo rol: la pantalla de arranque de la
+ * app (`App.tsx`, sin barras) y el cargador de proveedores (`SuppliersPanel.tsx`, dentro del artículo de la ficha, así que aparece con
+ * el programa ya cargado y nunca mientras espera).
  */
-export const loadingOf = (page: Page): Locator => page.locator('[role="status"][aria-busy="true"]:has(> span.skeleton)');
+export const loadingOf = (page: Page): Locator =>
+  page.locator(
+    'xpath=//*[@role="status"][@aria-busy="true"][not(ancestor::article)][span[contains(concat(" ", normalize-space(@class), " "), " skeleton ")]]',
+  );
 /** Título de la página (la h1 de la ficha o del aviso). */
 export const titleOf = (page: Page): Locator => page.getByRole('heading', { level: 1 });
 /** Insignia de estado de la cabecera. */

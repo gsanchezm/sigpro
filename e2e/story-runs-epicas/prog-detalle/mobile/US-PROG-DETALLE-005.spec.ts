@@ -3,7 +3,7 @@ import { DEMO, resetTenants, TENANT_A, type Credentials } from '../../../story-r
 import { ACTION, pathOf, waitUntil } from '../../support/browser';
 import { check, cell, conclude, strict, type Check } from '../../support/checks';
 import { defineBrowserRows, type BrowserRowHandler } from '../../core/framework';
-import { actionMissing, attrOne, enabledOne, notSeenCheck, prepFailed, runSteps, seenCheck, valueCheck } from '../web/common';
+import { actionMissing, attrOne, enabledOne, notSeenCheck, prepFailed, runSteps, seenCheck, textOne, valueCheck } from '../web/common';
 import {
   articleOf,
   budgetOf,
@@ -38,18 +38,25 @@ const DETAIL = '/programs/PRG-001';
 /** Lectura de un dato de la ficha móvil frente al valor de la celda. */
 type Reader = (page: Page, valor: string) => Promise<readonly Check[]>;
 
-/** La etiqueta que la historia nombra se ve en la ficha (el texto exacto de la etiqueta, una sola vez). */
-const labelCheck = (page: Page, label: string): Promise<Check> =>
-  seenCheck(articleOf(page).getByText(label, { exact: true }), `ve la etiqueta «${label}»`, `la etiqueta «${label}»`);
+/**
+ * Etiqueta y valor juntos: el contenedor de la pareja es el ancestro más cercano del valor que contiene el texto exacto de la etiqueta
+ * (en la ficha, el bloque «etiqueta + valor»). La etiqueta debe verse DENTRO de ese contenedor, y el valor debe ser el de la celda.
+ */
+const labeledValue = async (valueLocator: Locator, label: string, valor: string, what: string): Promise<Check[]> => {
+  const pair = valueLocator.locator(`xpath=ancestor::*[.//text()[normalize-space(.)='${label}']][1]`);
+  const labelInPair = await seenCheck(pair.getByText(label, { exact: true }), `ve la etiqueta «${label}» junto a su valor`, `la etiqueta «${label}» junto al valor`);
+  return [labelInPair, await valueCheck(valueLocator, valor, what)];
+};
 
-/** Campo con etiqueta: se comprueba la etiqueta y el valor. */
+/** Campo con etiqueta de la ficha: etiqueta y valor en la misma pareja. */
 const labeledField =
   (label: string, locate: (page: Page) => Locator): Reader =>
-  async (page, valor) => [await labelCheck(page, label), await valueCheck(locate(page), valor, `el campo «${label}»`)];
+  async (page, valor) =>
+    labeledValue(locate(page), label, valor, `el campo «${label}»`);
 
 const FIELD_READERS: ReadonlyMap<string, Reader> = new Map<string, Reader>([
   ['el título', async (page, valor) => [await valueCheck(screenTitle(page), valor, 'el título')]],
-  ['el código', async (page, valor) => [await seenCheck(articleOf(page).getByText(valor, { exact: true }), `ve el código ${valor}`, 'el código')]],
+  ['el código', async (page, valor) => [await valueCheck(articleOf(page).getByText(valor, { exact: true }), valor, 'el código')]],
   ['el estado', async (page, valor) => [await valueCheck(stateBadgeOf(page), valor, 'el estado')]],
   ['el campo «Responsable»', labeledField('Responsable', ownerOf)],
   ['el campo «Fechas»', labeledField('Fechas', datesOf)],
@@ -57,12 +64,14 @@ const FIELD_READERS: ReadonlyMap<string, Reader> = new Map<string, Reader>([
   [
     'la barra «Progreso»',
     async (page, valor) => {
-      // El texto «11 %» va junto a la barra (la barra no tiene texto propio); el valor de la barra es aria-valuenow
+      // El texto «11 %» va junto a la barra (la barra no tiene texto propio: la fila que la contiene es la pareja con la etiqueta
+      // «Progreso»); el valor de la barra es aria-valuenow
       const percent = valor.replace(/\s*%$/, '');
-      const label = await labelCheck(page, 'Progreso');
-      const text = await valueCheck(progressBarOf(page).locator('xpath=../..'), valor, 'la barra «Progreso» muestra');
+      const row = progressBarOf(page).locator('xpath=../..');
+      const pair = await labeledValue(row, 'Progreso', valor, 'la barra «Progreso» muestra');
+      const read = await textOne(row);
       const now = await attrOne(progressBarOf(page), 'aria-valuenow');
-      return [label, text, check(now === percent, `la barra «Progreso» vale ${percent}`, `la barra «Progreso» vale ${now ?? '(sin leer)'}`)];
+      return [...pair, check(now === percent, `la barra «Progreso» vale ${percent}`, `la barra «Progreso» vale ${now ?? '(sin leer)'} y muestra «${read ?? '(sin leer)'}»`)];
     },
   ],
   ['la descripción', async (page, valor) => [await valueCheck(descriptionOf(page), valor, 'la descripción')]],
@@ -131,11 +140,18 @@ const editByRole: BrowserRowHandler = async (row, { page }) => {
   }
   // «No se puede pulsar»: el clic debe fallar (el botón está deshabilitado) y la app debe seguir en la ficha
   const refused = await runSteps([['pulsar «Editar programa»', () => button.click({ timeout: 1_000 })]]);
+  // Se distingue «el botón está deshabilitado» (el clic lo rechaza por eso) de «el clic falló por otra causa»
+  const disabledCause = refused !== undefined && refused.callLog.some((line) => /not enabled|is disabled/.test(line));
   checks.push(
     check(
       refused !== undefined && pathOf(page) === DETAIL,
       'no se puede pulsar: la app sigue en /programs/PRG-001',
       refused === undefined ? `se pudo pulsar y la app va a ${pathOf(page)}` : `no se pudo pulsar; sigue en ${pathOf(page)}`,
+    ),
+    check(
+      disabledCause,
+      'el clic falla porque el botón está deshabilitado',
+      refused === undefined ? 'el clic no falló' : disabledCause ? 'el clic falla porque el botón está deshabilitado' : `el clic falló por otra causa: ${refused.callLog.join(' · ')}`,
     ),
   );
   return conclude(checks, refused === undefined ? { note: DIRECT_APPROXIMATION } : { note: DIRECT_APPROXIMATION, evidence: { callLog: refused.callLog } });

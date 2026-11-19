@@ -87,9 +87,16 @@ export const shapeChecks = (body: unknown): readonly Check[] => {
   const priority = field(body, 'priority');
   const start = field(body, 'startDate');
   const end = field(body, 'endDate');
+  const progress = field(body, 'progress');
+  const done = field(body, 'milestonesDone');
+  const total = field(body, 'milestonesTotal');
   return [
     check(exact, 'exactamente los 14 campos del detalle', exact ? 'exactamente los 14 campos del detalle' : `campos ${keys.length === 0 ? '(ninguno)' : keys.join(', ')}`),
-    check(typeof classified === 'boolean' && Number.isInteger(budget), 'classified booleano y budgetEur entero', `classified ${String(classified)} y budgetEur ${String(budget)}`),
+    check(
+      typeof classified === 'boolean' && [budget, progress, done, total].every((value) => Number.isInteger(value)),
+      'classified booleano; budgetEur, progress, milestonesDone y milestonesTotal enteros',
+      `classified ${String(classified)}, budgetEur ${String(budget)}, progress ${String(progress)}, milestonesDone ${String(done)}, milestonesTotal ${String(total)}`,
+    ),
     check(
       typeof status === 'string' && STATUS.has(status) && typeof priority === 'string' && PRIORITY.has(priority) && typeof start === 'string' && ISO_DATE.test(start) && typeof end === 'string' && ISO_DATE.test(end),
       'status y priority de sus listas y fechas YYYY-MM-DD',
@@ -98,12 +105,42 @@ export const shapeChecks = (body: unknown): readonly Check[] => {
   ];
 };
 
-/** El cuerpo no trae ningún dato del programa (ni campo de datos ni un código PRG-xxx). */
+/**
+ * Rutas donde el cuerpo trae datos de programa, en CUALQUIER nivel (también anidados): una clave de datos del programa, o un valor que sea
+ * un código PRG-xxx (eco del código). El `code` de un error es `program_not_found`, así que no cuenta por sí solo.
+ */
+const dataHits = (value: unknown, path: string): string[] => {
+  if (Array.isArray(value)) return value.flatMap((item, index) => dataHits(item, `${path}[${index}]`));
+  if (typeof value === 'string') return /^PRG-\d{3}$/.test(value) ? [`${path}=${value}`] : [];
+  if (typeof value === 'object' && value !== null) {
+    return Object.entries(value).flatMap(([key, child]) => [...(DATA_FIELDS.includes(key) ? [`${path}.${key}`] : []), ...dataHits(child, `${path}.${key}`)]);
+  }
+  return [];
+};
+
+/** El cuerpo no trae ningún dato del programa, ni al nivel superior ni anidado (ni un campo de datos ni un código PRG-xxx). */
 export const noProgramData = (result: ApiResult): Check => {
-  const found = DATA_FIELDS.filter((key) => field(result.body, key) !== undefined);
-  const code = field(result.body, 'code');
-  const pieces = typeof code === 'string' && /^PRG-\d{3}$/.test(code) ? [...found, `code ${code}`] : found;
-  return check(pieces.length === 0, 'el cuerpo no trae ningún dato del programa', pieces.length === 0 ? 'sin datos del programa' : `trae ${pieces.join(', ')}`);
+  const hits = dataHits(result.body, '$');
+  return check(hits.length === 0, 'el cuerpo no trae ningún dato del programa, ni anidado', hits.length === 0 ? 'sin datos del programa' : `trae ${hits.join(', ')}`);
+};
+
+/** JSON canónico: las claves se ordenan en todos los niveles, así dos cuerpos se comparan enteros sin depender del orden de las claves. */
+export const canonicalJson = (value: unknown): string => JSON.stringify(sortKeys(value));
+const sortKeys = (value: unknown): unknown => {
+  if (Array.isArray(value)) return value.map(sortKeys);
+  if (typeof value === 'object' && value !== null) {
+    const entries = Object.keys(value).sort().map((key): [string, unknown] => [key, sortKeys((value as Record<string, unknown>)[key])]);
+    return Object.fromEntries(entries);
+  }
+  return value;
+};
+
+/** Igualdad por TIPO y valor: un texto con su texto; un número solo con su número entero escrito; un booleano con «true» o «false». */
+export const sameValue = (actual: unknown, expected: string): boolean => {
+  if (typeof actual === 'string') return actual === expected;
+  if (typeof actual === 'number') return /^-?\d+$/.test(expected) && Number(expected) === actual;
+  if (typeof actual === 'boolean') return expected === (actual ? 'true' : 'false');
+  return false;
 };
 
 /** 404 `program_not_found`: estado, `code` y `message` (la regla pide ambos con ese mismo texto). */
@@ -113,8 +150,9 @@ export const notFoundCheck = (result: ApiResult): Check => {
   return check(ok, 'respuesta 404 con code y message program_not_found', `respuesta ${result.status} con code ${String(errorCode(result))} y message ${String(message)}`);
 };
 
-/** Un campo del cuerpo igual, como texto exacto, al que dice la celda. */
+/** Un campo del cuerpo igual, por tipo y valor, al que dice la celda (un número «11» no es el texto «11»). */
 export const fieldCheck = (body: unknown, key: string, expected: string): Check => {
   const value = field(body, key);
-  return check(String(value) === expected, `el campo ${key} vale ${expected}`, `el campo ${key} vale ${value === undefined ? '(sin campo)' : String(value)}`);
+  const shown = value === undefined ? '(sin campo)' : typeof value === 'string' ? value : JSON.stringify(value);
+  return check(sameValue(value, expected), `el campo ${key} vale ${expected}`, `el campo ${key} vale ${shown}`);
 };

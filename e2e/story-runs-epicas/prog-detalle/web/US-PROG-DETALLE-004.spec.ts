@@ -1,11 +1,12 @@
 import type { Locator, Page } from '@playwright/test';
 import { PROGRAMAS_TESTIDS } from '../../../../packages/shared/src/testids';
 import { resetTenants, TENANT_A } from '../../../story-runs/support/prepare';
-import { ACTION, isVisible, pathOf, waitUntil } from '../../support/browser';
+import { ACTION, CEILING_MS, isVisible, pathOf, waitUntil } from '../../support/browser';
 import { cell, check, conclude, sleep, strict, type Check } from '../../support/checks';
 import { defineBrowserRows, type BrowserRowHandler } from '../../core/framework';
 import {
   actionMissing,
+  attrOne,
   cardMenuOf,
   DESKTOP_WIDTH,
   notSeenCheck,
@@ -55,14 +56,31 @@ const PANEL_LABELS: ReadonlyMap<string, string> = new Map<string, string>([
   ['el campo «Avance»', 'Avance'],
 ]);
 
-/** Peticiones a la API de programas desde ahora: el panel lateral no debe pedir nada (los datos ya están en la fila). */
-const apiRequestsFrom = (page: Page): string[] => {
-  const requests: string[] = [];
+/** Una petición a la API observada: método, ruta con su query e instante (`performance.now()`, en el proceso de la prueba). */
+interface ApiEvent {
+  readonly at: number;
+  readonly method: string;
+  readonly target: string;
+}
+
+/**
+ * Escucha TODAS las peticiones a /api/ (no solo las de programas) desde que se registra. Se llama cuando la lista ya ha terminado su carga
+ * inicial (`listSettled`), así que la petición inicial de la lista no entra en la cuenta. Guarda el instante de inicio del listener.
+ */
+const observeApi = (page: Page): { readonly startedAt: number; readonly events: ApiEvent[] } => {
+  const events: ApiEvent[] = [];
+  const startedAt = performance.now();
   page.on('request', (request) => {
     const url = new URL(request.url());
-    if (url.pathname.startsWith('/api/programs')) requests.push(`${request.method()} ${url.pathname}`);
+    if (url.pathname.startsWith('/api/')) events.push({ at: performance.now(), method: request.method(), target: `${url.pathname}${url.search}` });
   });
-  return requests;
+  return { startedAt, events };
+};
+
+/** La lista ha terminado su carga inicial: la red está en reposo (o se agota el techo) y la tabla ya no está marcada como ocupada. */
+const listSettled = async (page: Page): Promise<void> => {
+  await page.waitForLoadState('networkidle', { timeout: CEILING_MS }).catch(() => undefined);
+  await waitUntil(async () => (await attrOne(page.getByRole('table'), 'aria-busy')) === 'false');
 };
 
 // --- Esquema 1: el panel muestra los datos del programa de la fila -------------------------------------------------------------------------
@@ -75,16 +93,27 @@ const panelData: BrowserRowHandler = async (row, { page }) => {
   const expected = `ve ${dato} con el valor ${valor}`;
   const signed = await signIn(page, DESKTOP_WIDTH);
   if (signed) return prepFailed(expected, signed);
-  const requests = apiRequestsFrom(page);
+  await listSettled(page);
+  const observer = observeApi(page);
+  const clickAt = performance.now();
   const opened = await openPanel(page);
   if (opened) return actionMissing(expected, opened);
   await panelShown(page);
-  // Se observa un segundo con el panel abierto: ninguna petición a la API de programas
+  // Se observa un segundo con el panel abierto. Solo cuentan las peticiones posteriores al clic en la fila.
   await sleep(1_000);
-  const checks: Check[] = [await valueCheck(locate(page), valor, dato), check(requests.length === 0, 'el panel no hace ninguna petición', requests.length === 0 ? 'ninguna petición a /api/programs' : `peticiones: ${requests.join(', ')}`)];
+  const counted = observer.events
+    .filter((event) => event.at >= clickAt)
+    .map((event) => ({ metodo: event.method, ruta: event.target, msDesdeClic: Math.round(event.at - clickAt) }));
+  const described = counted.map((event) => `${event.metodo} ${event.ruta} a los ${event.msDesdeClic} ms`).join('; ');
+  const checks: Check[] = [
+    await valueCheck(locate(page), valor, dato),
+    check(counted.length === 0, 'el panel no hace ninguna petición a /api/', counted.length === 0 ? 'ninguna petición a /api/' : `peticiones: ${described}`),
+  ];
   const label = PANEL_LABELS.get(dato);
   if (label !== undefined) checks.push(await valueCheck(locate(page).locator('xpath=..').locator('dt'), label, 'la etiqueta del campo'));
-  return conclude(checks, { evidence: { peticiones: requests } });
+  return conclude(checks, {
+    evidence: { inicioDelListenerMs: Math.round(observer.startedAt), clicMs: Math.round(clickAt), peticionesDesdeElClic: counted },
+  });
 };
 
 // --- Esquema 2: el panel se cierra con el botón o con la tecla Escape ----------------------------------------------------------------------
@@ -140,12 +169,12 @@ const narrowCard: BrowserRowHandler = async (row, { page }) => {
   if (signed) return prepFailed(expected, signed);
   const menu = await runSteps([[`abrir el menú de acciones de la tarjeta de ${code}`, () => cardMenuOf(page, code).click(ACTION)]]);
   if (menu) return actionMissing(expected, menu);
-  // Con la hoja de acciones abierta (antes de elegir), no hay ningún panel lateral en la lista responsive
-  const noPanel = await notSeenCheck(sidePanel(page), 'ningún panel lateral', 'el panel lateral');
   const picked = await runSteps([['elegir «Ver detalle»', () => viewDetailItem(page).click(ACTION)]]);
   if (picked) return actionMissing(expected, picked);
   const arrived = await waitUntil(async () => pathOf(page) === `/programs/${code}`);
-  return conclude([noPanel, check(arrived.reached, `llega a /programs/${code}`, `llega a ${pathOf(page)}`)]);
+  // Después de elegir «Ver detalle» y de llegar a la ruta de detalle: no hay ningún panel lateral
+  const noPanel = await notSeenCheck(sidePanel(page), 'ningún panel lateral', 'el panel lateral');
+  return conclude([check(arrived.reached, `llega a /programs/${code}`, `llega a ${pathOf(page)}`), noPanel]);
 };
 
 defineBrowserRows({

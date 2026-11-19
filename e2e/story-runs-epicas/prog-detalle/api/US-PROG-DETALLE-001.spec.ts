@@ -1,10 +1,11 @@
 import { adminCredentials, call, field, type ApiResult } from '../../../story-runs/support/api';
 import { DEMO, TENANT_A, TENANT_B } from '../../../story-runs/support/prepare';
-import { cell, conclude, parseResponse, preparationFailed, responseCheck, strict, type Check } from '../../support/checks';
+import { cell, check, conclude, parseResponse, preparationFailed, responseCheck, strict, type Check } from '../../support/checks';
 import { defineApiRows, outcome, type ApiRowHandler } from '../../core/framework';
 import {
-  CODES_NOT_A_PROGRAM,
   ACCOUNTS,
+  canonicalJson,
+  CODES_NOT_A_PROGRAM,
   fieldCheck,
   getProgram,
   notFoundCheck,
@@ -53,7 +54,17 @@ const anyRole: ApiRowHandler = async (row) => {
     });
   }
   const result = await getProgram('PRG-001', session.accessToken);
-  return conclude([responseCheck(result, { status: 200 }), fieldCheck(result.body, 'code', 'PRG-001'), fieldCheck(result.body, 'ownerName', 'Marta Ruiz'), ...shapeChecks(result.body)]);
+  // «Misma respuesta» que el gestor: estado y cuerpo entero (JSON canónico), no solo algunos campos
+  const reference = await sessionOfAccount(TENANT_A, DEMO.gestor);
+  const referenceResult = reference.accessToken === undefined ? undefined : await getProgram('PRG-001', reference.accessToken);
+  const same = referenceResult !== undefined && referenceResult.status === result.status && canonicalJson(referenceResult.body) === canonicalJson(result.body);
+  return conclude([
+    responseCheck(result, { status: 200 }),
+    fieldCheck(result.body, 'code', 'PRG-001'),
+    fieldCheck(result.body, 'ownerName', 'Marta Ruiz'),
+    check(same, 'la misma respuesta que gestor@sigpro.test (estado y cuerpo entero)', same ? 'cuerpo y estado iguales al del gestor' : `cuerpo distinto del gestor: ${canonicalJson(result.body)}`),
+    ...shapeChecks(result.body),
+  ]);
 };
 
 // --- Esquema 3: un código que no es un programa del tenant responde 404 --------------------------------------------------------------------
@@ -131,10 +142,19 @@ const isolation: ApiRowHandler = async (row) => {
   const header = strict('cabecera', ISOLATION_HEADER, cell(row, 'cabecera'));
   const wanted = strict('respuesta', ISOLATION_RESPONSE, cell(row, 'respuesta'));
   const result = await getProgram('PRG-025', token, header);
-  // 404: estado, código y mensaje (con la ausencia de datos); 200: estado, nombre y forma de la respuesta
+  // 404: estado, código y mensaje, sin datos anidados, y el cuerpo ENTERO igual al de un código que no existe (PRG-000, mismo token y cabecera)
   const checks: Check[] = [];
-  if (wanted.status === 404) checks.push(notFoundCheck(result), noProgramData(result));
-  else checks.push(responseCheck(result, { status: wanted.status }));
+  if (wanted.status === 404) {
+    const missing = await getProgram('PRG-000', token, header);
+    const same = missing.status === result.status && canonicalJson(missing.body) === canonicalJson(result.body);
+    checks.push(
+      notFoundCheck(result),
+      noProgramData(result),
+      check(same, 'el cuerpo es igual que el de un código que no existe (PRG-000)', same ? 'cuerpo igual al de PRG-000' : `cuerpo distinto: ${canonicalJson(result.body)} frente a ${canonicalJson(missing.body)}`),
+    );
+  } else {
+    checks.push(responseCheck(result, { status: wanted.status }));
+  }
   if (wanted.name !== undefined) checks.push(fieldCheck(result.body, 'name', wanted.name), ...shapeChecks(result.body));
   return conclude(checks);
 };

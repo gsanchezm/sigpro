@@ -142,11 +142,18 @@ const editByRole: BrowserRowHandler = async (row, { page }) => {
   }
   // «No se puede pulsar»: el clic debe fallar (el botón no está habilitado) y la página debe seguir en la ficha
   const refused = await runSteps([['pulsar «Editar programa»', () => control.click({ timeout: 1_000 })]]);
+  // Se distingue «el botón está deshabilitado» (el clic lo rechaza por eso) de «el clic falló por otra causa» (p. ej. lo tapa otro elemento)
+  const disabledCause = refused !== undefined && refused.callLog.some((line) => /not enabled|is disabled/.test(line));
   checks.push(
     check(
       refused !== undefined && pathOf(page) === DETAIL,
       'no se puede pulsar: la ficha sigue en /programs/PRG-001',
       refused === undefined ? `se pudo pulsar y la página va a ${pathOf(page)}` : `no se pudo pulsar; sigue en ${pathOf(page)}`,
+    ),
+    check(
+      disabledCause,
+      'el clic falla porque el botón está deshabilitado',
+      refused === undefined ? 'el clic no falló' : disabledCause ? 'el clic falla porque el botón está deshabilitado' : `el clic falló por otra causa: ${refused.callLog.join(' · ')}`,
     ),
   );
   return conclude(checks, refused === undefined ? {} : { evidence: { callLog: refused.callLog } });
@@ -166,13 +173,33 @@ const CONTENT: ReadonlyMap<string, 'resumen' | 'hitos' | 'requisitos'> = new Map
 ]);
 
 /** Lo que cada opción muestra y, en «Requisitos», lo que NO muestra («solo» el enlace). */
+/** Los datos de PRG-001 del Esquema 1 (mismos datos y mismos valores): «ve los datos de la ficha» los comprueba todos, como ese Esquema. */
+const SEED_FACTS: ReadonlyArray<readonly [string, string]> = [
+  ['el código', 'PRG-001'],
+  ['el título de la página', 'Sistema de mando táctico Ártemis'],
+  ['la descripción', 'Programa «Sistema de mando táctico Ártemis»: alcance, hitos, requisitos y verificación del sistema.'],
+  ['el estado', '«Activo»'],
+  ['el campo «Responsable»', 'Marta Ruiz'],
+  ['el campo «Fechas»', '01/01/2023 → 01/07/2024'],
+  ['el campo «Presupuesto»', '450.000 €'],
+  ['el campo «Prioridad»', '«Media»'],
+  ['el campo «Clasificado»', '«Sí»'],
+  ['el campo «Hitos completados»', '1 / 9'],
+  ['la barra «Progreso»', '11%'],
+];
+
 const contentChecks = async (page: Page, kind: 'resumen' | 'hitos' | 'requisitos'): Promise<readonly Check[]> => {
   if (kind === 'resumen') {
-    return [
+    const checks: Check[] = [
       await seenCheck(summaryList(page), 've los datos de la ficha', 'los datos de la ficha'),
-      await valueCheck(summaryField(page, 'Responsable'), 'Marta Ruiz', 'el responsable'),
       await seenCheck(suppliersSection(page), 've la sección de proveedores del programa', 'la sección de proveedores'),
     ];
+    for (const [dato, valor] of SEED_FACTS) {
+      const reader = FIELD_READERS.get(dato);
+      if (reader === undefined) throw new Error(`sin lector para «${dato}»`);
+      checks.push(...(await reader(page, valor)));
+    }
+    return checks;
   }
   if (kind === 'hitos') {
     return [
@@ -215,6 +242,9 @@ const TAB_KEY: ReadonlyMap<string, string> = new Map<string, string>([
   ['flecha izquierda', 'ArrowLeft'],
 ]);
 
+/** Lo que las filas de flechas no prueban: la regla de vuelta (desde la última, derecha → la primera; desde la primera, izquierda → la última). */
+const ARROW_NOTE = 'La fila solo prueba Resumen→Hitos o Resumen→Requisitos. La vuelta de la regla (desde la última, la flecha derecha va a la primera; desde la primera, la izquierda va a la última) y Hitos↔Requisitos no la ejecuta ninguna fila.';
+
 const arrowKeys: BrowserRowHandler = async (row, { page }) => {
   await resetTenants([TENANT_A]);
   const from = strict('desde', OPTIONS, cell(row, 'desde'));
@@ -235,7 +265,7 @@ const arrowKeys: BrowserRowHandler = async (row, { page }) => {
   if (pressed) return actionMissing(expected, pressed);
   await waitUntil(async () => (await selectedLabel(page, DESKTOP_WIDTH)) === to);
   const selected = await selectedLabel(page, DESKTOP_WIDTH);
-  return conclude([check(selected === to, expected, `la pestaña seleccionada es ${selected ?? '(sin leer)'}`)]);
+  return conclude([check(selected === to, expected, `la pestaña seleccionada es ${selected ?? '(sin leer)'}`)], { note: ARROW_NOTE });
 };
 
 // --- Esquema 5: el ancho de la ventana decide cómo se ven las opciones ----------------------------------------------------------------------
@@ -342,6 +372,6 @@ defineBrowserRows({
     [4, onWeb(arrowKeys)],
     [5, onWeb(shapeByWidth)],
     [6, onWeb(requirementsTree)],
-    [7, onWeb(noSession)],
+    [7, noSession],
   ]),
 });

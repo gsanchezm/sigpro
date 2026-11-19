@@ -1,3 +1,4 @@
+import type { Locator } from '@playwright/test';
 import { resetTenants, TENANT_A } from '../../../story-runs/support/prepare';
 import { ACTION, CEILING_MS, isVisible, pathOf, waitUntil } from '../../support/browser';
 import { cell, check, conclude, strict } from '../../support/checks';
@@ -17,9 +18,12 @@ import {
   openPath,
   prepFailed,
   prepFailedText,
+  progressBarOf,
   runSteps,
+  seen,
   seenCheck,
   signIn,
+  stateBadgeOf,
 } from './common';
 
 // US-PROG-DETALLE-003 — Carga, aviso de no encontrado, error de la ficha y volver a Programas (web). Preparación de cada fila: reinicio de
@@ -46,19 +50,29 @@ const loadingUntilArrival: BrowserRowHandler = async (row, { page }) => {
   const went = await runSteps([['abrir /programs/PRG-001', () => page.goto('/programs/PRG-001', { timeout: CEILING_MS })]]);
   if (went) return actionMissing(expected, went);
 
-  // Se mira durante la espera (con el techo por defecto): si el nombre llega antes de ver la carga, la comprobación no se cumple
-  const watched = { loading: false, nameWhileLoading: false };
+  // Se mira durante la espera (con el techo por defecto). Mientras el indicador de carga se ve, no debe verse ningún dato del programa:
+  // ni su código, ni su nombre, ni otro dato de la ficha. Si el nombre llega antes de ver la carga, la comprobación no se cumple.
+  const watched = { loading: false, leaked: new Set<string>() };
   const name = page.getByRole('heading', NAME_HEADING);
+  const probes: ReadonlyMap<string, Locator> = new Map<string, Locator>([
+    ['el nombre', name],
+    ['el código PRG-001', page.getByText('PRG-001', { exact: true })],
+    ['el estado', stateBadgeOf(page)],
+    ['la barra «Progreso»', progressBarOf(page)],
+    ['el responsable Marta Ruiz', page.getByText('Marta Ruiz', { exact: true })],
+    ['la ficha', articleOf(page)],
+  ]);
   await waitUntil(async () => {
     if (await isVisible(loadingOf(page))) {
       watched.loading = true;
-      if (await isVisible(name)) watched.nameWhileLoading = true;
+      for (const [label, probe] of probes) if ((await seen(probe)) === true) watched.leaked.add(label);
     }
-    return isVisible(name);
+    return (await seen(name)) === true;
   });
+  const leaked = [...watched.leaked];
   return conclude([
     check(watched.loading, 'mientras espera ve el indicador de carga', watched.loading ? 've el indicador de carga' : 'no ve el indicador de carga'),
-    check(!watched.nameWhileLoading, 'no ve el nombre mientras espera', watched.nameWhileLoading ? 've el nombre mientras espera' : 'no ve el nombre mientras espera'),
+    check(leaked.length === 0, 'mientras espera no ve el código, el nombre ni otro dato de la ficha', leaked.length === 0 ? 'no ve datos del programa' : `ve ${leaked.join(', ')}`),
     await seenCheck(name, `al llegar la respuesta ve el nombre ${NAME}`, `el nombre ${NAME}`),
   ]);
 };

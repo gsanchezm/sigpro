@@ -1,11 +1,10 @@
-import type { Page } from '@playwright/test';
+import type { Locator, Page } from '@playwright/test';
 import { DEMO, resetTenants, TENANT_A } from '../../../story-runs/support/prepare';
 import { ACTION, CEILING_MS, pathOf, waitUntil } from '../../support/browser';
 import { cell, check, conclude, strict } from '../../support/checks';
 import { defineBrowserRows, type BrowserRowHandler } from '../../core/framework';
 import {
   actionMissing,
-  articleOf,
   delayDetail,
   failDetail,
   notSeenCheck,
@@ -18,10 +17,17 @@ import {
   type StepFailure,
 } from '../web/common';
 import {
+  articleOf,
   backButton,
+  budgetOf,
+  datesOf,
+  descriptionOf,
   DETAIL_TITLE,
   DIRECT_APPROXIMATION,
   errorOf,
+  ownerOf,
+  progressBarOf,
+  stateBadgeOf,
   heading1,
   loadingOf,
   notFoundOf,
@@ -58,21 +64,34 @@ const loadingUntilArrival: BrowserRowHandler = async (row, { page }) => {
   const went = await runSteps([['abrir /programs/PRG-001', () => page.goto(DETAIL, { timeout: CEILING_MS })]]);
   if (went) return actionMissing(expected, went);
 
-  // Se mira durante la espera (con el techo por defecto): si el nombre llega antes de ver «Cargando…», la comprobación no se cumple
-  const watched: { loading: boolean; text?: string; nameWhileLoading: boolean } = { loading: false, nameWhileLoading: false };
+  // Se mira durante la espera (con el techo por defecto). Mientras se ve «Cargando…» no debe verse el nombre ni ningún otro dato del
+  // programa. El código NO cuenta: el subtítulo de la pantalla muestra el código pedido mientras carga (ProgramDetailScreen.tsx:46) y la
+  // regla móvil solo prohíbe el nombre.
+  const watched: { loading: boolean; text?: string; leaked: Set<string> } = { loading: false, leaked: new Set<string>() };
   const name = heading1(page, NAME);
+  const probes: ReadonlyMap<string, Locator> = new Map<string, Locator>([
+    ['el nombre', name],
+    ['el responsable', ownerOf(page)],
+    ['las fechas', datesOf(page)],
+    ['el presupuesto', budgetOf(page)],
+    ['la descripción', descriptionOf(page)],
+    ['el estado', stateBadgeOf(page)],
+    ['la barra «Progreso»', progressBarOf(page)],
+    ['la ficha', articleOf(page)],
+  ]);
   await waitUntil(async () => {
     if ((await seen(loadingOf(page))) === true) {
       watched.loading = true;
       watched.text ??= await textOne(loadingOf(page));
-      if ((await seen(name)) === true) watched.nameWhileLoading = true;
+      for (const [label, probe] of probes) if ((await seen(probe)) === true) watched.leaked.add(label);
     }
     return (await seen(name)) === true;
   });
+  const leaked = [...watched.leaked];
   return conclude(
     [
       check(watched.loading && watched.text === 'Cargando…', 'mientras espera ve «Cargando…»', watched.loading ? `ve «${watched.text ?? '(sin leer)'}»` : 'no ve «Cargando…»'),
-      check(!watched.nameWhileLoading, 'no ve el nombre mientras espera', watched.nameWhileLoading ? 've el nombre mientras espera' : 'no ve el nombre mientras espera'),
+      check(leaked.length === 0, 'mientras espera no ve el nombre del programa ni sus datos', leaked.length === 0 ? 'no ve datos del programa' : `ve ${leaked.join(', ')}`),
       await seenCheck(name, `al llegar la respuesta ve el nombre ${NAME}`, `el nombre ${NAME}`),
     ],
     { note: DIRECT_APPROXIMATION },
@@ -156,7 +175,11 @@ const ORIGIN: ReadonlyMap<string, Origin> = new Map<string, Origin>([
   ['la búsqueda global, con el resultado del programa PRG-001', 'busqueda'],
 ]);
 
-/** Llega a la ficha desde el origen de la fila: la lista (tarjeta) o la búsqueda global (su resultado), siempre con navegación de la propia app. */
+/**
+ * Llega a la ficha desde el origen de la fila. La pantalla de origen (la lista o la búsqueda global) se abre por su dirección, con carga
+ * completa y la sesión guardada (`goto`); desde ella la ficha se abre con navegación de la propia app (tocar la tarjeta o el resultado),
+ * así que «volver» tiene historial que recorrer.
+ */
 const reachDetail = async (page: Page, origin: Origin): Promise<StepFailure | undefined> => {
   if (origin === 'lista') {
     const listed = await runSteps([
