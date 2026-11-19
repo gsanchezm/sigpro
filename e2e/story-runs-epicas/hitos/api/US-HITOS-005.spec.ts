@@ -22,21 +22,27 @@ import {
 // después, inicio de sesión de la cuenta de la fila en alumno01 (x-tenant: alumno01). La fila del hito de otro tenant crea PRG-001-M10
 // en alumno02 y reinicia alumno02 al terminar.
 
+/** Serialización de una lista de hitos para compararla tal cual (mismo orden, mismos campos y valores). */
+const snapshotOf = (items: readonly unknown[]): string => JSON.stringify(items);
+
 // --- Esquema 1: eliminar un hito responde 204 y lo quita de la lista -----------------------------------------------------------
 
 const deleteRemoves: ApiRowHandler = async (row) => {
   const hito = cell(row, 'hito');
-  const expected = `respuesta 204 y la lista de PRG-001 tiene 8 hitos sin ${hito}`;
+  const expected = `respuesta 204 y la lista de PRG-001 tiene 8 hitos sin ${hito}, y los demás no cambian`;
   await resetTenants([TENANT_A]);
   const gestor = await tokenFor('gestor');
   if (gestor.token === undefined) return preparationFailed(expected, 'gestor@sigpro.test inicia sesión y recibe accessToken', gestor.last);
+  const antes = itemsOf(await listMilestones(gestor.token, 'PRG-001'));
   const borrado = await request('DELETE', TENANT_A, `/milestones/${hito}`, gestor.token);
-  const lista = await listMilestones(gestor.token, 'PRG-001');
-  const items = itemsOf(lista);
+  const despues = itemsOf(await listMilestones(gestor.token, 'PRG-001'));
+  const restantes = antes.filter((item) => field(item, 'id') !== hito);
   return conclude([
     responseCheck(borrado, { status: 204 }),
-    check(items.length === 8, '8 hitos en la lista', `${items.length} hitos en la lista`),
-    check(milestoneOf(items, hito) === undefined, `${hito} fuera de la lista`, milestoneOf(items, hito) === undefined ? `${hito} fuera de la lista` : `${hito} sigue en la lista`),
+    check(despues.length === 8, '8 hitos en la lista', `${despues.length} hitos en la lista`),
+    check(milestoneOf(despues, hito) === undefined, `${hito} fuera de la lista`, milestoneOf(despues, hito) === undefined ? `${hito} fuera de la lista` : `${hito} sigue en la lista`),
+    // «Los demás hitos no cambian de fecha, de nombre ni de avance»: la lista restante es idéntica a la de antes del borrado
+    check(snapshotOf(restantes) === snapshotOf(despues), 'los demás hitos no cambian (mismos id, nombre, fecha, avance y cumplido)', 'los demás hitos cambian'),
   ]);
 };
 
@@ -109,6 +115,13 @@ const permissions: ApiRowHandler = async (row) => {
   if (sent.failed !== undefined) return preparationFailed(expected, 'la cuenta de la fila inicia sesión en alumno01 y recibe accessToken', sent.failed.last);
   const result = await request('DELETE', TENANT_A, `/milestones/${hito}`, sent.token);
   const checks: Check[] = 'code' in esperada ? [rechazoCheck(result, esperada)] : [responseCheck(result, { status: esperada.status })];
+  // Tras la respuesta, la lista confirma el efecto: con 204 el hito ya no está; con 403 sigue (con la misma cuenta se puede leer la lista)
+  if (sent.token !== undefined && hito === 'PRG-001-M03') {
+    const lista = itemsOf(await listMilestones(sent.token, 'PRG-001'));
+    const presente = milestoneOf(lista, hito) !== undefined;
+    const debeEstar = !('status' in esperada && esperada.status === 204);
+    checks.push(check(presente === debeEstar, debeEstar ? `${hito} sigue en la lista` : `${hito} ya no está en la lista`, presente ? `${hito} sigue en la lista` : `${hito} ya no está en la lista`));
+  }
   return conclude(checks);
 };
 

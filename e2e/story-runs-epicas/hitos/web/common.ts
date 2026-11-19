@@ -220,7 +220,7 @@ export const enterAndOpen = async (page: Page, credentials: Credentials, code: s
 export const settledMilestones = async (page: Page): Promise<boolean> =>
   (
     await waitUntil(async () => {
-      const rows = await page.locator('[data-testid^="milestone-row-"]').count();
+      const rows = await page.locator('tr[data-testid^="milestone-row-"]').count();
       return rows > 0 || (await isVisible(page.getByTestId(HITOS_TESTIDS.MILESTONES_EMPTY))) || (await isVisible(page.getByTestId(HITOS_TESTIDS.MILESTONES_ERROR)));
     })
   ).reached;
@@ -281,18 +281,68 @@ export const hasToast = async (page: Page, title: string, body?: string): Promis
 /** Espera a un aviso con ese título y cuerpo, con el techo de la prueba. */
 export const waitToast = async (page: Page, title: string, body?: string): Promise<boolean> => (await waitUntil(() => hasToast(page, title, body))).reached;
 
-/** Un aviso con ese título no aparece durante `durationMs` (se observa un tiempo que elige la prueba). */
-export const noToastFor = async (page: Page, title: string, durationMs = 2_000): Promise<boolean> => {
-  const started = performance.now();
-  while (performance.now() - started < durationMs) {
-    if (await hasToast(page, title)) return false;
-    await sleep(50);
-  }
-  return true;
+interface RecordedWindow {
+  __sigproToasts?: ToastView[];
+}
+
+/**
+ * Registro de avisos: se instala ANTES de la acción y guarda cada aviso que aparece desde entonces, aunque dure menos de lo que tarda la
+ * comprobación (un aviso vive 3 s). Así «no aparece ningún aviso» se comprueba sobre todo lo que salió, no sobre lo que se ve en un instante.
+ */
+export const armToasts = (page: Page): Promise<void> =>
+  page.evaluate(() => {
+    const host = window as unknown as { __sigproToasts?: { tone: string; title: string; body: string }[]; __sigproArmed?: boolean };
+    if (host.__sigproArmed === true) return;
+    host.__sigproArmed = true;
+    host.__sigproToasts = [];
+    const record = (element: HTMLElement): void => {
+      // Hojas de texto: el título y el cuerpo. El botón «×» (web) no es un div y no entra.
+      const leaves = Array.from(element.querySelectorAll('div'))
+        .filter((node) => node.querySelector('div') === null)
+        .map((node) => (node.textContent ?? '').trim());
+      host.__sigproToasts?.push({ tone: element.getAttribute('data-testid') ?? '', title: leaves[0] ?? '', body: leaves[1] ?? '' });
+    };
+    new MutationObserver((mutations) => {
+      for (const mutation of mutations) {
+        for (const node of Array.from(mutation.addedNodes)) {
+          if (!(node instanceof HTMLElement)) continue;
+          if (node.matches('[data-testid^="toast-"][role]')) record(node);
+          node.querySelectorAll<HTMLElement>('[data-testid^="toast-"][role]').forEach(record);
+        }
+      }
+    }).observe(document.body, { childList: true, subtree: true });
+  });
+
+/** Todos los avisos registrados desde `armToasts`, en orden de aparición. */
+export const recordedToasts = (page: Page): Promise<readonly ToastView[]> =>
+  page.evaluate(() => (window as unknown as RecordedWindow).__sigproToasts ?? []).catch(() => []);
+
+/**
+ * Un aviso con ese título NO salió desde `armToasts`. Espera `durationMs` (por encima de la vida de un aviso y del retardo de red) y
+ * después mira el registro: un aviso que apareciera y se fuera durante la espera también cuenta.
+ */
+export const noRecordedToastFor = async (page: Page, title: string, durationMs = 3_500): Promise<boolean> => {
+  await sleep(durationMs);
+  return !(await recordedToasts(page)).some((toast) => same(toast.title, title));
 };
 
-/** Un aviso de guardado (título «Hito actualizado») no aparece durante `durationMs`. */
-export const noSaveToastFor = (page: Page, durationMs = 2_000): Promise<boolean> => noToastFor(page, 'Hito actualizado', durationMs);
+/** Texto visible del porcentaje de la cabecera del programa («22%», sin espacio), que va justo después de la barra. */
+export const headerPercentText = (page: Page): Promise<string | undefined> => textOne(headerProgress(page).locator('xpath=following-sibling::span[1]'));
+
+/** Cuenta las peticiones de un método a una ruta de la API desde que se registra (no cambia la página). */
+export const requestCounter = (page: Page, method: string, pathname: string): { readonly count: () => number } => {
+  let total = 0;
+  page.on('request', (request) => {
+    if (request.method() === method && new URL(request.url()).pathname === pathname) total += 1;
+  });
+  return { count: () => total };
+};
+
+/** Número de hitos que devuelve la API para el programa (lectura por HTTP, sin tocar la pantalla). -1 si la lista no llega. */
+export const milestoneCountByApi = async (token: string, code: string): Promise<number> => {
+  const listed = await call('GET', `/programs/${code}/milestones`, { tenant: TENANT_A, token });
+  return Array.isArray(listed.body) ? (listed.body as readonly unknown[]).length : -1;
+};
 
 // --- Demoras y fallos provocados por la prueba -----------------------------------------------------------------------------------
 

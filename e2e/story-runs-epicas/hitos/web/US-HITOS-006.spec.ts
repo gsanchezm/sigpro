@@ -55,7 +55,18 @@ const CUENTAS: ReadonlyMap<string, Credentials> = new Map<string, Credentials>([
   ['auditor@sigpro.test', DEMO.auditor],
 ]);
 
+/** Lo que cada fila de rol dice que puede hacer, leído de la celda «resultado» (texto exacto de la historia). */
+const RESULTADO_ROL: ReadonlyMap<string, 'edita' | 'solo lectura'> = new Map<string, 'edita' | 'solo lectura'>([
+  ['el texto «Doble clic para editar · Intro guarda · Esc cancela» y «Nuevo hito» habilitado', 'edita'],
+  ['el texto «Tu rol no permite modificar hitos», «Nuevo hito» deshabilitado y los deslizadores de avance sin poder moverse', 'solo lectura'],
+]);
+
 const ESPERA: ReadonlyMap<string, number> = new Map<string, number>([['3 segundos', 3_000]]);
+
+/** Orden de los hitos de PRG-001 y PRG-004 según la historia (los nombres del seed, por fecha límite). */
+const SECUENCIA: readonly string[] = ['SRR', 'PDR', 'CDR', 'TRR', 'FAT', 'SAT', 'Entrega', 'Cierre', 'Garantía'];
+
+const same = (a: readonly string[], b: readonly string[]): boolean => a.length === b.length && a.every((value, index) => value === b[index]);
 
 // --- Esquema 1: la tabla muestra cada hito con su avance y su estado -------------------------------------------------------------
 
@@ -82,7 +93,7 @@ const orderAndCount: BrowserRowHandler = async (row, { page }) => {
   const primero = literal(cell(row, 'primero'));
   const ultimo = literal(cell(row, 'ultimo'));
   const recuento = literal(cell(row, 'recuento'));
-  const expected = `el primer hito es ${primero}, el último ${ultimo} y el recuento dice ${recuento}`;
+  const expected = `la secuencia ${SECUENCIA.join(', ')}; el primer hito es ${primero}, el último ${ultimo} y el recuento dice ${recuento}`;
   await resetTenants([TENANT_A]);
   const failure = await enterAndOpen(page, DEMO.gestor, programa);
   if (failure) return prepFailed(expected, failure);
@@ -90,6 +101,7 @@ const orderAndCount: BrowserRowHandler = async (row, { page }) => {
   const nombres = await milestoneNamesOf(page);
   const texto = await textOne(countLine(page));
   return conclude([
+    check(same(nombres, SECUENCIA), `la secuencia ${SECUENCIA.join(', ')}`, `la secuencia ${nombres.join(', ') || '(ninguna)'}`),
     check(nombres[0] === primero, `el primero es ${primero}`, `el primero es ${nombres[0] ?? '(ninguno)'}`),
     check(nombres[nombres.length - 1] === ultimo, `el último es ${ultimo}`, `el último es ${nombres[nombres.length - 1] ?? '(ninguno)'}`),
     check(texto === recuento, `el recuento dice ${recuento}`, `el recuento dice ${texto ?? '(sin leer)'}`),
@@ -101,15 +113,16 @@ const orderAndCount: BrowserRowHandler = async (row, { page }) => {
 const roleView: BrowserRowHandler = async (row, { page }) => {
   const cuenta = cell(row, 'cuenta');
   const credenciales = strict('cuenta', CUENTAS, cuenta);
+  const modo = strict('resultado', RESULTADO_ROL, cell(row, 'resultado'));
   const expected = `${cuenta} ve ${cell(row, 'resultado')}`;
   await resetTenants([TENANT_A]);
   const failure = await enterAndOpen(page, credenciales, 'PRG-001');
   if (failure) return prepFailed(expected, failure);
   await settledMilestones(page);
-  const puede = cuenta === 'gestor@sigpro.test';
-  const hint = puede ? 'Doble clic para editar · Intro guarda · Esc cancela' : 'Tu rol no permite modificar hitos';
-  const checks: Check[] = [await seenCheck(page.getByText(hint, { exact: true }), `el texto «${hint}»`, `el texto «${hint}»`), await enabledCheck(newButton(page), puede, '«Nuevo hito»')];
-  if (!puede) {
+  const edita = modo === 'edita';
+  const hint = edita ? 'Doble clic para editar · Intro guarda · Esc cancela' : 'Tu rol no permite modificar hitos';
+  const checks: Check[] = [await seenCheck(page.getByText(hint, { exact: true }), `el texto «${hint}»`, `el texto «${hint}»`), await enabledCheck(newButton(page), edita, '«Nuevo hito»')];
+  if (!edita) {
     checks.push(await enabledCheck(sliderOf(page, 'SRR'), false, 'el deslizador de avance de SRR'));
     checks.push(await enabledCheck(sliderOf(page, 'PDR'), false, 'el deslizador de avance de PDR'));
   }
@@ -130,7 +143,7 @@ const emptyProgram: BrowserRowHandler = async (row, { page }) => {
   if (failure) return prepFailed(expected, failure);
   await settledMilestones(page);
   return conclude([
-    await seenCheck(emptyLine(page), 'el aviso «Este programa todavía no tiene hitos.»', 'el aviso «Este programa todavía no tiene hitos.»'),
+    await textCheck(emptyLine(page), 'Este programa todavía no tiene hitos.', 'el aviso'),
     await textCheck(countLine(page), '0 de 0 hitos cumplidos', 'el recuento dice'),
   ]);
 };
@@ -188,7 +201,8 @@ const failedLoad: BrowserRowHandler = async (row, { page }) => {
   const shown = await waitUntil(() => isVisible(errorBox(page)));
   const titulo = await seenCheck(errorBox(page).getByText('No se pudieron cargar los hitos', { exact: true }), 'el aviso «No se pudieron cargar los hitos»', 'el aviso «No se pudieron cargar los hitos»');
   const boton = await seenCheck(errorBox(page).getByRole('button', { name: 'Reintentar', exact: true }), 'el botón «Reintentar»', 'el botón «Reintentar»');
-  const sinFilas = check((await milestoneNamesOf(page)).length === 0, 'ninguna fila de hito', 'ninguna fila de hito');
+  const filasAntes = (await milestoneNamesOf(page)).length;
+  const sinFilas = check(filasAntes === 0, 'ninguna fila de hito', `${filasAntes} filas de hito`);
   switchOn.on = false;
   await errorBox(page).getByRole('button', { name: 'Reintentar', exact: true }).click(ACTION);
   await settledMilestones(page);

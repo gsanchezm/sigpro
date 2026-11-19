@@ -127,6 +127,13 @@ export const textField = (item: unknown, key: string): string | undefined => {
 /** Hito de la lista con ese id, o `undefined`. */
 export const milestoneOf = (items: readonly unknown[], id: string): unknown => items.find((item) => field(item, 'id') === id);
 
+/** Número de hitos que la API devuelve para un programa de alumno01 (solo lectura). */
+export const countMilestones = async (token: string | undefined, programCode: string): Promise<number> => itemsOf(await listMilestones(token, programCode)).length;
+
+/** Regla «No se crea nada»: el número de hitos no cambia tras un rechazo. */
+export const nothingCreatedCheck = (antes: number, despues: number): Check =>
+  check(antes === despues, 'no se crea ningún hito', `hitos antes ${antes}, después ${despues}`);
+
 /** Código del programa de un id de hito: PRG-001-M02 → PRG-001. Cualquier otra forma lanza. */
 export const programOf = (milestoneId: string): string => {
   const match = /^(PRG-\d{3})-M\d{2}$/.exec(milestoneId);
@@ -174,8 +181,10 @@ export const rechazoCheck = (result: ApiResult, expected: Rechazo): Check => {
 /** 422 `nothingToUpdate`: el motivo no va asociado a ningún campo (la clave de `errors` no es ninguno de los campos del hito). */
 export const nothingToUpdateCheck = (result: ApiResult): Check => {
   const errors = errorsOf(result);
-  const onlyRoot = !['name', 'dueDate', 'progress'].some((key) => key in errors);
-  const ok = result.status === 422 && errorCode(result) === 'validation_failed' && Object.values(errors).includes('nothingToUpdate') && onlyRoot;
+  // Solo la clave raíz (la vacía: ningún campo) y ese motivo. Cualquier otra clave, aunque no sea un campo del hito, rompe la regla.
+  const keys = Object.keys(errors);
+  const onlyRoot = keys.length === 1 && keys[0] === '' && errors[''] === 'nothingToUpdate';
+  const ok = result.status === 422 && errorCode(result) === 'validation_failed' && onlyRoot;
   return check(ok, '422 validation_failed con el motivo nothingToUpdate y sin motivo de ningún campo', `${describeResponse(result)}; errores ${JSON.stringify(errors)}`);
 };
 

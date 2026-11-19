@@ -9,6 +9,7 @@ import {
   enterAndOpen,
   failMilestoneWrite,
   hasToast,
+  headerPercentText,
   headerProgress,
   literal,
   prepFailed,
@@ -47,7 +48,7 @@ const moveSlider: BrowserRowHandler = async (row, { page }) => {
   const estado = literal(cell(row, 'estado'));
   const recuento = literal(cell(row, 'recuento'));
   const avance = intOf(cell(row, 'avance'));
-  const expected = `mover el avance de ${hito} a ${valor}: aviso ${aviso}, estado ${estado}, recuento ${recuento} y cabecera ${avance} %`;
+  const expected = `mover el avance de ${hito} a ${valor}: aviso ${aviso}, estado ${estado}, recuento ${recuento} y cabecera ${avance}%`;
   await resetTenants([TENANT_A]);
   const failure = await enterAndOpen(page, DEMO.gestor, 'PRG-001');
   if (failure) return prepFailed(expected, failure);
@@ -58,12 +59,15 @@ const moveSlider: BrowserRowHandler = async (row, { page }) => {
   const avisoVisible = await waitToast(page, 'Hito actualizado', aviso);
   const estadoVisible = await statusOfRow(page, 'PRG-001', hito);
   const recuentoVisible = await textOne(countLine(page));
-  const cabecera = await waitUntil(async () => (await attrOne(headerProgress(page), 'aria-valuenow')) === String(avance));
+  // La cabecera se refresca tras el guardado (recarga del programa): se espera a los dos datos, el de la barra y el visible «N%»
+  const cabecera = await waitUntil(async () => (await attrOne(headerProgress(page), 'aria-valuenow')) === String(avance) && (await headerPercentText(page)) === `${avance}%`);
+  const visible = await headerPercentText(page);
+  const barra = await attrOne(headerProgress(page), 'aria-valuenow');
   return conclude([
     check(avisoVisible, `el aviso «Hito actualizado» con «${aviso}»`, avisoVisible ? 'aviso visible' : 'sin ese aviso'),
     check(estadoVisible === estado, `el estado de ${hito} es ${estado}`, `el estado de ${hito} es ${estadoVisible ?? '(sin leer)'}`),
     check(recuentoVisible === recuento, `el recuento dice ${recuento}`, `el recuento dice ${recuentoVisible ?? '(sin leer)'}`),
-    check(cabecera.reached, `la cabecera del programa muestra ${avance} %`, `la cabecera no muestra ${avance} % (barra en ${String(await attrOne(headerProgress(page), 'aria-valuenow'))})`),
+    check(cabecera.reached, `la cabecera del programa muestra ${avance}%`, `la cabecera muestra ${visible ?? '(sin leer)'} (barra ${barra ?? '(sin leer)'})`),
   ]);
 };
 

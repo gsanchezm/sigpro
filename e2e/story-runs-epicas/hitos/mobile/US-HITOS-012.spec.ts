@@ -6,7 +6,7 @@ import { ACTION, waitUntil } from '../../support/browser';
 import { cell, check, conclude, strict, type Check } from '../../support/checks';
 import { defineBrowserRows, outcome, type BrowserRowHandler } from '../../core/framework';
 import { buttonNamed, cardOf, countLine, decOf, deleteItem, enterAndOpen, failMilestoneWrite, gestorToken, incOf, literal, menuOf, onExpoWeb, settledCards, sliderOf, statusInCard } from './common';
-import { attrOne, enabledOne, hasToast, prepFailed, seen, textOne, waitToast, noToastFor } from '../web/common';
+import { actionMissing, armToasts, attrOne, enabledOne, hasToast, noRecordedToastFor, prepFailed, runSteps, seen, textOne, waitToast } from '../web/common';
 
 // US-HITOS-012 — Mover el avance de un hito de 5 en 5 y borrarlo con confirmación (app móvil, Expo web a 390 px). Preparación de cada fila:
 // reinicio de alumno01 con el token de su administrador; después, inicio de sesión de gestor@sigpro.test con «alumno01» en «Tenant de
@@ -20,7 +20,7 @@ const PREPARACION: ReadonlyMap<string, 'seed' | 'parche95'> = new Map<string, 's
   ['PDR se ha llevado a 95 % con PATCH /api/milestones/PRG-001-M02', 'parche95'],
 ]);
 
-/** Botón de la celda, normalizado el signo menos (U+2212 o guion) a «-». */
+/** Botón de la celda, con el signo menos normalizado a «-» (la historia escribe «−», U+2212). */
 const BOTON: ReadonlyMap<string, 'mas' | 'menos'> = new Map<string, 'mas' | 'menos'>([
   ['«+»', 'mas'],
   ['«-»', 'menos'],
@@ -41,7 +41,11 @@ const RESULTADO_AVANCE: ReadonlyMap<string, Efecto> = new Map<string, Efecto>([
   ['el avance de PDR pasa a 100 %, su estado pasa a «Cumplido» y el recuento dice «2 de 9 hitos cumplidos»', { avance: '100 %', estado: 'Cumplido', recuento: '2 de 9 hitos cumplidos' }],
 ]);
 
+const NOTA_DESHABILITADO = 'La fila no pulsa: el botón está deshabilitado, así que el avance que se comprueba es el del estado inicial, no el resultado de una acción.';
+
 const avanceOf = (page: Page, hito: string): Promise<string | undefined> => attrOne(sliderOf(page, hito), 'aria-valuetext');
+
+const botonDe = (page: Page, hito: string, mas: boolean): Locator => (mas ? incOf(page, hito) : decOf(page, hito));
 
 // --- Esquema 1: los botones − y + mueven el avance de 5 en 5 sin salirse de 0 a 100 -----------------------------------------
 
@@ -62,19 +66,29 @@ const stepButtons: BrowserRowHandler = async (row, { page }) => {
   if (failure) return prepFailed(expected, failure);
   await settledCards(page);
 
-  const control: Locator = boton === 'mas' ? incOf(page, hito) : decOf(page, hito);
-  const simbolo = boton === 'mas' ? '+' : '−';
+  const mas = boton === 'mas';
+  const control = botonDe(page, hito, mas);
+  const simbolo = mas ? '+' : '−';
   if (efecto.deshabilitado) {
     const habilitado = await enabledOne(control);
     const avance = await avanceOf(page, hito);
-    return conclude([
-      check(habilitado === false, `el botón «${simbolo}» de ${hito} está deshabilitado`, `el botón «${simbolo}» ${String(habilitado)}`),
-      check(avance === efecto.avance, `el avance de ${hito} sigue en ${efecto.avance}`, `el avance de ${hito} es ${avance ?? '(sin leer)'}`),
-    ]);
+    return conclude(
+      [
+        check(habilitado === false, `el botón «${simbolo}» de ${hito} está deshabilitado`, `el botón «${simbolo}» ${String(habilitado)}`),
+        check(avance === efecto.avance, `el avance de ${hito} sigue en ${efecto.avance}`, `el avance de ${hito} es ${avance ?? '(sin leer)'}`),
+      ],
+      { note: NOTA_DESHABILITADO },
+    );
   }
-  await control.click(ACTION);
-  await waitUntil(async () => (await avanceOf(page, hito)) === efecto.avance);
-  const checks: Check[] = [check((await avanceOf(page, hito)) === efecto.avance, `el avance de ${hito} pasa a ${efecto.avance}`, `el avance de ${hito} es ${(await avanceOf(page, hito)) ?? '(sin leer)'}`)];
+  // Se pulsa dentro del diagnóstico de pasos; después se espera el aviso de guardado antes de leer estado y recuento
+  const pulsado = await runSteps([[`pulsar «${simbolo}» del control de ${hito}`, () => control.click(ACTION)]]);
+  if (pulsado) return actionMissing(expected, pulsado);
+  const aviso = await waitToast(page, 'Hito actualizado', `${hito} · avance ${efecto.avance}`);
+  const avanceLeido = await waitUntil(async () => (await avanceOf(page, hito)) === efecto.avance);
+  const checks: Check[] = [
+    check(aviso, `el aviso «Hito actualizado» con «${hito} · avance ${efecto.avance}»`, aviso ? 'aviso visible' : 'sin ese aviso (el avance vuelve al valor anterior si el guardado falla)'),
+    check(avanceLeido.reached, `el avance de ${hito} pasa a ${efecto.avance}`, `el avance de ${hito} es ${(await avanceOf(page, hito)) ?? '(sin leer)'}`),
+  ];
   if (efecto.estado !== undefined) {
     const estado = await statusInCard(page, hito);
     checks.push(check(estado === efecto.estado, `el estado de ${hito} es ${efecto.estado}`, `el estado de ${hito} es ${estado ?? '(sin leer)'}`));
@@ -96,7 +110,8 @@ const rejectedStep: BrowserRowHandler = async (row, { page }) => {
   if (failure) return prepFailed(expected, failure);
   await settledCards(page);
   await failMilestoneWrite(page, 'PRG-001-M02', 'PATCH');
-  await incOf(page, hito).click(ACTION);
+  const pulsado = await runSteps([[`pulsar «+» del control de ${hito}`, () => incOf(page, hito).click(ACTION)]]);
+  if (pulsado) return actionMissing(expected, pulsado);
   const aviso = await waitUntil(() => hasToast(page, 'No se pudo guardar el hito'));
   const vuelve = await waitUntil(async () => (await avanceOf(page, hito)) === '10 %');
   const estado = await statusInCard(page, hito);
@@ -127,20 +142,27 @@ const removeFromMenu: BrowserRowHandler = async (row, { page }) => {
   const failure = await enterAndOpen(page, DEMO.gestor, 'PRG-001');
   if (failure) return prepFailed(expected, failure);
   await settledCards(page);
-  await menuOf(page, 'PDR').click(ACTION);
-  await deleteItem(page).click(ACTION);
+  // Los avisos se registran ANTES de la acción, para que «ningún aviso» se mida sobre todo lo que salga
+  await armToasts(page);
   const hoja = page.getByTestId(HITOS_TESTIDS.MILESTONE_DELETE_DIALOG);
-  await waitUntil(() => seen(hoja).then((value) => value === true));
-  await buttonNamed(page, decision === 'cancelar' ? 'Cancelar' : 'Eliminar').click(ACTION);
+  const abrir = await runSteps([
+    ['abrir el menú de PDR', () => menuOf(page, 'PDR').click(ACTION)],
+    ['elegir «Eliminar» en el menú', () => deleteItem(page).click(ACTION)],
+  ]);
+  if (abrir) return actionMissing(expected, abrir);
+  const abierta = await waitUntil(() => seen(hoja).then((value) => value === true));
+  if (!abierta.reached) return conclude([check(false, 'la hoja de confirmación «Eliminar hito» se abre', 'la hoja de confirmación no se abre')]);
+  const pulsar = await runSteps([[`pulsar «${decision === 'cancelar' ? 'Cancelar' : 'Eliminar'}» en la hoja`, () => buttonNamed(page, decision === 'cancelar' ? 'Cancelar' : 'Eliminar').click(ACTION)]]);
+  if (pulsar) return actionMissing(expected, pulsar);
 
   if (resultado === 'sigue') {
     const cerrada = await waitUntil(() => seen(hoja).then((value) => value === false));
     const sigue = await seen(cardOf(page, 'PDR'));
-    const sinAviso = await noToastFor(page, 'Hito eliminado');
+    const sinAviso = await noRecordedToastFor(page, 'Hito eliminado');
     return conclude([
       check(cerrada.reached, 'la hoja se cierra', cerrada.reached ? 'la hoja se cerró' : 'la hoja sigue abierta'),
       check(sigue === true, '«PDR» sigue en la lista', sigue === true ? '«PDR» sigue en la lista' : '«PDR» no está en la lista'),
-      check(sinAviso, 'ningún aviso', sinAviso ? 'ningún aviso' : 'aparece un aviso'),
+      check(sinAviso, 'ningún aviso de «Hito eliminado»', sinAviso ? 'ningún aviso de «Hito eliminado»' : 'aparece un aviso de «Hito eliminado»'),
     ]);
   }
   const aviso = await waitToast(page, 'Hito eliminado', 'PDR');

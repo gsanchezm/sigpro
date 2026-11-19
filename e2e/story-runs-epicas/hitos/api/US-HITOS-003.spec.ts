@@ -61,6 +61,7 @@ const changeFields: ApiRowHandler = async (row) => {
   const fecha = cambio.fecha === 'antes' ? (textField(before, 'dueDate') ?? '') : cambio.fecha;
   const checks: Check[] = [
     responseCheck(result, { status: 200 }),
+    check(textField(result.body, 'id') === 'PRG-001-M01', 'el id no cambia (PRG-001-M01)', `id ${String(textField(result.body, 'id'))}`),
     ...echoChecks(result, { name: cambio.nombre, dueDate: fecha }),
   ];
   if (cambio.sinCambios) {
@@ -162,6 +163,12 @@ const permissions: ApiRowHandler = async (row) => {
     esperada === ACEPTADA
       ? [responseCheck(result, { status: 200 }), ...echoChecks(result, { name: nombre.trim() })]
       : [rechazoCheck(result, esperada)];
+  // Tras un 403 el hito no cambia: se relee la lista con la misma cuenta y el nombre sigue siendo el del seed
+  if (esperada !== ACEPTADA) {
+    const despues = await listMilestones(sent.token, 'PRG-001');
+    const hito = milestoneOf(itemsOf(despues), 'PRG-001-M01');
+    checks.push(check(textField(hito, 'name') === 'SRR', 'el nombre de PRG-001-M01 sigue siendo SRR', `el nombre es ${String(textField(hito, 'name'))}`));
+  }
   return conclude(checks);
 };
 

@@ -6,16 +6,19 @@ import { cell, check, conclude, strict } from '../../support/checks';
 import { defineBrowserRows, type BrowserRowHandler } from '../../core/framework';
 import {
   actionMissing,
+  armToasts,
   attrCheck,
+  attrOne,
   countLine,
   enabledCheck,
   enterAndOpen,
   failMilestoneWrite,
   hasToast,
+  headerPercentText,
   headerProgress,
   literal,
   menuButtonOf,
-  noToastFor,
+  noRecordedToastFor,
   prepFailed,
   rowOf,
   runSteps,
@@ -75,6 +78,7 @@ const confirmOrCancel: BrowserRowHandler = async (row, { page }) => {
   const failure = await enterAndOpen(page, DEMO.gestor, 'PRG-001');
   if (failure) return prepFailed(expected, failure);
   await settledMilestones(page);
+  await armToasts(page);
   const opened = await openDelete(page, hito);
   if (opened) return actionMissing(expected, opened);
   const pulsado = await runSteps([[`pulsar «${accion}» en el diálogo`, () => dialogo(page).getByRole('button', { name: accion, exact: true }).click(ACTION)]]);
@@ -83,7 +87,7 @@ const confirmOrCancel: BrowserRowHandler = async (row, { page }) => {
   if (resultado === 'sigue') {
     const cerrado = await waitUntil(async () => (await seen(dialogo(page))) === false);
     const sigue = await waitUntil(async () => (await seen(rowOf(page, 'PRG-001', hito))) === true);
-    const sinAviso = await noToastFor(page, 'Hito eliminado');
+    const sinAviso = await noRecordedToastFor(page, 'Hito eliminado');
     return conclude([
       check(cerrado.reached, 'el diálogo se cierra', cerrado.reached ? 'el diálogo se cerró' : 'el diálogo sigue abierto'),
       check(sigue.reached, `«${hito}» sigue en la tabla`, sigue.reached ? `«${hito}» sigue en la tabla` : `«${hito}» ya no está en la tabla`),
@@ -99,10 +103,13 @@ const confirmOrCancel: BrowserRowHandler = async (row, { page }) => {
       await textCheck(countLine(page), '1 de 8 hitos cumplidos', 'el recuento dice'),
     ]);
   }
+  // La cabecera se refresca tras el borrado: se espera a los dos datos (la barra y el «0%» visible) antes de leerla
+  const cabecera = await waitUntil(async () => (await attrOne(headerProgress(page), 'aria-valuenow')) === '0' && (await headerPercentText(page)) === '0%');
+  const visible = await headerPercentText(page);
   return conclude([
     check(quitado.reached, `«${hito}» desaparece de la tabla`, quitado.reached ? `«${hito}» desaparece de la tabla` : `«${hito}» sigue en la tabla`),
     await textCheck(countLine(page), '0 de 8 hitos cumplidos', 'el recuento dice'),
-    await attrCheck(headerProgress(page), 'aria-valuenow', '0', 'la cabecera del programa muestra'),
+    check(cabecera.reached, 'la cabecera del programa muestra 0%', `la cabecera muestra ${visible ?? '(sin leer)'}`),
   ]);
 };
 
@@ -118,16 +125,19 @@ const roleCannotDelete: BrowserRowHandler = async (row, { page }) => {
   await settledMilestones(page);
   const opened = await runSteps([
     ['abrir el menú de «SRR»', () => menuButtonOf(page, 'SRR').click(ACTION)],
-    ['ver el menú de «SRR»', async () => {
-      if (!(await waitUntil(() => isVisible(page.getByRole('menuitem', { name: 'Eliminar', exact: true })))).reached) throw new Error('el menú no aparece');
-    }],
+    [
+      'ver el menú de «SRR»',
+      async () => {
+        if (!(await waitUntil(() => isVisible(page.getByRole('menuitem', { name: 'Eliminar', exact: true })))).reached) throw new Error('el menú no aparece');
+      },
+    ],
   ]);
   if (opened) return actionMissing(expected, opened);
   const eliminar = page.getByRole('menuitem', { name: 'Eliminar', exact: true });
-  return conclude([
-    await enabledCheck(eliminar, false, '«Eliminar»'),
-    await attrCheck(eliminar, 'title', 'Tu rol no permite eliminar hitos', 'el motivo al pasar el ratón es'),
-  ]);
+  return conclude(
+    [await enabledCheck(eliminar, false, '«Eliminar»'), await attrCheck(eliminar, 'title', 'Tu rol no permite eliminar hitos', 'el motivo al pasar el ratón es')],
+    { note: 'El motivo se lee del atributo title (el tooltip): no se hace hover real sobre la opción.' },
+  );
 };
 
 // --- Esquema 3: un borrado que el servidor rechaza deja el hito en la tabla -------------------------------------------------

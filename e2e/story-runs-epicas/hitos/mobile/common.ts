@@ -4,19 +4,26 @@ import { DETALLE_TESTIDS, HITOS_DYNAMIC_TESTIDS, HITOS_TESTIDS, MOVIL_PROGRAMS_D
 import { ACTION, CEILING_MS, waitUntil } from '../../support/browser';
 import { check, type Check } from '../../support/checks';
 import type { BrowserRowHandler } from '../../core/framework';
-import { attrOne, deleteAllMilestones, delayMilestones, failMilestoneWrite, failingMilestones, gestorToken, hasToast, literal, noToastFor, runSteps, seen, textOne, toastsOf, waitToast, type StepFailure } from '../web/common';
+import { attrOne, deleteAllMilestones, delayMilestones, failMilestoneWrite, failingMilestones, gestorToken, hasToast, literal, noRecordedToastFor, armToasts, runSteps, seen, textOne, toastsOf, waitToast, type StepFailure } from '../web/common';
 
 // Piezas comunes de las filas de la app móvil de EP-HITOS, servida como web (Expo web a 390 px). El veredicto vale para Expo web: no se ha
 // comprobado en iOS ni en Android nativo. Los localizadores son de rol y de nombre donde la app los da (botones, deslizadores, tarjetas,
 // menús, hojas) y, si no, de testids de `testids.ts` como respaldo.
 
-export { TENANT_A, literal, toastsOf, hasToast, waitToast, noToastFor, failMilestoneWrite, delayMilestones, failingMilestones, deleteAllMilestones, gestorToken };
+export { TENANT_A, literal, toastsOf, hasToast, waitToast, armToasts, noRecordedToastFor, failMilestoneWrite, delayMilestones, failingMilestones, deleteAllMilestones, gestorToken, attrOne };
 
 export const EXPO_NOTE = 'El veredicto vale para Expo web (390 × 844): no se ha comprobado en iOS ni en Android nativo.';
 /** Aproximación declarada: abrir una dirección (carga completa) no es un enlace profundo ni una navegación interna. */
 export const DIRECT_APPROXIMATION = 'Abrir una dirección de la app se aproxima con una carga completa de la página en Expo web, que recupera la sesión guardada; en iOS o Android sería un enlace profundo o una navegación interna.';
 export const TENANT_TEXT = 'Tenant de trabajo';
+/** Signo menos de los botones del deslizador (U+2212, el que escribe la app). */
 export const MINUS = '−';
+
+/**
+ * Tarjetas de hito. El prefijo `milestone-row-` abarca también el botón ⋯ de cada tarjeta (`milestone-row-menu-<id>`): se excluye,
+ * porque no es una tarjeta (con 9 hitos habría 18 nodos).
+ */
+export const CARD_SELECTOR = '[data-testid^="milestone-row-"]:not([data-testid^="milestone-row-menu-"])';
 
 /** Añade a cada resultado la salvedad de plataforma. */
 export const onExpoWeb =
@@ -69,13 +76,13 @@ export const enterAndOpen = async (page: Page, credentials: Credentials, code: s
 export const settledCards = async (page: Page): Promise<boolean> =>
   (
     await waitUntil(async () => {
-      const cards = await page.locator('[data-testid^="milestone-row-"]').count();
+      const cards = await page.locator(CARD_SELECTOR).count();
       return cards > 0 || (await seen(page.getByTestId(HITOS_TESTIDS.MILESTONES_EMPTY))) === true || (await seen(page.getByTestId(HITOS_TESTIDS.MILESTONES_ERROR))) === true;
     })
   ).reached;
 
-/** Número de tarjetas de hito visibles. */
-export const cardCount = (page: Page): Promise<number> => page.locator('[data-testid^="milestone-row-"]').count();
+/** Número de tarjetas de hito visibles (sin los botones ⋯). */
+export const cardCount = (page: Page): Promise<number> => page.locator(CARD_SELECTOR).count();
 
 // --- Localizadores de la pestaña ---------------------------------------------------------------------------------------------
 
@@ -95,15 +102,12 @@ export const loadingBlock = (page: Page): Locator => page.getByTestId(MOVIL_PROG
 export const progressHeader = (page: Page): Locator => page.getByTestId(DETALLE_TESTIDS.PROGRAM_DETAIL_PROGRESS);
 /** Insignia de estado de una tarjeta («Cumplido», «En curso», «Pendiente»). */
 export const statusInCard = (page: Page, name: string): Promise<string | undefined> => textOne(cardOf(page, name).getByTestId(/^milestone-status-/));
-/** Texto de la razón visible bajo un control (permiso), por su testid de acción. */
+/** Texto visible de la razón bajo un control (permiso), por su testid de acción. */
 export const reasonOf = (page: Page, testId: string): Promise<string | undefined> => textOne(page.getByTestId(testId));
 export const ACTION_REASON = (kind: 'milestone-rename' | 'milestone-delete'): string => MOVIL_PROGRAMS_DYNAMIC_TESTIDS.ACTION_REASON(kind);
 export const PROGRESS_REASON = (id: string): string => MOVIL_PROGRAMS_DYNAMIC_TESTIDS.MILESTONE_PROGRESS_REASON(id);
 export const NEW_REASON = MOVIL_PROGRAMS_TESTIDS.MILESTONES_NEW_REASON;
 export const CARD_TESTID = (id: string): string => HITOS_DYNAMIC_TESTIDS.MILESTONE_ROW(id);
-
-/** Lectura estricta de un atributo de un único elemento, sin lanzar (re-exportada para las filas). */
-export { attrOne };
 
 /** Comprobación de un texto visible igual al esperado (la historia lo da entre «…» o sin comillas). */
 export const visibleText = async (target: Locator, expected: string, what: string): Promise<Check> => {
@@ -112,14 +116,12 @@ export const visibleText = async (target: Locator, expected: string, what: strin
   return check(text === want, `${what} ${want}`, `${what} ${text ?? '(sin leer)'}`);
 };
 
-/** Una lectura de la pestaña en un solo paso mientras carga: indicador, tarjetas y recuento. */
+/** Una lectura de la pestaña en un solo paso mientras carga: indicador de carga y tarjetas (sin los botones ⋯). */
 export const loadingMoment = (page: Page) =>
   page.evaluate(
-    ({ loading, prefix }) => ({
+    ({ loading, selector }) => ({
       indicator: document.querySelector(`[data-testid="${loading}"]`) !== null,
-      cards: document.querySelectorAll(`[data-testid^="${prefix}"]`).length,
+      cards: document.querySelectorAll(selector).length,
     }),
-    { loading: MOVIL_PROGRAMS_TESTIDS.MILESTONES_LOADING, prefix: 'milestone-row-' },
+    { loading: MOVIL_PROGRAMS_TESTIDS.MILESTONES_LOADING, selector: CARD_SELECTOR },
   );
-
-export { CEILING_MS };

@@ -4,8 +4,8 @@ import { HITOS_TESTIDS, MOVIL_PROGRAMS_TESTIDS } from '../../../../packages/shar
 import { ACTION, waitUntil } from '../../support/browser';
 import { cell, check, conclude, strict } from '../../support/checks';
 import { defineBrowserRows, type BrowserRowHandler } from '../../core/framework';
-import { attrOne, buttonNamed, cardOf, enterAndOpen, menuOf, newButton, onExpoWeb, renameItem, settledCards, textbox, visibleText } from './common';
-import { enabledOne, prepFailed, seen, textOne, waitToast } from '../web/common';
+import { CARD_SELECTOR, attrOne, buttonNamed, cardOf, enterAndOpen, menuOf, newButton, onExpoWeb, renameItem, settledCards, textbox, visibleText } from './common';
+import { actionMissing, enabledOne, prepFailed, runSteps, seen, textOne, waitToast, type Step } from '../web/common';
 
 // US-HITOS-011 — Crear un hito y editar su nombre o su fecha en una hoja (app móvil, Expo web a 390 px). Preparación de cada fila: reinicio
 // de alumno01 con el token de su administrador; después, inicio de sesión de gestor@sigpro.test con «alumno01» en «Tenant de trabajo»,
@@ -38,10 +38,10 @@ const CAMBIO: ReadonlyMap<string, { readonly campo?: 'nombre' | 'fecha'; readonl
   ['cambia «Nombre del hito» a A y pulsa «Guardar hito»', { campo: 'nombre', valor: 'A' }],
 ]);
 
-/** Nombres de las tarjetas, en orden, leídos en una sola lectura (el nombre accesible de cada tarjeta). */
+/** Nombres de las tarjetas, en orden, leídos en una sola lectura (el nombre accesible de cada tarjeta, sin los botones ⋯). */
 const cardNamesOf = (page: Page): Promise<readonly string[]> =>
   page
-    .evaluate(() => Array.from(document.querySelectorAll('[data-testid^="milestone-row-"]')).map((card) => card.getAttribute('aria-label') ?? ''))
+    .evaluate((selector) => Array.from(document.querySelectorAll(selector)).map((card) => card.getAttribute('aria-label') ?? ''), CARD_SELECTOR)
     .catch(() => []);
 
 const sheet = (page: Page, testId: string): Locator => page.getByTestId(testId);
@@ -57,12 +57,17 @@ const createSheet: BrowserRowHandler = async (row, { page }) => {
   const failure = await enterAndOpen(page, DEMO.gestor, 'PRG-001');
   if (failure) return prepFailed(expected, failure);
   await settledCards(page);
-  await newButton(page).click(ACTION);
   const hoja = sheet(page, HITOS_TESTIDS.MILESTONE_NEW_DIALOG);
-  await waitUntil(() => seen(hoja).then((value) => value === true));
-  await textbox(page, 'Nombre').fill(nombre, ACTION);
-  await textbox(page, 'Fecha límite').fill(fecha, ACTION);
-  await buttonNamed(page, 'Crear hito').click(ACTION);
+  const abrir = await runSteps([['abrir «Nuevo hito»', () => newButton(page).click(ACTION)]]);
+  if (abrir) return actionMissing(expected, abrir);
+  const abierta = await waitUntil(() => seen(hoja).then((value) => value === true));
+  if (!abierta.reached) return conclude([check(false, 'la hoja «Nuevo hito» se abre', 'la hoja «Nuevo hito» no se abre')]);
+  const rellenar = await runSteps([
+    ['escribir el nombre', () => textbox(page, 'Nombre').fill(nombre, ACTION)],
+    ['escribir la fecha límite', () => textbox(page, 'Fecha límite').fill(fecha, ACTION)],
+    ['pulsar «Crear hito»', () => buttonNamed(page, 'Crear hito').click(ACTION)],
+  ]);
+  if (rellenar) return actionMissing(expected, rellenar);
 
   if (resultado === 'creado') {
     const aviso = await waitToast(page, 'Hito creado', 'Revisión de diseño · PRG-001-M10');
@@ -76,10 +81,11 @@ const createSheet: BrowserRowHandler = async (row, { page }) => {
   }
   const motivo = sheet(page, resultado.error === 'name' ? HITOS_TESTIDS.MILESTONE_NEW_NAME_ERROR : HITOS_TESTIDS.MILESTONE_NEW_DATE_ERROR);
   const mostrado = await waitUntil(() => seen(motivo).then((value) => value === true));
+  const sigueAbierta = (await seen(hoja)) === true;
   return conclude([
     check(mostrado.reached, `el motivo «${resultado.motivo}» debajo del campo`, mostrado.reached ? 'motivo visible' : 'sin motivo visible'),
     await visibleText(motivo, resultado.motivo, 'el motivo debajo del campo es'),
-    check((await seen(hoja)) === true, 'la hoja sigue abierta', (await seen(hoja)) === true ? 'la hoja sigue abierta' : 'la hoja se cerró'),
+    check(sigueAbierta, 'la hoja sigue abierta', sigueAbierta ? 'la hoja sigue abierta' : 'la hoja se cerró'),
   ]);
 };
 
@@ -94,44 +100,63 @@ const editSheet: BrowserRowHandler = async (row, { page }) => {
   const failure = await enterAndOpen(page, DEMO.gestor, 'PRG-001');
   if (failure) return prepFailed(expected, failure);
   await settledCards(page);
-  await menuOf(page, 'SRR').click(ACTION);
-  await renameItem(page).click(ACTION);
+  const abrirMenu = await runSteps([
+    ['abrir el menú de SRR', () => menuOf(page, 'SRR').click(ACTION)],
+    ['elegir «Renombrar»', () => renameItem(page).click(ACTION)],
+  ]);
+  if (abrirMenu) return actionMissing(expected, abrirMenu);
   const hoja = sheet(page, MOVIL_PROGRAMS_TESTIDS.MILESTONE_EDIT_DIALOG);
-  await waitUntil(() => seen(hoja).then((value) => value === true));
-  if (cambio.campo === 'nombre' && cambio.valor !== undefined) await textbox(page, 'Nombre del hito').fill(cambio.valor, ACTION);
-  if (cambio.campo === 'fecha' && cambio.valor !== undefined) await textbox(page, 'Fecha límite').fill(cambio.valor, ACTION);
+  const abierta = await waitUntil(() => seen(hoja).then((value) => value === true));
+  if (!abierta.reached) return conclude([check(false, 'la hoja «Editar hito» se abre', 'la hoja «Editar hito» no se abre')]);
+  const escribir: Step[] = [];
+  if (cambio.campo === 'nombre' && cambio.valor !== undefined) escribir.push(['escribir el nombre del hito', () => textbox(page, 'Nombre del hito').fill(cambio.valor ?? '', ACTION)]);
+  if (cambio.campo === 'fecha' && cambio.valor !== undefined) escribir.push(['escribir la fecha límite', () => textbox(page, 'Fecha límite').fill(cambio.valor ?? '', ACTION)]);
+  const escrito = await runSteps(escribir);
+  if (escrito) return actionMissing(expected, escrito);
   const guardar = buttonNamed(page, 'Guardar hito');
 
   if (cambio.campo === undefined) {
-    // Sin cambios: «Guardar hito» deshabilitado y el motivo visible
-    // El motivo se ve como texto. La app lo deja además en `aria-description` (no visible): se anota como evidencia, no cuenta.
+    // Sin cambios: «Guardar hito» deshabilitado y el motivo visible. La app pasa el motivo solo al botón (aria-description, no
+    // pintado): el texto visible se exige tal cual la historia (se ve el motivo) y el atributo se anota como evidencia.
     const habilitado = await enabledOne(guardar);
     const motivo = 'No hay cambios que guardar';
     const visible = await textOne(page.getByText(motivo, { exact: true }));
     const descripcion = await attrOne(guardar, 'aria-description');
-    return conclude([
-      check(habilitado === false, '«Guardar hito» deshabilitado', `«Guardar hito» ${String(habilitado)}`),
-      check(visible === motivo, `el motivo «${motivo}» se ve`, `texto visible: «${visible ?? '(ninguno)'}»; aria-description: «${descripcion ?? '(ninguno)'}»`),
-    ]);
+    return conclude(
+      [
+        check(habilitado === false, '«Guardar hito» deshabilitado', `«Guardar hito» ${String(habilitado)}`),
+        check(visible === motivo, `el motivo «${motivo}» se ve`, `texto visible: «${visible ?? '(ninguno)'}»; aria-description: «${descripcion ?? '(ninguno)'}»`),
+      ],
+      { note: 'La app pasa el motivo solo al botón (FormDialog → Button, como aria-description y data-reason) y no lo pinta como texto. Discrepancia de la pantalla, no del manejador.' },
+    );
   }
-  await guardar.click(ACTION);
+  const guardado = await runSteps([['pulsar «Guardar hito»', () => guardar.click(ACTION)]]);
+  if (guardado) return actionMissing(expected, guardado);
 
   if (cambio.campo === 'nombre' && cambio.valor === 'A') {
     const error = await visibleText(sheet(page, MOVIL_PROGRAMS_TESTIDS.MILESTONE_EDIT_NAME_ERROR), 'El nombre debe tener al menos 2 caracteres', 'bajo «Nombre del hito» aparece');
-    const abierta = (await seen(hoja)) === true;
+    const abiertaTras = (await seen(hoja)) === true;
     const sigue = (await seen(cardOf(page, 'SRR'))) === true;
-    return conclude([error, check(abierta, 'la hoja sigue abierta', abierta ? 'la hoja sigue abierta' : 'la hoja se cerró'), check(sigue, 'la tarjeta sigue mostrando «SRR»', sigue ? 'la tarjeta muestra «SRR»' : 'la tarjeta no muestra «SRR»')]);
+    return conclude([
+      error,
+      check(abiertaTras, 'la hoja sigue abierta', abiertaTras ? 'la hoja sigue abierta' : 'la hoja se cerró'),
+      check(sigue, 'la tarjeta sigue mostrando «SRR»', sigue ? 'la tarjeta muestra «SRR»' : 'la tarjeta no muestra «SRR»'),
+    ]);
   }
   const titulo = 'Hito actualizado';
   const detalle = cambio.campo === 'nombre' ? 'Revisión PDR · nombre actualizado' : 'SRR · fecha límite 15/03/2027';
   const aviso = await waitToast(page, titulo, detalle);
   const cerrada = await waitUntil(() => seen(hoja).then((value) => value === false));
   const nombres = await cardNamesOf(page);
-  const ultimo = cambio.campo === 'fecha' ? nombres[nombres.length - 1] === 'SRR' : nombres.includes('Revisión PDR');
+  // Con el nombre nuevo, SRR sale de su posición (la primera) y «Revisión PDR» ocupa ese lugar; con la fecha nueva, SRR pasa al final
+  const ocupa =
+    cambio.campo === 'fecha'
+      ? nombres[nombres.length - 1] === 'SRR'
+      : !nombres.includes('SRR') && nombres[0] === 'Revisión PDR';
   return conclude([
     check(aviso, `el aviso «${titulo}» con «${detalle}»`, aviso ? 'aviso visible' : `sin ese aviso (${textoCambio})`),
     check(cerrada.reached, 'la hoja se cierra', cerrada.reached ? 'la hoja se cerró' : 'la hoja sigue abierta'),
-    check(ultimo, cambio.campo === 'fecha' ? 'la tarjeta de «SRR» pasa a ser la última' : 'la tarjeta muestra «Revisión PDR»', `tarjetas: ${nombres.join(', ')}`),
+    check(ocupa, cambio.campo === 'fecha' ? 'la tarjeta de «SRR» pasa a ser la última' : 'SRR sale de su posición y «Revisión PDR» ocupa la primera', `tarjetas: ${nombres.join(', ')}`),
   ]);
 };
 

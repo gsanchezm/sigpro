@@ -8,6 +8,8 @@ import {
   TENANT_A,
   TENANT_B,
   VALOR_TEXTO,
+  countMilestones,
+  nothingCreatedCheck,
   prepareCopyInB,
   request,
   rechazoCheck,
@@ -18,9 +20,9 @@ import {
   type Rechazo,
 } from './common';
 
-// US-HITOS-002 — Crear un hito con nombre y fecha límite (API). Preparación de cada fila: reinicio de alumno01 con el token de su
-// administrador; después, inicio de sesión de la cuenta de la fila (gestor por defecto) en alumno01 (x-tenant: alumno01). Si la fila
-// dice que se ha borrado PRG-001-M03, la preparación lo borra con DELETE antes del alta. La fila PRG-025 usa la copia en alumno02.
+// US-HITOS-002 — Crear un hito con nombre y fecha límite en un programa (API). Preparación de cada fila: reinicio de alumno01 con el token de
+// su administrador; después, inicio de sesión de la cuenta de la fila (gestor por defecto) en alumno01 (x-tenant: alumno01). Si la fila dice
+// que se ha borrado PRG-001-M03, la preparación lo borra con DELETE antes del alta. La fila PRG-025 usa la copia en alumno02.
 
 const FECHA_NUEVA = '2027-03-15';
 const NOMBRE_NUEVO = 'Revisión de diseño';
@@ -75,11 +77,13 @@ const nameRule: ApiRowHandler = async (row) => {
   await resetTenants([TENANT_A]);
   const gestor = await tokenFor('gestor');
   if (gestor.token === undefined) return preparationFailed(expected, 'gestor@sigpro.test inicia sesión y recibe accessToken', gestor.last);
+  const antes = await countMilestones(gestor.token, 'PRG-001');
   const result = await request('POST', TENANT_A, '/programs/PRG-001/milestones', gestor.token, { name: nombre, dueDate: FECHA_NUEVA });
+  const despues = await countMilestones(gestor.token, 'PRG-001');
   const checks: Check[] =
     esperada === CREADA
       ? [responseCheck(result, { status: 201 }), check(textField(result.body, 'name') === nombre.trim(), `name ${nombre.trim()}`, `name ${String(textField(result.body, 'name'))}`)]
-      : [rechazoCheck(result, esperada)];
+      : [rechazoCheck(result, esperada), nothingCreatedCheck(antes, despues)];
   return conclude(checks);
 };
 
@@ -100,11 +104,13 @@ const dateRule: ApiRowHandler = async (row) => {
   if (gestor.token === undefined) return preparationFailed(expected, 'gestor@sigpro.test inicia sesión y recibe accessToken', gestor.last);
   // «(sin el campo)» es un cuerpo sin dueDate: no es lo mismo que mandar un texto vacío
   const body = { name: NOMBRE_NUEVO, ...(fecha === undefined ? {} : { dueDate: fecha }) };
+  const antes = await countMilestones(gestor.token, 'PRG-001');
   const result = await request('POST', TENANT_A, '/programs/PRG-001/milestones', gestor.token, body);
+  const despues = await countMilestones(gestor.token, 'PRG-001');
   const checks: Check[] =
     esperada === CREADA
       ? [responseCheck(result, { status: 201 }), check(textField(result.body, 'dueDate') === fecha, `dueDate ${String(fecha)}`, `dueDate ${String(textField(result.body, 'dueDate'))}`)]
-      : [rechazoCheck(result, esperada)];
+      : [rechazoCheck(result, esperada), nothingCreatedCheck(antes, despues)];
   return conclude(checks);
 };
 
@@ -140,11 +146,12 @@ const permissions: ApiRowHandler = async (row) => {
   await resetTenants([TENANT_A]);
   const sent = await sentTokenOf(credential);
   if (sent.failed !== undefined) return preparationFailed(expected, 'la cuenta de la fila inicia sesión en alumno01 y recibe accessToken', sent.failed.last);
+  const antes = await countMilestones(sent.token, 'PRG-001');
   const result = await request('POST', TENANT_A, '/programs/PRG-001/milestones', sent.token, { name: nombre, dueDate: FECHA_NUEVA });
   const checks: Check[] =
     'id' in esperada
       ? [responseCheck(result, { status: esperada.status }), check(textField(result.body, 'id') === esperada.id, `id ${esperada.id}`, `id ${String(textField(result.body, 'id'))}`)]
-      : [rechazoCheck(result, esperada)];
+      : [rechazoCheck(result, esperada), nothingCreatedCheck(antes, await countMilestones(sent.token, 'PRG-001'))];
   return conclude(checks);
 };
 

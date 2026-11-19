@@ -33,7 +33,7 @@ import {
   statusInCard,
   visibleText,
 } from './common';
-import { enabledOne, prepFailed, literal, runSteps, textOne } from '../web/common';
+import { actionMissing, enabledOne, prepFailed, literal, runSteps, textOne } from '../web/common';
 
 // US-HITOS-010 — Ver los hitos en tarjetas: estado, avance, permisos y estados de carga, vacío y error (app móvil, Expo web a 390 px).
 // Preparación de cada fila: reinicio de alumno01 con el token de su administrador; después, inicio de sesión de la cuenta de la fila con
@@ -63,6 +63,15 @@ const CUENTAS: ReadonlyMap<string, Credentials> = new Map<string, Credentials>([
 
 /** Id del hito SRR de PRG-001 (la app enlaza el motivo del avance con el id del hito). */
 const SRR_ID = 'PRG-001-M01';
+
+/** Lo que cada fila de rol dice que puede hacer, leído de la celda «resultado» (texto exacto de la historia). */
+const RESULTADO_ROL: ReadonlyMap<string, 'edita' | 'solo lectura'> = new Map<string, 'edita' | 'solo lectura'>([
+  ['«Nuevo hito» habilitado, los botones «−» y «+» del control de avance de «SRR» habilitados donde el avance lo permite, y «Renombrar» y «Eliminar» habilitados', 'edita'],
+  [
+    'el texto «Tu rol no permite crear hitos» bajo «Nuevo hito», el texto «Tu rol no permite modificar hitos» bajo el control de avance de la tarjeta, los botones «−» y «+» sin poder pulsarse, y «Renombrar» y «Eliminar» deshabilitados con sus motivos',
+    'solo lectura',
+  ],
+]);
 
 type Situacion = 'retraso' | 'vacio' | 'error';
 
@@ -115,7 +124,8 @@ const roleControls: BrowserRowHandler = async (row, { page }) => {
   const failure = await enterAndOpen(page, credenciales, 'PRG-001');
   if (failure) return prepFailed(expected, failure);
   await settledCards(page);
-  const puede = cuenta === 'gestor@sigpro.test';
+  const modo = strict('resultado', RESULTADO_ROL, cell(row, 'resultado'));
+  const puede = modo === 'edita';
   const nuevo = await enabledOne(newButton(page));
   const dec = await enabledOne(decOf(page, 'SRR'));
   const inc = await enabledOne(incOf(page, 'SRR'));
@@ -129,8 +139,11 @@ const roleControls: BrowserRowHandler = async (row, { page }) => {
     const motivoAvance = await reasonOf(page, PROGRESS_REASON(SRR_ID));
     checks.push(check(motivoAvance === 'Tu rol no permite modificar hitos', 'bajo el control de avance: «Tu rol no permite modificar hitos»', `bajo el control: «${motivoAvance ?? '(sin texto)'}»`));
   }
-  // Menú ⋯ de SRR: «Renombrar» y «Eliminar»
-  await runSteps([['abrir el menú de SRR', () => menuOf(page, 'SRR').click(ACTION)]]);
+  // Menú ⋯ de SRR: se abre la hoja y se espera a que muestre «Renombrar» antes de leer sus opciones
+  const menu = await runSteps([['abrir el menú de SRR', () => menuOf(page, 'SRR').click(ACTION)]]);
+  if (menu) return actionMissing(expected, menu);
+  const hoja = await waitUntil(() => renameItem(page).isVisible({ timeout: 500 }).catch(() => false));
+  if (!hoja.reached) return conclude([check(false, 'la hoja de acciones de SRR muestra «Renombrar»', 'la hoja de acciones no se muestra')]);
   const renombrar = await enabledOne(renameItem(page));
   const eliminar = await enabledOne(deleteItem(page));
   if (puede) {
@@ -190,7 +203,8 @@ const states: BrowserRowHandler = async (row, { page }) => {
   const titulo = await visibleText(errorBlock(page).getByText('No se pudieron cargar los hitos', { exact: true }), 'No se pudieron cargar los hitos', 'el aviso');
   const sinTarjetas = (await cardCount(page)) === 0;
   if (switchOn) switchOn.on = false;
-  await buttonNamed(page, 'Reintentar').click(ACTION);
+  const reintento = await runSteps([['pulsar «Reintentar»', () => buttonNamed(page, 'Reintentar').click(ACTION)]]);
+  if (reintento) return actionMissing(expected, reintento);
   const vuelve = await settledCards(page);
   const tarjetas = await cardCount(page);
   return conclude([
