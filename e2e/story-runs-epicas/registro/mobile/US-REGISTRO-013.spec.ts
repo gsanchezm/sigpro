@@ -89,7 +89,7 @@ const ELEMENTS: ReadonlyMap<string, (page: Page) => Promise<readonly Check[]>> =
     async (page) => {
       const input = textbox(page, 'Contraseña');
       const empty = (await valueOf(input)) === '';
-      const hidden = (await attrOf(input, 'type')) === 'password';
+      const hidden = (await inputTypeOf(input)) === 'password';
       return [check(empty && hidden, 'está vacía y oculta lo que se escribe', `${empty ? 'vacía' : 'con texto'} y ${hidden ? 'oculta' : 'en claro'}`)];
     },
   ],
@@ -135,7 +135,14 @@ const PRESSED: ReadonlyMap<string, boolean> = new Map([
 ]);
 
 /** Tipo de cada campo de contraseña (`password` oculta, `text` en claro). */
-const typesOf = async (password: Locator, confirm: Locator): Promise<readonly (string | undefined)[]> => [await attrOf(password, 'type'), await attrOf(confirm, 'type')];
+/**
+ * Tipo EFECTIVO del campo (propiedad del elemento, no el atributo): en Expo web un campo en claro no lleva el atributo `type` y su tipo por defecto es `text`.
+ * Una lectura fallida da `undefined` y no cuenta ni como oculto ni como en claro.
+ */
+const inputTypeOf = (target: Locator): Promise<string | undefined> =>
+  safe(() => target.first().evaluate((element) => (element instanceof HTMLInputElement ? element.type : undefined), undefined, { timeout: 500 }), undefined);
+
+const typesOf = async (password: Locator, confirm: Locator): Promise<readonly (string | undefined)[]> => [await inputTypeOf(password), await inputTypeOf(confirm)];
 
 const toggling: BrowserRowHandler = async (row, { page }) => {
   await resetTenants([TENANT_A]);
