@@ -2,7 +2,7 @@ import type { Locator, Page } from '@playwright/test';
 import { defineBrowserRows, type BrowserRowHandler, type ManifestRow } from '../../core/framework';
 import { cell, check, preparationFailedWeb, strict } from '../../support/checks';
 import type { Outcome } from '../../core/framework';
-import { ACTION, pathOf, waitUntil } from '../../support/browser';
+import { ACTION, CEILING_MS, pathOf, safe, waitUntil } from '../../support/browser';
 import { actionFailed, captureBodies, keysOf, plainOf, controlCheck, controlOf, detailDialog, interact, observe, onWeb, pollPersisted, prepareWeb, readDetail, toastShown, verdictWeb, waitDetail, watchRequests, type DetailView } from './common';
 
 // US-NC-GESTION-007 — Edición de la severidad, la descripción y la asignación en el detalle de NC-003 (web, /nc/NC-003, escritorio 1440 px).
@@ -17,6 +17,22 @@ const SAVED = 'NC-003 guardada';
 const SHORT_DESCRIPTION = 'La descripción debe tener al menos 10 caracteres';
 const NOT_FOUND = 'No se encontró la no conformidad';
 const NO_MATCH = 'Sin coincidencias';
+
+/** Ambigüedad de la historia: nombra el marcador «Buscar persona…» con la NC ya asignada, pero el campo muestra el nombre asignado. */
+const AMBIGUITY_NOTE =
+  'Ambigüedad de la historia: nombra el marcador «Buscar persona…» con la NC asignada; con asignación el campo muestra el nombre de la persona (el marcador solo se ve sin asignar). El campo se localiza por su nombre accesible «Asignada a».';
+
+/** Teclea la búsqueda como una persona: limpia el campo (Ctrl+A y Retroceso) y escribe carácter a carácter, sin «fill» que reemplace el valor de golpe. */
+const typeAsPerson = (locator: Locator, text: string): Promise<{ readonly message: string; readonly note: string } | undefined> =>
+  interact(locator, `escribir «${text}» en «Asignada a»`, async (element) => {
+    await element.click(ACTION);
+    await element.press('ControlOrMeta+A', ACTION);
+    await element.press('Backspace', ACTION);
+    await element.pressSequentially(text, { delay: 40, timeout: CEILING_MS });
+  });
+
+/** Texto visible de un campo editable tras escribir (relectura para comprobar lo que llegó al editor); `undefined` si no se lee. */
+const readTextbox = (locator: Locator): Promise<string | undefined> => safe(async () => (await locator.first().textContent({ timeout: 2_000 })) ?? undefined, undefined);
 
 const ACCOUNT_CELLS: ReadonlyMap<string, string> = new Map<string, string>([
   ['gestor@sigpro.test', 'gestor@sigpro.test'],
@@ -143,10 +159,12 @@ const twoSaveButtons: BrowserRowHandler = async (row: ManifestRow, { page }) => 
       check(still?.severityText === 'Menor', 'severidad «Menor» en el detalle', `severidad «${still?.severityText ?? '(sin leer)'}»`),
     ]);
   }
-  const closed = await waitUntil(async () => !(await readDetail(page))?.open && pathOf(page) === '/nc');
+  // Lectura fallida = no cumplido: se exige que el detalle esté cerrado de forma LEÍDA (open === false), no que la lectura falle
+  const closed = await waitUntil(async () => (await readDetail(page))?.open === false && pathOf(page) === '/nc');
+  const after = await readDetail(page);
   return verdictWeb([
     check(toast.readable && toast.seen, `aviso «${SAVED}»`, toast.observed),
-    check(closed.reached, 'la pantalla vuelve a /nc', `ruta ${pathOf(page)}, detalle abierto: ${(await readDetail(page))?.open === true ? 'sí' : 'no'}`),
+    check(closed.reached, 'la pantalla vuelve a /nc (detalle cerrado y ruta /nc)', `ruta ${pathOf(page)}, detalle ${after === undefined ? 'sin leer' : after.open ? 'abierto' : 'cerrado'}`),
   ]);
 };
 
@@ -162,6 +180,8 @@ const descriptionLength: BrowserRowHandler = async (row: ManifestRow, { page }) 
 
   const written = await interact(dialogOf(page).getByRole('textbox', { name: 'Descripción', exact: true }), 'escribir en «Descripción»', (element) => element.fill(text, ACTION));
   if (written !== undefined) return actionFailed(expected, written);
+  // Relectura tras escribir: el editor debe contener exactamente el texto de la fila antes de guardar
+  const readBack = await readTextbox(dialogOf(page).getByRole('textbox', { name: 'Descripción', exact: true }));
   const saved = await saveWith(page, 'Guardar');
   if (saved !== undefined) return actionFailed(expected, saved);
 
@@ -170,6 +190,7 @@ const descriptionLength: BrowserRowHandler = async (row: ManifestRow, { page }) 
     const persisted = await pollPersisted('NC-003', (fields) => plainOf(fields.description ?? '') === text);
     return verdictWeb([
       check(toast.readable && toast.seen, `aviso «${SAVED}»`, toast.observed),
+      check(readBack === text, 'el editor contiene el texto de la fila tras escribir', `editor con «${readBack ?? '(sin leer)'}»`),
       check(plainOf(persisted?.description ?? '') === text, `NC-003 guardada con la descripción de ${text.length} letras`, `descripción guardada: ${persisted?.description ?? '(sin leer)'}`),
     ]);
   }
@@ -177,6 +198,7 @@ const descriptionLength: BrowserRowHandler = async (row: ManifestRow, { page }) 
   const view = await readDetail(page);
   await observe(2_000);
   return verdictWeb([
+    check(readBack === text, 'el editor contiene el texto de la fila tras escribir', `editor con «${readBack ?? '(sin leer)'}»`),
     check(shown.reached, `«${SHORT_DESCRIPTION}» bajo «Descripción»`, `bajo «Descripción»: ${view?.descriptionError ?? '(sin error visible)'}`),
     check(log.count('PATCH', '/api/nc/NC-003') === 0, 'ninguna petición de guardado', `peticiones PATCH /api/nc/NC-003: ${log.count('PATCH', '/api/nc/NC-003')}`),
     check(log.count('GET', '/api/nc/NC-003') > 0, 'control: el registro de peticiones ve la carga del detalle', `peticiones GET /api/nc/NC-003 vistas: ${log.count('GET', '/api/nc/NC-003')}`),
@@ -192,7 +214,7 @@ const assignPerson: BrowserRowHandler = async (row: ManifestRow, { page }) => {
   const opened = await openDetail(page, 'gestor@sigpro.test', expected);
   if (opened.failed !== undefined) return opened.failed;
 
-  const typed = await interact(dialogOf(page).getByRole('combobox', { name: 'Asignada a', exact: true }), 'escribir en «Buscar persona…»', (element) => element.fill(search, ACTION));
+  const typed = await typeAsPerson(dialogOf(page).getByRole('combobox', { name: 'Asignada a', exact: true }), search);
   if (typed !== undefined) return actionFailed(expected, typed);
   const chosen = await interact(dialogOf(page).getByRole('listbox', { name: 'Personas', exact: true }).getByRole('option', { name: person, exact: true }), `elegir ${person} en «Personas»`, (element) => element.click(ACTION));
   if (chosen !== undefined) return actionFailed(expected, chosen);
@@ -206,7 +228,7 @@ const assignPerson: BrowserRowHandler = async (row: ManifestRow, { page }) => {
     check(toast.readable && toast.seen, `aviso «${SAVED}»`, toast.observed),
     check(field.reached, `«Asignada a» muestra ${person}`, `«Asignada a» muestra «${(await readDetail(page))?.assigneeValue ?? '(sin leer)'}»`),
     check(persisted?.assigneeName === person, `NC-003 asignada a ${person} en el servidor`, `NC-003 asignada a ${persisted?.assigneeName ?? '(sin leer)'}`),
-  ]);
+  ], AMBIGUITY_NOTE);
 };
 
 // --- Esquema 5: quitar la asignación deja la no conformidad sin responsable -------------------------------------------------------
@@ -242,7 +264,7 @@ const noMatch: BrowserRowHandler = async (row: ManifestRow, { page }) => {
   const opened = await openDetail(page, 'gestor@sigpro.test', expected);
   if (opened.failed !== undefined) return opened.failed;
 
-  const typed = await interact(dialogOf(page).getByRole('combobox', { name: 'Asignada a', exact: true }), 'escribir en «Buscar persona…»', (element) => element.fill(search, ACTION));
+  const typed = await typeAsPerson(dialogOf(page).getByRole('combobox', { name: 'Asignada a', exact: true }), search);
   if (typed !== undefined) return actionFailed(expected, typed);
   const list = dialogOf(page).getByRole('listbox', { name: 'Personas', exact: true });
   const visible = await waitUntil(async () => (await list.count()) > 0 && (await list.first().isVisible()));
@@ -252,7 +274,7 @@ const noMatch: BrowserRowHandler = async (row: ManifestRow, { page }) => {
     check(visible.reached, 'la lista «Personas» visible', visible.reached ? 'la lista «Personas» visible' : 'la lista «Personas» no aparece'),
     check(text !== undefined && text.includes(NO_MATCH), `«${NO_MATCH}» en la lista`, `texto de la lista: «${text ?? '(sin leer)'}»`),
     check(options === 0, 'ninguna persona en la lista', `personas en la lista: ${options}`),
-  ], 'La búsqueda se hace con «fill» (reemplaza el texto «Andrés Molina» que muestra el campo); pressSequentially lo habría añadido.');
+  ], `${AMBIGUITY_NOTE} El campo se limpia y se teclea carácter a carácter: con la asignación vigente, la primera tecla quita la asignación.`);
 };
 
 // --- Esquema 7: un rol sin permiso de edición ve el detalle en solo lectura -------------------------------------------------------

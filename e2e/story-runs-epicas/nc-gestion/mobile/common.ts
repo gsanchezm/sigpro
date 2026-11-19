@@ -170,8 +170,12 @@ const detailReader = (code: string): MobileDetailView => {
     comments: commentNodes.map((item) => {
       const head = item.children[0] ?? null;
       const body = item.children[item.children.length - 1] ?? null;
+      // Por texto y no por posición: la etiqueta («Rápido» / «Cierre») es el nodo cuyo texto la nombra; el autor es el primer
+      // nodo de la cabecera que no es la fecha (dd/mm/aaaa) ni la etiqueta
       const headParts = head === null ? [] : Array.from(head.children).map((child) => rawText(child));
-      return { author: headParts[0], kind: headParts.length > 2 ? headParts[headParts.length - 1] : undefined, body: rawText(body) };
+      const label = headParts.find((text) => text === 'Rápido' || text === 'Cierre');
+      const author = headParts.find((text) => text !== undefined && text !== label && !/\d{2}\/\d{2}\/\d{4}/.test(text));
+      return { author, kind: label, body: rawText(body) };
     }),
     commentError: shownText(inside('nc-comment-error')),
     commentValue: (inside('nc-comment-input') as HTMLTextAreaElement | null)?.value ?? undefined,

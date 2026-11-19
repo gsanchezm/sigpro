@@ -144,6 +144,8 @@ const eachFieldValidated: BrowserRowHandler = async (row: ManifestRow, { page })
     ...(filling.description === undefined ? {} : { description: filling.description }),
   });
   if (filled !== undefined) return actionFailed(expected, filled);
+  // Relectura del editor tras escribir: lo que llega a «Descripción» es el texto de la fila (vacío si la fila no escribe nada)
+  const readBack = (await newDialog(page).getByRole('textbox', { name: 'Descripción', exact: true }).first().textContent({ timeout: 2_000 }).catch(() => null)) ?? undefined;
   const submitted = await submitNew(page);
   if (submitted !== undefined) return actionFailed(expected, submitted);
 
@@ -152,6 +154,7 @@ const eachFieldValidated: BrowserRowHandler = async (row: ManifestRow, { page })
   await observe(2_000);
   return verdictWeb([
     check(shown.reached, `«${message}» bajo su campo`, `bajo su campo: ${view?.[filling.errorField] ?? '(sin error visible)'}`),
+    check(readBack !== undefined && readBack.trim() === (filling.description ?? '').trim(), 'el campo «Descripción» contiene el texto de la fila', `campo «Descripción» con «${readBack ?? '(sin leer)'}»`),
     check((await readNew(page))?.open === true, 'el formulario sigue abierto', (await readNew(page))?.open === true ? 'el formulario sigue abierto' : 'el formulario no está abierto'),
     check(log.count('POST', CREATE_PATH) === 0, 'ninguna petición de alta', `peticiones POST /api/nc: ${log.count('POST', CREATE_PATH)}`),
     check(log.count('GET', LIST_PATH) > 0, 'control: el registro de peticiones ve la carga de la lista', `peticiones GET /api/nc vistas: ${log.count('GET', LIST_PATH)}`),

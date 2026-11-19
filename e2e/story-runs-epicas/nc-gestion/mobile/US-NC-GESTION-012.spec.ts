@@ -1,10 +1,10 @@
 import type { Locator, Page } from '@playwright/test';
 import { defineBrowserRows, type BrowserRowHandler, type ManifestRow, type Outcome } from '../../core/framework';
-import { cell, check, strict } from '../../support/checks';
+import { cell, check, strict, type Check } from '../../support/checks';
 import { ACTION, waitUntil } from '../../support/browser';
 import { persistedState } from '../api/common';
 import { actionFailed, interact, observe, pollPersisted, toastShown, verdictWeb, watchRequests } from '../web/common';
-import { onMobile, openCard, prepareMobile, readDetail, sheetOf, waitDetail, waitSheetReady } from './common';
+import { onMobile, openCard, prepareMobile, readDetail, sheetOf, waitDetail, waitSheetReady, type MobileDetailView } from './common';
 
 // US-NC-GESTION-012 — Comentarios y cierre de NC-003 desde la hoja de detalle en la app móvil (Expo web a 390 px; NO es nativo). Preparación de
 // cada fila: reinicio de alumno01 con su administrador; la cuenta abre la app, llega a /nc y toca NC-003 (en «Acción correctiva», con 3
@@ -76,6 +76,20 @@ const closeToggle = (page: Page): Locator => sheet(page).getByRole('button', { n
 const closeArea = (page: Page): Locator => sheet(page).getByRole('textbox', { name: 'Comentario de cierre', exact: true });
 const closeSubmit = (page: Page): Locator => sheet(page).getByRole('button', { name: 'Cerrar no conformidad', exact: true });
 
+/**
+ * Etiquetas de los comentarios de NC-003 (012.md: «Cada comentario muestra … si no es un comentario normal, la etiqueta «Rápido» o «Cierre»»;
+ * NcComments.tsx). El seed deja una sola etiqueta: la del comentario de Pablo Serrano, «Rápido». Los demás comentarios no llevan etiqueta.
+ */
+const labelsCheck = (view: MobileDetailView | undefined): Check => {
+  const labelled = (view?.comments ?? []).filter((comment) => comment.kind !== undefined);
+  const onlyPablo = labelled.length === 1 && labelled[0]?.author === 'Pablo Serrano' && labelled[0]?.kind === 'Rápido';
+  return check(
+    onlyPablo,
+    'en NC-003 solo el comentario de Pablo Serrano lleva la etiqueta «Rápido» (los demás, ninguna)',
+    `comentarios con etiqueta: ${labelled.map((comment) => `${comment.author ?? '(sin autor)'} «${comment.kind ?? ''}»`).join(', ') || '(ninguno)'}`,
+  );
+};
+
 // --- Esquema 1: un comentario válido se añade al final de la lista ------------------------------------------------------------
 
 const addsComment: BrowserRowHandler = async (row: ManifestRow, { page }) => {
@@ -94,6 +108,7 @@ const addsComment: BrowserRowHandler = async (row: ManifestRow, { page }) => {
   const last = shown?.comments[shown.comments.length - 1];
   const persisted = await pollPersisted('NC-003', (fields) => fields.commentCount === 4);
   return verdictWeb([
+    labelsCheck(await readDetail(page, 'NC-003')),
     check(shown?.commentsHeading === 'Comentarios (4)', '«Comentarios (4)»', `encabezado «${shown?.commentsHeading ?? '(sin leer)'}»`),
     check(last?.author === author && last?.body === COMMENT_TEXT, `comentario nuevo al final firmado por ${cell(row, 'autor')}`, `último comentario: ${last?.author ?? '(sin leer)'} / «${last?.body ?? '(sin leer)'}»`),
     check(shown?.commentValue === '', 'el campo «Añadir comentario» queda vacío', `campo con «${shown?.commentValue ?? '(sin leer)'}»`),
@@ -122,8 +137,10 @@ const emptyNotSent: BrowserRowHandler = async (row: ManifestRow, { page }) => {
   await observe(2_000);
   return verdictWeb([
     check(shown.reached, `«${EMPTY_COMMENT}» bajo el campo`, `bajo el campo: «${view?.commentError ?? '(sin error visible)'}»`),
+    labelsCheck(view),
     check(view?.commentsHeading === 'Comentarios (3)', '«Comentarios (3)»', `encabezado «${view?.commentsHeading ?? '(sin leer)'}»`),
     check(log.count('POST', COMMENT_PATH) === 0, 'ninguna petición de comentario', `peticiones POST ${COMMENT_PATH}: ${log.count('POST', COMMENT_PATH)}`),
+    check(log.count('GET', '/api/nc/NC-003') > 0, 'control: el registro de peticiones ve la carga del detalle', `peticiones GET /api/nc/NC-003 vistas: ${log.count('GET', '/api/nc/NC-003')}`),
   ]);
 };
 
@@ -145,6 +162,8 @@ const closeCounter: BrowserRowHandler = async (row: ManifestRow, { page }) => {
   if (typed !== undefined) return actionFailed(expected, typed);
   const counted = await waitUntil(async () => (await readDetail(page, 'NC-003'))?.closeCounter === counter);
   const shownCounter = (await readDetail(page, 'NC-003'))?.closeCounter;
+  // Las etiquetas de los comentarios se leen con la hoja abierta (antes de enviar: después, en el aviso de éxito, la hoja se cierra)
+  const labelsView = await readDetail(page, 'NC-003');
   const submitted = await interact(closeSubmit(page), 'pulsar «Cerrar no conformidad»', (element) => element.click(ACTION));
   if (submitted !== undefined) return actionFailed(expected, submitted);
 
@@ -156,6 +175,7 @@ const closeCounter: BrowserRowHandler = async (row: ManifestRow, { page }) => {
       check(counted.reached && shownCounter === counter, `contador «${counter}»`, `contador «${shownCounter ?? '(sin leer)'}»`),
       check(toast.readable && toast.seen, `aviso «${CLOSED}»`, toast.observed),
       check(gone.reached, 'la hoja de detalle se cierra', gone.reached ? 'la hoja de detalle se cerró' : 'la hoja de detalle sigue abierta'),
+      labelsCheck(labelsView),
       check(state === 'closed', 'NC-003 cerrada en el servidor', `NC-003 en el servidor: ${state ?? '(sin leer)'}`),
     ]);
   }
@@ -167,7 +187,9 @@ const closeCounter: BrowserRowHandler = async (row: ManifestRow, { page }) => {
     check(counted.reached && shownCounter === counter, `contador «${counter}»`, `contador «${shownCounter ?? '(sin leer)'}»`),
     check(shown.reached, `«${result.text}» bajo el campo`, `bajo el campo: «${view?.closeError ?? '(sin error visible)'}»`),
     check(view?.open === true, 'la hoja de detalle sigue abierta', view?.open === true ? 'la hoja de detalle sigue abierta' : 'la hoja de detalle se cerró'),
+    labelsCheck(labelsView),
     check(transitions.count('POST', TRANSITION_PATH) === 0, 'ninguna petición de cierre', `peticiones POST ${TRANSITION_PATH}: ${transitions.count('POST', TRANSITION_PATH)}`),
+    check(transitions.count('GET', '/api/nc/NC-003') > 0, 'control: el registro de peticiones ve la carga del detalle', `peticiones GET /api/nc/NC-003 vistas: ${transitions.count('GET', '/api/nc/NC-003')}`),
     check(state === 'corrective_action', 'NC-003 sigue en «Acción correctiva» en el servidor', `NC-003 en el servidor: ${state ?? '(sin leer)'}`),
   ]);
 };
@@ -178,6 +200,7 @@ const roleSeesClose: BrowserRowHandler = async (row: ManifestRow, { page }) => {
   const account = strict('correo', ACCOUNT_CELLS, cell(row, 'correo'));
   const expect = strict('resultado', ROLE_CELLS, cell(row, 'resultado'));
   const expected = `${account} abre NC-003 y mira los botones «Mover a…» → ${cell(row, 'resultado')}`;
+  const transitions = watchRequests(page);
   const opened = await openSheet(page, account, expected);
   if (opened !== undefined) return opened;
   const view = await waitDetail(page, 'NC-003', (current) => current.transitions.length > 0);
@@ -187,6 +210,10 @@ const roleSeesClose: BrowserRowHandler = async (row: ManifestRow, { page }) => {
     if (tapped !== undefined) return actionFailed(expected, tapped);
     const form = await waitUntil(async () => (await closeArea(page).count()) > 0);
     return verdictWeb([
+      labelsCheck(view),
+      // «No envía el cambio»: abrir el formulario de cierre no hace ninguna petición de transición
+      check(transitions.count('POST', TRANSITION_PATH) === 0, 'ninguna petición de cambio de estado al abrir el formulario de cierre', `peticiones POST ${TRANSITION_PATH}: ${transitions.count('POST', TRANSITION_PATH)}`),
+      check(transitions.count('GET', '/api/nc/NC-003') > 0, 'control: el registro de peticiones ve la carga del detalle', `peticiones GET /api/nc/NC-003 vistas: ${transitions.count('GET', '/api/nc/NC-003')}`),
       check(toggle !== undefined && toggle.disabled === false, '«Mover a «Cerrada»» habilitado', `«Mover a «Cerrada»» ${toggle === undefined ? '(no está)' : toggle.disabled ? 'deshabilitado' : 'habilitado'}`),
       check(form.reached, 'aparece el formulario de cierre', form.reached ? 'aparece el formulario de cierre' : 'no aparece el formulario de cierre'),
     ]);
@@ -194,12 +221,14 @@ const roleSeesClose: BrowserRowHandler = async (row: ManifestRow, { page }) => {
   if (expect === 'consultant') {
     return verdictWeb([
       check(toggle !== undefined && toggle.disabled === true, '«Mover a «Cerrada»» deshabilitado', `«Mover a «Cerrada»» ${toggle === undefined ? '(no está)' : toggle.disabled ? 'deshabilitado' : 'habilitado'}`),
+      labelsCheck(view),
       check(view?.reasonVisible === DENIED_CLOSE, `«${DENIED_CLOSE}» visible bajo los botones`, `motivo visible: «${view?.reasonVisible ?? '(no visible)'}»`),
     ]);
   }
   const all = view?.transitions ?? [];
   return verdictWeb([
     check(all.length > 0 && all.every((button) => button.disabled), 'todos los botones «Mover a…» deshabilitados', `botones: ${all.map((button) => `${button.label ?? '?'} ${button.disabled ? 'deshabilitado' : 'habilitado'}`).join('; ') || '(ninguno)'}`),
+    labelsCheck(view),
     check(view?.reasonVisible === DENIED_MOVE, `«${DENIED_MOVE}» visible`, `motivo visible: «${view?.reasonVisible ?? '(no visible)'}»`),
   ]);
 };

@@ -105,7 +105,7 @@ const addsComment: BrowserRowHandler = async (row: ManifestRow, { page }) => {
     check(last?.author === author && last?.body === COMMENT_TEXT, `comentario nuevo al final, firmado por ${cell(row, 'autor')}`, `último comentario: ${last?.author ?? '(sin leer)'} / «${last?.body ?? '(sin leer)'}»`),
     check(view?.commentValue === '', 'el campo «Añadir comentario» queda vacío', `campo con «${view?.commentValue ?? '(sin leer)'}»`),
     check(persisted?.length === 4 && persistedLast?.authorName === author, 'en el servidor: 4 comentarios y el último de la persona', `en el servidor: ${persisted?.length ?? '(sin leer)'} comentarios, último de ${persistedLast?.authorName ?? '(sin leer)'}`),
-  ]);
+  ], 'Regla sin fila: «Todavía no hay comentarios» (hilo vacío) no se ejerce: NC-003 y NC-004 tienen comentarios en el seed.');
 };
 
 // --- Esquema 2: un comentario vacío no se envía --------------------------------------------------------------------------------
@@ -165,6 +165,7 @@ const lengthLimit: BrowserRowHandler = async (row: ManifestRow, { page }) => {
     check(shown.reached, `«${LONG_ERROR}» bajo el campo`, `bajo el campo: «${view?.commentError ?? '(sin error visible)'}»`),
     check(view?.commentsHeading === 'Comentarios (3)', '«Comentarios (3)»', `encabezado «${view?.commentsHeading ?? '(sin leer)'}»`),
     check(log.count('POST', COMMENT_PATH) === 0, 'ninguna petición de comentario', `peticiones POST ${COMMENT_PATH}: ${log.count('POST', COMMENT_PATH)}`),
+    check(log.count('GET', '/api/nc/NC-003') > 0, 'control: el registro de peticiones ve la carga del detalle', `peticiones GET /api/nc/NC-003 vistas: ${log.count('GET', '/api/nc/NC-003')}`),
   ]);
 };
 
@@ -180,9 +181,21 @@ const typeLabel: BrowserRowHandler = async (row: ManifestRow, { page }) => {
   if (opened.failed !== undefined) return opened.failed;
   const view = await readDetail(page);
   const found = view?.comments.find((comment) => comment.author === author);
+  // Las etiquetas de TODOS los comentarios de la NC (la historia: NC-003 tiene 3 comentarios y solo el de Pablo Serrano es «Rápido»;
+  // NC-004 tiene un único comentario de cierre de Javier Ortega, «Cierre»)
+  const storyCount = code === 'NC-003' ? 3 : 1;
+  const storyAuthor = code === 'NC-003' ? 'Pablo Serrano' : 'Javier Ortega';
+  const storyLabel = code === 'NC-003' ? 'Rápido' : 'Cierre';
+  const labelledNow = (view?.comments ?? []).filter((comment) => comment.kindLabel !== undefined);
   return verdictWeb([
     check(found !== undefined, `comentario de ${cell(row, 'autor')} en ${code}`, found === undefined ? `sin comentario de ${cell(row, 'autor')}` : 'comentario encontrado'),
     check(found?.kindLabel === label, `etiqueta «${label}» en el comentario de ${cell(row, 'autor')}`, `etiqueta «${found?.kindLabel ?? '(sin etiqueta)'}»`),
+    check(view?.comments.length === storyCount, `${code} tiene ${storyCount} comentario(s) tras el reinicio`, `comentarios en ${code}: ${view?.comments.length ?? '(sin leer)'}`),
+    check(
+      labelledNow.length === 1 && labelledNow[0]?.author === storyAuthor && labelledNow[0]?.kindLabel === storyLabel,
+      `en ${code} solo el comentario de ${storyAuthor} lleva la etiqueta «${storyLabel}» (los demás, ninguna)`,
+      `comentarios con etiqueta en ${code}: ${labelledNow.map((comment) => `${comment.author ?? '(sin autor)'} «${comment.kindLabel ?? ''}»`).join(', ') || '(ninguno)'}`,
+    ),
   ]);
 };
 

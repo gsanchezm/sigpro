@@ -2,7 +2,7 @@ import { field, type ApiResult } from '../../../story-runs/support/api';
 import { DEMO } from '../../../story-runs/support/prepare';
 import { defineApiRows, type ApiRowHandler, type ManifestRow } from '../../core/framework';
 import { cell, check, preparationFailed, strict } from '../../support/checks';
-import { ACCOUNT_CELLS, TENANT_A, actorOf, answerChecks, commentNc, detailNc, fieldCheck, resetTenants, verdict, type Expect } from './common';
+import { ACCOUNT_CELLS, TENANT_A, actorOf, answerChecks, commentNc, detailNc, fieldCheck, fieldsOf, resetTenants, sameFields, showValue, verdict, type Expect } from './common';
 
 // US-NC-GESTION-004 — Comentarios de una no conformidad por la API (POST /api/nc/:code/comments). Preparación de cada fila: reinicio de
 // alumno01 con el token de su administrador; después la cuenta de la fila inicia sesión en alumno01. El texto se recorta de los espacios
@@ -67,14 +67,25 @@ const eachRoleComments: ApiRowHandler = async (row: ManifestRow) => {
   const actor = await actorOf(account);
   if (actor.token === undefined) return preparationFailed(expected, `${cell(row, 'correo')} inicia sesión con POST /api/auth/login`, actor.last);
 
-  const created = await commentNc(actor.token, 'NC-003', { body: COMMENT_BODY });
+  // La lectura de la NC antes y después (con gestor@sigpro.test): el comentario no cambia ni el estado ni la severidad
   const gestor = await actorOf(GESTOR);
+  const before = gestor.token === undefined ? undefined : fieldsOf(await detailNc(gestor.token, 'NC-003'));
+  const created = await commentNc(actor.token, 'NC-003', { body: COMMENT_BODY });
+  const after = gestor.token === undefined ? undefined : fieldsOf(await detailNc(gestor.token, 'NC-003'));
   const total = await commentCountOf(gestor.token, 'NC-003');
+  const unchanged = ['severity', 'state', 'assigneeId', 'assigneeName', 'description'] as const;
+  const createdAt = field(created.body, 'createdAt');
   return verdict([
     check(created.status === 201, 'respuesta 201', `respuesta ${created.status}`),
     fieldCheck('authorName', field(created.body, 'authorName'), author),
     fieldCheck('kind', field(created.body, 'kind'), 'comment'),
     fieldCheck('commentCount de NC-003 después', total, 4),
+    check(typeof field(created.body, 'id') === 'string' && field(created.body, 'id') !== '', 'id del comentario', `id ${showValue(field(created.body, 'id'))}`),
+    fieldCheck('authorId del comentario (la persona que inicia sesión)', field(created.body, 'authorId'), actor.id),
+    check(typeof createdAt === 'string' && !Number.isNaN(Date.parse(createdAt)), 'createdAt del comentario como fecha ISO', `createdAt ${showValue(createdAt)}`),
+    check(sameFields(before, after, unchanged), 'NC-003 sin cambios en severidad, estado, asignado y descripción', unchanged.map((key) => `${key} ${showValue(before?.[key])}→${showValue(after?.[key])}`).join('; ')),
+    fieldCheck('severity de NC-003 después', after?.severity, 'critical'),
+    fieldCheck('state de NC-003 después', after?.state, 'corrective_action'),
   ]);
 };
 

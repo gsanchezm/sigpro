@@ -90,7 +90,10 @@ const eachRole: ApiRowHandler = async (row: ManifestRow) => {
     fieldCheck('commentCount', fields?.commentCount, 0),
     fieldCheck('testRunId', fields?.testRunId, null),
     fieldCheck('assigneeId', fields?.assigneeId, null),
-    check(typeof fields?.programName === 'string' && fields.programName !== '', 'programName con el nombre del programa', `programName ${showValue(fields?.programName)}`),
+    fieldCheck('programName', fields?.programName, 'Sistema de mando táctico Ártemis'),
+    fieldCheck('severity', fields?.severity, 'major'),
+    fieldCheck('description', fields?.description, TEN_A),
+    check(typeof fields?.createdAt === 'string' && !Number.isNaN(Date.parse(fields.createdAt)), 'createdAt como fecha ISO', `createdAt ${showValue(fields?.createdAt)}`),
   ];
   return verdict(checks);
 };

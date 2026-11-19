@@ -14,6 +14,8 @@ export { TENANT_A, resetTenants };
 export interface Actor {
   readonly token: string | undefined;
   readonly role: string | undefined;
+  /** Id de la persona que inicia sesión (`user.id` de la respuesta del login): es el `authorId` de sus comentarios. */
+  readonly id: string | undefined;
   readonly last: ApiResult;
 }
 
@@ -22,7 +24,13 @@ export const actorOf = async (credentials: Credentials): Promise<Actor> => {
   const started = await startSession(TENANT_A, credentials);
   const user = field(started.result.body, 'user');
   const role = field(user, 'role');
-  return { token: started.session?.accessToken, role: typeof role === 'string' ? role : undefined, last: started.result };
+  const id = field(user, 'id');
+  return {
+    token: started.session?.accessToken,
+    role: typeof role === 'string' ? role : undefined,
+    id: typeof id === 'string' ? id : undefined,
+    last: started.result,
+  };
 };
 
 /** Petición a la API en alumno01 con el token dado (o sin cabecera Authorization si es `undefined`). */
@@ -74,6 +82,7 @@ export interface NcFields {
   readonly assigneeName: string | null | undefined;
   readonly commentCount: number | undefined;
   readonly testRunId: string | null | undefined;
+  readonly createdAt: string | undefined;
 }
 
 const textField = (body: unknown, key: string): string | undefined => {
@@ -102,6 +111,7 @@ export const fieldsOf = (result: ApiResult): NcFields | undefined => {
     assigneeName: nullableField(result.body, 'assigneeName'),
     commentCount: typeof commentCount === 'number' ? commentCount : undefined,
     testRunId: nullableField(result.body, 'testRunId'),
+    createdAt: textField(result.body, 'createdAt'),
   };
 };
 
@@ -112,9 +122,20 @@ export const showValue = (value: unknown): string => (value === undefined ? '(au
 export const sameFields = (before: NcFields | undefined, after: NcFields | undefined, keys: readonly (keyof NcFields)[]): boolean =>
   before !== undefined && after !== undefined && keys.every((key) => before[key] === after[key]);
 
-/** Comprobación de un campo frente a lo que dice la historia. */
+/** Comprobación de un campo frente a lo que dice la historia. Un campo AUSENTE (`undefined`) nunca cumple: no se lee, no coincide. */
 export const fieldCheck = (label: string, observed: unknown, expected: unknown): Check =>
-  check(observed === expected, `${label} ${showValue(expected)}`, `${label} ${showValue(observed)}`);
+  check(observed !== undefined && observed === expected, `${label} ${showValue(expected)}`, `${label} ${showValue(observed)}`);
+
+/** Valores del seed de NC-003 que la historia da por hecho (si la fila no los envía, deben seguir así). */
+export const NC003_SEED = {
+  severity: 'critical',
+  description: 'Desviación detectada en la ejecución 003: el resultado no cumple el criterio de aceptación.',
+  state: 'corrective_action',
+  programCode: 'PRG-001',
+  assigneeId: 'u4',
+  assigneeName: 'Andrés Molina',
+  commentCount: 3,
+} as const;
 
 /** Lista de no conformidades de una respuesta 200: `items`; lista vacía si no la trae. */
 export const itemsOf = (body: unknown): readonly Record<string, unknown>[] => {

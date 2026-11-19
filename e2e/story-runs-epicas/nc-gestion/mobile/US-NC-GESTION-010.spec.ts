@@ -129,6 +129,12 @@ const eachFieldValidated: BrowserRowHandler = async (row: ManifestRow, { page })
     const written = await writeDescription(page, filling.description);
     if (written !== undefined) return actionFailed(expected, written);
   }
+  // Relectura del campo «Descripción» tras escribir (vacío si la fila no escribe nada): lo que se envía es lo que dice la fila
+  const readBack = await dialogOf(page)
+    .getByRole('textbox', { name: 'Descripción', exact: true })
+    .first()
+    .inputValue({ timeout: 2_000 })
+    .catch(() => undefined);
   const submitted = await submitMobile(page);
   if (submitted !== undefined) return actionFailed(expected, submitted);
 
@@ -136,11 +142,12 @@ const eachFieldValidated: BrowserRowHandler = async (row: ManifestRow, { page })
   const view: MobileNewView | undefined = await readNew(page);
   await observe(2_000);
   return verdictWeb([
+    check(readBack !== undefined && readBack.trim() === (filling.description ?? '').trim(), 'el campo «Descripción» contiene el texto de la fila', `campo «Descripción» con «${readBack ?? '(sin leer)'}»`),
     check(shown.reached, `«${message}» bajo su campo`, `bajo su campo: ${view?.[filling.errorField] ?? '(sin error visible)'}`),
     check((await readNew(page))?.open === true, 'el diálogo sigue abierto', (await readNew(page))?.open === true ? 'el diálogo sigue abierto' : 'el diálogo no está abierto'),
     check(log.count('POST', CREATE_PATH) === 0, 'ninguna petición de alta', `peticiones POST /api/nc: ${log.count('POST', CREATE_PATH)}`),
     check(log.count('GET', CREATE_PATH) > 0, 'control: el registro de peticiones ve la carga de la lista', `peticiones GET /api/nc vistas: ${log.count('GET', CREATE_PATH)}`),
-  ]);
+  ], 'Regla sin fila: «Abrir no conformidad» deshabilitado mientras cargan los programas («Cargando programas…»); la fila solo abre el diálogo una vez cargados.');
 };
 
 defineBrowserRows({

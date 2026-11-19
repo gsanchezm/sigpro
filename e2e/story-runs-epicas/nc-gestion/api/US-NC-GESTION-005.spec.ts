@@ -98,7 +98,10 @@ const maximumLength: ApiRowHandler = async (row: ManifestRow) => {
 
   const result = await closeWith(gestor.token, 'NC-003', comment);
   const stateNow = await persistedState('NC-003');
-  return verdict([...closeChecks(expect, result), fieldCheck('estado de NC-003 después', stateNow, expect.state ?? 'corrective_action')]);
+  return verdict(
+    [...closeChecks(expect, result), fieldCheck('estado de NC-003 después', stateNow, expect.state ?? 'corrective_action')],
+    'Sin fila para el orden 403 → 409 → 422 con cuerpo inválido de un rol sin permiso: el orden de la historia no se ejerce aquí (el rol de la fila es admin o gestor). Un consultor con más de 1000 caracteres recibiría 422 (la validación del cuerpo va antes que el rol).',
+  );
 };
 
 // --- Esquema 3: solo admin y program_manager pueden cerrar --------------------------------------------------------------------
@@ -130,7 +133,10 @@ const checkOrder: ApiRowHandler = async (row: ManifestRow) => {
   if (actor.token === undefined) return preparationFailed(expected, `${cell(row, 'correo')} inicia sesión con POST /api/auth/login`, actor.last);
 
   const result = await closeWith(actor.token, code, comment);
-  return verdict([...closeChecks(expect, result), fieldCheck(`estado de ${code} después (seed)`, await persistedState(code), seedState)]);
+  return verdict(
+    [...closeChecks(expect, result), fieldCheck(`estado de ${code} después (seed)`, await persistedState(code), seedState)],
+    'El orden 403 → 409 → 422 se ejerce solo con cuerpos válidos (comentario de 19, 20 o vacío). Sin fila con un rol sin permiso y un cuerpo inválido (p. ej. más de 1000 caracteres): ahí la validación del cuerpo responde antes que el rol.',
+  );
 };
 
 // --- Esquema 5: el comentario de cierre queda guardado como comentario de cierre y recortado ----------------------------------

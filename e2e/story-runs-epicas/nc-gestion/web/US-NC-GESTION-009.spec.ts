@@ -70,16 +70,20 @@ const dialogArea = (page: Page): Locator => closeDialog(page, 'NC-003').getByRol
 const dialogSubmit = (page: Page): Locator => closeDialog(page, 'NC-003').getByRole('button', { name: 'Cerrar no conformidad', exact: true });
 
 /** Cuerpos de las peticiones de cierre que salen de la página (se captura el `comment` enviado). */
-const captureTransitions = (page: Page): { readonly bodies: () => readonly string[] } => {
+const captureTransitions = (page: Page): { readonly bodies: () => readonly string[]; readonly control: () => boolean } => {
   const bodies: string[] = [];
+  let reads = 0;
   page.on('request', (request) => {
     try {
-      if (request.method() === 'POST' && new URL(request.url()).pathname === TRANSITION_PATH) bodies.push(request.postData() ?? '(sin cuerpo)');
+      const path = new URL(request.url()).pathname;
+      if (request.method() === 'GET' && path.startsWith('/api/nc')) reads += 1;
+      if (request.method() === 'POST' && path === TRANSITION_PATH) bodies.push(request.postData() ?? '(sin cuerpo)');
     } catch {
       // una URL que no se lee no cuenta
     }
   });
-  return { bodies: () => [...bodies] };
+  // Control positivo: el registro ve las lecturas de la propia página (si no, una negativa «0 peticiones» no prueba nada)
+  return { bodies: () => [...bodies], control: () => reads > 0 };
 };
 
 /** Comentario de cierre enviado (texto `comment` del cuerpo JSON), o `undefined` si no se puede leer. */
@@ -151,8 +155,10 @@ const minimumLength: BrowserRowHandler = async (row: ManifestRow, { page }) => {
   await observe(2_000);
   const state = await persistedState('NC-003');
   return verdictWeb([
+    check(counted.reached && shownCounter === counter, `contador «${counter}»`, `contador «${shownCounter ?? '(sin leer)'}»`),
     check(shown.reached, `«${result.text}» bajo el campo`, `bajo el campo: «${view?.closeError ?? '(sin error visible)'}»`),
     check(transitions.bodies().length === 0, 'ninguna petición de cierre', `peticiones de cierre: ${transitions.bodies().length}`),
+    check(transitions.control(), 'control: el registro de peticiones ve la carga de la página', `lecturas GET /api/nc vistas: ${transitions.control() ? 'sí' : 'no'}`),
     check(state === 'corrective_action', 'NC-003 sigue en «Acción correctiva» en el servidor', `NC-003 en el servidor: ${state ?? '(sin leer)'}`),
   ]);
 };
@@ -180,6 +186,7 @@ const emptyNotSent: BrowserRowHandler = async (row: ManifestRow, { page }) => {
   return verdictWeb([
     check(shown.reached, `«${REQUIRED_ERROR}» bajo el campo`, `bajo el campo: «${(await readDetail(page))?.closeError ?? '(sin error visible)'}»`),
     check(transitions.bodies().length === 0, 'ninguna petición de cierre', `peticiones de cierre: ${transitions.bodies().length}`),
+    check(transitions.control(), 'control: el registro de peticiones ve la carga de la página', `lecturas GET /api/nc vistas: ${transitions.control() ? 'sí' : 'no'}`),
   ]);
 };
 
@@ -220,7 +227,11 @@ const dragToClosed: BrowserRowHandler = async (row: ManifestRow, { page }) => {
   const drag = await performDrag(page, 'NC-003', 'closed');
   if (!isDragOutcome(drag)) return actionFailed(expected, drag);
   if (!drag.started) {
-    // Sin «dragstart» sobre una tarjeta arrastrable no se puede afirmar nada de la app: la fila no se ejecuta
+    // Una tarjeta NO arrastrable (draggable=false) es un defecto: la historia exige poder arrastrarla (rol con permiso de cierre)
+    if (drag.draggable === 'false') {
+      return verdictWeb([check(false, 'la tarjeta NC-003 arrastrable (draggable=true) para el rol con permiso de cierre', `la tarjeta NC-003 tiene draggable=false: no se puede arrastrar a «Cerrada»`)]);
+    }
+    // Sin «dragstart» sobre una tarjeta arrastrable (o sin atributo legible) no se puede afirmar nada de la app: la fila no se ejecuta
     return notExecutable(expected, `el gesto de arrastrar no arranca en el arnés: no hay «dragstart» sobre NC-003 (draggable=${drag.draggable ?? '(sin leer)'}; marca de la columna «${drag.dropOnTarget}»; puntero sobre la columna: ${drag.pointerOnTarget ? 'sí' : 'no'}); no se puede afirmar que la app lo impida. Inicios de arrastre registrados: ${(await dragStarts(page)).join(', ') || '(ninguno)'}`);
   }
 
@@ -253,6 +264,7 @@ const dragToClosed: BrowserRowHandler = async (row: ManifestRow, { page }) => {
     check(shown.reached, `«${result.text}» bajo el campo`, `bajo el campo: «${message ?? '(sin error visible)'}»`),
     check(stillOpen, 'el diálogo «Cerrar NC-003» sigue abierto', stillOpen ? 'el diálogo «Cerrar NC-003» sigue abierto' : 'el diálogo se cerró'),
     check(transitions.bodies().length === 0, 'ninguna petición de cierre', `peticiones de cierre: ${transitions.bodies().length}`),
+    check(transitions.control(), 'control: el registro de peticiones ve la carga del tablero', `lecturas GET /api/nc vistas: ${transitions.control() ? 'sí' : 'no'}`),
   ]);
 };
 
@@ -281,6 +293,7 @@ const cancelKeeps: BrowserRowHandler = async (row: ManifestRow, { page }) => {
     check(view?.stateText === 'Acción correctiva', 'NC-003 sigue en «Acción correctiva» (detalle)', `estado del detalle «${view?.stateText ?? '(sin leer)'}»`),
     check(state === 'corrective_action', 'NC-003 sigue en «Acción correctiva» en el servidor', `NC-003 en el servidor: ${state ?? '(sin leer)'}`),
     check(transitions.bodies().length === 0, 'ninguna petición de cierre', `peticiones de cierre: ${transitions.bodies().length}`),
+    check(transitions.control(), 'control: el registro de peticiones ve la carga del detalle', `lecturas GET /api/nc vistas: ${transitions.control() ? 'sí' : 'no'}`),
   ]);
 };
 

@@ -1,7 +1,7 @@
 import { DEMO } from '../../../story-runs/support/prepare';
 import { defineApiRows, type ApiRowHandler, type ManifestRow } from '../../core/framework';
 import { cell, check, preparationFailed, strict, type Check } from '../../support/checks';
-import { ACCOUNT_CELLS, NC003_DESCRIPTION, TENANT_A, actorOf, answerChecks, detailNc, fieldCheck, fieldsOf, patchNc, resetTenants, sameFields, showValue, verdict, type Expect, type NcFields } from './common';
+import { ACCOUNT_CELLS, NC003_DESCRIPTION, NC003_SEED, TENANT_A, actorOf, answerChecks, detailNc, fieldCheck, fieldsOf, patchNc, resetTenants, sameFields, showValue, verdict, type Expect, type NcFields } from './common';
 
 // US-NC-GESTION-003 — Edición de la severidad, la descripción o la asignación por la API (PATCH /api/nc/:code). Preparación de cada fila:
 // reinicio de alumno01 con el token de su administrador; después la cuenta de la fila inicia sesión en alumno01. Las lecturas de «sin
@@ -105,6 +105,14 @@ const editSentFields: ApiRowHandler = async (row: ManifestRow) => {
     check(sameFields(before, after, untouched), `sin cambios en ${untouched.join(', ')} en GET /api/nc/NC-003 después`, `GET /api/nc/NC-003 después: ${showValue(after?.severity)} / ${showValue(after?.assigneeName)}`),
     check(after?.description === NC003_DESCRIPTION || sent.includes('description'), `descripción del seed en GET después`, `descripción en GET después: ${showValue(after?.description)}`),
   ];
+  // Los campos que la fila no envía deben seguir con los valores del SEED que dice la historia (no solo con los de antes del PATCH)
+  checks.push(
+    check(
+      untouched.every((key) => fields !== undefined && fields[key] !== undefined && String(fields[key]) === String(NC003_SEED[key as keyof typeof NC003_SEED])),
+      `los campos no enviados (${untouched.join(', ')}) siguen con los valores del seed (severity critical, ${NC003_SEED.assigneeName}, ${NC003_SEED.state})`,
+      untouched.map((key) => `${key} ${showValue(fields?.[key])}`).join('; '),
+    ),
+  );
   const persisted = sent.includes('severity') ? 'severity' : sent.includes('assigneeId') ? 'assigneeId' : undefined;
   if (persisted !== undefined && after !== undefined) checks.push(fieldCheck(`${persisted} persistido`, after[persisted], fields?.[persisted]));
   return verdict(checks);

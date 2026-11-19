@@ -2,7 +2,7 @@ import type { Locator, Page } from '@playwright/test';
 import { MOVIL_NC_TESTIDS } from '../../../../packages/shared/src/testids';
 import { defineBrowserRows, type BrowserRowHandler, type ManifestRow, type Outcome } from '../../core/framework';
 import { cell, check, strict } from '../../support/checks';
-import { ACTION, waitUntil } from '../../support/browser';
+import { ACTION, CEILING_MS, waitUntil } from '../../support/browser';
 import { actionFailed, captureBodies, interact, keysOf, observe, plainOf, pollPersisted, toastShown, verdictWeb, watchRequests, type Blocked } from '../web/common';
 import { onMobile, openCard, prepareMobile, readEdit, sheetOf, waitDetail, waitEdit, waitSheetReady, type MobileEditView } from './common';
 
@@ -91,6 +91,18 @@ const chooseSeverity = (page: Page, label: string): Promise<{ readonly message: 
 
 const saveButton = (page: Page, name: string): Locator => editForm(page).getByRole('button', { name, exact: true });
 
+/**
+ * Teclea la búsqueda como una persona: limpia el campo (Ctrl+A y Retroceso) y escribe carácter a carácter. El campo de búsqueda de la
+ * hoja «Asignada a» empieza vacío; el campo «Asignada a» (combobox) es el que muestra el nombre de la persona asignada.
+ */
+const typeAsPerson = (locator: Locator, text: string) =>
+  interact(locator, `escribir «${text}» en «Buscar persona»`, async (element) => {
+    await element.click(ACTION);
+    await element.press('ControlOrMeta+A', ACTION);
+    await element.press('Backspace', ACTION);
+    await element.pressSequentially(text, { delay: 40, timeout: CEILING_MS });
+  });
+
 // --- Esquema 1: un rol con permiso de edición cambia la severidad y guarda --------------------------------------------------------
 
 const changeSeverity: BrowserRowHandler = async (row: ManifestRow, { page }) => {
@@ -117,7 +129,7 @@ const changeSeverity: BrowserRowHandler = async (row: ManifestRow, { page }) => 
     check(persisted?.severity === severity.key, `NC-003 guardada con severity ${severity.key}`, `NC-003 con severity ${persisted?.severity ?? '(sin leer)'}`),
     check(log.count('PATCH', SAVE_PATH) === 1, 'una petición PATCH de cambios', `peticiones PATCH: ${log.count('PATCH', SAVE_PATH)}`),
     check(bodies().length === 1 && JSON.stringify(keysOf(bodies()[0] ?? '')) === JSON.stringify(['severity']), 'se envía solo el campo cambiado (severity)', `envíos PATCH con: ${bodies().map((raw) => keysOf(raw)?.join(', ') ?? '(sin leer)').join(' | ') || '(ninguno)'}`),
-  ]);
+  ], 'Regla sin fila propia: «la descripción viaja solo si cambia su texto»; esta fila cambia solo la severidad, y el envío lo confirma (sin descripción).');
 };
 
 // --- Esquema 2: los dos botones de guardado se diferencian en lo que pasa después -----------------------------------------------
@@ -164,6 +176,8 @@ const descriptionLength: BrowserRowHandler = async (row: ManifestRow, { page }) 
   if (edit.blocked !== undefined) return actionFailed(expected, edit.blocked);
   const written = await interact(editForm(page).getByRole('textbox', { name: 'Descripción', exact: true }), 'escribir en «Descripción»', (element) => element.fill(text.text, ACTION));
   if (written !== undefined) return actionFailed(expected, written);
+  // Relectura del campo «Descripción» tras escribir: lo que se envía es el texto de la fila
+  const readBack = await editForm(page).getByRole('textbox', { name: 'Descripción', exact: true }).first().inputValue({ timeout: 2_000 }).catch(() => undefined);
   const saved = await interact(saveButton(page, 'Guardar'), 'pulsar «Guardar»', (element) => element.click(ACTION));
   if (saved !== undefined) return actionFailed(expected, saved);
 
@@ -172,6 +186,7 @@ const descriptionLength: BrowserRowHandler = async (row: ManifestRow, { page }) 
     const persisted = await pollPersisted('NC-003', (fields) => plainOf(fields.description ?? '') === text.text);
     return verdictWeb([
       check(toast.readable && toast.seen, `aviso «${SAVED}»`, toast.observed),
+      check(readBack === text.text, 'el campo «Descripción» contiene el texto de la fila tras escribir', `campo con «${readBack ?? '(sin leer)'}»`),
       check(plainOf(persisted?.description ?? '') === text.text, 'NC-003 guardada con la descripción de 10 letras', `descripción en el servidor: ${persisted?.description ?? '(sin leer)'}`),
     ]);
   }
@@ -179,6 +194,7 @@ const descriptionLength: BrowserRowHandler = async (row: ManifestRow, { page }) 
   const view = await readEdit(page);
   await observe(2_000);
   return verdictWeb([
+    check(readBack === text.text, 'el campo «Descripción» contiene el texto de la fila tras escribir', `campo con «${readBack ?? '(sin leer)'}»`),
     check(shown.reached, `«${SHORT}» bajo el campo`, `bajo el campo: «${view?.descriptionError ?? '(sin error visible)'}»`),
     check(log.count('PATCH', SAVE_PATH) === 0, 'ninguna petición de guardado', `peticiones PATCH: ${log.count('PATCH', SAVE_PATH)}`),
     check(log.count('GET', SAVE_PATH) > 0, 'control: el registro de peticiones ve la carga del detalle', `peticiones GET vistas: ${log.count('GET', SAVE_PATH)}`),
@@ -198,7 +214,7 @@ const assignPerson: BrowserRowHandler = async (row: ManifestRow, { page }) => {
   const combo = await interact(editForm(page).getByRole('combobox', { name: 'Asignada a', exact: true }), 'abrir «Asignada a»', (element) => element.click(ACTION));
   if (combo !== undefined) return actionFailed(expected, combo);
   const owners = page.getByTestId('nc-assignee-dialog');
-  const typed = await interact(owners.getByRole('textbox', { name: 'Buscar persona', exact: true }), 'escribir en «Buscar persona»', (element) => element.fill(person.search, ACTION));
+  const typed = await typeAsPerson(owners.getByRole('textbox', { name: 'Buscar persona', exact: true }), person.search);
   if (typed !== undefined) return actionFailed(expected, typed);
   const chosen = await interact(owners.getByRole('radio', { name: persona, exact: true }), `elegir ${persona}`, (element) => element.click(ACTION));
   if (chosen !== undefined) return actionFailed(expected, chosen);
@@ -212,7 +228,7 @@ const assignPerson: BrowserRowHandler = async (row: ManifestRow, { page }) => {
     check(toast.readable && toast.seen, `aviso «${SAVED}»`, toast.observed),
     check(shown?.assignee === persona, `«Asignada a» muestra ${persona}`, `«Asignada a» muestra «${shown?.assignee ?? '(sin leer)'}»`),
     check(persisted?.assigneeName === persona, `NC-003 asignada a ${persona} en el servidor`, `NC-003 asignada a ${persisted?.assigneeName ?? '(sin leer)'}`),
-  ]);
+  ], 'El campo de búsqueda de la hoja «Asignada a» empieza vacío y se teclea carácter a carácter; la persona asignada se lee del campo «Asignada a» (el marcador «Buscar persona» no se ve con una persona asignada).');
 };
 
 // --- Esquema 5: quitar la asignación deja la no conformidad sin responsable -----------------------------------------------------
