@@ -6,8 +6,8 @@ import { cell, check, conclude, preparationFailedWeb, sleep, strict, type Check 
 import { defineBrowserRows, type BrowserRowHandler } from '../../core/framework';
 import { actionFailed, eq, interact, onWeb, openPath, quotedOr, sameList, signIn, toggleOf, treeItem, treeRows, visibleCodes } from './common';
 
-/** Ventana de reacción local de la pantalla (~1 s): se espera esto antes de juzgar que algo ocurre o no ocurre. */
-const REACTION_MS = 1000;
+/** Ventana que se observa antes de juzgar que «no pasa nada» (tres segundos: más que cualquier reacción local de la pantalla). */
+const REACTION_MS = 3000;
 
 // US-REQ-ARBOL-006 — Recorrer el árbol y las pestañas con el teclado (web). Preparación de cada fila: reinicio de alumno01 con su administrador,
 // inicio de sesión de gestor@sigpro.test en /login?tenant=alumno01 (contexto sin sesión) y llegada a Programas. El foco se pone con `focus()`
@@ -96,11 +96,11 @@ const RESULT_CHECKS: ReadonlyMap<string, Expectation> = new Map<string, Expectat
   ['el foco pasa a REQ-003', async (_b, _a, focus) => [check(focus === 'REQ-003', 'el foco pasa a REQ-003', `el foco está en ${focus}`)]],
   [
     'no pasa nada y el foco sigue en REQ-002',
-    async (before, after, focus) => [check(focus === 'REQ-002', 'el foco sigue en REQ-002', `el foco está en ${focus}`), check(sameList(before, after), 'la lista visible no cambia', 'la lista visible cambió')],
+    async (before, after, focus) => [check(focus === 'REQ-002', 'el foco sigue en REQ-002', `el foco está en ${focus}`), check(sameList(before, after), 'la lista visible no cambia', `la lista visible: antes ${before.join(', ')}; después ${after.join(', ')}`)],
   ],
   [
     'no pasa nada y el foco sigue en REQ-001',
-    async (before, after, focus) => [check(focus === 'REQ-001', 'el foco sigue en REQ-001', `el foco está en ${focus}`), check(sameList(before, after), 'la lista visible no cambia', 'la lista visible cambió')],
+    async (before, after, focus) => [check(focus === 'REQ-001', 'el foco sigue en REQ-001', `el foco está en ${focus}`), check(sameList(before, after), 'la lista visible no cambia', `la lista visible: antes ${before.join(', ')}; después ${after.join(', ')}`)],
   ],
 ]);
 
@@ -120,7 +120,8 @@ const arrowAction: BrowserRowHandler = async (row, { page }) => {
   }
   const focused = await interact(treeItem(page, fila), `poner el foco en la fila de ${fila}`, (el) => el.focus());
   if (focused) return actionFailed(expected, focused);
-  await settleFocus(page, fila);
+  const start = await settleFocus(page, fila);
+  if (start !== fila) return preparationFailedWeb(expected, `el foco está en ${start} y no en ${fila} antes de la tecla`);
   const before = await visibleCodes(page);
   await page.keyboard.press(strict('tecla', KEYS, tecla));
   // Reacción local de la propia pantalla (~1 s): se observa esa ventana antes de juzgar «no pasa nada»
@@ -143,7 +144,8 @@ const enterOpens: BrowserRowHandler = async (row, { page }) => {
   await openPath(page, '/programs/PRG-002/requirements');
   const focused = await interact(treeItem(page, fila), `poner el foco en la fila de ${fila}`, (el) => el.focus());
   if (focused) return actionFailed(expected, focused);
-  await settleFocus(page, fila);
+  const start = await settleFocus(page, fila);
+  if (start !== fila) return preparationFailedWeb(expected, `el foco está en ${start} y no en ${fila} antes de Intro`);
   await page.keyboard.press('Enter');
   const detail = page.getByTestId(REQUISITOS_TESTIDS.REQUIREMENT_DETAIL);
   await waitUntil(async () => (await detail.count()) > 0);
@@ -208,7 +210,8 @@ const slash: BrowserRowHandler = async (row, { page }) => {
   await openPath(page, `/programs/${cell(row, 'programa')}/requirements`);
   const focused = await interact(treeItem(page, 'REQ-001'), 'poner el foco en la fila de REQ-001', (el) => el.focus());
   if (focused) return actionFailed(expected, focused);
-  await settleFocus(page, 'REQ-001');
+  const start = await settleFocus(page, 'REQ-001');
+  if (start !== 'REQ-001') return preparationFailedWeb(expected, `el foco está en ${start} y no en REQ-001 antes de la barra`);
   await page.keyboard.press('/');
   const search: Locator = page.getByRole('searchbox', { name: 'Buscar requisitos', exact: true });
   const onSearch = await search.evaluate((node) => node === document.activeElement, undefined, { timeout: 2000 }).catch(() => false);

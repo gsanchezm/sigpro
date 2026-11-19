@@ -4,6 +4,8 @@ import { cell, check, conclude, preparationFailed, strict } from '../../support/
 import { defineApiRows, type ApiRowHandler } from '../../core/framework';
 import {
   CREDENTIAL,
+  lastResultsCheck,
+  listOf,
   ISOLATION_ACCOUNT,
   ISOLATION_HEADER,
   codesOfObjects,
@@ -87,7 +89,15 @@ const detailText: ApiRowHandler = async (row) => {
   if (session.accessToken === undefined) return preparationFailed(expected, 'gestor@sigpro.test inicia sesión y recibe accessToken', session.last);
   const result = await getRequirement(codigo, session.accessToken);
   const plain = plainOf(field(result.body, 'description'));
-  return conclude([statusCheck(result, { status: 200 }), check(plain === texto, `el texto de description es ${texto}`, `el texto de description es «${plain}»`), ...requirementShape(result.body)]);
+  const html = typeof field(result.body, 'description') === 'string' ? (field(result.body, 'description') as string) : '';
+  // La historia dice que la descripción «se guarda como texto con formato»: el HTML guardado lleva párrafo y negrita, no solo el texto
+  const formatted = html.startsWith('<p>') && html.includes('<strong>') && html.includes('</strong>');
+  return conclude([
+    statusCheck(result, { status: 200 }),
+    check(plain === texto, `el texto de description es ${texto}`, `el texto de description es «${plain}»`),
+    check(formatted, 'la descripción guardada con formato (párrafo y negrita)', formatted ? 'la descripción guardada con párrafo y negrita' : `la descripción guardada es «${html.slice(0, 80)}» (sin formato)`),
+    ...requirementShape(result.body),
+  ], { note: 'La historia no fija las NC de estos requisitos: el campo ncs se comprueba solo por su forma (las filas sin casos enlazados lo fijan a vacío).' });
 };
 
 // --- Esquema 4: las etiquetas del requisito son las que se guardaron, en su orden ------------------------------------------------------------
@@ -114,7 +124,7 @@ const detailTests: ApiRowHandler = async (row) => {
   if (session.accessToken === undefined) return preparationFailed(expected, 'gestor@sigpro.test inicia sesión y recibe accessToken', session.last);
   const result = await getRequirement(codigo, session.accessToken);
   const codes = codesOfObjects(field(result.body, 'tests'));
-  return conclude([statusCheck(result, { status: 200 }), check(sameValue(codes, casos), `en tests solo ${casos}`, `en tests ${shown(codes)}`), ...requirementShape(result.body)]);
+  return conclude([statusCheck(result, { status: 200 }), check(sameValue(codes, casos), `en tests solo ${casos}`, `en tests ${shown(codes)}`), lastResultsCheck(field(result.body, 'tests'), listOf(casos)), ...requirementShape(result.body)]);
 };
 
 // --- Esquema 6: un requisito sin casos enlazados no tiene ni tests ni no conformidades ------------------------------------------------------

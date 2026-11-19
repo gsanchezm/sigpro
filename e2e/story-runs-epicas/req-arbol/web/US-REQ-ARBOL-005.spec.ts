@@ -16,7 +16,6 @@ const prepare = async (page: Page, credentials: { readonly email: string; readon
 
 /** Panel de detalle de escritorio (sección junto al árbol) y de responsive (diálogo a pantalla completa). */
 const desktopDetail = (page: Page): Locator => page.getByTestId(REQUISITOS_TESTIDS.REQUIREMENT_DETAIL);
-const responsiveDetail = (page: Page): Locator => page.getByTestId(RESPONSIVE_TESTIDS.REQUIREMENT_DETAIL);
 /** El detalle abierto, sea cual sea su diseño. */
 const anyDetail = (page: Page): Locator => page.getByTestId(REQUISITOS_TESTIDS.REQUIREMENT_DETAIL).or(page.getByTestId(RESPONSIVE_TESTIDS.REQUIREMENT_DETAIL));
 
@@ -66,6 +65,12 @@ const detailFields: BrowserRowHandler = async (row, { page }) => {
 
 // --- Esquema 2: los casos enlazados se muestran con su enlace y su resultado -----------------------------------------------------------
 
+/** Resultado de la última ejecución de cada caso en el seed, con la etiqueta que muestra la pantalla. */
+const SEED_RESULT_TEXT: ReadonlyMap<string, string> = new Map<string, string>([
+  ['TC-001', 'Bloqueado'],
+  ['TC-008', 'Superado'],
+]);
+
 const linkedTests: BrowserRowHandler = async (row, { page }) => {
   const codigo = cell(row, 'codigo');
   const casos = listOf(cell(row, 'casos'));
@@ -84,9 +89,11 @@ const linkedTests: BrowserRowHandler = async (row, { page }) => {
   const href = await link.getAttribute('href', { timeout: 2000 }).catch(() => null);
   return conclude([
     check(sameList(codes, casos), `los códigos ${casos.join(', ')}`, `los códigos ${codes.join(', ')}`),
-    check(results.length === casos.length && results.every((result) => ['Superado', 'Fallido', 'Bloqueado', 'Sin ejecutar'].includes(result)), 'cada uno con uno de los resultados Superado, Fallido, Bloqueado o Sin ejecutar', `resultados ${results.join(', ')}`),
+    check(sameList(results, casos.map((code) => SEED_RESULT_TEXT.get(code) ?? '(sin dato del seed)')), `cada uno con su resultado de la última ejecución: ${casos.map((code) => `${code} ${SEED_RESULT_TEXT.get(code) ?? '?'}`).join(', ')}`, `resultados ${results.join(', ')}`),
     eq('el enlace de TC-001', href ?? undefined, '/verification/TC-001'),
-  ]);
+  ], {
+    note: 'La historia no fija el resultado de cada caso: se compara con la última ejecución del seed (TC-001 bloqueado en RUN-002, TC-008 superado en RUN-017).',
+  });
 };
 
 // --- Esquema 3: un requisito sin casos enlazados ni no conformidades lo indica en el detalle -----------------------------------------
@@ -123,10 +130,17 @@ const copyCode: BrowserRowHandler = async (row, { page, context }) => {
   if (blocked) return actionFailed(expected, blocked);
   const { found, seen } = await toast;
   const clipboard = await page.evaluate(() => navigator.clipboard.readText()).catch(() => '(no legible)');
-  return conclude([check(found, `ve el aviso «Código copiado» con «${aviso}»`, found ? 've el aviso «Código copiado»' : `avisos de tono info: ${seen.map((entry) => `${entry.title} / ${entry.body}`).join(' · ') || '(ninguno)'}`)], {
-    note: `El portapapeles se lee tras el clic (${JSON.stringify(clipboard)}); el veredicto se decide por el aviso, no por el portapapeles.`,
-    evidence: { portapapeles: clipboard },
-  });
+  const copied = clipboard === codigo;
+  return conclude(
+    [
+      check(found, `ve el aviso «Código copiado» con «${aviso}»`, found ? 've el aviso «Código copiado»' : `avisos de tono info: ${seen.map((entry) => `${entry.title} / ${entry.body}`).join(' · ') || '(ninguno)'}`),
+      check(copied, `el portapapeles contiene ${codigo}`, `el portapapeles contiene «${clipboard}»`),
+    ],
+    {
+      note: 'El control se localiza por su nombre accesible «Copiar código REQ-017»: en la pantalla el texto visible es «⧉ Copiar código» (el nombre accesible añade el código). El portapapeles se lee tras el clic con el permiso concedido.',
+      evidence: { portapapeles: clipboard },
+    },
+  );
 };
 
 // --- Esquema 5: quien no puede editar ve los campos del detalle en solo lectura -------------------------------------------------------
@@ -139,6 +153,8 @@ const readOnly: BrowserRowHandler = async (row, { page }) => {
   await openPath(page, '/programs/PRG-002/requirements?select=REQ-017');
   await waitUntil(async () => (await desktopDetail(page).count()) > 0);
   const select = desktopDetail(page).getByLabel('Prioridad', { exact: true });
+  // El puntero pasa por el campo (como la historia): el motivo se lee del atributo title, que es lo que el navegador muestra como globo
+  await select.hover({ timeout: 2000 }).catch(() => undefined);
   const disabled = await select.isDisabled({ timeout: 2000 }).catch(() => false);
   const shown = await select.evaluate((node) => (node as HTMLSelectElement).selectedOptions[0]?.textContent ?? '', undefined, { timeout: 2000 }).catch(() => undefined);
   const title = await select.getAttribute('title', { timeout: 2000 }).catch(() => null);
@@ -146,7 +162,7 @@ const readOnly: BrowserRowHandler = async (row, { page }) => {
     check(disabled, 'el campo «Prioridad» no se puede cambiar', disabled ? 'el campo «Prioridad» no se puede cambiar' : 'el campo «Prioridad» se puede cambiar'),
     eq('el valor del campo «Prioridad»', norm(shown), 'Baja'),
     check(title === 'Tu rol no permite editar requisitos', 'el motivo «Tu rol no permite editar requisitos» (atributo title)', `el motivo «${title ?? '(sin motivo)'}»`),
-  ], { note: 'El motivo se comprueba en el atributo title del campo, no en el globo que dibuja el navegador al pasar el puntero.' });
+  ], { note: 'Aproximación: el globo nativo del navegador no es legible desde la prueba; se comprueba el atributo title del campo con el puntero encima.' });
 };
 
 // --- Esquema 6: el enlace de la dirección abre el detalle del requisito indicado ----------------------------------------------------
@@ -190,7 +206,7 @@ const closeDetail: BrowserRowHandler = async (row, { page }) => {
   const blocked =
     control === 'cerrar-desktop'
       ? await interact(page.getByRole('button', { name: 'Cerrar detalle de REQ-017', exact: true }), 'pulsar «Cerrar detalle de REQ-017»', (el) => el.click(ACTION))
-      : await interact(responsiveDetail(page).getByTestId(RESPONSIVE_TESTIDS.REQUIREMENT_DETAIL_CLOSE), 'pulsar «Volver»', (el) => el.click(ACTION));
+      : await interact(page.getByRole('button', { name: 'Volver', exact: true }), 'pulsar «Volver»', (el) => el.click(ACTION));
   if (blocked) return actionFailed(expected, blocked);
   await waitUntil(async () => (await anyDetail(page).count()) === 0);
   const gone = (await anyDetail(page).count()) === 0;

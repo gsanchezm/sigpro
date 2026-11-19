@@ -54,8 +54,9 @@ const loading: BrowserRowHandler = async (row, { page }) => {
   const navigated = await runSteps([['abrir /programs/PRG-001/requirements', () => page.goto('/programs/PRG-001/requirements', { timeout: CEILING_MS })]]);
   if (navigated) return preparationFailedWeb(expected, navigated);
   const counter = await countText(page);
-  const metric = await textOf(page.getByRole('group', { name: 'Requisitos', exact: true }).getByText('…', { exact: true }));
-  const treeShown = (await visibleCodes(page)).length;
+  // Las cuatro cifras, leídas una a una: todas deben mostrar «…» mientras la lista llega
+  const cardValues = await Promise.all(['Requisitos', 'Cobertura de verificación', 'Pendientes de aprobación', 'NC abiertas'].map((label) => textOf(page.getByRole('group', { name: label, exact: true }).locator('.metric-value'))));
+  const treeShown = await page.getByRole('treeitem').count();
   const arrived = await waitUntil(async () => (await visibleCodes(page)).includes('REQ-001'), CEILING_MS);
   const elapsed = Math.round(performance.now() - started);
   await waitUntil(async () => (await countText(page)) === '14 de 14 requisitos');
@@ -63,7 +64,7 @@ const loading: BrowserRowHandler = async (row, { page }) => {
   return conclude(
     [
       check(counter === '…', 'el contador «…» mientras espera', `el contador «${counter ?? '(no legible)'}» mientras espera`),
-      check(metric !== undefined, 'las cifras «…» mientras espera', metric === undefined ? 'las cifras no muestran «…»' : 'las cifras muestran «…»'),
+      check(cardValues.every((value) => value === '…'), 'las cuatro cifras «…» mientras espera', `cifras ${cardValues.map((value) => value ?? '(no legible)').join(', ')}`),
       check(treeShown === 0, 'ningún requisito mientras espera', `${treeShown} requisitos mientras espera`),
       check(arrived.reached && final === '14 de 14 requisitos', 've REQ-001 y el contador «14 de 14 requisitos» al llegar la respuesta', `contador «${final ?? '(no legible)'}»`),
     ],
@@ -85,12 +86,13 @@ const errorState: BrowserRowHandler = async (row, { page }) => {
   await waitUntil(async () => (await alert.count()) > 0);
   const lines = await alertLines(page);
   const retry = await isVisible(page.getByRole('button', { name: 'Reintentar', exact: true }));
-  const shown = await visibleCodes(page);
+  const shown = Array.from({ length: await page.getByRole('treeitem').count() }, () => '');
   return conclude([
     check(lines[0] === 'No se pudieron cargar los requisitos', 'el aviso «No se pudieron cargar los requisitos»', `el aviso «${lines[0] ?? '(sin título)'}»`),
     check((lines[1] ?? '') !== '', 'una línea de detalle técnico', lines[1] === undefined ? 'sin línea de detalle técnico' : `detalle técnico «${lines[1]}»`),
     check(retry, 'el botón «Reintentar»', retry ? 've el botón «Reintentar»' : 'no ve el botón «Reintentar»'),
     check(shown.length === 0, 'ningún requisito', `${shown.length} requisitos visibles`),
+    eq('el contador durante el error', await countText(page), '…'),
   ]);
 };
 
@@ -132,13 +134,15 @@ const notFound: BrowserRowHandler = async (row, { page }) => {
   const link = page.getByRole('link', { name: 'Volver a Programas', exact: true });
   const linkShown = await isVisible(link);
   const figuresShown = (await page.getByTestId(REQUISITOS_TESTIDS.REQUIREMENTS_METRICS).count()) > 0;
-  const treeCount = (await visibleCodes(page)).length;
+  const programHeader = (await page.getByLabel('Programa', { exact: true }).count()) > 0;
+  const treeCount = (await page.getByRole('treeitem').count());
   const pressed = await interact(link, 'pulsar «Volver a Programas»', (el) => el.click(ACTION));
   if (pressed) return actionFailed(expected, pressed);
   const back = await waitUntil(async () => new URL(page.url()).pathname === '/programs');
   return conclude([
     check(lines[0] === 'No se encontró el programa' && linkShown, 'el título «No se encontró el programa» y el enlace «Volver a Programas»', `el aviso «${lines.join(' · ')}» con enlace ${linkShown ? 'visible' : 'no visible'}`),
     check(!figuresShown && treeCount === 0, 'ni cifras ni árbol', `cifras ${figuresShown ? 'visibles' : 'no visibles'} y ${treeCount} requisitos`),
+    check(!programHeader, 'sin la cabecera del programa', programHeader ? 'con la cabecera del programa' : 'sin la cabecera del programa'),
     check(back.reached, 'llega a /programs', `llega a ${new URL(page.url()).pathname}`),
   ]);
 };
@@ -163,7 +167,7 @@ const noSession: BrowserRowHandler = async (row, { page }) => {
   ]);
   if (opened) return preparationFailedWeb(expected, opened);
   const arrived = await waitUntil(async () => new URL(page.url()).pathname === '/login');
-  const seen = await visibleCodes(page);
+  const seen = Array.from({ length: await page.getByRole('treeitem').count() }, () => '');
   const loginHeading = await isVisible(page.getByRole('heading', { name: 'Iniciar sesión', exact: true }));
   return conclude([
     check(arrived.reached, 'llega a /login', `llega a ${new URL(page.url()).pathname}`),

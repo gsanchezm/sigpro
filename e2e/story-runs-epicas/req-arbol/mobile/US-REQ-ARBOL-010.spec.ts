@@ -64,6 +64,11 @@ const noTags: BrowserRowHandler = async (row, { page }) => {
 // --- Esquema 3: los casos de prueba enlazados se listan con su código y su resultado ----------------------------------------------
 
 const RESULT_LABELS: readonly string[] = ['Superado', 'Fallido', 'Bloqueado', 'Sin ejecutar'];
+/** Última ejecución de cada caso en el seed (la historia no fija el valor): TC-001 bloqueado en RUN-002, TC-008 superado en RUN-017. */
+const SEED_RESULT_TEXT: ReadonlyMap<string, string> = new Map<string, string>([
+  ['TC-001', 'Bloqueado'],
+  ['TC-008', 'Superado'],
+]);
 const LINKED: ReadonlyMap<string, string> = new Map<string, string>([['TC-001 y TC-008', 'TC-001 y TC-008']]);
 
 const linkedTests: BrowserRowHandler = async (row, { page }) => {
@@ -87,8 +92,8 @@ const linkedTests: BrowserRowHandler = async (row, { page }) => {
   return conclude([
     check(heading > 0, 'la sección «Casos de prueba enlazados»', heading > 0 ? 've «Casos de prueba enlazados»' : 'no ve «Casos de prueba enlazados»'),
     check(codes.join(', ') === wanted.join(', '), `los códigos ${wanted.join(', ')}`, `los códigos ${codes.join(', ')}`),
-    check(results.every((result) => RESULT_LABELS.includes(result)), `cada uno con uno de los resultados ${RESULT_LABELS.join(', ')}`, `resultados ${results.join(', ')}`),
-  ]);
+    check(wanted.map((code) => SEED_RESULT_TEXT.get(code) ?? '').join(', ') === results.join(', '), `cada uno con su resultado de la última ejecución: ${wanted.map((code) => `${code} ${SEED_RESULT_TEXT.get(code) ?? '?'}`).join(', ')}`, `resultados ${results.join(', ')}`),
+  ], { note: 'La historia no fija el resultado de cada caso: se compara con la última ejecución del seed.' });
 };
 
 // --- Esquema 4: un requisito sin casos ni no conformidades lo indica en Trazabilidad -------------------------------------------------
@@ -134,7 +139,7 @@ const closeSheet: BrowserRowHandler = async (row, { page }) => {
   await waitUntil(async () => (await rowCodes(page)).includes('REQ-017'));
   const opened = await openSheet(page, 'REQ-017');
   if (opened.blocked) return actionFailed(expected, { message: opened.blocked, note: 'La fila no se puede pulsar.' });
-  const closer: Locator = sheet(page).getByTestId(REQUISITOS_TESTIDS.REQUIREMENT_DETAIL_CLOSE);
+  const closer: Locator = sheet(page).getByRole('button', { name: 'Cerrar', exact: true });
   const pressed = await interact(closer, 'pulsar «Cerrar»', (el) => el.click(ACTION));
   if (pressed) return actionFailed(expected, pressed);
   await waitUntil(async () => !(await sheetOpen(page)));

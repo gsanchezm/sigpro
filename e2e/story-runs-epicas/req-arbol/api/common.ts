@@ -1,6 +1,5 @@
 import { adminCredentials, call, decodeJwt, errorCode, field, type ApiResult } from '../../../story-runs/support/api';
 import { DEMO, startSession, TENANT_A, TENANT_B, type Credentials } from '../../../story-runs/support/prepare';
-import { REQUIREMENT_TAGS } from '../../../../packages/shared/src/domain';
 import { check, type Check } from '../../support/checks';
 
 // Piezas comunes de las filas de API de EP-REQ-ARBOL: cuentas con su sesión (las de alumnoNN no llevan segundo factor; admin@sigpro.test
@@ -138,7 +137,8 @@ export const REQUIREMENT_FIELDS: readonly string[] = ['code', 'programCode', 'pa
 
 const STATES: ReadonlySet<string> = new Set(['draft', 'approved', 'verified', 'validated']);
 const PRIORITIES: ReadonlySet<string> = new Set(['low', 'medium', 'high']);
-const TAG_KEYS: ReadonlySet<string> = new Set<string>(REQUIREMENT_TAGS);
+/** Etiquetas de la historia (regla de GET /api/programs/:code/requirements y /api/requirements/:code), no la lista de la app. */
+const TAG_KEYS: ReadonlySet<string> = new Set<string>(['safety', 'security', 'performance', 'interface', 'regulatory', 'maintainability', 'availability', 'usability']);
 const RESULTS: ReadonlySet<unknown> = new Set<unknown>(['pass', 'fail', 'blocked', null]);
 const SEVERITIES: ReadonlySet<string> = new Set(['minor', 'major', 'critical']);
 const NC_STATES: ReadonlySet<string> = new Set(['open', 'in_analysis', 'corrective_action', 'closed', 'rejected']);
@@ -147,6 +147,27 @@ const sameKeys = (value: unknown, expected: readonly string[]): boolean => {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) return false;
   const keys = Object.keys(value).sort();
   return keys.length === expected.length && [...expected].sort().every((key, index) => keys[index] === key);
+};
+
+/**
+ * Última ejecución de cada caso de prueba enlazado en el seed (apps/api/src/seed/data.ts: la de mayor executedAt; TC-001 blocked en RUN-002 y
+ * TC-008 pass en RUN-017, TC-012 pass en RUN-024). La historia no fija el valor: se compara con el seed, y así un lastResult equivocado no pasa.
+ */
+export const SEED_LAST_RESULT: ReadonlyMap<string, string> = new Map<string, string>([
+  ['TC-001', 'blocked'],
+  ['TC-008', 'pass'],
+  ['TC-010', 'pass'],
+  ['TC-012', 'pass'],
+  ['TC-017', 'fail'],
+]);
+
+/** Los `tests` de un requisito traen, para cada caso dado, el resultado del seed («sin ejecutar» si no hay ninguno). */
+export const lastResultsCheck = (tests: unknown, codes: readonly string[]): Check => {
+  const list = Array.isArray(tests) ? tests : [];
+  const wanted = codes.map((code) => `${code}=${SEED_LAST_RESULT.get(code) ?? 'sin ejecutar'}`);
+  const observed = list.map((test) => `${String(field(test, 'code'))}=${field(test, 'lastResult') === null ? 'sin ejecutar' : String(field(test, 'lastResult'))}`);
+  const same = wanted.length === observed.length && wanted.every((entry, index) => entry === observed[index]);
+  return check(same, `lastResult ${wanted.join(', ') || '(ninguno)'}`, `lastResult ${observed.join(', ') || '(ninguno)'}`);
 };
 
 /** Un requisito (listado o detalle): exactamente sus campos, con valores de sus listas, `tests` en el orden de `testCaseCodes`. */

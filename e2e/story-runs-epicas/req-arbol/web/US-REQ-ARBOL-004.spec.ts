@@ -4,7 +4,7 @@ import { REQUISITOS_TESTIDS } from '../../../../packages/shared/src/testids';
 import { ACTION, waitUntil } from '../../support/browser';
 import { cell, check, conclude, preparationFailedWeb, strict, type Check } from '../../support/checks';
 import { defineBrowserRows, type BrowserRowHandler } from '../../core/framework';
-import { actionFailed, countText, eq, interact, listOf, onWeb, openPath, quotedOr, sameSet, signIn, textOf, toggleOf, visibleCodes } from './common';
+import { actionFailed, countText, eq, interact, listOf, onWeb, openPath, quotedOr, sameSet, signIn, textOf, toggleOf, treeRows, visibleCodes } from './common';
 
 // US-REQ-ARBOL-004 — Buscar en el árbol por código o título y filtrar por estado (web). Preparación de cada fila: reinicio de alumno01 con el
 // token de su administrador, inicio de sesión de gestor@sigpro.test en /login?tenant=alumno01 (contexto sin sesión) y llegada a Programas.
@@ -143,6 +143,7 @@ const expandedUnderFilter: BrowserRowHandler = async (row, { page }) => {
   return conclude([
     check(sameSet(shown, ['REQ-001', 'REQ-005']), 've REQ-001 y REQ-005', `ve ${shown.join(', ')}`),
     check(expandedState === 'true', 'REQ-001 desplegado (todas sus ramas)', `REQ-001 con aria-expanded ${String(expandedState)}`),
+    check((await treeRows(page)).every((row) => row.expanded !== 'false'), 'todas las ramas visibles desplegadas', `ramas plegadas: ${(await treeRows(page)).filter((row) => row.expanded === 'false').map((row) => row.code).join(', ') || '(ninguna)'}`),
   ]);
 };
 
@@ -159,6 +160,10 @@ const clearFilters: BrowserRowHandler = async (row, { page }) => {
   if (typed) return actionFailed(expected, typed);
   const picked = await interact(stateFilter(page), `elegir «${estado}» en el filtro «Estado»`, (el) => el.selectOption({ label: estado }, ACTION));
   if (picked) return actionFailed(expected, picked);
+  // Antes de limpiar, el filtro debe haber surtido efecto: con 017 y «Borrador» quedan REQ-015 y REQ-017 (2 de 14)
+  await waitUntil(async () => (await countText(page)) === '2 de 14 requisitos');
+  const applied = await countText(page);
+  if (applied !== '2 de 14 requisitos') return preparationFailedWeb(expected, `con 017 y «Borrador» el contador dice «${applied ?? '(no legible)'}», no «2 de 14 requisitos»`);
   const cleared = await interact(page.getByRole('button', { name: 'Limpiar filtros', exact: true }), 'pulsar «Limpiar filtros»', (el) => el.click(ACTION));
   if (cleared) return actionFailed(expected, cleared);
   await waitUntil(async () => (await countText(page)) === '14 de 14 requisitos');

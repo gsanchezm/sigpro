@@ -4,7 +4,7 @@ import { REQUISITOS_DYNAMIC_TESTIDS } from '../../../../packages/shared/src/test
 import { ACTION, waitUntil } from '../../support/browser';
 import { cell, check, conclude, preparationFailedWeb, strict } from '../../support/checks';
 import { defineBrowserRows, type BrowserRowHandler } from '../../core/framework';
-import { actionFailed, armDownload, csvOf, eq, interact, norm, onWeb, openPath, quotedOr, signIn, textOf, waitToast } from './common';
+import { actionFailed, armDownload, countText, csvOf, eq, interact, norm, onWeb, openPath, quotedOr, signIn, textOf, waitToast } from './common';
 
 // US-REQ-ARBOL-007 — Ver las cifras del programa, leer el documento de requisitos y descargar el CSV (web, 1440 px). Preparación de cada fila:
 // reinicio de alumno01 con su administrador, inicio de sesión de gestor@sigpro.test en /login?tenant=alumno01 y llegada a Programas.
@@ -62,10 +62,15 @@ const figuresUnderFilter: BrowserRowHandler = async (row, { page }) => {
   const picked = await interact(page.getByLabel('Estado', { exact: true }), 'elegir «Validado» en el filtro «Estado»', (el) => el.selectOption({ label: 'Validado' }, ACTION));
   if (picked) return actionFailed(expected, picked);
   await waitUntil(async () => (await page.getByRole('searchbox', { name: 'Buscar requisitos', exact: true }).inputValue({ timeout: 2000 })) === '005');
-  const filtered = (await page.getByLabel('Estado', { exact: true }).inputValue({ timeout: 2000 })) !== '';
+  // El efecto de la búsqueda y del filtro se mide: con 005 y «Validado» no queda ningún requisito (REQ-005 es aprobado)
+  const effect = await waitUntil(async () => (await countText(page)) === '0 de 14 requisitos');
+  const counter = await countText(page);
+  const noMatch = (await page.getByText('Sin coincidencias', { exact: true }).count()) > 0;
+  const chosen = await page.getByLabel('Estado', { exact: true }).inputValue({ timeout: 2000 }).catch(() => undefined);
   const shown = await cardText(page, 'Requisitos');
   return conclude([
-    check(filtered, 'el filtro «Estado» tiene «Validado» elegido', filtered ? 'el filtro «Estado» tiene una opción elegida' : 'el filtro «Estado» no tiene opción elegida'),
+    check(effect.reached && noMatch, 'el efecto del filtro: «0 de 14 requisitos» y el aviso «Sin coincidencias»', `contador «${counter ?? '(no legible)'}», aviso «Sin coincidencias» ${noMatch ? 'visible' : 'no visible'}`),
+    check(chosen === 'validated', 'el filtro «Estado» tiene «Validado» elegido', `el filtro «Estado» tiene «${chosen ?? '(no legible)'}»`),
     check(shown.value === '14', 'la tarjeta «Requisitos» sigue mostrando 14', `la tarjeta «Requisitos» muestra ${shown.value ?? '(no legible)'}`),
     eq('el texto de la tarjeta «Requisitos»', shown.aux, 'validados: 3'),
   ]);
@@ -153,7 +158,10 @@ const csvLine: BrowserRowHandler = async (row, { page }) => {
   const file = await csvOf(await downloaded);
   const lines = (file?.text ?? '').split('\n').map((line) => line.replace(/\r$/, ''));
   const found = lines.find((line) => line.startsWith(linea.split(';')[0] ?? '')) ?? '(sin línea)';
-  return conclude([check(lines.includes(linea), `una línea es ${linea}`, `la línea del código es ${found}`)], { evidence: { lineas: lines.length } });
+  return conclude([check(lines.includes(linea), `una línea es ${linea}`, `la línea del código es ${found}`)], {
+    evidence: { lineas: lines.length },
+    note: 'La fila no ejerce el separador «|» (etiquetas y casos separados): REQ-015 y REQ-017 tienen una sola etiqueta o un solo caso, y la historia no fija una fila con varios.',
+  });
 };
 
 // --- Esquema 7: exportar CSV no está disponible en un programa sin requisitos -------------------------------------------------------------

@@ -189,7 +189,8 @@ export interface TreeRow {
 
 /** Filas visibles del árbol en orden. Un nombre que no empieza por un código se devuelve tal cual (y no casa con ningún código). */
 export const treeRows = async (page: Page): Promise<readonly TreeRow[]> => {
-  const items = await safe(() => page.getByRole('treeitem').all(), []);
+  // Sin respaldo: si el árbol no se puede leer, la lectura falla (no cuenta como «ningún requisito»)
+  const items = await page.getByRole('treeitem').all();
   return Promise.all(
     items.map(async (item): Promise<TreeRow> => {
       const label = (await safe(() => item.getAttribute('aria-label', { timeout: 2000 }), null)) ?? '';

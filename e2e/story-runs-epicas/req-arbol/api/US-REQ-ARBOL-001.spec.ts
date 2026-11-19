@@ -5,6 +5,8 @@ import { defineApiRows, outcome, type ApiRowHandler } from '../../core/framework
 import {
   ACCOUNTS,
   CREDENTIAL,
+  lastResultsCheck,
+  listOf,
   ISOLATION_ACCOUNT,
   ISOLATION_HEADER,
   ISOLATION_PROGRAM_BODY,
@@ -129,6 +131,7 @@ const seedTests: ApiRowHandler = async (row) => {
     statusCheck(result, { status: 200 }),
     valueCheck(`testCaseCodes de ${codigo}`, item?.testCaseCodes, casos),
     check(sameValue(testCodes, codigos), `en tests solo ${codigos}`, `en tests ${shown(testCodes)}`),
+    lastResultsCheck(item?.tests, listOf(casos)),
     ...listShape(result.body),
   ]);
 };

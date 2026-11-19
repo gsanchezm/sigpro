@@ -62,7 +62,7 @@ const numbering: BrowserRowHandler = async (row, { page }) => {
   // El texto visible puede ir en una o en dos líneas; la etiqueta accesible de la sección lleva número y título juntos (se usa como respaldo)
   const label = await page.getByTestId(REQUISITOS_DYNAMIC_TESTIDS.DOC_SECTION(codigo)).getAttribute('aria-label', { timeout: 2000 }).catch(() => null);
   const wanted = `${numero} ${titulo}`;
-  return conclude([check(lines.includes(wanted) || label === wanted, `ve «${wanted}»`, `ve «${lines.join(' · ') || '(nada)'}» (etiqueta «${label ?? '(sin etiqueta)'}»)`)]);
+  return conclude([check(lines.includes(wanted), `ve «${wanted}»`, `ve «${lines.join(' · ') || '(nada)'}» (etiqueta «${label ?? '(sin etiqueta)'}»)`)]);
 };
 
 const numberingUnderSearch: BrowserRowHandler = async (row, { page }) => {

@@ -1,7 +1,7 @@
 import type { Page } from '@playwright/test';
 import { DEMO, resetTenants, TENANT_A } from '../../../story-runs/support/prepare';
 import { REQUISITOS_DYNAMIC_TESTIDS, REQUISITOS_TESTIDS } from '../../../../packages/shared/src/testids';
-import { ACTION, waitUntil } from '../../support/browser';
+import { ACTION, isVisible, waitUntil } from '../../support/browser';
 import { cell, check, conclude, preparationFailedWeb, strict, type Check } from '../../support/checks';
 import { defineBrowserRows, type BrowserRowHandler } from '../../core/framework';
 import { ACCOUNTS, actionFailed, boxOf, countText, describe, eq, interact, listOf, onWeb, openPath, sameList, sameSet, seenStrict, signIn, textOf, titleButtonOf, toggleOf, treeItem, treeRows, visibleCodes } from './common';
@@ -148,6 +148,8 @@ const expandAll: BrowserRowHandler = async (row, { page }) => {
   const collapsed = await interact(page.getByRole('button', { name: 'Contraer todo', exact: true }), 'pulsar «Contraer todo»', (el) => el.click(ACTION));
   if (collapsed) return actionFailed(expected, collapsed);
   await waitUntil(async () => sameSet(await visibleCodes(page), ['REQ-001', 'REQ-006', 'REQ-011']));
+  // Precondición de la historia («ha pulsado «Contraer todo»»): si no queda contraído, la fila no parte de ese estado
+  if (!sameSet(await visibleCodes(page), ['REQ-001', 'REQ-006', 'REQ-011'])) return preparationFailedWeb(expected, 'tras «Contraer todo» no quedan visibles solo REQ-001, REQ-006 y REQ-011');
   const expanded = await interact(page.getByRole('button', { name: 'Expandir todo', exact: true }), 'pulsar «Expandir todo»', (el) => el.click(ACTION));
   if (expanded) return actionFailed(expected, expanded);
   await waitUntil(async () => sameList(await visibleCodes(page), ALL_PRG001));
@@ -176,10 +178,10 @@ const columnsByWidth: BrowserRowHandler = async (row, { page }) => {
   const tag = item.getByText('Ciberseguridad', { exact: true });
   const tagShown = (await tag.count()) > 0 && (await tag.first().isVisible());
   const header = page.getByTestId(REQUISITOS_TESTIDS.REQUIREMENTS_TREE_HEADER);
-  const headerShown = (await header.count()) > 0;
+  const headerShown = await isVisible(header);
   const headerWords = ((await textOf(header)) ?? '').split('\n').map((line) => line.trim());
-  const testsShown = (await page.getByTestId(REQUISITOS_DYNAMIC_TESTIDS.REQUIREMENT_ROW_TESTS('REQ-001')).count()) > 0;
-  const ncShown = (await page.getByTestId(REQUISITOS_DYNAMIC_TESTIDS.REQUIREMENT_ROW_NC('REQ-001')).count()) > 0;
+  const testsShown = await isVisible(page.getByTestId(REQUISITOS_DYNAMIC_TESTIDS.REQUIREMENT_ROW_TESTS('REQ-001')));
+  const ncShown = await isVisible(page.getByTestId(REQUISITOS_DYNAMIC_TESTIDS.REQUIREMENT_ROW_NC('REQ-001')));
   return conclude(
     [
       await seenStrict(item, 'la fila de REQ-001'),
@@ -220,6 +222,9 @@ const switchProgram: BrowserRowHandler = async (row, { page }) => {
     check(value === '', 'el campo «Buscar requisitos» está vacío', `el campo «Buscar requisitos» contiene «${value ?? '(no legible)'}»`),
     eq('el contador', await countText(page), '14 de 14 requisitos'),
     eq('el título de REQ-015', await textOf(titleButtonOf(page, 'REQ-015')), 'Registro de eventos del subsistema 015'),
+    // Regla: tras cambiar de programa el árbol está desplegado y no hay ningún detalle abierto
+    check((await treeRows(page)).every((row) => row.expanded !== 'false'), 'el árbol del programa elegido desplegado', `filas plegadas: ${(await treeRows(page)).filter((row) => row.expanded === 'false').map((row) => row.code).join(', ') || '(ninguna)'}`),
+    check(!(await isVisible(page.getByTestId(REQUISITOS_TESTIDS.REQUIREMENT_DETAIL))), 'ningún detalle abierto', 'ningún detalle abierto'),
   ]);
 };
 

@@ -1,6 +1,6 @@
 import type { Page } from '@playwright/test';
 import { TENANT_A } from '../../../story-runs/support/prepare';
-import { MOVIL_REQUIREMENTS_DYNAMIC_TESTIDS, MOVIL_REQUIREMENTS_TESTIDS, REQUISITOS_TESTIDS } from '../../../../packages/shared/src/testids';
+import { MOVIL_REQUIREMENTS_DYNAMIC_TESTIDS, REQUISITOS_TESTIDS } from '../../../../packages/shared/src/testids';
 import { ACTION, waitUntil } from '../../support/browser';
 import { cell, check, conclude, preparationFailedWeb, strict } from '../../support/checks';
 import { defineBrowserRows, type BrowserRowHandler } from '../../core/framework';
@@ -40,10 +40,13 @@ const rowFields: BrowserRowHandler = async (row, { page }) => {
   await waitUntil(async () => (await rowCodes(page)).includes(codigo));
   const badge = await textOf(rowOf(page, codigo).getByTestId(MOVIL_REQUIREMENTS_DYNAMIC_TESTIDS.ROW_STATE(codigo)));
   const priority = await textOf(rowOf(page, codigo).getByTestId(MOVIL_REQUIREMENTS_DYNAMIC_TESTIDS.ROW_PRIORITY(codigo)));
-  const tags = await textOf(rowOf(page, codigo).getByTestId(MOVIL_REQUIREMENTS_DYNAMIC_TESTIDS.ROW_TAGS(codigo)));
+  // Sin línea de etiquetas = ningún elemento con ese id; si existe, se lee su texto (una lectura fallida no cuenta como «sin línea»)
+  const tagLine = rowOf(page, codigo).getByTestId(MOVIL_REQUIREMENTS_DYNAMIC_TESTIDS.ROW_TAGS(codigo));
+  const hasTagLine = (await tagLine.count()) > 0;
+  const tags = hasTagLine ? await textOf(tagLine) : undefined;
   const tagsCheck =
     etiquetas === 'sin-linea'
-      ? check(tags === undefined, 'sin línea de etiquetas', tags === undefined ? 'sin línea de etiquetas' : `línea de etiquetas «${tags}»`)
+      ? check(!hasTagLine, 'sin línea de etiquetas', hasTagLine ? `línea de etiquetas «${tags ?? '(no legible)'}»` : 'sin línea de etiquetas')
       : eq('la línea de etiquetas', tags, etiquetas);
   return conclude([eq(`el estado de ${codigo}`, badge, estado), eq(`la línea de prioridad de ${codigo}`, priority, prioridad), tagsCheck]);
 };
@@ -115,7 +118,10 @@ const foldAndUnfold: BrowserRowHandler = async (row, { page }) => {
   ];
   const unfolded = await interact(foldButton(page, strict('expandir', UNFOLD, expandir)), `pulsar ${expandir}`, (el) => el.click(ACTION));
   if (unfolded) return actionFailed(expected, unfolded);
-  await waitUntil(async () => (await rowCodes(page)).some((code) => ocultos.includes(code)));
+  await waitUntil(async () => {
+    const now = await rowCodes(page);
+    return ocultos.every((code) => now.includes(code));
+  });
   const back = await rowCodes(page);
   checks.push(...ocultos.map((code) => check(back.includes(code), `vuelve a ver ${code}`, `${back.includes(code) ? 'vuelve a ver' : 'no ve'} ${code}`)));
   return conclude(checks);
@@ -172,7 +178,7 @@ const backLink: BrowserRowHandler = async (row, { page }) => {
   const failure = await prepare(page);
   if (failure) return preparationFailedWeb(expected, failure);
   await openMobile(page, `/programs/${programa}/requirements`);
-  const link = page.getByTestId(MOVIL_REQUIREMENTS_TESTIDS.BACK_TO_PROGRAM);
+  const link = page.getByRole('link', { name: 'Volver al detalle', exact: true });
   const pressed = await interact(link, 'pulsar «Volver al detalle»', (el) => el.click(ACTION));
   if (pressed) return actionFailed(expected, pressed);
   const arrived = await waitUntil(async () => new URL(page.url()).pathname === `/programs/${programa}`);

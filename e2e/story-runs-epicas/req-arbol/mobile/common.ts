@@ -93,8 +93,9 @@ export const rowOf = (page: Page, code: string): Locator => page.getByRole('list
 
 /** Códigos de las filas visibles, en orden. */
 export const rowCodes = async (page: Page): Promise<readonly string[]> => {
-  const items = await safe(() => treeList(page).getByRole('listitem').all(), []);
-  const labels = await Promise.all(items.map((item) => safe(() => item.getAttribute('aria-label', { timeout: 2000 }), null)));
+  // Sin respaldo: si la lista no se puede leer, la lectura falla (no cuenta como «ninguna fila»)
+  const items = await treeList(page).getByRole('listitem').all();
+  const labels = await Promise.all(items.map((item) => item.getAttribute('aria-label', { timeout: 2000 })));
   return labels.map((label) => /^(REQ-\d{3})/.exec(label ?? '')?.[1] ?? '').filter((code) => code !== '');
 };
 
@@ -110,8 +111,8 @@ export const openButton = (page: Page, code: string): Locator => page.getByRole(
 /** Hoja de detalle abierta (su id de prueba: la hoja es un diálogo con el mismo nombre que el título de la sección). */
 export const sheet = (page: Page): Locator => page.getByTestId(REQUISITOS_TESTIDS.REQUIREMENT_DETAIL);
 
-/** Campo de búsqueda de la pantalla (su id de prueba: el campo solo tiene el texto de ayuda como nombre). */
-export const searchField = (page: Page): Locator => page.getByTestId(REQUISITOS_TESTIDS.REQUIREMENTS_SEARCH);
+/** Campo «Buscar requisitos»: tiene nombre accesible (su aria-label es la etiqueta de la pantalla, RequirementsPage.tsx). */
+export const searchField = (page: Page): Locator => page.getByRole('textbox', { name: 'Buscar requisitos', exact: true });
 
 /** Pestaña de la pantalla (su id de prueba). */
 export const tab = (page: Page, key: 'tree' | 'document' | 'matrix'): Locator =>
@@ -128,8 +129,8 @@ export const seen = async (target: Locator, label: string): Promise<Check> => {
   return check(visible, `ve ${label}`, visible ? `ve ${label}` : `no ve ${label}`);
 };
 
-/** Pausa de reacción local (~1 s) antes de juzgar que algo no ocurre. */
-export const REACTION = (): Promise<void> => sleep(1000);
+/** Pausa de observación (3 s) antes de juzgar que algo no ocurre: más que cualquier reacción local de la pantalla. */
+export const REACTION = (): Promise<void> => sleep(3000);
 
 /** Una fila móvil no ejecutable: el motivo y la nota con la salvedad de plataforma (la historia dice lo que espera). */
 export const notRun = (expected: string, reason: string): Outcome => ({ verdict: 'no-ejecutable', expected, observed: '(no se ejecutó)', note: `${reason} ${EXPO_NOTE}` });
