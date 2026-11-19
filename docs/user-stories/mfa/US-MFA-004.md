@@ -18,7 +18,7 @@ para terminar el inicio de sesión solo cuando yo complete el segundo paso.
 - «Código de verificación» abre un teclado numérico, solo conserva dígitos y como máximo seis. «Verificar» permanece deshabilitado mientras el código no tenga seis dígitos.
 - Con el código de demostración `123456`, se abre la sesión y se llega a `/programs`. Con un código de seis dígitos que no es el de la cuenta, como `000000`, se ve «Código incorrecto o caducado», se permanece en la verificación sin sesión y se puede corregir el código e intentarlo de nuevo.
 - «Volver al inicio de sesión» muestra otra vez el formulario de correo y contraseña sin completar la sesión.
-- Preparación de cada fila, en el tenant `alumno01`: se reinicia con `POST /api/admin/reset` y el token de `alumno01@sigpro.lab` (contraseña `Alumno1234!`), se abre `/login` en la app sin sesión guardada, se escribe `alumno01` en «Tenant de trabajo» y se envía `admin@sigpro.test` con `Admin1234!`. Cada fila empieza con el almacenamiento de la app vacío. Los ejemplos se comprueban en Expo web a 390 × 844; esta verificación no sustituye a una prueba nativa y no comprueba qué teclado abre el sistema.
+- Preparación de cada fila, en el tenant `alumno01`: se reinicia con `POST /api/admin/reset` y el token de `alumno01@sigpro.lab` (contraseña `Alumno1234!`), se abre `/login` en la app sin ninguna sesión de SIGPRO guardada en el dispositivo (en Expo web, en el navegador), se escribe `alumno01` en «Tenant de trabajo» y se envía `admin@sigpro.test` con `Admin1234!`.
 
 ## Criterios de aceptación
 ```gherkin
