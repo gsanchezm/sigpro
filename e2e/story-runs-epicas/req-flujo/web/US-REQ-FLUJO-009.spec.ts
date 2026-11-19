@@ -5,8 +5,8 @@ import { defineBrowserRows, type BrowserRowHandler } from '../../core/framework'
 import { ACCOUNT_CELLS, STATE_CELLS, STATE_LABEL, detailState, eqCheck, flowOf, openDetail, prepareWeb, readFlow, verdictWeb, webPrepFailed, type StepRead } from './common';
 
 // US-REQ-FLUJO-009 — Estado con su nombre y flujo de aprobación en sus cuatro pasos (web). Los pasos anteriores al estado figuran hechos; el
-// del estado figura como paso actual y los posteriores como pendientes. El indicador de un paso hecho muestra ✓ junto a su número (la
-// historia lo pide así). Preparación: reinicio de alumno01, inicio de sesión de gestor@sigpro.test y detalle abierto.
+// del estado figura como paso actual y los posteriores como pendientes. El indicador de un paso hecho muestra ✓ en lugar de su número (la
+// historia lo pide así, tras corregir su redacción con el sistema de diseño). Preparación: reinicio de alumno01, inicio de sesión de gestor@sigpro.test y detalle abierto.
 
 /** Requisitos y programas de las celdas (los del seed). */
 const REQUIREMENT_CELLS: ReadonlyMap<string, string> = new Map<string, string>([
@@ -76,13 +76,13 @@ const flowAdvance: BrowserRowHandler = async (row, { page }) => {
     const wanted = wantedStatus.get(step.state) ?? '(sin celda)';
     const read: StepRead | undefined = flow.find((entry) => entry.state === step.state);
     const status = check(read?.status === wanted, `${step.name} ${cell(row, step.column)}`, `${step.name} ${phraseOf(read?.status)}`);
-    // La historia pide ✓ junto al número del paso hecho: se miran ambos en el indicador del paso.
+    // La historia pide ✓ en el punto del paso hecho, en lugar de su número: el indicador debe ser exactamente ✓.
     const indicator =
       wanted === 'done'
         ? [
             check(
-              read?.dot !== undefined && read.dot.includes('✓') && read.dot.includes(String(step.number)),
-              `el indicador de ${step.name} muestra ✓ junto al número ${step.number}`,
+              read?.dot !== undefined && read.dot.trim() === '✓',
+              `el indicador de ${step.name} muestra ✓ en lugar de su número`,
               `el indicador de ${step.name} muestra «${read?.dot ?? '(no legible)'}»`,
             ),
           ]

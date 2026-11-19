@@ -16,7 +16,7 @@ para saber qué falta para que se considere validado sin abrir ningún otro dato
 ## Reglas
 - El detalle de un requisito muestra su estado con el nombre en texto visible: Borrador para `draft`, Aprobado para `approved`, Verificado para `verified` y Validado para `validated`.
 - El flujo de aprobación tiene cuatro pasos, en este orden: Redacción, Aprobación, Verificación y Validación. Redacción corresponde a Borrador, Aprobación a Aprobado, Verificación a Verificado y Validación a Validado.
-- Los pasos anteriores al estado actual figuran como hechos, con ✓ junto a su número. El paso del estado actual figura como paso actual. Los posteriores figuran como pendientes.
+- Los pasos anteriores al estado actual figuran como hechos, con ✓ en el punto del paso, en lugar de su número. El paso del estado actual figura como paso actual. Los posteriores figuran como pendientes.
 - Un requisito en Borrador tiene el primer paso como actual; uno en Validado tiene todos los pasos anteriores hechos y el último como actual. No hay ningún estado en el que el flujo quede sin paso actual.
 - Preparación de cada fila: se reinicia el tenant `alumno01` con `POST /api/admin/reset` y el token de `alumno01@sigpro.lab` (contraseña `Alumno1234!`). Después, la persona abre `/login?tenant=alumno01` en un navegador sin ninguna sesión de SIGPRO guardada y se identifica como `gestor@sigpro.test` (`Gestor1234!`). Tras el reinicio, `REQ-017` está en Borrador (en `PRG-002`), `REQ-001` en Aprobado, `REQ-002` en Verificado y `REQ-003` en Validado (estos tres en `PRG-001`).
 
