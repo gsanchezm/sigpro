@@ -5,7 +5,7 @@ epica: EP-REQ-TRAZA
 titulo: "[Web] Leer la matriz de trazabilidad del programa"
 etiquetas: [web]
 relacionadas: [US-REQ-TRAZA-001, US-REQ-TRAZA-006, US-REQ-TRAZA-007]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["/programs/:code/requirements"]
 ---
 

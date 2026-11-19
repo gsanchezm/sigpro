@@ -5,7 +5,7 @@ epica: EP-REQ-TRAZA
 titulo: "[API] Rechazar un enlace que no puede crearse"
 etiquetas: [api]
 relacionadas: [US-REQ-TRAZA-002, US-REQ-TRAZA-004]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["PUT /api/requirements/:code/tests/:testCaseCode"]
 ---
 

@@ -5,7 +5,7 @@ epica: EP-REQ-TRAZA
 titulo: "[Web] Marcar y desmarcar un cruce en la matriz de trazabilidad"
 etiquetas: [web]
 relacionadas: [US-REQ-TRAZA-002, US-REQ-TRAZA-004, US-REQ-TRAZA-005, US-REQ-TRAZA-007]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["/programs/:code/requirements"]
 permisos: [requirement.edit]
 ---

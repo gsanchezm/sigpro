@@ -5,7 +5,7 @@ epica: EP-REQ-TRAZA
 titulo: "[Móvil] Leer, marcar y desmarcar cruces en la matriz de trazabilidad"
 etiquetas: [movil]
 relacionadas: [US-REQ-TRAZA-005, US-REQ-TRAZA-006]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["/programs/:code/requirements"]
 permisos: [requirement.edit]
 ---

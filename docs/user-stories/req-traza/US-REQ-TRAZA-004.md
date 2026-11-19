@@ -5,7 +5,7 @@ epica: EP-REQ-TRAZA
 titulo: "[API] Desenlazar un caso de prueba de un requisito"
 etiquetas: [api]
 relacionadas: [US-REQ-TRAZA-002, US-REQ-TRAZA-003]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["DELETE /api/requirements/:code/tests/:testCaseCode"]
 permisos: [requirement.edit]
 ---

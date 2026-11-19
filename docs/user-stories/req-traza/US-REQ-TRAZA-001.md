@@ -5,7 +5,7 @@ epica: EP-REQ-TRAZA
 titulo: "[API] Consultar la matriz de trazabilidad de un programa"
 etiquetas: [api]
 relacionadas: [US-REQ-TRAZA-005]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["GET /api/programs/:code/traceability"]
 ---
 

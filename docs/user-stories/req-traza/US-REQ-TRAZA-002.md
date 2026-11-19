@@ -5,7 +5,7 @@ epica: EP-REQ-TRAZA
 titulo: "[API] Enlazar un caso de prueba con un requisito del mismo programa"
 etiquetas: [api]
 relacionadas: [US-REQ-TRAZA-001, US-REQ-TRAZA-003, US-REQ-TRAZA-006]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["PUT /api/requirements/:code/tests/:testCaseCode"]
 permisos: [requirement.edit]
 ---
