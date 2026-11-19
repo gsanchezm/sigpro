@@ -5,7 +5,7 @@ epica: EP-DOC-LISTA
 titulo: "[Móvil] Ver la ficha de un documento con sus versiones y su contenido en páginas"
 etiquetas: [movil]
 relacionadas: [US-DOC-LISTA-003, US-DOC-LISTA-004, US-DOC-LISTA-009, US-DOC-LISTA-010]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["/documents/:id"]
 ---
 

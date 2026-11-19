@@ -5,7 +5,7 @@ epica: EP-DOC-LISTA
 titulo: "[API] Listar los documentos del tenant con sus campos y su orden"
 etiquetas: [api]
 relacionadas: [US-LOGIN-001, US-DOC-LISTA-002, US-DOC-LISTA-003]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["GET /api/documents"]
 ---
 

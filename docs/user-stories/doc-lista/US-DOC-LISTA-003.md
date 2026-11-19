@@ -5,7 +5,7 @@ epica: EP-DOC-LISTA
 titulo: "[API] Consultar el detalle de un documento con su historial de versiones"
 etiquetas: [api]
 relacionadas: [US-DOC-LISTA-001, US-DOC-LISTA-004, US-DOC-LISTA-009, US-DOC-LISTA-012]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["GET /api/documents/:id"]
 ---
 

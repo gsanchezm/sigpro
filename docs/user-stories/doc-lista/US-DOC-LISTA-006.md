@@ -5,7 +5,7 @@ epica: EP-DOC-LISTA
 titulo: "[Web] Ver la tabla de documentos y el menú de acciones de cada fila"
 etiquetas: [web]
 relacionadas: [US-DOC-LISTA-001, US-DOC-LISTA-005, US-DOC-LISTA-007, US-DOC-LISTA-008, US-DOC-LISTA-011]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["/documents"]
 ---
 

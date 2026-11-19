@@ -5,7 +5,7 @@ epica: EP-DOC-LISTA
 titulo: "[Web] Buscar y filtrar la lista de documentos"
 etiquetas: [web]
 relacionadas: [US-DOC-LISTA-002, US-DOC-LISTA-006, US-DOC-LISTA-013]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["/documents"]
 ---
 

@@ -5,7 +5,7 @@ epica: EP-DOC-LISTA
 titulo: "[Web] Ver los estados de carga, vacío y error de la lista de documentos"
 etiquetas: [web]
 relacionadas: [US-DOC-LISTA-006, US-DOC-LISTA-007, US-DOC-LISTA-011]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["/documents"]
 ---
 

@@ -5,7 +5,7 @@ epica: EP-DOC-LISTA
 titulo: "[API] Filtrar la lista de documentos por programa, clasificación y texto"
 etiquetas: [api]
 relacionadas: [US-DOC-LISTA-001, US-DOC-LISTA-007, US-DOC-LISTA-013]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["GET /api/documents"]
 ---
 

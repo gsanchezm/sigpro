@@ -5,7 +5,7 @@ epica: EP-DOC-LISTA
 titulo: "[Móvil] Ver la lista de documentos en tarjetas, buscarla y descargar su PDF"
 etiquetas: [movil]
 relacionadas: [US-DOC-LISTA-006, US-DOC-LISTA-007, US-DOC-LISTA-008, US-DOC-LISTA-013]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["/documents"]
 ---
 

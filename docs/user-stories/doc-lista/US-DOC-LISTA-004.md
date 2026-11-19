@@ -5,7 +5,7 @@ epica: EP-DOC-LISTA
 titulo: "[API] Servir el contenido de una versión en páginas para el visor"
 etiquetas: [api]
 relacionadas: [US-DOC-LISTA-003, US-DOC-LISTA-005, US-DOC-LISTA-010, US-DOC-LISTA-012]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["GET /api/documents/:id/content"]
 ---
 

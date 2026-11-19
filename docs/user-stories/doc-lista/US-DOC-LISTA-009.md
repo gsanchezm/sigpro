@@ -5,7 +5,7 @@ epica: EP-DOC-LISTA
 titulo: "[Web] Ver la ficha de un documento con su historial y sus acciones"
 etiquetas: [web]
 relacionadas: [US-DOC-LISTA-003, US-DOC-LISTA-006, US-DOC-LISTA-010, US-DOC-LISTA-012]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["/documents/:id"]
 ---
 

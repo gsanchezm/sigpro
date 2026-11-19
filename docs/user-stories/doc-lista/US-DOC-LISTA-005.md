@@ -5,7 +5,7 @@ epica: EP-DOC-LISTA
 titulo: "[API] Descargar una versión de un documento como PDF con su nombre"
 etiquetas: [api]
 relacionadas: [US-DOC-LISTA-004, US-DOC-LISTA-006, US-DOC-LISTA-009, US-DOC-LISTA-014]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["GET /api/documents/:id/download"]
 ---
 

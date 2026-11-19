@@ -5,7 +5,7 @@ epica: EP-DOC-LISTA
 titulo: "[Web] Ver una versión de un documento en el visor"
 etiquetas: [web]
 relacionadas: [US-DOC-LISTA-004, US-DOC-LISTA-009, US-DOC-LISTA-012]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["/documents/:id/view"]
 ---
 
