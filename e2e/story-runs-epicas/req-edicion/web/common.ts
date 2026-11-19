@@ -364,3 +364,17 @@ export const performDrag = async (page: Page, from: string, to: string, zone: nu
     return { message: `no se pudo arrastrar ${from} sobre ${to}: ${String(error).split('\n')[0] ?? 'error'}`, note: 'el gesto del puntero falló en el arnés' };
   }
 };
+
+/**
+ * Lee de nuevo (con pausa) hasta que `ok` se cumple o se agota `ceilingMs`. Sirve para leer la API tras una acción sin adelantarse a su
+ * respuesta: la lectura espera a la persistencia en lugar de ir por delante de ella. Devuelve el último valor, si se cumplió y cuánto se esperó.
+ */
+export const pollApi = async <T>(read: () => Promise<T>, ok: (value: T) => boolean, ceilingMs = 5_000): Promise<{ readonly value: T; readonly reached: boolean; readonly elapsedMs: number }> => {
+  const started = performance.now();
+  let value = await read();
+  while (!ok(value) && performance.now() - started < ceilingMs) {
+    await sleep(250);
+    value = await read();
+  }
+  return { value, reached: ok(value), elapsedMs: Math.round(performance.now() - started) };
+};

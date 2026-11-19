@@ -5,7 +5,7 @@ import { cell, check, preparationFailedWeb, strict, type Check } from '../../sup
 import { field } from '../../../story-runs/support/api';
 import { ACCOUNT_OF, TENANT_A, act, loginAs, resetTenants, verdict } from '../api/common';
 import { REQUISITOS_TESTIDS } from '../../../../packages/shared/src/testids';
-import { actionFailed, inOrder, interact, isAbsent, isShown, menuItem, noOkToast, onWeb, openRequirements, panelBadge, readText, rowMenuOf, rowOf, signIn, stateCheck, titleButtonOf, toastShown, type AccountName, type WebAction } from './common';
+import { actionFailed, inOrder, interact, isAbsent, isShown, menuItem, noOkToast, onWeb, pollApi, openRequirements, panelBadge, readText, rowMenuOf, rowOf, signIn, stateCheck, titleButtonOf, toastShown, type AccountName, type WebAction } from './common';
 
 // US-REQ-EDICION-009 — Editar un requisito en su panel y en su fila (web, escritorio 1440 px). Preparación de cada fila: reinicio de
 // alumno01, inicio de sesión en /login?tenant=alumno01 y apertura de /programs/PRG-001/requirements. Estado del seed: REQ-001 aprobado
@@ -230,7 +230,7 @@ const inlineEdit: BrowserRowHandler = async (row, { page }) => {
   const failure = await prepare(page, 'gestor', expected);
   if (failure !== undefined) return failure;
   const typed = NEW_INLINE_TITLE_OF[kind];
-  // «elige la fila» se implementa como foco en la fila (no hay clic): el panel no se abre con F2 y el foco queda en el árbol
+  // «elige la fila» se implementa como foco en la fila (no hay clic): con F2 el panel no se abre y el foco queda en el árbol
   const start: WebAction =
     kind === 'f2-intro'
       ? (current) => interact(rowOf(current, 'REQ-002'), 'elegir la fila de REQ-002 (foco)', (element) => element.focus(ACTION))
@@ -244,30 +244,44 @@ const inlineEdit: BrowserRowHandler = async (row, { page }) => {
   )(page);
   if (blocked !== undefined) return actionFailed(expected, blocked);
   const endedAt = Date.now();
-  const stored = await storedOf('REQ-002');
-  const currentTitle = field(stored?.body ?? null, 'title');
+
   if (kind === 'dblclick-esc') {
-    // Ningún aviso de guardado (de ningún tipo de éxito), no solo el de «volvió a Borrador»
+    // Sin guardado: primero la ventana de silencio y SOLO DESPUÉS la lectura de la API
     const quiet = await noOkToast(page, endedAt);
+    const stored = await storedOf('REQ-002');
+    const currentTitle = field(stored?.body ?? null, 'title');
     return verdict([
       check(currentTitle === 'Latencia del subsistema 002', 'el título de REQ-002 sigue siendo «Latencia del subsistema 002»', `el título de REQ-002 es «${String(currentTitle)}»`),
       check(quiet.held, 'no aparece ningún aviso de guardado', quiet.held ? 'no aparece ningún aviso de guardado' : `aparece ${quiet.seen}`),
     ]);
   }
-  const toast = await toastShown(page, 'ok', 'Requisito guardado', 'REQ-002 volvió a Borrador');
+
   if (kind === 'dblclick-invalid') {
+    // Sin guardado (título no válido): se mide el aviso del campo, se deja pasar la ventana de silencio y LUEGO se lee la API
     const explanation = await safe(() => INLINE(page).getAttribute('title', { timeout: 1_000 }), null);
     const stillOpen = await isShown(INLINE(page));
+    const quiet = await noOkToast(page, endedAt);
+    const stored = await storedOf('REQ-002');
+    const currentTitle = field(stored?.body ?? null, 'title');
     return verdict([
       check(stillOpen, 'el campo sigue abierto', stillOpen ? 'el campo sigue abierto' : 'el campo se cerró'),
       check(explanation === 'El título debe tener al menos 3 caracteres', 'la explicación del campo es «El título debe tener al menos 3 caracteres»', `la explicación del campo es «${explanation ?? '(sin explicación)'}»`),
       check(currentTitle === 'Latencia del subsistema 002', 'el título de REQ-002 no cambia', `el título de REQ-002 es «${String(currentTitle)}»`),
+      check(quiet.held, 'no aparece ningún aviso de guardado', quiet.held ? 'no aparece ningún aviso de guardado' : `aparece ${quiet.seen}`),
     ]);
   }
-  return verdict([
-    check(toast.seen, '«Requisito guardado» con «REQ-002 volvió a Borrador»', `aviso ${toast.observed}`),
-    check(currentTitle === 'Latencia revisada del subsistema 002', 'el título de REQ-002 es «Latencia revisada del subsistema 002»', `el título de REQ-002 es «${String(currentTitle)}»`),
-  ]);
+
+  // Con guardado (Intro): primero el aviso que confirma la respuesta de la API y LUEGO la lectura, hasta que el título guardado sea el nuevo
+  const toast = await toastShown(page, 'ok', 'Requisito guardado', 'REQ-002 volvió a Borrador');
+  const polled = await pollApi(() => storedOf('REQ-002'), (result) => field(result?.body ?? null, 'title') === typed, 5_000);
+  const currentTitle = field(polled.value?.body ?? null, 'title');
+  return {
+    ...verdict([
+      check(toast.seen, '«Requisito guardado» con «REQ-002 volvió a Borrador»', `aviso ${toast.observed}`),
+      check(currentTitle === typed, `el título de REQ-002 es «${typed}»`, `el título de REQ-002 es «${String(currentTitle)}»`),
+    ]),
+    evidence: { esperaLecturaApiMs: polled.elapsedMs, avisoVisto: toast.seen },
+  };
 };
 
 // --- Un rol sin permiso de edición no cambia nada -----------------------------------------------------------------------
