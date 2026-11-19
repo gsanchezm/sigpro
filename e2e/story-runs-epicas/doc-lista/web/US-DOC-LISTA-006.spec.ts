@@ -1,6 +1,6 @@
 import type { BrowserContext } from '@playwright/test';
 import { TENANT_A, resetTenants } from '../../../story-runs/support/prepare';
-import { ACTION, isVisible, waitUntil } from '../../support/browser';
+import { ACTION, attrOf, isVisible, waitUntil } from '../../support/browser';
 import { defineBrowserRows, outcome, type BrowserFixtures, type BrowserRowHandler, type ManifestRow, type Outcome } from '../../core/framework';
 import { cell, check, preparationFailedWeb, strict, type Check } from '../../support/checks';
 import {
@@ -9,6 +9,8 @@ import {
   armToasts,
   countText,
   detailTitle,
+  linkOf,
+  listCheck,
   noDownload,
   tryDownload,
   interact,
@@ -87,6 +89,7 @@ const rowData: BrowserRowHandler = onWeb(async (row: ManifestRow, { page }) => {
   if (failure !== undefined) return preparationFailedWeb(expected, failure);
   const seen = await waitUntil(() => isVisible(rowOf(page, code)));
   const cells = await rowCells(page, code);
+  const href = await attrOf(linkOf(page, code), 'href');
   const checks: Check[] = [
     check(seen.reached, `ve la fila de ${code}`, seen.reached ? `ve la fila de ${code}` : `no aparece la fila de ${code}`),
     check(cells?.[1] === cell(row, 'titulo'), `el título ${cell(row, 'titulo')}`, `el título ${cells?.[1] ?? '(sin leer)'}`),
@@ -94,11 +97,15 @@ const rowData: BrowserRowHandler = onWeb(async (row: ManifestRow, { page }) => {
     check(cells?.[3] === clase, `la clasificación ${clase}`, `la clasificación ${cells?.[3] ?? '(sin leer)'}`),
     check(cells?.[4] === cell(row, 'version'), `la versión ${cell(row, 'version')}`, `la versión ${cells?.[4] ?? '(sin leer)'}`),
     check(cells?.[5] === cell(row, 'fecha'), `la fecha ${cell(row, 'fecha')}`, `la fecha ${cells?.[5] ?? '(sin leer)'}`),
+    check(href === `/documents/${code}`, `el código es un enlace a /documents/${code}`, `el código enlaza a «${href ?? '(sin leer)'}»`),
   ];
   return finish(checks, { evidence: { celdas: cells ?? null } });
 });
 
 // --- Esquema 2: la lista sale en orden de código y con el recuento de documentos en cualquier diseño -------------------------
+
+/** Los doce documentos del tenant, en orden de código (la historia los cita como DOC-001 a DOC-012). */
+const TODOS: readonly string[] = Array.from({ length: 12 }, (_, index) => `DOC-${String(index + 1).padStart(3, '0')}`);
 
 const orderAndCount: BrowserRowHandler = onWeb(async (row, { page }) => {
   const expected = thenOf(row);
@@ -107,13 +114,11 @@ const orderAndCount: BrowserRowHandler = onWeb(async (row, { page }) => {
   if (failure !== undefined) return preparationFailedWeb(expected, failure);
   await waitUntil(async () => (await shownCodes(page))?.length === 12);
   const codes = await shownCodes(page);
-  const last = codes === undefined ? undefined : codes[codes.length - 1];
   const above = await subtitleText(page);
   const below = await countText(page);
   return finish(
     [
-      check(codes?.[0] === 'DOC-001', 'el primer documento es DOC-001', `el primer documento es ${codes?.[0] ?? '(sin leer)'}`),
-      check(last === 'DOC-012', 'el último es DOC-012', `el último es ${last ?? '(sin leer)'}`),
+      listCheck(codes, TODOS),
       check(above === '12 documentos', 'el recuento encima de la lista dice «12 documentos»', `el recuento encima de la lista dice «${above ?? '(sin leer)'}»`),
     ],
     { evidence: { recuentoDebajoDeLaTabla: below ?? null, documentosVistos: codes?.length ?? null } },
@@ -165,12 +170,12 @@ const downloadFromMenu = async (expected: string, code: string, option: string, 
   });
   if ('error' in got) return noDownload(expected, page, got.error);
   const download = got.download;
-  const toast = await toastShown(page, 'info', 'Descarga iniciada', 'DOC-002-v1.pdf', armedAt);
+  const toast = await toastShown(page, undefined, 'Descarga iniciada', 'DOC-002-v1.pdf', armedAt);
   return finish([
     check(toast.seen, 've el aviso «Descarga iniciada» con el nombre DOC-002-v1.pdf', toast.seen ? 've el aviso «Descarga iniciada» con el nombre DOC-002-v1.pdf' : `no aparece el aviso: ${toast.observed}`),
     check(download.name === 'DOC-002-v1.pdf', 'el archivo descargado se llama DOC-002-v1.pdf', `el archivo descargado se llama ${download.name}`),
     sameBytes(download.bytes, await apiPdfOf(TENANT_A, 'DOC-002'), 'DOC-002 versión 1'),
-  ]);
+  ], { evidence: { tonoDelAvisoRegistrado: toast.observed } });
 };
 
 const menuActions: BrowserRowHandler = async (row: ManifestRow, { page, context }): Promise<Outcome> => {

@@ -1,12 +1,13 @@
 import { TENANT_A, resetTenants } from '../../../story-runs/support/prepare';
-import { ACTION, isVisible, safe, waitUntil } from '../../support/browser';
+import { ACTION, isVisible, waitUntil } from '../../support/browser';
 import { defineBrowserRows, type BrowserFixtures, type BrowserRowHandler, type ManifestRow, type Outcome } from '../../core/framework';
 import { cell, check, preparationFailedWeb, strict } from '../../support/checks';
 import {
   LAYOUTS,
   countCheck,
   countText,
-  busyOf,
+  loadingSnapshot,
+  type LoadingSnapshot,
   emptyBlock,
   emptyClear,
   failAllGet,
@@ -23,7 +24,6 @@ import {
   searchBox,
   shownCodes,
   signIn,
-  skeletonRows,
   thenOf,
   visibleOrUnknown,
   waitForList,
@@ -32,7 +32,6 @@ import {
   type Layout,
   finish,
 } from './common';
-import { DOCUMENTOS_TESTIDS } from '../../../../packages/shared/src/testids';
 
 // US-DOC-LISTA-008 — Estados de carga, vacío y error de la lista de documentos en la web. Preparación: reinicio de alumno01 e inicio
 // de sesión de gestor@sigpro.test; las demoras y los errores los provoca la prueba en ese navegador antes de abrir /documents.
@@ -50,9 +49,6 @@ const TODOS: readonly string[] = Array.from({ length: 12 }, (_, index) => `DOC-$
 
 /** Ruta de la lista de documentos (la de la API, sin cadena de consulta: los filtros no cambian la ruta). */
 const LISTA = '/api/documents';
-
-/** Elemento ocupado de la lista (el primer `aria-busy` de la página de documentos: la tabla o las tarjetas). */
-const busyTarget = (page: Page) => page.getByTestId(DOCUMENTOS_TESTIDS.DOCUMENTS_PAGE).locator('[aria-busy]').first();
 
 /** Prepara la sesión de gestor@sigpro.test con el diseño dado (sin abrir /documents todavía). */
 const loggedIn = async (page: Page, layout: Layout): Promise<string | undefined> => {
@@ -77,8 +73,13 @@ const loadingThenRows: BrowserRowHandler = onWeb(async (row: ManifestRow, { page
   await delayGet(page, LISTA, delay);
   const opened = await gotoPath(page, '/documents');
   if (opened !== undefined) return preparationFailedWeb(expected, opened);
-  const skeleton = await waitUntil(async () => (await safe(() => skeletonRows(page).count(), 0)) > 0);
-  const busy = await busyOf(busyTarget(page));
+  // Filas de carga y `aria-busy` se leen en una misma lectura del navegador: la observación es del mismo instante.
+  let snapshot: LoadingSnapshot = { skeleton: 0, busy: undefined };
+  const skeleton = await waitUntil(async () => {
+    snapshot = await loadingSnapshot(page);
+    return snapshot.skeleton > 0;
+  });
+  const busy = snapshot.busy;
   const settled = await listSettled(page);
   const codes = await shownCodes(page);
   const count = await countText(page);

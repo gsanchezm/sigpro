@@ -6,7 +6,9 @@ import {
   delayGet,
   gotoPath,
   hasTrace,
+  apiPagesOf,
   linesOf,
+  sectionChildren,
   normalizedText,
   onWeb,
   signIn,
@@ -96,20 +98,38 @@ const header: BrowserRowHandler = onWeb(async (row: ManifestRow, { page }): Prom
 
 // --- Esquema 2: cada página se titula con su número y reparte las líneas en orden ---------------------------------------------------
 
+/** Un apartado numerado (su línea empieza por «N. ») se lee en negrita; el resto, no. */
+const NUMBERED = /^\d+\. /;
+
 const pages: BrowserRowHandler = onWeb(async (row: ManifestRow, { page }): Promise<Outcome> => {
   const expected = thenOf(row);
   const pagina = strict('página', PAGINA, cell(row, 'pagina'));
   const failure = await enter(page, '/documents/DOC-001/view');
   if (failure !== undefined) return preparationFailedWeb(expected, failure);
   const shown = await waitUntil(() => isVisible(viewerPageN(page, pagina)));
-  const lines = (await linesOf(viewerPageN(page, pagina))) ?? [];
-  const content = lines.slice(1);
-  return finish([
-    check(shown.reached, `ve «Página ${pagina} de 2»`, shown.reached ? `ve «Página ${pagina} de 2»` : `no aparece la página ${pagina}`),
-    check(lines[0] === `Página ${pagina} de 2`, `ve «Página ${pagina} de 2»`, `ve «${lines[0] ?? '(sin leer)'}»`),
-    check(content[0] === cell(row, 'primera'), `con las líneas que empiezan por ${cell(row, 'primera')}`, `empieza por «${content[0] ?? '(sin leer)'}»`),
-    check(content[content.length - 1] === cell(row, 'ultima'), `y acaban en ${cell(row, 'ultima')}`, `acaba en «${content[content.length - 1] ?? '(sin leer)'}»`),
-  ]);
+  const children = (await sectionChildren(viewerPageN(page, pagina))) ?? [];
+  const body = children.slice(1);
+  const lines = body.map((child) => (child.tag === 'DIV' ? '' : child.text));
+  const content = lines.filter((line) => line !== '');
+  // Líneas de la última versión de DOC-001 con sus huecos, tal como las sirve la API (la historia 004 fija su reparto en páginas).
+  const reference = (await apiPagesOf('DOC-001'))?.[pagina - 1];
+  const expectedLines = reference ?? [];
+  const firstDifference = lines.findIndex((line, index) => line !== expectedLines[index]);
+  const sameLayout = reference !== undefined && lines.length === expectedLines.length && firstDifference < 0;
+  const boldOk = body.every((child, index) => child.tag === 'DIV' || (NUMBERED.test(expectedLines[index] ?? '') ? Number(child.weight) >= 600 : Number(child.weight) < 600));
+  const layoutText = 'las líneas de la página, con sus huecos vacíos, son las de la versión';
+  const boldText = 'los apartados numerados en negrita y el resto sin negrita';
+  return finish(
+    [
+      check(shown.reached, `ve «Página ${pagina} de 2»`, shown.reached ? `ve «Página ${pagina} de 2»` : `no aparece la página ${pagina}`),
+      check(children[0]?.text === `Página ${pagina} de 2`, `ve «Página ${pagina} de 2»`, `ve «${children[0]?.text ?? '(sin leer)'}»`),
+      check(content[0] === cell(row, 'primera'), `con las líneas que empiezan por ${cell(row, 'primera')}`, `empieza por «${content[0] ?? '(sin leer)'}»`),
+      check(content[content.length - 1] === cell(row, 'ultima'), `y acaban en ${cell(row, 'ultima')}`, `acaba en «${content[content.length - 1] ?? '(sin leer)'}»`),
+      check(sameLayout, layoutText, reference === undefined ? '(sin leer la versión en la API)' : sameLayout ? layoutText : `difiere en la línea ${firstDifference + 1}: «${lines[firstDifference] ?? '(hueco)'}» frente a «${expectedLines[firstDifference] ?? '(sin línea)'}»`),
+      check(boldOk, boldText, boldOk ? boldText : 'la negrita no coincide con los apartados numerados'),
+    ],
+    { evidence: { huecosVistos: lines.filter((line) => line === '').length } },
+  );
 });
 
 // --- Esquema 3: un documento o una versión que no existen muestran el aviso de no encontrado -----------------------------------

@@ -99,6 +99,19 @@ export const errorOfBytes = (bytes: Buffer): { readonly code?: string; readonly 
   }
 };
 
+/**
+ * ¿La fuente F2 del PDF (la que dibuja la negrita) es Helvetica-Bold? Busca el recurso /F2, el objeto al que apunta y su nombre base,
+ * sin depender del orden de los objetos.
+ */
+export const boldFontOf = (bytes: Buffer): boolean => {
+  const raw = bytes.toString('latin1');
+  const at = raw.indexOf('/F2 ');
+  if (at < 0) return false;
+  const reference = raw.slice(at + 4).split(' ')[0] ?? '';
+  const objectAt = raw.indexOf('\n' + reference + ' 0 obj');
+  return objectAt >= 0 && raw.slice(objectAt, objectAt + 200).includes('/BaseFont /Helvetica-Bold');
+};
+
 /** ¿Empieza el cuerpo por `%PDF-` y termina por `%%EOF`? */
 export const isPdf = (bytes: Buffer): boolean => bytes.subarray(0, 5).toString('latin1') === '%PDF-' && bytes.toString('latin1').trimEnd().endsWith('%%EOF');
 

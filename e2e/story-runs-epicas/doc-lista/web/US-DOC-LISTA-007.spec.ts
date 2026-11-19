@@ -15,7 +15,6 @@ import {
   programSelect,
   searchBox,
   selectedOptionText,
-  shownCodes,
   signIn,
   subtitleText,
   thenOf,
@@ -140,12 +139,14 @@ const clearFilters: BrowserRowHandler = onWeb(async (row: ManifestRow, { page })
   if (chosenProgram !== undefined) return failedAction(expected, chosenProgram);
   const chosenClass = await chooseIn(classSelect, clasificacion, 'Clasificación')(page);
   if (chosenClass !== undefined) return failedAction(expected, chosenClass);
-  // Precondición: los tres filtros llegan a la lista (una lista filtrada, con menos de 12 y al menos uno) antes de limpiar.
-  const filtered = await waitUntil(async () => {
-    const codes = await shownCodes(page);
-    return codes !== undefined && codes.length > 0 && codes.length < 12;
-  });
-  if (!filtered.reached) return preparationFailedWeb(expected, 'los filtros no llegan a la lista: no se ve una lista filtrada');
+  // Precondición: los tres filtros están aplicados en sus controles (valor de cada uno) antes de pulsar «Limpiar filtros».
+  const applied = await waitUntil(
+    async () =>
+      (await controlValue(searchBox(page))) === texto &&
+      (await selectedOptionText(programSelect(page))) === programa &&
+      (await selectedOptionText(classSelect(page))) === clasificacion,
+  );
+  if (!applied.reached) return preparationFailedWeb(expected, 'los tres filtros no quedan aplicados en sus controles');
   const cleared = await interact(toolbarClear(page), 'pulsar «Limpiar filtros»', (element) => element.click(ACTION));
   if (cleared !== undefined) return failedAction(expected, cleared);
   const shown = await waitForList(page, TODOS, '12 documentos');

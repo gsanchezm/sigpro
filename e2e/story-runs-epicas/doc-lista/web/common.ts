@@ -1,11 +1,12 @@
 import type { BrowserContext, Download, Locator, Page, Route } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
 import { DOCUMENTOS_DYNAMIC_TESTIDS, DOCUMENTOS_TESTIDS, PROGRAMAS_TESTIDS } from '../../../../packages/shared/src/testids';
+import { call } from '../../../story-runs/support/api';
 import { DEMO, TENANT_A, startSession } from '../../../story-runs/support/prepare';
 import { rawGet } from '../api/common';
 import { ACTION, CEILING_MS, attrOf, isVisible, runSteps, safe, textOf, waitUntil } from '../../support/browser';
 import { check, conclude, sleep, type Check } from '../../support/checks';
-import { outcome, pending, type BrowserRowHandler, type ManifestRow, type Outcome } from '../../core/framework';
+import { outcome, type BrowserRowHandler, type ManifestRow, type Outcome } from '../../core/framework';
 
 // Piezas comunes de las filas web de EP-DOC-LISTA (escritorio 1440 px; diseño responsive 390 px, por debajo de 1024). Los
 // localizadores son de rol y de nombre; los ids de prueba solo donde la pantalla no ofrece otro rastro (filas, enlaces, recuento,
@@ -456,8 +457,9 @@ const describeLog = (log: readonly ToastEntry[] | null | undefined): string => {
 };
 
 /** Busca en el registro un aviso con ese tono, título y cuerpo (exactos). Espera con techo; consulta el registro, no la pantalla. */
-export const toastShown = async (page: Page, tone: 'ok' | 'danger' | 'info' | 'warn', title: string, body: string, armedAt?: number): Promise<ToastResult> => {
-  const matches = (entry: ToastEntry): boolean => entry.tone === tone && entry.title === title && entry.body === body;
+export const toastShown = async (page: Page, tone: 'ok' | 'danger' | 'info' | 'warn' | undefined, title: string, body: string, armedAt?: number): Promise<ToastResult> => {
+  // Sin tono: el tono no lo fija la historia; el tono que se registró va en la evidencia (`observed`).
+  const matches = (entry: ToastEntry): boolean => (tone === undefined || entry.tone === tone) && entry.title === title && entry.body === body;
   const found = await waitUntil(async () => {
     const log = await toastLog(page);
     return log !== null && log !== undefined && log.some(matches);
@@ -585,18 +587,21 @@ export const finish = (checks: readonly Check[], extra: Pick<Outcome, 'note' | '
   return { ...result, note: `Difiere en: ${differences.join('; ')}` };
 };
 
-/** Nota de las filas que dependen de una decisión pendiente de la historia (la línea de detalle técnico, la traza de la petición). */
-export const TRACE_PENDING_NOTE =
-  'Depende de «Decisiones pendientes» de la historia: la línea de detalle técnico (la traza de la petición) no está decidida. La fila la pide en su paso; se anota, sin veredicto sobre ella.';
+/**
+ * Nota de las filas que piden la traza de la petición (la línea de detalle técnico). El README («Detalle técnico visible») dice que el
+ * veredicto no depende de ella: se anota en la evidencia y no se compara. Las historias que la piden la dejan en «Decisiones pendientes».
+ */
+export const TRACE_NOTE =
+  "La historia pide la traza de la petición en el paso y la deja en «Decisiones pendientes»; el veredicto es independiente de la traza según el README («Detalle técnico visible»): la traza va a la evidencia y no se compara.";
 
 /**
- * Fila que pide la traza de la petición (decisión pendiente): si fallan las demás comprobaciones, discrepa con su nota; si solo falta
- * la traza, queda como `pendiente-de-decision` con lo observado.
+ * Fila que pide la traza: el veredicto sale solo de las demás comprobaciones (coincide si se cumplen, discrepa si no). La traza
+ * observada (presente o no) va a la evidencia y la nota dice que no decide el veredicto.
  */
-export const traceDependent = (expected: string, others: readonly Check[], trace: Check, evidence?: Readonly<Record<string, unknown>>): Outcome => {
-  const result = finish([...others, trace], evidence === undefined ? {} : { evidence });
-  if (!others.every((entry) => entry.ok)) return result;
-  return pending(expected, result.observed, TRACE_PENDING_NOTE, evidence);
+export const traceDependent = (expected: string, others: readonly Check[], trace: Check, evidence: Readonly<Record<string, unknown>> = {}): Outcome => {
+  const result = conclude(others, { evidence: { ...evidence, trazaPresente: trace.ok, trazaObservada: trace.observed } });
+  const differences = others.filter((entry) => !entry.ok).map((entry) => `«${entry.expected}» no se cumple (${entry.observed})`);
+  return { ...result, expected, note: differences.length === 0 ? TRACE_NOTE : `${TRACE_NOTE} Difiere en: ${differences.join("; ")}` };
 };
 
 /** Motivo de preparación cuando el registro de avisos no está instalado: la fila no puede comprobar el aviso que pide. */
@@ -626,3 +631,54 @@ export const noDownload = async (expected: string, page: Page, error: unknown): 
     evidence: { avisosRegistrados: log ?? null },
   });
 };
+
+/** Hijos del contenedor de una página del visor: el encabezado y luego cada línea (`p`) o hueco vacío (`div`), con su grosor de fuente. */
+export interface ViewerChild {
+  readonly tag: string;
+  readonly text: string;
+  readonly weight: string;
+}
+
+/** Lee los hijos de la sección de una página, en una sola lectura del navegador. `undefined` si no se puede leer. */
+export const sectionChildren = (target: Locator): Promise<readonly ViewerChild[] | undefined> =>
+  safe<readonly ViewerChild[] | undefined>(
+    () =>
+      target.first().evaluate((section: Element) =>
+        Array.from(section.children).map((child) => ({
+          tag: child.tagName,
+          text: (child as HTMLElement).innerText.trim(),
+          weight: getComputedStyle(child).fontWeight,
+        })),
+      { timeout: 2_000 }),
+    undefined,
+  );
+
+/** Páginas de un documento tal como las sirve la API al gestor (la última versión si no se pasa versión). `undefined` si falla. */
+export const apiPagesOf = async (id: string, version?: number): Promise<readonly (readonly string[])[] | undefined> => {
+  const started = await startSession(TENANT_A, DEMO.gestor);
+  if (started.session === undefined) return undefined;
+  const content = await call('GET', `/documents/${id}/content`, { tenant: TENANT_A, token: started.session.accessToken, ...(version === undefined ? {} : { query: `version=${version}` }) });
+  const pages = (content.body as { readonly pages?: unknown } | null)?.pages;
+  return Array.isArray(pages) ? (pages as string[][]) : undefined;
+};
+
+/** Estado de carga de la lista leído en una sola lectura del navegador: filas de carga y `aria-busy` del mismo instante. */
+export interface LoadingSnapshot {
+  readonly skeleton: number;
+  readonly busy: string | undefined;
+}
+
+export const loadingSnapshot = (page: Page): Promise<LoadingSnapshot> =>
+  safe<LoadingSnapshot>(
+    () =>
+      page.evaluate(
+        ([pageId, skeletonId]: readonly string[]) => {
+          const root = document.querySelector(`[data-testid="${pageId}"]`);
+          if (root === null) return { skeleton: -1, busy: undefined };
+          const busy = root.querySelector('[aria-busy]');
+          return { skeleton: root.querySelectorAll(`[data-testid="${skeletonId}"]`).length, busy: busy?.getAttribute('aria-busy') ?? undefined };
+        },
+        [DOCUMENTOS_TESTIDS.DOCUMENTS_PAGE, PROGRAMAS_TESTIDS.SKELETON_ROW],
+      ),
+    { skeleton: -1, busy: undefined },
+  );

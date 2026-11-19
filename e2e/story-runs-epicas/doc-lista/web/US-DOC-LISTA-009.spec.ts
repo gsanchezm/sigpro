@@ -153,10 +153,14 @@ const historyRowText: BrowserRowHandler = onWeb(async (row: ManifestRow, { page 
   const failure = await openFicha(page, 'DOC-001');
   if (failure !== undefined) return preparationFailedWeb(expected, failure);
   const seen = await waitUntil(() => isVisible(historyRow(page, version)));
-  const spans = await safe(() => historyRow(page, version).locator('span').allInnerTexts(), undefined);
+  // Las tres columnas son los `span` hijos directos de la fila (versión, nota y autor con fecha): se leen por posición y se comprueba su número.
+  const columns = historyRow(page, version).locator(':scope > span');
+  const columnCount = await safe(() => columns.count(), -1);
+  const spans = await safe(() => columns.allInnerTexts(), undefined);
   const parts = (spans ?? []).map((text) => text.replace(/\s+/g, ' ').trim());
   return finish([
     check(seen.reached, `ve la fila de la versión ${version} del historial`, seen.reached ? `ve la fila de la versión ${version} del historial` : `no aparece la fila de la versión ${version}`),
+    check(columnCount === 3, 'la fila tiene tres columnas (versión, nota y autor con fecha)', `la fila tiene ${columnCount < 0 ? '(sin leer)' : columnCount} columnas`),
     check(parts[0] === `v${version}`, `ve v${version}`, `ve «${parts[0] ?? '(sin leer)'}»`),
     check(parts[1] === cell(row, 'nota'), `la nota ${cell(row, 'nota')}`, `la nota «${parts[1] ?? '(sin leer)'}»`),
     check(parts[2] === `por Javier Ortega · ${cell(row, 'fecha')}`, `el texto «por Javier Ortega · ${cell(row, 'fecha')}»`, `el texto «${parts[2] ?? '(sin leer)'}»`),
@@ -200,12 +204,12 @@ const downloadVersion: BrowserRowHandler = onWeb(async (row: ManifestRow, { page
   });
   if ('error' in got) return noDownload(expected, page, got.error);
   const download = got.download;
-  const toast = await toastShown(page, 'info', 'Descarga iniciada', archivo, armedAt);
+  const toast = await toastShown(page, undefined, 'Descarga iniciada', archivo, armedAt);
   return finish([
     check(toast.seen, `ve el aviso «Descarga iniciada» con el nombre ${archivo}`, toast.seen ? `ve el aviso «Descarga iniciada» con el nombre ${archivo}` : `no aparece el aviso: ${toast.observed}`),
     check(download.name === archivo, `el archivo descargado se llama ${archivo}`, `el archivo descargado se llama ${download.name}`),
     sameBytes(download.bytes, await apiPdfOf(TENANT_A, 'DOC-001', option.version), `DOC-001 versión ${option.version}`),
-  ]);
+  ], { evidence: { tonoDelAvisoRegistrado: toast.observed } });
 });
 
 // --- Esquema 5: un código que no existe muestra el aviso de documento no encontrado --------------------------------------------------

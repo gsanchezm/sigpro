@@ -7,7 +7,7 @@ import { thenOf } from '../web/common';
 // pila. Cada fila se devuelve `notExecutable` con lo que la historia espera (sus pasos «Entonces» y «Y») y el motivo, para que el
 // informe tenga una fila por cada Esquema. No se abre la app ni se toca la API.
 
-const MOTIVO = 'Android/Android nativo, sin emulador';
+const MOTIVO = 'Android nativo, sin emulador';
 
 const androidShareSheet: BrowserRowHandler = async (row: ManifestRow) => notExecutable(thenOf(row), MOTIVO);
 

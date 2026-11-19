@@ -1,7 +1,8 @@
+import { call, field } from '../../../story-runs/support/api';
 import { resetTenants, TENANT_A, TENANT_B } from '../../../story-runs/support/prepare';
 import { defineApiRows, type ApiRowHandler, type ManifestRow, type Outcome } from '../../core/framework';
 import { cell, check, preparationFailed, strict, type Check } from '../../support/checks';
-import { errorOfBytes, gestorIn, isolationPrep, isPdf, pdfTexts, rawGet, thenOf, type PrepFailure, type RawResponse, finish } from './common';
+import { boldFontOf, errorOfBytes, finish, gestorIn, isolationPrep, isPdf, pdfTexts, rawGet, thenOf, type PrepFailure, type RawResponse } from './common';
 
 // US-DOC-LISTA-005 — Descarga de una versión como PDF por la API, con su nombre. Preparación: reinicio de alumno01 con su
 // administrador y sesión de gestor@sigpro.test en alumno01; las filas de aislamiento reinician también alumno02 y publican la
@@ -102,10 +103,24 @@ const startsWithTitle: ApiRowHandler = async (row: ManifestRow): Promise<Outcome
   const texts = pdfTexts(raw.bytes);
   const first = texts[0];
   const second = texts[1];
+  // Las líneas de la versión (la última, como la descarga) tal cual y en orden; un hueco es una línea en blanco que el PDF dibuja como espacio.
+  const content = await call('GET', `/documents/${id}/content`, { tenant: TENANT_A, token: ready.token });
+  const pagesValue = field(content.body, 'pages');
+  const versionLines = Array.isArray(pagesValue) ? (pagesValue as string[][]).flat() : undefined;
+  const expectedLines = (versionLines ?? []).map((line) => (line === '' ? ' ' : line));
+  const bodyLines = texts.slice(2, -1).map((entry) => entry.text);
+  const firstDifference = bodyLines.findIndex((text, index) => text !== expectedLines[index]);
+  const sameBody = versionLines !== undefined && bodyLines.length === expectedLines.length && firstDifference < 0;
+  const footer = texts[texts.length - 1]?.text;
+  const footerExpected = `SIGPRO · ${cell(row, 'titulo')} · Página 1 de 1`;
+  const bold = boldFontOf(raw.bytes);
+  const bodyText = 'después van las líneas de la versión, tal cual y en orden';
   return finish([
     check(raw.status === 200 && isPdf(raw.bytes), 'un PDF que empieza por %PDF-', raw.status === 200 && isPdf(raw.bytes) ? 'un PDF que empieza por %PDF-' : `respuesta ${raw.status} sin PDF`),
-    check(first?.text === cell(row, 'titulo') && first.font === 'F2', `su primer texto es ${cell(row, 'titulo')}, en negrita`, `su primer texto es ${first?.text ?? '(sin texto)'}${first?.font === 'F2' ? ', en negrita' : ''}`),
+    check(first?.text === cell(row, 'titulo') && first.font === 'F2' && bold, `su primer texto es ${cell(row, 'titulo')}, en negrita (Helvetica-Bold)`, `su primer texto es ${first?.text ?? '(sin texto)'}, con la fuente ${first?.font ?? '(sin fuente)'}${bold ? ' Helvetica-Bold' : ' sin Helvetica-Bold'}`),
     check(second?.text === cell(row, 'identificacion'), `su segundo texto es ${cell(row, 'identificacion')}`, `su segundo texto es ${second?.text ?? '(sin texto)'}`),
+    check(sameBody, bodyText, sameBody ? bodyText : versionLines === undefined ? '(sin leer las líneas de la versión en la API)' : `${bodyLines.length} líneas en el PDF y ${expectedLines.length} en la versión; primera diferencia en la línea ${firstDifference + 1}: «${bodyLines[firstDifference] ?? '(sin línea)'}» frente a «${expectedLines[firstDifference] ?? '(sin línea)'}»`),
+    check(footer === footerExpected, `el pie ${footerExpected}`, `el pie es «${footer ?? '(sin texto)'}»`),
   ]);
 };
 

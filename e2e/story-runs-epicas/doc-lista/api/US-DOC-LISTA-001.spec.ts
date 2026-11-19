@@ -2,7 +2,7 @@ import { call, field } from '../../../story-runs/support/api';
 import { resetTenants, TENANT_A, TENANT_B } from '../../../story-runs/support/prepare';
 import { defineApiRows, type ApiRowHandler, type ManifestRow, type Outcome } from '../../core/framework';
 import { cell, check, preparationFailed, strict, type Check } from '../../support/checks';
-import { fieldIs, gestorIn, idsOf, isolationPrep, itemsOf, statusCheck, thenOf, type Credential, type PrepFailure, finish } from './common';
+import { fieldIs, gestorIn, idsCheck, idsOf, isolationPrep, itemsOf, statusCheck, thenOf, type Credential, type PrepFailure, finish } from './common';
 
 // US-DOC-LISTA-001 — Lista de documentos por la API: campos, orden y aislamiento por tenant. Preparación: reinicio de alumno01 con
 // su administrador y sesión de gestor@sigpro.test en alumno01; las filas de aislamiento reinician también alumno02 y publican la
@@ -69,7 +69,8 @@ const CABECERA: ReadonlyMap<string, string | undefined> = new Map<string, string
   ['alumno02', TENANT_B],
 ]);
 
-const FIRST_LAST = { first: 'DOC-001', last: 'DOC-012' } as const;
+/** Los doce documentos del tenant, en orden ascendente por código (DOC-001 a DOC-012). */
+const ORDEN_COMPLETO: readonly string[] = Array.from({ length: 12 }, (_, index) => `DOC-${String(index + 1).padStart(3, '0')}`);
 
 // --- Esquema 1: cada documento trae sus campos y su versión vigente ---------------------------------------------------------------
 
@@ -89,7 +90,7 @@ const eachDocumentFields: ApiRowHandler = async (row: ManifestRow): Promise<Outc
     statusCheck(listed, 200),
     check(items.length === 12, 'la respuesta trae 12 documentos', `la respuesta trae ${items.length} documentos`),
     check(field(listed.body, 'hiddenCount') === 0, 'hiddenCount 0', `hiddenCount ${String(field(listed.body, 'hiddenCount'))}`),
-    check(ids[0] === FIRST_LAST.first && ids[ids.length - 1] === FIRST_LAST.last, 'el primero es DOC-001 y el último es DOC-012', `el primero es ${ids[0] ?? '(ninguno)'} y el último es ${ids[ids.length - 1] ?? '(ninguno)'}`),
+    idsCheck(ids, ORDEN_COMPLETO),
     fieldIs(item, 'title', cell(row, 'titulo'), `el documento ${code} tiene el título`),
     fieldIs(item, 'programCode', programa, `el programa`),
     fieldIs(item, 'programName', cell(row, 'nombre_programa'), `con el nombre`),

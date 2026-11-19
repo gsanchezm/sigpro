@@ -1,5 +1,5 @@
 import { TENANT_A, resetTenants } from '../../../story-runs/support/prepare';
-import { ACTION, isVisible, waitUntil } from '../../support/browser';
+import { ACTION, attrOf, isVisible, waitUntil } from '../../support/browser';
 import { defineBrowserRows, outcome, type BrowserFixtures, type BrowserRowHandler, type ManifestRow, type Outcome } from '../../core/framework';
 import { cell, check, preparationFailedWeb, strict } from '../../support/checks';
 import {
@@ -12,6 +12,7 @@ import {
   failFirstGet,
   interact,
   linesOf,
+  linkOf,
   sameBytes,
   shownCodes,
   normalizedText,
@@ -155,8 +156,12 @@ const cardData: BrowserRowHandler = onExpoWeb(async (row: ManifestRow, { page })
   if (failure !== undefined) return preparationFailedWeb(expected, failure);
   const seen = await waitUntil(() => isVisible(cardOf(page, code)));
   const lines = (await cardLines(page, code)) ?? [];
+  // El código de la tarjeta es un enlace a su ficha: el texto del enlace empieza por el código y el destino es /documents/CODE.
+  const href = await attrOf(linkOf(page, code), 'href');
+  const linkCode = ((await normalizedText(linkOf(page, code))) ?? '').split(' ')[0];
   return finish([
     check(seen.reached, `ve la tarjeta de ${code}`, seen.reached ? `ve la tarjeta de ${code}` : `no aparece la tarjeta de ${code}`),
+    check(linkCode === code && href === `/documents/${code}`, `el código es un enlace a la ficha /documents/${code}`, `el código enlaza a «${href ?? '(sin leer)'}» con el texto «${linkCode || '(sin leer)'}»`),
     check(lines.includes(cell(row, 'titulo')), `el título ${cell(row, 'titulo')}`, `las líneas de la tarjeta son ${lines.join(' · ') || '(sin leer)'}`),
     check(lines.includes(programa), `el programa ${programa}`, `el programa no aparece entre «${lines.join(' · ') || '(sin leer)'}»`),
     check(lines.includes(clase), `la clasificación ${clase}`, `la clasificación no aparece entre «${lines.join(' · ') || '(sin leer)'}»`),
@@ -214,12 +219,12 @@ const cardMenuActions: BrowserRowHandler = onExpoWeb(async (row: ManifestRow, { 
   });
   if ('error' in got) return noDownload(expected, page, got.error);
   const download = got.download;
-  const toast = await toastShown(page, 'info', 'Descarga iniciada', 'DOC-002-v1.pdf', armedAt);
+  const toast = await toastShown(page, undefined, 'Descarga iniciada', 'DOC-002-v1.pdf', armedAt);
   return finish([
     check(toast.seen, 've el aviso «Descarga iniciada» con el nombre DOC-002-v1.pdf', toast.seen ? 've el aviso «Descarga iniciada» con el nombre DOC-002-v1.pdf' : `no aparece el aviso: ${toast.observed}`),
     check(download.name === 'DOC-002-v1.pdf', 'el archivo se llama DOC-002-v1.pdf', `el archivo se llama ${download.name}`),
     sameBytes(download.bytes, await apiPdfOf(TENANT_A, 'DOC-002'), 'DOC-002 versión 1'),
-  ]);
+  ], { evidence: { tonoDelAvisoRegistrado: toast.observed } });
 });
 
 // --- Esquema 4: mientras llega la respuesta se ve el estado de carga y después las tarjetas --------------------------------------

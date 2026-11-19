@@ -4,6 +4,7 @@ import { ACTION, attrOf, isVisible, waitUntil } from '../../support/browser';
 import { defineBrowserRows, outcome, type BrowserRowHandler, type ManifestRow, type Outcome } from '../../core/framework';
 import { cell, check, preparationFailedWeb, strict } from '../../support/checks';
 import {
+  apiPagesOf,
   apiPdfOf,
   armToasts,
   noDownload,
@@ -118,6 +119,11 @@ const touchVersion: BrowserRowHandler = async (row: ManifestRow, { page }): Prom
   const version = strict('versión', CHIP_DE_VERSION, cell(row, 'version'));
   const failure = await openFicha(page, 'DOC-001');
   if (failure !== undefined) return preparationFailedWeb(expected, failure);
+  // Antes de tocar otra versión se muestra la página 2 («Cargar más»): al tocar, el contenido debe volver a la primera página.
+  const more = await interact(loadMore(page), 'pulsar «Cargar más»', (element) => element.click(ACTION));
+  if (more !== undefined) return failed(expected, more.message, more.note);
+  const secondShown = await waitUntil(() => isVisible(viewerPageN(page, 2)));
+  if (!secondShown.reached) return preparationFailedWeb(expected, 'no se ve la página 2 antes de tocar otra versión');
   const touched = await interact(versionChip(page, version), `tocar «${version}»`, (element) => element.click(ACTION));
   if (touched !== undefined) return failed(expected, touched.message, touched.note);
   const marked = await waitUntil(async () => (await checkedOf(versionChip(page, version))) === 'true');
@@ -125,8 +131,16 @@ const touchVersion: BrowserRowHandler = async (row: ManifestRow, { page }): Prom
   const meta = await normalizedText(versionMeta(page));
   const label = await isVisible(detailBox(page).getByText('Nota de cambios', { exact: true }));
   const note = await normalizedText(versionNote(page));
+  // Tras tocar: la página 1 de la versión elegida se ve y la 2 no (las dos versiones que cita la historia tienen dos páginas).
+  const firstAgain = await waitUntil(() => isVisible(viewerPageN(page, 1)));
+  const firstLabel = (await linesOf(viewerPageN(page, 1)))?.[0];
+  const secondAfter = await visibleOrUnknown(viewerPageN(page, 2));
+  const totalPages = (await apiPagesOf('DOC-001', strict('número', VERSION_DE_ESTADO, cell(row, 'version'))))?.length;
+  const pageLabel = `Página 1 de ${totalPages ?? '(sin leer)'}`;
   return finish([
     check(marked.reached, `queda marcada «${version}»`, `«${version}» tiene aria-checked ${stateNow ?? '(sin leer)'}`),
+    check(firstAgain.reached && firstLabel === pageLabel, `el contenido vuelve a la primera página: ve «${pageLabel}»`, `ve «${firstLabel ?? '(sin leer)'}»`),
+    check(secondAfter === false, 'no ve la página 2', secondAfter === undefined ? '(sin leer)' : secondAfter ? 've la página 2 tras tocar la versión' : 'no ve la página 2 tras tocar la versión'),
     check(meta === `por Javier Ortega · ${cell(row, 'fecha')}`, `ve el texto «por Javier Ortega · ${cell(row, 'fecha')}»`, `ve «${meta ?? '(sin leer)'}»`),
     check(label, 'la etiqueta «Nota de cambios»', label ? 'se ve la etiqueta «Nota de cambios»' : 'no se ve la etiqueta «Nota de cambios»'),
     check(note === cell(row, 'nota'), `la nota ${cell(row, 'nota')}`, `la nota «${note ?? '(sin leer)'}»`),
@@ -177,12 +191,12 @@ const downloadChosen: BrowserRowHandler = async (row: ManifestRow, { page }): Pr
   });
   if ('error' in got) return noDownload(expected, page, got.error);
   const download = got.download;
-  const toast = await toastShown(page, 'info', 'Descarga iniciada', archivo, armedAt);
+  const toast = await toastShown(page, undefined, 'Descarga iniciada', archivo, armedAt);
   return finish([
     check(toast.seen, `ve el aviso «Descarga iniciada» con el nombre ${archivo}`, toast.seen ? `ve el aviso «Descarga iniciada» con el nombre ${archivo}` : `no aparece el aviso: ${toast.observed}`),
     check(download.name === archivo, `el archivo se llama ${archivo}`, `el archivo se llama ${download.name}`),
     sameBytes(download.bytes, await apiPdfOf(TENANT_A, 'DOC-001', number), `DOC-001 versión ${number}`),
-  ]);
+  ], { evidence: { tonoDelAvisoRegistrado: toast.observed } });
 };
 
 // --- Esquema 5: un código que no existe muestra el aviso de documento no encontrado --------------------------------------------------
@@ -204,7 +218,7 @@ const notFoundFicha: BrowserRowHandler = async (row: ManifestRow, { page }): Pro
       check(shown.reached && lines.includes('No se encontró el documento'), 'el aviso «No se encontró el documento»', `el aviso dice «${trace || '(sin leer)'}»`),
       check(back === 'Volver a Documentos', 'el enlace «Volver a Documentos»', `el enlace dice «${back ?? '(sin leer)'}»`),
     ],
-    { note: `${DIRECT_APPROXIMATION} El paso pide la traza de la petición, pero la línea de detalle técnico no decide el veredicto (el README la excluye): se anota en la evidencia y no se compara.`, evidence: { ruta: path, trazaDelAviso: trace, trazaContieneEl404: trace.includes('→ 404') } },
+    { note: `${DIRECT_APPROXIMATION} El paso pide la traza de la petición; la historia 012 no la deja en «Decisiones pendientes». El veredicto es independiente de la traza según el README («Detalle técnico visible»): la traza se anota en la evidencia y no se compara.`, evidence: { ruta: path, trazaDelAviso: trace, trazaContieneEl404: trace.includes('→ 404') } },
   );
 };
 
