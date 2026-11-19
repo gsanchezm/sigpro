@@ -123,6 +123,8 @@ export const compare = (tenant: string, token: string, id: string, query: string
 
 /** Lo que dice el evento más reciente de publicación de versiones del tenant. */
 export interface PublishEvent {
+  /** Identificador del registro: si cambia, ha entrado un evento nuevo (aunque su contenido coincida con uno anterior). */
+  readonly id: string | undefined;
   readonly action: string | undefined;
   readonly entityId: string | undefined;
   readonly version: number | undefined;
@@ -137,11 +139,13 @@ export const lastPublishEvent = async (tenant: string): Promise<{ readonly event
   const result = await call('GET', '/audit', { tenant, token, query: 'entity=document&q=document.version_published&limit=1' });
   const items = field(result.body, 'items');
   const first: unknown = Array.isArray(items) ? items[0] : undefined;
+  const id = field(first, 'id');
   const action = field(first, 'action');
   const entityId = field(first, 'entityId');
   const version = field(field(first, 'diff'), 'version');
   return {
     event: {
+      id: typeof id === 'string' ? id : undefined,
       action: typeof action === 'string' ? action : undefined,
       entityId: typeof entityId === 'string' ? entityId : undefined,
       version: typeof version === 'number' ? version : undefined,

@@ -61,9 +61,12 @@ const byPermission: ApiRowHandler = async (row: ManifestRow): Promise<Outcome> =
     const noData = noDataCheck(raw);
     if (noData.ok && (raw.status === 403 || raw.status === 404)) {
       const code = codeOf(jsonOf(raw.bytes));
+      // Lo medido sobre el PDF: cabecera de tipo y cuerpo (sin «%PDF-» = no hay PDF; la descarga pide que no se devuelva)
+      const type = raw.contentType === '' ? '(sin cabecera Content-Type)' : raw.contentType;
+      const pdf = raw.contentType.startsWith('application/pdf') || isPdf(raw.bytes) ? 'se devuelve un PDF' : 'no se devuelve un PDF';
       return pending(
         expected,
-        `respuesta ${raw.status}${code === undefined ? '' : ` ${code}`}, sin datos del documento`,
+        `respuesta ${raw.status}${code === undefined ? '' : ` ${code}`}, sin datos del documento; ${pdf} (Content-Type ${type}; cuerpo ${isPdf(raw.bytes) ? 'con %PDF-' : 'sin %PDF-'})`,
         'Decisión pendiente en 002.md («Decisiones pendientes»): si un restringido que existe debe responder 404 document_not_found en lugar de 403. Hoy responde 403; la fila no juzga el código, solo que no entregue datos del documento.',
         evidence,
       );

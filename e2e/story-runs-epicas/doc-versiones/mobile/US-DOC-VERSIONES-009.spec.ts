@@ -13,11 +13,29 @@ import {
   fieldAlertCheck,
   finish,
   interact,
+  seenWord,
   settle,
   toastShown,
+  verticalBox,
+  visibleOrUnknown,
   type Blocked,
 } from '../web/common';
-import { contentError, contentField, detailTitle, gotoApp, noteField, onExpoWeb, openPublishDialog, publishButton, publishDialog, publishReason, signInAs, submitButton, versionChip, waitDialogLoaded } from './common';
+import {
+  contentError,
+  contentField,
+  detailTitle,
+  gotoApp,
+  noteField,
+  onExpoWeb,
+  openPublishDialog,
+  publishButton,
+  publishDialog,
+  publishReason,
+  signInAs,
+  submitButton,
+  versionChip,
+  waitDialogLoaded,
+} from './common';
 
 // US-DOC-VERSIONES-009 — Publicar una versión nueva desde la ficha (móvil, Expo web a 390 px). Preparación de cada fila: reinicio de
 // alumno01, inicio de sesión de la cuenta de la fila en la app (con «alumno01» en «Tenant de trabajo») y apertura de la ficha por una
@@ -80,15 +98,21 @@ const publishFromMobile: BrowserRowHandler = onExpoWeb(async (row, { page }) => 
   if (submitted !== undefined) return actionFailed(expected, submitted);
 
   const toast = await toastShown(page, 'ok', 'Versión publicada', 'DOC-001 → versión 4');
-  const closed = await waitUntil(async () => !(await safe(() => publishDialog(page).isVisible({ timeout: 500 }), true)));
-  const chosen = await waitUntil(async () => (await attrOf(versionChip(page, 'Versión 4 · última'), 'aria-checked')) === 'true');
+  await waitUntil(async () => (await visibleOrUnknown(publishDialog(page))) === false);
+  const dialogSeen = await visibleOrUnknown(publishDialog(page));
+  await waitUntil(async () => (await attrOf(versionChip(page, 'Versión 4 · última'), 'aria-checked')) === 'true');
+  const chosen = await attrOf(versionChip(page, 'Versión 4 · última'), 'aria-checked');
   // Persistencia por API, después del aviso
   const persisted = await apiVersionReached(account, 'DOC-001', 4);
   const stored = persisted.state?.versions?.find((entry) => entry.version === 4);
   return finish([
-    check(toast.seen, 've el aviso «Versión publicada» con el texto «DOC-001 → versión 4»', toast.seen ? 've el aviso «Versión publicada» con el texto «DOC-001 → versión 4»' : `no aparece el aviso: ${toast.observed}`),
-    check(closed.reached, 'el diálogo se cierra', closed.reached ? 'el diálogo se cierra' : 'el diálogo sigue abierto'),
-    check(chosen.reached, 'la ficha muestra la opción «Versión 4 · última» elegida', chosen.reached ? 'la ficha muestra la opción «Versión 4 · última» elegida' : 'la opción «Versión 4 · última» no queda elegida'),
+    check(
+      toast.seen,
+      'aparece el aviso «Versión publicada» / «DOC-001 → versión 4»',
+      toast.seen ? `aparece el aviso ${toast.shownAs ?? '(sin leer)'}` : `no aparece el aviso: ${toast.observed}`,
+    ),
+    check(dialogSeen === false, 'el diálogo se cierra', `el diálogo ${seenWord(dialogSeen)}`),
+    check(chosen === 'true', 'la ficha muestra la opción «Versión 4 · última» elegida', `la opción «Versión 4 · última» tiene aria-checked ${chosen ?? '(sin leer)'}`),
     check(
       persisted.reached && stored?.note === (typed ?? ''),
       `la API guarda la versión 4 con la nota ${typed === undefined ? '(vacía)' : `«${typed}»`}`,
@@ -110,12 +134,29 @@ const noPermissionReason: BrowserRowHandler = onExpoWeb(async (row, { page }) =>
   await waitUntil(() => isVisible(detailTitle(page)));
   const button = publishButton(page);
   const disabled = await attrOf(button, 'aria-disabled');
-  const reason = await textOf(publishReason(page));
   const dataReason = await attrOf(button, 'data-reason');
+  const posts = countPosts(page, '/documents/DOC-001/versions');
+  // Prueba de comportamiento: un clic forzado sobre el botón no habilitado no abre el diálogo ni envía nada
+  await interact(button, 'pulsar «Publicar nueva versión» (sin permiso)', (element) => element.click({ ...ACTION, force: true }));
+  await settle();
+  const dialogSeen = await visibleOrUnknown(publishDialog(page));
+  // El motivo: primero se mide que se ve (y dónde), y solo después se lee su texto visible
+  const reason = publishReason(page);
+  const reasonSeen = await visibleOrUnknown(reason);
+  const reasonBox = reasonSeen === true ? await verticalBox(reason) : undefined;
+  const buttonBox = await verticalBox(button);
+  const reasonText = reasonSeen === true ? await textOf(reason) : undefined;
+  const below = reasonBox !== undefined && buttonBox !== undefined && reasonBox.top >= buttonBox.bottom - 1;
   return finish(
     [
-      check(disabled === 'true', '«Publicar nueva versión» no se puede pulsar', disabled === undefined ? '«Publicar nueva versión»: aria-disabled no se puede leer' : `«Publicar nueva versión» aria-disabled ${disabled}`),
-      check(reason === SIN_PERMISO, `debajo de los botones se lee «${SIN_PERMISO}»`, reason === undefined ? 'debajo de los botones no se puede leer el motivo' : `debajo de los botones se lee «${reason}»`),
+      check(disabled === 'true', '«Publicar nueva versión» no se puede pulsar (aria-disabled true)', disabled === undefined ? '«Publicar nueva versión»: aria-disabled sin leer' : `«Publicar nueva versión» aria-disabled ${disabled}`),
+      check(dialogSeen === false, 'al pulsarlo no se abre el diálogo', `el diálogo ${seenWord(dialogSeen)} tras el clic`),
+      check(posts() === 0, 'no se envía ninguna publicación', `se envían ${posts()} peticiones de publicación`),
+      check(
+        reasonSeen === true && reasonText === SIN_PERMISO && below,
+        `debajo de los botones se ve «${SIN_PERMISO}»`,
+        reasonSeen === true ? `debajo de los botones se ve «${reasonText ?? '(sin texto)'}»${below ? '' : ', no debajo de los botones'}` : `el motivo ${seenWord(reasonSeen)}`,
+      ),
     ],
     { evidence: { dataReason: dataReason ?? null } },
   );
@@ -147,12 +188,12 @@ const rejectsBeforeSending: BrowserRowHandler = onExpoWeb(async (row, { page }) 
       : await fieldAlertCheck(alert, noteField(page), aviso, '«Nota de cambios»');
   // Tolerancia de la prueba: una reacción local (1 s) para que una publicación indebida llegue a salir si la hubiera
   await settle();
-  const stillOpen = await safe(() => publishDialog(page).isVisible({ timeout: 500 }), undefined);
+  const stillOpen = await visibleOrUnknown(publishDialog(page));
   const version = await apiVersionOf(cuentaOf('gestor@sigpro.test'), 'DOC-002');
   return finish([
     alertCheck,
     check(posts() === 0, 'no se envía nada al servidor', `se envían ${posts()} peticiones de publicación`),
-    check(stillOpen === true, 'el diálogo sigue abierto', stillOpen === true ? 'el diálogo sigue abierto' : stillOpen === false ? 'el diálogo se cierra' : 'no se puede leer si el diálogo sigue abierto'),
+    check(stillOpen === true, 'el diálogo sigue abierto', `el diálogo ${seenWord(stillOpen)}`),
     check(version === 1, 'DOC-002 sigue en la versión 1', `DOC-002 queda en la versión ${version === undefined ? '(sin leer)' : String(version)}`),
   ]);
 });

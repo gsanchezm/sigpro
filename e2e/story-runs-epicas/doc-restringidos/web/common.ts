@@ -1,5 +1,5 @@
 import type { Locator, Page } from '@playwright/test';
-import { DOCUMENTOS_DYNAMIC_TESTIDS, DOCUMENTOS_TESTIDS, PROGRAMAS_TESTIDS } from '../../../../packages/shared/src/testids';
+import { DOCUMENTOS_DYNAMIC_TESTIDS, DOCUMENTOS_TESTIDS, PROGRAMAS_DYNAMIC_TESTIDS, PROGRAMAS_TESTIDS } from '../../../../packages/shared/src/testids';
 import { DEMO, TENANT_A } from '../../../story-runs/support/prepare';
 import { ACTION, CEILING_MS, HOLD_MS, runSteps, safe, waitUntil, type Step } from '../../support/browser';
 import { check, sleep, type Check } from '../../support/checks';
@@ -51,8 +51,15 @@ export const passwordField = (page: Page): Locator => page.getByLabel('Contrase�
 export const enterButton = (page: Page): Locator => page.getByRole('button', { name: 'Entrar', exact: true });
 export const codeField = (page: Page): Locator => page.getByLabel('Código de verificación', { exact: true });
 export const verifyButton = (page: Page): Locator => page.getByRole('button', { name: 'Verificar', exact: true });
-/** Enlace «Documentos» de la navegación principal (la barra lateral). */
-export const navDocuments = (page: Page): Locator => page.getByRole('navigation', { name: 'Navegación principal', exact: true }).getByRole('link', { name: 'Documentos', exact: true });
+/**
+ * Enlace «Documentos» de la barra lateral. El nombre «Navegación principal» está en el `aside` (rol «complementary»), no en el
+ * `nav` que contiene los enlaces, así que se busca dentro del `aside`; de respaldo, el id de prueba del enlace de la barra.
+ */
+export const navDocuments = (page: Page): Locator =>
+  page
+    .getByRole('complementary', { name: 'Navegación principal', exact: true })
+    .getByRole('link', { name: 'Documentos', exact: true })
+    .or(page.getByTestId(PROGRAMAS_DYNAMIC_TESTIDS.NAV('documents')));
 /** Buscador «Buscar documentos» de la lista. */
 export const searchBox = (page: Page): Locator => page.getByRole('searchbox', { name: 'Buscar documentos', exact: true });
 /** Recuento encima de la lista (primer párrafo vivo de la página de documentos). */
@@ -165,8 +172,47 @@ export const signIn = (page: Page, account: AccountKey): Promise<string | undefi
   return runSteps(steps);
 };
 
-/** Abre «Documentos» desde la navegación principal (clic en el enlace de la barra lateral). Devuelve el fallo de la acción, si lo hubo. */
-export const openDocumentsFromMenu = (page: Page): Promise<string | undefined> => runSteps([['abrir «Documentos» en el menú', () => navDocuments(page).click(ACTION)]]);
+/** Qué elemento está en el centro del objetivo (el que recibe el clic), o `undefined` si no se pudo leer. */
+const hitOf = (target: Locator): Promise<string | undefined> =>
+  safe(
+    () =>
+      target.first().evaluate(
+        (node) => {
+          const box = node.getBoundingClientRect();
+          const top = document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2);
+          if (top === null) return '(ninguno)';
+          const testid = top.getAttribute('data-testid');
+          return `${top.tagName.toLowerCase()}${testid === null ? '' : `[data-testid="${testid}"]`}`;
+        },
+        undefined,
+        { timeout: 2_000 },
+      ),
+    undefined,
+  );
+
+/**
+ * Clic diagnosticado: si falla, el motivo dice si el elemento no existe, cuál es el mensaje de Playwright (las primeras líneas y la
+ * de «intercepts pointer events») y qué elemento recibe el clic en su centro. Devuelve `undefined` si el clic salió bien.
+ */
+export const clickDiagnosed = async (target: Locator, label: string): Promise<string | undefined> => {
+  try {
+    await target.click(ACTION);
+    return undefined;
+  } catch (error) {
+    const lines = (error instanceof Error ? error.message : String(error))
+      .split('\n')
+      .map((line) => line.trim())
+      .filter((line) => line !== '');
+    const intercept = lines.find((line) => line.includes('intercepts pointer events'));
+    const head = `no se pudo ${label}: ${lines.slice(0, 3).join(' · ')}${intercept === undefined ? '' : ` · ${intercept}`}`;
+    const found = await countOf(target);
+    if (found === 0) return `${head} · el elemento no existe en la pantalla (0 coincidencias)`;
+    return `${head} · recibe el clic: ${(await hitOf(target)) ?? '(no se pudo leer)'}`;
+  }
+};
+
+/** Abre «Documentos» desde la barra lateral (clic en su enlace). Devuelve el diagnóstico del clic fallido, si lo hubo. */
+export const openDocumentsFromMenu = (page: Page): Promise<string | undefined> => clickDiagnosed(navDocuments(page), 'abrir «Documentos» en el menú');
 
 /** Abre una ruta de la app en la misma pestaña (carga completa: la sesión guardada se recupera). */
 export const gotoRoute = (page: Page, path: string): Promise<string | undefined> => runSteps([[`abrir ${path} en la misma pestaña`, () => page.goto(path, { timeout: CEILING_MS })]]);

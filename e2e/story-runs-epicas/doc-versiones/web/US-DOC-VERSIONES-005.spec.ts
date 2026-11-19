@@ -6,7 +6,7 @@ import { defineBrowserRows, type BrowserRowHandler } from '../../core/framework'
 import { cuentaOf, letras, lineas, thenOf, type VersionEntry } from '../api/common';
 import {
   actionFailed,
-  apiVersionOf,
+  apiVersionHolds,
   apiVersionReached,
   armToasts,
   backLink,
@@ -24,13 +24,13 @@ import {
   openPublishDialog,
   publishButton,
   quietWindow,
-  rowCells,
   selectedOptionText,
-  settle,
+  seenWord,
   signIn,
   stateCheck,
   submitButton,
   toastShown,
+  versionCellOf,
   versionSelect,
   visibleOrUnknown,
   waitContentLoaded,
@@ -38,8 +38,8 @@ import {
 } from './common';
 
 // US-DOC-VERSIONES-005 — Publicar una versión nueva desde la ficha (web). Preparación de cada fila: reinicio de alumno01, inicio de
-// sesión de la cuenta de la fila en /login?tenant=alumno01 y apertura de la ficha del documento. Las comprobaciones de la API se
-// hacen DESPUÉS de esperar el aviso, sondeando hasta 5 s; los avisos se leen del registro instalado antes de la acción.
+// sesión de la cuenta de la fila en /login?tenant=alumno01 y apertura de la ficha del documento. Lo que se afirma es lo MEDIDO: el aviso
+// que casó en el registro, la visibilidad del diálogo, el selector y la celda de la lista. La API se sondea tras la acción.
 
 const UNARMED = 'el registro de avisos no está instalado en la página: no se puede comprobar el aviso';
 
@@ -98,31 +98,36 @@ const publishFromDetail: BrowserRowHandler = onWeb(async (row, { page }) => {
   if (submitted !== undefined) return actionFailed(expected, submitted);
 
   const toast = await toastShown(page, 'ok', 'Versión publicada', 'DOC-001 → versión 4');
-  // Una lectura fallida del diálogo no cuenta como «cerrado»: solo `false` (visible = no) cumple
-  const closed = await waitUntil(async () => (await visibleOrUnknown(dialogOf(page, 'DOC-001'))) === false);
+  // El diálogo debe dejar de verse (lectura sin leer = no cumple); se espera antes de medir
+  await waitUntil(async () => (await visibleOrUnknown(dialogOf(page, 'DOC-001'))) === false);
+  const dialogSeen = await visibleOrUnknown(dialogOf(page, 'DOC-001'));
   // El selector pasa a «Versión 4 (última)» cuando termina la recarga de la ficha: se espera antes de leerlo
   await waitUntil(async () => (await selectedOptionText(versionSelect(page))) === 'Versión 4 (última)');
   const selected = await selectedOptionText(versionSelect(page));
-  // Persistencia por API, después del aviso: la versión 4 con la nota que se envió
+  // Persistencia por API, después del aviso (sondeo de hasta 5 s)
   const persisted = await apiVersionReached(account, 'DOC-001', 4);
   const stored: VersionEntry | undefined = persisted.state?.versions?.find((entry) => entry.version === 4);
   const back = await interact(backLink(page), 'pulsar «Volver a Documentos»', (element) => element.click(ACTION));
   if (back !== undefined) return actionFailed(expected, back);
-  await waitUntil(async () => (await rowCells(page, 'DOC-001'))?.[4] === 'v4');
-  const cells = await rowCells(page, 'DOC-001');
+  await waitUntil(async () => (await versionCellOf(page, 'DOC-001')) === 'v4');
+  const listed = await versionCellOf(page, 'DOC-001');
   return finish(
     [
-      check(toast.seen, 've el aviso «Versión publicada» con el texto «DOC-001 → versión 4»', toast.seen ? 've el aviso «Versión publicada» con el texto «DOC-001 → versión 4»' : `no aparece el aviso: ${toast.observed}`),
-      check(closed.reached, 'el diálogo se cierra', closed.reached ? 'el diálogo se cierra' : 'el diálogo sigue abierto'),
+      check(
+        toast.seen,
+        'aparece el aviso «Versión publicada» / «DOC-001 → versión 4»',
+        toast.seen ? `aparece el aviso ${toast.shownAs ?? '(sin leer)'}` : `no aparece el aviso: ${toast.observed}`,
+      ),
+      check(dialogSeen === false, 'el diálogo se cierra', `el diálogo ${seenWord(dialogSeen)}`),
       check(selected === 'Versión 4 (última)', 'en la ficha, el selector «Versión» muestra «Versión 4 (última)»', `en la ficha, el selector «Versión» muestra «${selected ?? '(sin leer)'}»`),
       check(
         persisted.reached && stored?.note === (typed ?? ''),
         `la API guarda la versión 4 con la nota ${typed === undefined ? '(vacía)' : `«${typed}»`}`,
         persisted.reached ? `la API guarda la versión 4 con la nota «${stored?.note ?? '(sin leer)'}»` : 'la API no llega a la versión 4 en 5 s',
       ),
-      check(cells?.[4] === 'v4', 'al volver a /documents, la fila de DOC-001 muestra «v4»', `al volver a /documents, la fila de DOC-001 muestra «${cells?.[4] ?? '(sin leer)'}»`),
+      check(listed === 'v4', 'al volver a /documents, la fila de DOC-001 muestra «v4» (columna Versión)', `al volver a /documents, la fila de DOC-001 muestra «${listed ?? '(sin leer)'}» (columna Versión)`),
     ],
-    { evidence: { celdasDeLaFila: cells ?? null } },
+    { evidence: { celdaVersion: listed ?? null } },
   );
 });
 
@@ -151,15 +156,18 @@ const validatesBeforeSending: BrowserRowHandler = onWeb(async (row, { page }) =>
     field === 'contenido'
       ? await fieldAlertCheck(alert, contentField(page), aviso, '«Contenido (una línea por fila)»')
       : await fieldAlertCheck(alert, noteField(page), aviso, '«Nota de cambios»');
-  // Tolerancia de la prueba: una reacción local (1 s) para que una publicación indebida llegue a salir si la hubiera
-  await settle();
-  const stillOpen = await isVisible(dialogOf(page, 'DOC-002'));
-  const version = await apiVersionOf(cuentaOf('gestor@sigpro.test'), 'DOC-002');
+  // Ventana de observación: una publicación indebida tendría tiempo de llegar al servidor y a la API (5 s)
+  const holds = await apiVersionHolds(cuentaOf('gestor@sigpro.test'), 'DOC-002', 1, 5_000);
+  const stillOpen = await visibleOrUnknown(dialogOf(page, 'DOC-002'));
   return finish([
     alertCheck,
     check(posts() === 0, 'no se envía nada al servidor', `se envían ${posts()} peticiones de publicación`),
-    check(stillOpen, 'el diálogo sigue abierto', stillOpen ? 'el diálogo sigue abierto' : 'el diálogo se cierra'),
-    check(version === 1, 'DOC-002 sigue en la versión 1', `DOC-002 queda en la versión ${version === undefined ? '(sin leer)' : String(version)}`),
+    check(stillOpen === true, 'el diálogo sigue abierto', `el diálogo ${seenWord(stillOpen)}`),
+    check(
+      holds.changedTo === undefined && holds.last === 1,
+      'DOC-002 sigue en la versión 1 durante la ventana de 5 s',
+      holds.changedTo !== undefined ? `DOC-002 pasa a la versión ${holds.changedTo}` : `DOC-002 queda en la versión ${holds.last === undefined ? '(sin leer)' : String(holds.last)}`,
+    ),
   ]);
 });
 
@@ -203,18 +211,21 @@ const cancelKeepsVersion: BrowserRowHandler = onWeb(async (row, { page }) => {
   if (cancelled !== undefined) return actionFailed(expected, cancelled);
 
   const quiet = await quietWindow(page, 'ok');
-  const closed = await waitUntil(async () => (await visibleOrUnknown(dialogOf(page, 'DOC-001'))) === false);
+  await waitUntil(async () => (await visibleOrUnknown(dialogOf(page, 'DOC-001'))) === false);
+  const dialogSeen = await visibleOrUnknown(dialogOf(page, 'DOC-001'));
   const selected = await selectedOptionText(versionSelect(page));
-  const version = await apiVersionOf(cuentaOf('gestor@sigpro.test'), 'DOC-001');
+  // Sondeo de la API durante 5 s: la versión 3 debe mantenerse, no solo en una lectura
+  const holds = await apiVersionHolds(cuentaOf('gestor@sigpro.test'), 'DOC-001', 3, 5_000);
+  const quietObserved = quiet.unarmed ? `no se puede afirmar (${quiet.seen})` : quiet.held ? 'ningún aviso de tono ok en la ventana de 4 s' : `aparece ${quiet.seen}`;
   return finish([
-    check(closed.reached, 'el diálogo se cierra sin aviso de publicación', closed.reached ? 'el diálogo se cierra' : 'el diálogo sigue abierto'),
-    check(
-      !quiet.unarmed && quiet.held,
-      'no aparece ningún aviso de publicación',
-      quiet.unarmed ? `no se puede afirmar (${quiet.seen})` : quiet.held ? 'no aparece ningún aviso de publicación' : `aparece ${quiet.seen}`,
-    ),
+    check(dialogSeen === false, 'el diálogo se cierra sin aviso de publicación', `el diálogo ${seenWord(dialogSeen)}`),
+    check(!quiet.unarmed && quiet.held, 'no aparece ningún aviso de publicación', quietObserved),
     check(selected === 'Versión 3 (última)', 'la ficha sigue mostrando la versión 3 como la última', `la ficha muestra «${selected ?? '(sin leer)'}»`),
-    check(version === 3, 'DOC-001 sigue en la versión 3 en la API', `DOC-001 queda en la versión ${version === undefined ? '(sin leer)' : String(version)} en la API`),
+    check(
+      holds.changedTo === undefined && holds.last === 3,
+      'DOC-001 sigue en la versión 3 en la API durante 5 s',
+      holds.changedTo !== undefined ? `DOC-001 pasa a la versión ${holds.changedTo} en la API` : `DOC-001 queda en la versión ${holds.last === undefined ? '(sin leer)' : String(holds.last)} en la API`,
+    ),
   ]);
 });
 

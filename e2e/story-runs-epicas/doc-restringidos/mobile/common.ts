@@ -86,6 +86,26 @@ export const countOfLocator = (target: Locator): Promise<number> => safe(() => t
 export const attrValue = (target: Locator, name: string): Promise<string | undefined> =>
   safe(async () => (await target.first().getAttribute(name, { timeout: 1_000 })) ?? undefined, undefined);
 
+/** Estado efectivo de un botón: `habilitado`, `deshabilitado` o `no leído` (el elemento no existe o no se pudo leer). */
+export type ButtonState = 'habilitado' | 'deshabilitado' | 'no leído';
+
+/**
+ * Estado efectivo de un botón de la app. react-native-web omite el atributo `aria-disabled` cuando el botón está habilitado (o lo deja
+ * en «false»): sin atributo o con «false» y sin la propiedad `disabled` = habilitado; `aria-disabled="true"` o `disabled` = deshabilitado.
+ * Un elemento que no existe o no se puede leer nunca cuenta como habilitado.
+ */
+export const buttonStateOf = async (target: Locator): Promise<ButtonState> => {
+  if ((await countOfLocator(target)) !== 1) return 'no leído';
+  const read = await safe(
+    () => target.first().evaluate((node) => ({ aria: node.getAttribute('aria-disabled'), disabled: (node as HTMLButtonElement).disabled === true }), undefined, { timeout: 1_000 }),
+    undefined,
+  );
+  if (read === undefined) return 'no leído';
+  if (read.aria === 'true' || read.disabled) return 'deshabilitado';
+  if (read.aria === null || read.aria === 'false') return 'habilitado';
+  return 'no leído';
+};
+
 /** Caja visible de un elemento (`undefined` si no se pudo leer). */
 export const boxOf = (target: Locator): Promise<{ readonly x: number; readonly y: number; readonly width: number; readonly height: number } | undefined> =>
   safe(async () => (await target.first().boundingBox({ timeout: 1_000 })) ?? undefined, undefined);

@@ -110,13 +110,25 @@ const describeLog = (log: readonly ToastEntry[] | null | undefined): string => {
 };
 
 /** Busca en el registro un aviso con ese tono, título y cuerpo. Espera con techo; consulta el registro, no la pantalla. */
-export const toastShown = async (page: Page, tone: Tone, title: string, body: string): Promise<{ readonly seen: boolean; readonly observed: string }> => {
+export const toastShown = async (
+  page: Page,
+  tone: Tone,
+  title: string,
+  body: string,
+): Promise<{ readonly seen: boolean; readonly observed: string; readonly shownAs?: string }> => {
   const matches = (entry: ToastEntry): boolean => entry.tone === tone && entry.title === title && entry.body === body;
   const found = await waitUntil(async () => {
     const log = await toastLog(page);
     return log !== null && log !== undefined && log.some(matches);
   });
-  return { seen: found.reached, observed: describeLog(await toastLog(page)) };
+  const log = await toastLog(page);
+  // Lo medido: la entrada del registro que casó (tono, título y cuerpo tal como se registraron), no el texto esperado
+  const hit = log === null || log === undefined ? undefined : log.find(matches);
+  return {
+    seen: found.reached,
+    observed: describeLog(log),
+    ...(hit === undefined ? {} : { shownAs: `${hit.tone} «${hit.title}» / «${hit.body}»` }),
+  };
 };
 
 /** Ventana de silencio: tras esperar `QUIET_WINDOW_MS`, no debe haber ningún aviso de ese tono. `unarmed` si el registro no se puede leer. */
@@ -285,15 +297,32 @@ export const rowCells = async (page: Page, code: string): Promise<readonly strin
   return texts?.map((text) => text.replace(/\s+/g, ' ').trim());
 };
 
-/** Filas del historial de la ficha, cada una como la lista de textos de sus hijos (versión, nota, autor y fecha), en orden. */
-export const readHistory = (page: Page): Promise<readonly (readonly string[])[] | undefined> =>
-  safe(
+/** Una fila del historial leída por su contenido: versión («vN»), nota (la otra celda) y autor («por …», sin la fecha). */
+export interface HistoryRow {
+  readonly version: string | undefined;
+  readonly note: string | undefined;
+  readonly author: string | undefined;
+}
+
+/**
+ * Filas del historial de la ficha, en orden. Cada celda se identifica por su contenido, no por su posición: «vN» es la versión,
+ * «por …» el autor (antes de la fecha) y la celda restante, la nota. `undefined` si la lista no se puede leer.
+ */
+export const readHistory = async (page: Page): Promise<readonly HistoryRow[] | undefined> => {
+  const raw = await safe(
     () =>
       historyList(page)
         .locator(':scope > li')
         .evaluateAll((items) => items.map((item) => Array.from(item.children, (child) => child.textContent?.trim() ?? ''))),
     undefined,
   );
+  return raw?.map((texts) => {
+    const version = texts.find((text) => /^v\d+$/.test(text));
+    const byAuthor = texts.find((text) => text.startsWith('por '));
+    const note = texts.find((text) => text !== version && !text.startsWith('por '));
+    return { version, note, author: byAuthor?.split(' · ')[0] };
+  });
+};
 
 /** Una línea de una celda del diff: número, texto, si está tachada (eliminada) o resaltada (añadida). */
 export interface DiffSide {
@@ -349,9 +378,9 @@ export const waitDiffSettled = async (page: Page, from: string, to: string): Pro
     )
   ).reached;
 
-/** Textos de las cabeceras de la tabla del diff («Versión N» desde y hasta), en orden. `undefined` si no se pueden leer. */
+/** Textos de las cabeceras de la tabla del diff (rol «columnheader», por nombre: «Versión N» desde y hasta). `undefined` si no se leen. */
 export const readHeaders = (page: Page): Promise<readonly string[] | undefined> =>
-  safe(() => diffTable(page).locator('thead th').allInnerTexts(), undefined).then((texts) => texts?.map((text) => text.replace(/\s+/g, ' ').trim()));
+  safe(async () => (await diffTable(page).getByRole('columnheader').allInnerTexts()).map((text) => text.replace(/\s+/g, ' ').trim()), undefined);
 
 /** Elige una opción de «Desde» o «Hasta» por su texto visible. */
 export const chooseVersion = (which: 'Desde' | 'Hasta', option: string): ((page: Page) => Promise<Blocked | undefined>) => (page) =>
@@ -403,6 +432,57 @@ export const countPosts = (page: Page, suffix: string): (() => number) => {
     if (request.method() === 'POST' && new URL(request.url()).pathname.endsWith(suffix)) posts += 1;
   });
   return () => posts;
+};
+
+/** Lo que se midió de la visibilidad: «visible», «no visible» o «sin leer» (nunca se da por cumplida una lectura fallida). */
+export const seenWord = (seen: boolean | undefined): string => (seen === undefined ? 'sin leer' : seen ? 'visible' : 'no visible');
+
+/** Comprobación de visibilidad real: el elemento se ve. Lo observado es lo medido («visible», «no visible» o «sin leer»). */
+export const visibleCheck = async (target: Locator, label: string): Promise<Check> => {
+  const seen = await visibleOrUnknown(target);
+  return check(seen === true, `${label} visible`, `${label} ${seenWord(seen)}`);
+};
+
+/**
+ * Celda de la columna «Versión» de la lista para un documento: se localiza la columna por el encabezado («Versión») y se comprueba que
+ * la celda del código es el documento (así no se lee una celda desplazada). `undefined` si no se puede leer o no encaja.
+ */
+export const versionCellOf = async (page: Page, code: string): Promise<string | undefined> => {
+  const headers = await safe(async () => (await page.getByTestId(DOCUMENTOS_TESTIDS.DOCUMENTS_TABLE).getByRole('columnheader').allInnerTexts()).map((text) => text.replace(/\s+/g, ' ').trim()), undefined);
+  const cells = await rowCells(page, code);
+  if (headers === undefined || cells === undefined) return undefined;
+  const versionAt = headers.indexOf('Versión');
+  const codeAt = headers.indexOf('Código');
+  if (versionAt < 0 || codeAt < 0 || cells[codeAt] !== code) return undefined;
+  return cells[versionAt];
+};
+
+/**
+ * Sondeo de la versión vigente por API durante una ventana (techo `windowMs`): devuelve la última versión leída y, si cambió a otra
+ * distinta de `version` en algún momento, esa versión. Así «sigue en la versión N» se afirma en toda la ventana, no en una sola lectura.
+ */
+export const apiVersionHolds = async (
+  account: Credentials,
+  doc: string,
+  version: number,
+  windowMs: number,
+): Promise<{ readonly last: number | undefined; readonly changedTo: number | undefined }> => {
+  const login = await loginAs(TENANT_A, account);
+  if (login.token === undefined) return { last: undefined, changedTo: undefined };
+  const token = login.token;
+  let last: number | undefined;
+  let changedTo: number | undefined;
+  const started = performance.now();
+  for (;;) {
+    last = (await documentOf(TENANT_A, token, doc)).version;
+    if (last !== undefined && last !== version) {
+      changedTo = last;
+      break;
+    }
+    if (performance.now() - started >= windowMs) break;
+    await sleep(500);
+  }
+  return { last, changedTo };
 };
 
 /** Versión vigente de un documento leída por API con la cuenta (`undefined` = no legible). Lectura única: no espera. */

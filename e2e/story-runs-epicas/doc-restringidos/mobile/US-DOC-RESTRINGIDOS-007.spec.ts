@@ -12,6 +12,7 @@ import {
   actionFailed,
   attrValue,
   backLink,
+  buttonStateOf,
   badgeIn,
   boxOf,
   cardOf,
@@ -208,16 +209,16 @@ const adminDetail = async (page: Page): Promise<Verification> => {
   const title = await textOfLocator(detailTitle(page));
   const badge = await textOfLocator(detailBadge(page));
   const selector = await presenceOf(versionGroup(page));
-  const downloadDisabled = await attrValue(downloadButton(page), 'aria-disabled');
-  const publishDisabled = await attrValue(publishButton(page), 'aria-disabled');
+  const downloadState = await buttonStateOf(downloadButton(page));
+  const publishState = await buttonStateOf(publishButton(page));
   return {
     checks: [
       presentCheck(shown, 'presente', 'la ficha del documento'),
       textCheck(title, TITLE_RESTRICTED, 'el título es'),
       textCheck(badge, 'Restringido', 'la insignia es'),
       check(selector === 'presente', 'el selector de versión', `el selector de versión ${selector}`),
-      check(downloadDisabled === 'false', '«Descargar PDF» está habilitado', `«Descargar PDF» aria-disabled ${downloadDisabled ?? '(sin leer)'}`),
-      check(publishDisabled === 'false', '«Publicar nueva versión» está habilitado', `«Publicar nueva versión» aria-disabled ${publishDisabled ?? '(sin leer)'}`),
+      check(downloadState === 'habilitado', '«Descargar PDF» está habilitado', `«Descargar PDF» está ${downloadState}`),
+      check(publishState === 'habilitado', '«Publicar nueva versión» está habilitado', `«Publicar nueva versión» está ${publishState}`),
     ],
   };
 };
@@ -228,8 +229,8 @@ const auditorDetail = async (page: Page): Promise<Verification> => {
   const shown = await presenceOf(detailBox(page));
   const title = await textOfLocator(detailTitle(page));
   const badge = await textOfLocator(detailBadge(page));
-  const downloadDisabled = await attrValue(downloadButton(page), 'aria-disabled');
-  const publishDisabled = await attrValue(publishButton(page), 'aria-disabled');
+  const downloadState = await buttonStateOf(downloadButton(page));
+  const publishState = await buttonStateOf(publishButton(page));
   const dataReason = await attrValue(publishButton(page), 'data-reason');
   const reason = await textOfLocator(publishReason(page));
   const reasonBox = await boxOf(publishReason(page));
@@ -240,8 +241,8 @@ const auditorDetail = async (page: Page): Promise<Verification> => {
       presentCheck(shown, 'presente', 'la ficha del documento'),
       textCheck(title, TITLE_RESTRICTED, 'el título es'),
       textCheck(badge, 'Restringido', 'la insignia es'),
-      check(downloadDisabled === 'false', '«Descargar PDF» está habilitado', `«Descargar PDF» aria-disabled ${downloadDisabled ?? '(sin leer)'}`),
-      check(publishDisabled === 'true', '«Publicar nueva versión» está deshabilitado', `«Publicar nueva versión» aria-disabled ${publishDisabled ?? '(sin leer)'}`),
+      check(downloadState === 'habilitado', '«Descargar PDF» está habilitado', `«Descargar PDF» está ${downloadState}`),
+      check(publishState === 'deshabilitado', '«Publicar nueva versión» está deshabilitado', `«Publicar nueva versión» está ${publishState}`),
       check(dataReason === REASON, `el motivo en data-reason dice «${REASON}»`, `el motivo en data-reason dice «${dataReason ?? '(sin leer)'}»`),
       textCheck(reason, REASON, 'el texto visible bajo el botón es'),
       check(below, 'el texto está debajo del botón «Publicar nueva versión»', reasonBox === undefined || buttonBox === undefined ? 'las cajas del texto o del botón no se pudieron medir' : `el texto empieza en y=${String(Math.round(reasonBox.y))} y el botón acaba en y=${String(Math.round(buttonBox.y + buttonBox.height))}`),

@@ -2,15 +2,16 @@ import type { Page } from '@playwright/test';
 import { DOCUMENTOS_TESTIDS, MOVIL_DOCUMENTS_TESTIDS } from '../../../../packages/shared/src/testids';
 import { resetTenants, TENANT_A } from '../../../story-runs/support/prepare';
 import { isVisible, quoted, textOf, waitUntil } from '../../support/browser';
-import { check, cell, preparationFailedWeb, strict, type Check } from '../../support/checks';
+import { check, cell, preparationFailedWeb, strict, sleep, type Check } from '../../support/checks';
 import { defineBrowserRows, type BrowserRowHandler } from '../../core/framework';
 import { cuentaOf, DOCUMENTOS, thenOf } from '../api/common';
-import { actionFailed, finish, normalizedText } from '../web/common';
+import { actionFailed, finish, normalizedText, QUIET_WINDOW_MS, visibleCheck, visibleOrUnknown } from '../web/common';
 import { cellCheck, comboValue, compareFrom, compareTo, detailTitle, diffBusy, diffStats, diffTable, gotoApp, onExpoWeb, pickVersion, readMobileDiff, signInAs, type MobileRow } from './common';
 
 // US-DOC-VERSIONES-010 — Comparar dos versiones con las líneas apiladas (móvil, Expo web a 390 px). Preparación de cada fila: reinicio de
-// alumno01, inicio de sesión de gestor@sigpro.test en la app y apertura de la ficha por una carga completa de la dirección. Las filas del
-// diff se leen con su tipo (`data-diff`), su rótulo y sus celdas apiladas (número con signo, texto y tachado). La app NO es nativa.
+// alumno01, inicio de sesión de gestor@sigpro.test en la app y apertura de la ficha por una carga completa de la dirección. La tabla debe
+// asentarse con la elección de la fila (selectores con su valor, tabla visible y `aria-busy` en «false»); si no, la fila discrepa sin leer
+// la tabla anterior. Las filas se localizan por su tipo y deben ser únicas. La app NO es nativa.
 
 /** Tipo de la celda «tipo»: su tipo de fila (`data-diff`) y su rótulo visible. */
 const TIPO: ReadonlyMap<string, { readonly kind: string; readonly label: string }> = new Map<string, { readonly kind: string; readonly label: string }>([
@@ -61,6 +62,12 @@ const VERSION: ReadonlyMap<string, string> = new Map<string, string>([
   ['«Versión 3»', 'Versión 3'],
 ]);
 
+/** Acción previa de la fila del Esquema 3: elegir «Versión 3» en «Desde» o mirar la sección sin tocar nada. */
+const ACCION: ReadonlyMap<string, 'elige' | 'mira'> = new Map<string, 'elige' | 'mira'>([
+  ['elige «Versión 3» en «Desde»', 'elige'],
+  ['mira la sección «Comparar versiones»', 'mira'],
+]);
+
 /** Cuenta las peticiones GET de comparación que salen de la página desde ahora (una elección igual no debe pedir nada). */
 const countCompares = (page: Page): (() => number) => {
   let requests = 0;
@@ -81,17 +88,23 @@ const prepareDetail = async (page: Page, doc: string): Promise<string | undefine
   return shown.reached ? undefined : `no se ve la ficha de ${doc}`;
 };
 
-/** Espera a que los dos selectores muestren lo elegido y la tabla deje de estar «ocupada» (el resultado es el de la elección actual). */
-const waitCompareSettled = async (page: Page, from: string, to: string): Promise<boolean> =>
+/**
+ * La comparación está asentada cuando los dos selectores muestran lo elegido, la tabla se ve y su `aria-busy` es «false» (el
+ * resultado mostrado es el de la elección actual; «true» o «sin leer» no cuentan).
+ */
+const tableSettles = async (page: Page, from: string, to: string): Promise<boolean> =>
   (
     await waitUntil(
       async () =>
         (await comboValue(compareFrom(page))) === from &&
         (await comboValue(compareTo(page))) === to &&
-        (await diffBusy(page)) !== 'true' &&
-        (await isVisible(diffTable(page))),
+        (await visibleOrUnknown(diffTable(page))) === true &&
+        (await diffBusy(page)) === 'false',
     )
   ).reached;
+
+/** Resultado de una fila cuando la tabla no se asienta con la elección de la fila: discrepa, sin leer la tabla anterior. */
+const notSettled = (from: string, to: string) => finish([check(false, `la tabla se asienta con «${from}» y «${to}»`, 'la tabla no se asentó')]);
 
 // --- Esquema 1: la comparación inicial es la versión anterior contra la última -------------------------------------------------------
 
@@ -103,14 +116,17 @@ const initialComparison: BrowserRowHandler = onExpoWeb(async (row, { page }) => 
   const resumen = quoted(cell(row, 'resumen'));
   const failure = await prepareDetail(page, doc);
   if (failure !== undefined) return preparationFailedWeb(expected, failure);
-  const settled = await waitCompareSettled(page, desde, hasta);
+  if (!(await tableSettles(page, desde, hasta))) return notSettled(desde, hasta);
   const from = await comboValue(compareFrom(page));
   const to = await comboValue(compareTo(page));
   const stats = await normalizedText(diffStats(page));
   return finish([
+    await visibleCheck(compareFrom(page), 'el selector «Desde»'),
+    await visibleCheck(compareTo(page), 'el selector «Hasta»'),
     check(from === desde, `«Desde» muestra «${desde}»`, `«Desde» muestra «${from ?? '(sin leer)'}»`),
     check(to === hasta, `«Hasta» muestra «${hasta}»`, `«Hasta» muestra «${to ?? '(sin leer)'}»`),
-    check(settled && stats === resumen, `el resumen es «${resumen}»`, `el resumen es «${stats ?? '(sin leer)'}»`),
+    await visibleCheck(diffStats(page), 'el resumen de la comparación'),
+    check(stats === resumen, `el resumen es «${resumen}»`, `el resumen es «${stats ?? '(sin leer)'}»`),
   ]);
 });
 
@@ -128,20 +144,22 @@ const changeReadsInRow: BrowserRowHandler = onExpoWeb(async (row, { page }) => {
   if (pickedFrom !== undefined) return actionFailed(expected, pickedFrom);
   const pickedTo = await pickVersion('Hasta', hasta)(page);
   if (pickedTo !== undefined) return actionFailed(expected, pickedTo);
-  await waitCompareSettled(page, desde, hasta);
+  if (!(await tableSettles(page, desde, hasta))) return notSettled(desde, hasta);
   const rows: readonly MobileRow[] = (await readMobileDiff(page)) ?? [];
-  const found = rows.find((entry) => entry.kind === tipo.kind);
-  if (found === undefined) {
-    return finish([check(false, `hay una fila «${tipo.label}»`, `no hay ninguna fila «${tipo.label}» (filas leídas: ${rows.length})`)]);
+  // La fila del tipo debe ser ÚNICA: si hay dos, la lectura no sabe cuál es la que describe la historia
+  const matches = rows.filter((entry) => entry.kind === tipo.kind);
+  if (matches.length !== 1) {
+    return finish([check(false, `hay una única fila «${tipo.label}»`, `hay ${matches.length} filas «${tipo.label}» (filas leídas: ${rows.length})`)]);
   }
-  const checks: Check[] = [check(found.label === tipo.label, `la fila es «${tipo.label}»`, `la fila es «${found.label}»`)];
+  const found = matches[0];
+  const checks: Check[] = [check(found?.label === tipo.label, `la fila es «${tipo.label}»`, `la fila es «${found?.label ?? '(sin leer)'}»`)];
   lineas.cells.forEach((expectedCell, index) => {
-    checks.push(cellCheck(`la celda ${index + 1}`, found.cells[index], expectedCell.gutter, expectedCell.text, expectedCell.struck));
+    checks.push(cellCheck(`la celda ${index + 1}`, found?.cells[index], expectedCell.gutter, expectedCell.text, expectedCell.struck));
   });
-  checks.push(check(found.cells.length === lineas.cells.length, `la fila tiene ${lineas.cells.length} línea(s)`, `la fila tiene ${found.cells.length} línea(s)`));
+  checks.push(check(found?.cells.length === lineas.cells.length, `la fila tiene ${lineas.cells.length} línea(s)`, `la fila tiene ${found?.cells.length ?? '(sin leer)'} línea(s)`));
   if (lineas.stacked) {
-    const first = found.cells[0];
-    const second = found.cells[1];
+    const first = found?.cells[0];
+    const second = found?.cells[1];
     const below = first !== undefined && second !== undefined && second.top >= first.bottom - 1;
     checks.push(check(below, 'la línea nueva va debajo de la antigua', below ? 'la línea nueva va debajo de la antigua' : 'la línea nueva no va debajo de la antigua'));
   }
@@ -149,12 +167,6 @@ const changeReadsInRow: BrowserRowHandler = onExpoWeb(async (row, { page }) => {
 });
 
 // --- Esquema 3: sin dos versiones distintas no hay comparación -----------------------------------------------------------------------
-
-/** Acción previa de la fila: «elige» (elegir Versión 3 en «Desde») o «mira» (no hacer nada). Todos los valores de la columna están aquí. */
-const ACCION: ReadonlyMap<string, 'elige' | 'mira'> = new Map<string, 'elige' | 'mira'>([
-  ['elige «Versión 3» en «Desde»', 'elige'],
-  ['mira la sección «Comparar versiones»', 'mira'],
-]);
 
 const noComparison: BrowserRowHandler = onExpoWeb(async (row, { page }) => {
   const expected = thenOf(row);
@@ -165,15 +177,17 @@ const noComparison: BrowserRowHandler = onExpoWeb(async (row, { page }) => {
   if (failure !== undefined) return preparationFailedWeb(expected, failure);
   if (accion === 'elige') {
     // La comparación inicial (anterior contra última) debe haber asentado antes de contar: si no, su petición contaría como nueva
-    await waitCompareSettled(page, 'Versión 2', 'Versión 3');
+    if (!(await tableSettles(page, 'Versión 2', 'Versión 3'))) return notSettled('Versión 2', 'Versión 3');
     const compares = countCompares(page);
     const picked = await pickVersion('Desde', 'Versión 3')(page);
     if (picked !== undefined) return actionFailed(expected, picked);
     const shown = await waitUntil(() => isVisible(page.getByTestId(MOVIL_DOCUMENTS_TESTIDS.COMPARE_SAME)));
     const text = await textOf(page.getByTestId(MOVIL_DOCUMENTS_TESTIDS.COMPARE_SAME));
+    // Ventana de silencio: una petición tardía a la comparación también contaría (3,5 s o más, como en los avisos)
+    await sleep(QUIET_WINDOW_MS);
     return finish([
       check(shown.reached && text === aviso, `la sección dice «${aviso}»`, `la sección dice «${text ?? '(sin leer)'}»`),
-      check(compares() === 0, 'no pide ninguna comparación', `pide ${compares()} comparación(es)`),
+      check(compares() === 0, 'no pide ninguna comparación en 4 s', `pide ${compares()} comparación(es) en 4 s`),
     ]);
   }
   const shown = await waitUntil(() => isVisible(page.getByTestId(DOCUMENTOS_TESTIDS.DOCUMENT_COMPARE_ONE)));

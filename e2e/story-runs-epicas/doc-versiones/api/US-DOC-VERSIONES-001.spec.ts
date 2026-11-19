@@ -1,6 +1,7 @@
+import { field } from '../../../story-runs/support/api';
 import { TENANT_A, resetTenants, type Credentials } from '../../../story-runs/support/prepare';
 import { defineApiRows, type ApiRowHandler, type Outcome } from '../../core/framework';
-import { cell, check, preparationFailed, strict } from '../../support/checks';
+import { cell, check, preparationFailed, strict, type Check } from '../../support/checks';
 import {
   DOCUMENTOS,
   LINEA,
@@ -24,6 +25,46 @@ import {
 // US-DOC-VERSIONES-001 — Publicar una versión nueva por la API: queda la última, con su nota y su autor. Preparación de cada fila:
 // reinicio de alumno01, inicio de sesión de la cuenta de la fila en alumno01 y lectura de la versión de partida. Tras publicar se
 // vuelve a leer la ficha con la misma cuenta. Además, cada publicación exitosa debe quedar en la auditoría (regla de la historia).
+
+/**
+ * La respuesta de la publicación es la ficha completa (regla de la historia): identificador, programa, título, clasificación, versión
+ * nueva, `updatedAt` igual al momento de la versión nueva y una entrada por versión; el momento de la versión es el de la publicación.
+ */
+const fichaChecks = (body: unknown, doc: string, next: number, startedAt: number): Check[] => {
+  const text = (key: string): string | undefined => {
+    const value = field(body, key);
+    return typeof value === 'string' && value !== '' ? value : undefined;
+  };
+  const raw = field(body, 'versions');
+  const listed: readonly unknown[] = Array.isArray(raw) ? raw : [];
+  const createdAt = field(listed[listed.length - 1], 'createdAt');
+  const updatedAt = field(body, 'updatedAt');
+  const classification = field(body, 'classification');
+  return [
+    check(field(body, 'id') === doc, `la ficha trae id ${doc}`, `la ficha trae id ${String(field(body, 'id'))}`),
+    check(
+      text('programCode') !== undefined && text('programName') !== undefined && text('title') !== undefined,
+      'la ficha trae programCode, programName y title',
+      `la ficha trae programCode ${text('programCode') ?? '(sin leer)'}, programName ${text('programName') ?? '(sin leer)'} y title ${text('title') ?? '(sin leer)'}`,
+    ),
+    check(
+      classification === 'public' || classification === 'restricted',
+      'la ficha trae classification public o restricted',
+      `la ficha trae classification ${String(classification)}`,
+    ),
+    check(listed.length === next, `la ficha trae ${next} entradas en versions (una por versión)`, `la ficha trae ${listed.length} entradas en versions`),
+    check(
+      typeof updatedAt === 'string' && updatedAt === createdAt,
+      'updatedAt es el momento de la versión nueva (el createdAt de su entrada)',
+      `updatedAt ${String(updatedAt)} y createdAt de la versión nueva ${String(createdAt)}`,
+    ),
+    check(
+      typeof createdAt === 'string' && Date.parse(createdAt) >= startedAt - 1_000,
+      'createdAt de la versión nueva es el momento de la publicación',
+      `createdAt de la versión nueva ${String(createdAt)}`,
+    ),
+  ];
+};
 
 /** Una publicación de la fila y lo que la historia espera de ella. */
 interface Publication {
@@ -50,12 +91,14 @@ const publicarYVerificar = async (p: Publication): Promise<Outcome> => {
   const start = await documentOf(TENANT_A, login.token, p.doc);
   const mismatch = versionMismatch(p.doc, p.before, start);
   if (mismatch !== undefined) return preparationFailed(p.expected, mismatch, start.result);
+  const startedAt = Date.now();
   const sent = await publish(TENANT_A, login.token, p.doc, { lines: [LINEA], ...(p.note === undefined ? {} : { note: p.note }) });
   const after = await documentOf(TENANT_A, login.token, p.doc);
   const entry: VersionEntry | undefined = entryNamed(after.versions, p.next);
   const audit = await lastPublishEvent(TENANT_A);
   const checks = [
     ...responseChecks(sent, { status: 201, version: p.next }),
+    ...fichaChecks(sent.body, p.doc, p.next, startedAt),
     check(after.version === p.next, `la última versión de ${p.doc} es la ${p.next}`, `la última versión de ${p.doc} es la ${String(after.version)}`),
     check(entry?.note === p.stored, `con la nota ${shown(p.stored)}`, `con la nota ${entry === undefined ? '(sin leer)' : shown(entry.note)}`),
     ...(p.author === undefined
@@ -123,6 +166,7 @@ const keepsPreviousNotes: ApiRowHandler = async (row) => {
   const start = await documentOf(TENANT_A, login.token, doc);
   const mismatch = versionMismatch(doc, before, start);
   if (mismatch !== undefined) return preparationFailed(expected, mismatch, start.result);
+  const startedAt = Date.now();
   const sent = await publish(TENANT_A, login.token, doc, { lines: [LINEA], note: 'Revisión de alcance' });
   const after = await documentOf(TENANT_A, login.token, doc);
   const previous = (after.versions ?? []).filter((entry) => entry.version < next).sort((a, b) => a.version - b.version);
@@ -130,6 +174,7 @@ const keepsPreviousNotes: ApiRowHandler = async (row) => {
   const audit = await lastPublishEvent(TENANT_A);
   return finish([
     ...responseChecks(sent, { status: 201, version: next }),
+    ...fichaChecks(sent.body, doc, next, startedAt),
     check(
       previous.length === before && kept.length === notes.length && kept.every((note, index) => note === notes[index]),
       `las versiones anteriores de ${doc} conservan las notas ${notes.map((note) => `«${note}»`).join(', ')}`,
