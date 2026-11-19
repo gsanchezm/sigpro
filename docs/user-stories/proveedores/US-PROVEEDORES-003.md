@@ -45,7 +45,7 @@ Característica: Búsqueda de proveedores del tenant y ficha, en la web
       | abre «Proveedor del tenant» sin escribir | ve cinco opciones | «6 proveedores encontrados · 1 más: afina la búsqueda» |
       | escribe a en «Proveedor del tenant» | ve cinco opciones | «6 proveedores encontrados · 1 más: afina la búsqueda» |
       | escribe ca en «Proveedor del tenant» | ve cinco opciones | «5 proveedores encontrados» |
-      | escribe e en «Proveedor del tenant» | ve cuatro opciones | «4 proveedores encontrados» |
+      | escribe e en «Proveedor del tenant» | ve cinco opciones | «5 proveedores encontrados» |
       | escribe Sistemas en «Proveedor del tenant» | ve una opción | «1 proveedor encontrado» |
       | escribe zzzzzz en «Proveedor del tenant» | no ve ninguna lista de opciones | «Sin coincidencias» |
 
