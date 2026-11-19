@@ -1,7 +1,7 @@
 import { usersByEmail, type ApiResult } from '../../../story-runs/support/api';
 import { cell, conclude, preparationFailed, responseCheck, strict, type Check } from '../../support/checks';
 import { defineApiRows, outcome, type ApiRowHandler } from '../../support/framework';
-import { TENANT_02, TENANT_A, noRequestIdCheck, pendingCheck, postRegister, requestAccount, resetTenants, validBody } from './common';
+import { TENANT_02, TENANT_A, accountSnapshot, noNewAccountCheck, noRequestIdCheck, pendingCheck, postRegister, requestAccount, resetTenants, validBody } from './common';
 
 // US-REGISTRO-005 — Responder 409 si el correo ya tiene cuenta en el tenant. Preparación: reinicio de alumno01 (y de alumno02 en
 // el Esquema 2) con sus administradores. Las cuentas del seed se comprueban en el listado de usuarios antes de enviar.
@@ -34,14 +34,16 @@ const existingAccount: ApiRowHandler = async (row) => {
   // «Dado que … existe la cuenta»: se comprueba en el listado del tenant antes de enviar
   const users = await usersByEmail(TENANT_A);
   if (!users.has(account)) return outcome(false, expected, `la preparación no se cumplió: ${account} no está en el listado de alumno01`, { note: 'No se pudo reproducir el estado inicial que da por hecho la historia; la app no hace lo que la preparación describe.' });
+  const before = await accountSnapshot(TENANT_A, sent);
   const result = await postRegister(TENANT_A, validBody(sent));
-  return conclude([responseCheck(result, { status: 409, code: 'email_exists' }), noRequestIdCheck(result)]);
+  const after = await accountSnapshot(TENANT_A, sent);
+  return conclude([responseCheck(result, { status: 409, code: 'email_exists' }), noRequestIdCheck(result), noNewAccountCheck(before, after)]);
 };
 
 // --- Esquema 2: una solicitud anterior cuenta en su tenant y no en otro -----------------------------------------------------
 
 const ANOTHER_TENANT_RESPONSES: ReadonlyMap<string, (result: ApiResult) => readonly Check[]> = new Map<string, (result: ApiResult) => readonly Check[]>([
-  ['409 email_exists', (result) => [responseCheck(result, { status: 409, code: 'email_exists' })]],
+  ['409 email_exists', (result) => [responseCheck(result, { status: 409, code: 'email_exists' }), noRequestIdCheck(result)]],
   ['201 con status pending_approval', (result) => [responseCheck(result, { status: 201 }), pendingCheck(result)]],
 ]);
 

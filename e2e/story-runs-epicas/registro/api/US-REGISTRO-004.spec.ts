@@ -17,8 +17,8 @@ const TERMS: ReadonlyMap<string, boolean | string | undefined> = new Map<string,
 
 const TERMS_RESPONSES: ReadonlyMap<string, (result: ApiResult) => readonly Check[]> = new Map<string, (result: ApiResult) => readonly Check[]>([
   ['201 con status pending_approval', (result) => [responseCheck(result, { status: 201 }), pendingCheck(result)]],
-  ['422 validation_failed con motivo termsReq para terms', (result) => [responseCheck(result, { status: 422, code: 'validation_failed' }), motiveCheck(result, 'terms', 'termsReq')]],
-  ['422 validation_failed con un motivo para terms', (result) => [responseCheck(result, { status: 422, code: 'validation_failed' }), motiveCheck(result, 'terms')]],
+  ['422 validation_failed con motivo termsReq para terms', (result) => [responseCheck(result, { status: 422, code: 'validation_failed' }), motiveCheck(result, 'terms', 'termsReq'), noRequestIdCheck(result)]],
+  ['422 validation_failed con un motivo para terms', (result) => [responseCheck(result, { status: 422, code: 'validation_failed' }), motiveCheck(result, 'terms'), noRequestIdCheck(result)]],
 ]);
 
 const acceptTerms: ApiRowHandler = async (row) => {

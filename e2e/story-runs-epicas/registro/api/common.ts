@@ -1,4 +1,4 @@
-import { call, field, uniqueEmail, type ApiResult } from '../../../story-runs/support/api';
+import { adminToken, call, field, uniqueEmail, type ApiResult } from '../../../story-runs/support/api';
 import { NEW_ACCOUNT_PASSWORD } from '../../../story-runs/support/prepare';
 import { check, type Check } from '../../support/checks';
 
@@ -95,6 +95,31 @@ export const motiveCheck = (result: ApiResult, fieldName: string, expected?: str
   const ok = expected === undefined ? reason !== undefined : reason === expected;
   const wanted = expected === undefined ? `un motivo para ${fieldName}` : `motivo ${expected} para ${fieldName}`;
   return check(ok, wanted, reason === undefined ? `sin motivo para ${fieldName}` : `motivo ${reason} para ${fieldName}`);
+};
+
+/** Cuentas del tenant (`GET /api/admin/users`): cuántas hay, sus ids y cuántas tienen ese correo (sin mayúsculas ni espacios). */
+export interface AccountSnapshot {
+  readonly total: number;
+  readonly ids: readonly string[];
+  readonly sameEmail: number;
+}
+
+export const accountSnapshot = async (tenant: string, email: string): Promise<AccountSnapshot> => {
+  const result = await call('GET', '/admin/users', { tenant, token: await adminToken(tenant) });
+  if (result.status !== 200 || !Array.isArray(result.body)) throw new Error(`GET /admin/users de ${tenant}: ${result.status}`);
+  const users = result.body as ReadonlyArray<Record<string, unknown>>;
+  const wanted = email.trim().toLowerCase();
+  return {
+    total: users.length,
+    ids: users.map((user) => String(user.id)).sort(),
+    sameEmail: users.filter((user) => String(user.email).trim().toLowerCase() === wanted).length,
+  };
+};
+
+/** No se ha creado ninguna cuenta nueva entre las dos lecturas, y el correo tiene UNA sola cuenta. */
+export const noNewAccountCheck = (before: AccountSnapshot, after: AccountSnapshot): Check => {
+  const same = before.total === after.total && before.ids.join(',') === after.ids.join(',');
+  return check(same && after.sameEmail === 1, 'no se crea ninguna cuenta nueva y el correo sigue con una sola cuenta', `cuentas ${before.total} → ${after.total}; con ese correo: ${after.sameEmail}`);
 };
 
 /** 202 de `POST /api/auth/resend` con cuerpo vacío `{}`. */

@@ -9,7 +9,7 @@ import { TENANT_A, motiveCheck, newAccountEmail, noRequestIdCheck, pendingCheck,
 // --- Esquema 1: la longitud mínima son diez caracteres ------------------------------------------------------------------------
 
 const LENGTH_RESPONSES: ReadonlyMap<string, (result: ApiResult) => readonly Check[]> = new Map<string, (result: ApiResult) => readonly Check[]>([
-  ['422 validation_failed con motivo pwShort para password', (result) => [responseCheck(result, { status: 422, code: 'validation_failed' }), motiveCheck(result, 'password', 'pwShort')]],
+  ['422 validation_failed con motivo pwShort para password', (result) => [responseCheck(result, { status: 422, code: 'validation_failed' }), motiveCheck(result, 'password', 'pwShort'), noRequestIdCheck(result)]],
   ['201 con status pending_approval', (result) => [responseCheck(result, { status: 201 }), pendingCheck(result)]],
 ]);
 
@@ -47,7 +47,7 @@ const CONFIRMATIONS: ReadonlyMap<string, string> = new Map([
 
 const CONFIRM_RESPONSES: ReadonlyMap<string, (result: ApiResult) => readonly Check[]> = new Map<string, (result: ApiResult) => readonly Check[]>([
   ['201 con status pending_approval', (result) => [responseCheck(result, { status: 201 }), pendingCheck(result)]],
-  ['422 validation_failed con motivo pwMismatch para confirm', (result) => [responseCheck(result, { status: 422, code: 'validation_failed' }), motiveCheck(result, 'confirm', 'pwMismatch')]],
+  ['422 validation_failed con motivo pwMismatch para confirm', (result) => [responseCheck(result, { status: 422, code: 'validation_failed' }), motiveCheck(result, 'confirm', 'pwMismatch'), noRequestIdCheck(result)]],
 ]);
 
 const confirmation: ApiRowHandler = async (row) => {

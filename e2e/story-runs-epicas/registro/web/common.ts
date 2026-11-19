@@ -1,4 +1,4 @@
-import type { Locator, Page } from '@playwright/test';
+import type { Locator, Page, Request } from '@playwright/test';
 import { DEMO, TENANT_A } from '../../../story-runs/support/prepare';
 import { ACCESO_DYNAMIC_TESTIDS, ACCESO_TESTIDS } from '../../../../packages/shared/src/testids';
 import { ACTION, CEILING_MS, isVisible, linesOf, pathOf, runSteps, safe, textOf, type Step } from '../../support/browser';
@@ -137,22 +137,46 @@ export const onPrograms = async (page: Page): Promise<boolean> => pathOf(page) =
 
 // --- Solicitudes que sale del navegador --------------------------------------------------------------------------------------
 
-const isRegisterRequest = (url: string): boolean => {
+const pathEndsWith = (url: string, suffix: string): boolean => {
   try {
-    return new URL(url).pathname.endsWith('/auth/register');
+    return new URL(url).pathname.endsWith(suffix);
   } catch {
     return false;
   }
 };
 
-/** Cuenta las solicitudes POST de la página a `/auth/register`. Hay que llamarla ANTES de la acción observada. */
-export const watchSubmissions = (page: Page): (() => number) => {
-  let total = 0;
-  page.on('request', (request) => {
-    if (request.method() === 'POST' && isRegisterRequest(request.url())) total += 1;
-  });
-  return () => total;
+/** Cuerpo JSON de una petición POST, si lo tiene (`undefined` si no es JSON). */
+const bodyOf = (request: Request): unknown => {
+  try {
+    return request.postDataJSON() as unknown;
+  } catch {
+    return undefined;
+  }
 };
+
+/** Lo que sale del navegador en cada POST observado: la cabecera `x-tenant` y el cuerpo JSON. */
+export interface PostReading {
+  readonly tenant: string | undefined;
+  readonly body: unknown;
+}
+
+export interface PostWatch {
+  readonly count: () => number;
+  readonly posts: () => readonly PostReading[];
+}
+
+/** Observa los POST de la página cuyo camino termina en `suffix`. Hay que llamarla ANTES de la acción observada. */
+export const watchPosts = (page: Page, suffix: string): PostWatch => {
+  const posts: PostReading[] = [];
+  page.on('request', (request) => {
+    if (request.method() !== 'POST' || !pathEndsWith(request.url(), suffix)) return;
+    posts.push({ tenant: request.headers()['x-tenant'], body: bodyOf(request) });
+  });
+  return { count: () => posts.length, posts: () => [...posts] };
+};
+
+/** Cuenta las solicitudes POST de la página a `/auth/register`. Hay que llamarla ANTES de la acción observada. */
+export const watchSubmissions = (page: Page): (() => number) => watchPosts(page, '/auth/register').count;
 
 /** Retrasa la respuesta de `POST /api/auth/register` en el navegador (la prueba fija el retardo; la historia lo da como dato). */
 export const delayRegister = async (page: Page, ms: number): Promise<void> => {
@@ -217,6 +241,17 @@ export const strengthWordsIn = async (meter: Locator): Promise<readonly string[]
     if ((await safe(() => meter.getByText(word, { exact: true }).count(), 0)) > 0) present.push(word);
   }
   return present;
+};
+
+/** Palabras de fuerza VISIBLES en el medidor: cada una presente una sola vez y a la vista (la regla dice que el texto «se ve en la pantalla»). */
+export const visibleStrengthWords = async (meter: Locator): Promise<readonly string[]> => {
+  const visible: string[] = [];
+  for (const word of STRENGTHS.keys()) {
+    const target = meter.getByText(word, { exact: true });
+    const found = await safe(() => target.count(), 0);
+    if (found === 1 && (await isVisible(target))) visible.push(word);
+  }
+  return visible;
 };
 
 /** Color calculado de cada barra del medidor (las cuatro barras son el primer bloque oculto del medidor). */

@@ -19,6 +19,7 @@ import {
   sentPanel,
   submit,
   validValues,
+  watchPosts,
 } from './common';
 
 // US-REGISTRO-012 — Reenviar el correo de verificación desde «Solicitud enviada» (web). Preparación de cada fila: reinicio de
@@ -44,6 +45,7 @@ const resendEach: BrowserRowHandler = async (row, { page }) => {
   if (sent) return actionMissing(expected, sent);
   const panel = await waitUntil(() => isVisible(sentPanel(page)), CEILING_MS);
   if (!panel.reached) return preparationFailedWeb(expected, `no llega «${SENT_TITLE}» tras enviar la solicitud`);
+  const resends = watchPosts(page, '/auth/resend');
   const checks: Check[] = [];
   for (let press = 1; press <= times; press += 1) {
     const pressed = await runSteps([['pulsar «Reenviar correo de verificación»', () => resendButton(page).click(ACTION)]]);
@@ -56,6 +58,11 @@ const resendEach: BrowserRowHandler = async (row, { page }) => {
   checks.push(
     check(reading.visible && reading.text.includes(`${SENT_TEXT} ${email}`), `sigue viendo «${SENT_TITLE}» con el mismo correo`, reading.visible ? `sigue viendo «${SENT_TITLE}» con el correo ${reading.text.includes(email) ? 'de la solicitud' : 'otro'}` : `no sigue viendo «${SENT_TITLE}»`),
   );
+  // Cada pulsación es un POST a /auth/resend con el correo de la solicitud; ninguna inicia sesión
+  const posts = resends.posts();
+  const sentToEmail = posts.every((post) => typeof post.body === 'object' && post.body !== null && (post.body as Record<string, unknown>).email === email);
+  checks.push(check(posts.length === times && sentToEmail, `se envía POST /api/auth/resend ${times} vez(ces) con el correo de la solicitud`, `POST /api/auth/resend: ${posts.length}; con el correo de la solicitud: ${sentToEmail ? 'sí' : 'no'}`));
+  checks.push(await noSessionCheck(page, onLoginForm, onPrograms));
   return conclude(checks);
 };
 

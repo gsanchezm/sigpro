@@ -5,6 +5,7 @@ import { ACCESO_TESTIDS } from '../../../../packages/shared/src/testids';
 import { ACTION, CEILING_MS, attrOf, isDisabled, isVisible, linesOf, noSessionCheck, pathOf, runSteps, textOf, valueOf, waitUntil } from '../../support/browser';
 import { check, cell, conclude, preparationFailedWeb, strict, type Check } from '../../support/checks';
 import { defineBrowserRows, type BrowserRowHandler } from '../../support/framework';
+import { accountSnapshot, noNewAccountCheck } from '../api/common';
 import {
   DUPLICATE_MESSAGE,
   EMAIL_NOTE,
@@ -22,12 +23,13 @@ import {
   onPrograms,
   openRegister,
   readSent,
-  sentLine,
   requestIdLine,
+  sentLine,
   sentPanel,
   submit,
   submitButton,
   validValues,
+  watchPosts,
   type FormValues,
 } from './common';
 
@@ -72,7 +74,7 @@ const duplicate: BrowserRowHandler = async (row, { page }) => {
   await resetTenants([TENANT_A]);
   const typed = strict('correo', ACCOUNT_EMAILS, cell(row, 'correo'));
   const account = typed.trim().toLowerCase();
-  const expected = `ve encima de los campos «${DUPLICATE_MESSAGE}»; sigue en /register sin sesión, con los datos escritos`;
+  const expected = `ve encima de los campos «${DUPLICATE_MESSAGE}»; sigue en /register sin sesión, con los datos escritos; no se crea ninguna cuenta nueva`;
   // La cuenta es una del seed: se comprueba en el listado del tenant antes de enviar
   const users = await usersByEmail(TENANT_A);
   if (!users.has(account)) return preparationFailedWeb(expected, `${account} no está en el listado de alumno01`);
@@ -81,11 +83,13 @@ const duplicate: BrowserRowHandler = async (row, { page }) => {
   const values = validValues(typed);
   const filled = await fillForm(page, values);
   if (filled) return actionMissing(expected, filled);
+  const before = await accountSnapshot(TENANT_A, typed);
   const sent = await submit(page);
   if (sent) return actionMissing(expected, sent);
   const alert = page.getByRole('alert').first();
   const reached = await waitUntil(async () => linesOf(await textOf(alert))[0] === DUPLICATE_MESSAGE, CEILING_MS);
   const shown = linesOf(await textOf(alert))[0];
+  const after = await accountSnapshot(TENANT_A, typed);
   const kept = await keptValues(page, values, typed);
   const alertBox = await alert.boundingBox({ timeout: 500 }).catch(() => null);
   const nameBox = await field(page, 'Nombre').boundingBox({ timeout: 500 }).catch(() => null);
@@ -94,6 +98,7 @@ const duplicate: BrowserRowHandler = async (row, { page }) => {
     check(reached.reached, `ve encima de los campos «${DUPLICATE_MESSAGE}»`, shown === undefined ? 'no ve ningún aviso de error del servidor' : `ve «${shown}»`),
     check(above, 'el aviso va encima de los campos', above ? 'el aviso va encima de los campos' : 'el aviso no va encima de «Nombre»'),
     check(pathOf(page) === '/register' && kept, 'sigue en /register con los datos escritos', `ruta ${pathOf(page)}; datos ${kept ? 'conservados' : 'perdidos'}`),
+    noNewAccountCheck(before, after),
   ];
   checks.push(await noSessionCheck(page, onLoginForm, onPrograms));
   return conclude(checks, typed !== typed.trim() ? { note: EMAIL_NOTE } : {});
@@ -105,23 +110,26 @@ const accepted: BrowserRowHandler = async (row, { page }) => {
   await resetTenants([TENANT_A]);
   const role = strict('rol', ROLES, cell(row, 'rol'));
   const email = newAccountEmail();
-  const expected = `ve «${SENT_TITLE}», «${SENT_TEXT}» ${email}, «Pendiente de aprobación», el rol ${role} y un REQ-AAAA-NNNN; sigue en /register sin sesión; aviso «${SENT_TITLE}»`;
+  const expected = `ve «${SENT_TITLE}», «${SENT_TEXT}» ${email}, «Pendiente de aprobación», el rol ${role} y un REQ-AAAA-NNNN; sigue en /register sin sesión; aviso «${SENT_TITLE}»; la solicitud se envía una vez a alumno01`;
   const opened = await openRegister(page);
   if (opened) return preparationFailedWeb(expected, opened);
   const filled = await fillForm(page, validValues(email, role));
   if (filled) return actionMissing(expected, filled);
+  const posts = watchPosts(page, '/auth/register');
   const sent = await submit(page);
   if (sent) return actionMissing(expected, sent);
   const panel = await waitUntil(() => isVisible(sentPanel(page)), CEILING_MS);
   const reading = await readSent(page);
   const toast = await waitUntil(async () => (await okToastTitles(page)).includes(SENT_TITLE), CEILING_MS);
   const requestId = requestIdLine(reading.lines);
+  const registerPosts = posts.posts();
   const checks: Check[] = [
     check(panel.reached, `ve el título «${SENT_TITLE}»`, panel.reached ? `ve el título «${SENT_TITLE}»` : `no aparece la vista «${SENT_TITLE}»`),
     check(reading.text.includes(`${SENT_TEXT} ${email}`), `ve «${SENT_TEXT}» seguido de ${email}`, sentLine(reading.lines) ?? 'no ve el texto de verificación'),
     check(reading.lines.includes('Pendiente de aprobación'), 've el estado «Pendiente de aprobación»', reading.lines.includes('Pendiente de aprobación') ? 've el estado «Pendiente de aprobación»' : 'no ve el estado'),
     check(reading.lines.includes(role), `ve el rol ${role}`, reading.lines.includes(role) ? `ve el rol ${role}` : 'no ve el rol'),
     check(requestId !== undefined && currentYears().includes(requestId.slice(4, 8)), 've un identificador REQ-AAAA-NNNN del año en curso', requestId === undefined ? 'no ve identificador de solicitud' : `identificador ${requestId}`),
+    check(registerPosts.length === 1 && registerPosts[0]?.tenant === TENANT_A, 'la solicitud se envía una vez, con x-tenant alumno01', `solicitudes enviadas: ${registerPosts.length}; x-tenant ${registerPosts[0]?.tenant ?? '(sin cabecera)'}`),
     check(pathOf(page) === '/register', 'sigue en /register', `ruta ${pathOf(page)}`),
     check(toast.reached, `aparece un aviso emergente con el título «${SENT_TITLE}»`, toast.reached ? `aviso «${SENT_TITLE}» visible` : 'no aparece el aviso emergente'),
   ];
@@ -135,23 +143,28 @@ const busyWhileWaiting: BrowserRowHandler = async (row, { page }) => {
   await resetTenants([TENANT_A]);
   const delay = strict('espera', DELAYS, cell(row, 'espera'));
   const email = newAccountEmail();
-  const expected = `durante la espera «Enviar solicitud» deshabilitado con la explicación «${PROCESSING}»; al llegar la respuesta ve «${SENT_TITLE}»`;
+  const expected = `durante la espera «Enviar solicitud» deshabilitado con la explicación «${PROCESSING}»; al llegar la respuesta ve «${SENT_TITLE}»; no se puede volver a enviar (una sola solicitud)`;
   const opened = await openRegister(page);
   if (opened) return preparationFailedWeb(expected, opened);
   const filled = await fillForm(page, validValues(email));
   if (filled) return actionMissing(expected, filled);
   // La prueba retrasa la respuesta de la API en el navegador: la pantalla debe quedar ocupada durante ese retardo
   await delayRegister(page, delay);
+  const posts = watchPosts(page, '/auth/register');
   const pressed = await runSteps([['pulsar «Enviar solicitud»', () => submitButton(page).click(ACTION)]]);
   if (pressed) return actionMissing(expected, pressed);
   const busy = await waitUntil(() => isDisabled(submitButton(page)), CEILING_MS);
   const explanation = await attrOf(submitButton(page), 'title');
   const formBusy = await attrOf(page.getByTestId(ACCESO_TESTIDS.REGISTER_FORM), 'aria-busy');
+  // Un segundo clic mientras espera: el botón está deshabilitado, así que no debe salir ninguna solicitud más
+  await submitButton(page).click({ force: true, timeout: 500 }).catch(() => undefined);
   const arrived = await waitUntil(() => isVisible(sentPanel(page)), CEILING_MS);
+  const sentCount = posts.count();
   return conclude([
     check(busy.reached && explanation === PROCESSING, `durante la espera «Enviar solicitud» deshabilitado con la explicación «${PROCESSING}»`, busy.reached ? `deshabilitado con la explicación «${explanation ?? '(ninguna)'}»` : 'no queda deshabilitado durante la espera'),
     check(formBusy === 'true', 'durante la espera el formulario está ocupado', `formulario aria-busy=${formBusy ?? '(sin atributo)'}`),
     check(arrived.reached, `al llegar la respuesta ve el título «${SENT_TITLE}»`, arrived.reached ? `ve «${SENT_TITLE}»` : `no llega «${SENT_TITLE}»`),
+    check(sentCount === 1, 'no se puede volver a enviar: una sola solicitud', `solicitudes enviadas: ${sentCount}`),
   ]);
 };
 

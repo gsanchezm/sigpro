@@ -1,6 +1,7 @@
 import type { Page } from '@playwright/test';
 import { TENANT_A, resetTenants } from '../../../story-runs/support/prepare';
-import { ACTION, CEILING_MS, attrOf, isEnabled, isFocused, isVisible, noSessionCheck, pathOf, quoted, runSteps, textOf, valueOf, waitUntil } from '../../support/browser';
+import { ACCESO_TESTIDS } from '../../../../packages/shared/src/testids';
+import { ACTION, CEILING_MS, attrOf, isEnabled, isFocused, isVisible, noSessionCheck, pathOf, quoted, runSteps, safe, textOf, valueOf, waitUntil } from '../../support/browser';
 import { check, cell, conclude, preparationFailedWeb, strict, type Check } from '../../support/checks';
 import { defineBrowserRows, outcome, type BrowserRowHandler } from '../../support/framework';
 import {
@@ -27,6 +28,9 @@ import {
 // crea la sesión de gestor@sigpro.test en la propia pantalla de acceso, antes de abrir /register.
 
 const HELP = 'Debe pertenecer a un dominio autorizado.';
+const ROLE_HELP = 'El rol admin solo se asigna manualmente.';
+/** Orden de los campos de la historia (`id` de cada control del formulario; la casilla no tiene id y se omite). */
+const FORM_ORDER = ['register-first-name', 'register-last-name', 'register-email', 'register-org', 'register-role', 'register-password', 'register-password-confirm'];
 
 // --- Esquema 1: estado inicial de cada elemento del formulario ----------------------------------------------------------------
 
@@ -36,7 +40,14 @@ const INITIAL: ReadonlyMap<string, (page: Page) => Promise<readonly Check[]>> = 
     async (page) => {
       const title = await isVisible(titleOf(page));
       const hint = await isVisible(page.getByText(HINT, { exact: true }));
-      return [check(title && hint, `título «${TITLE}» con el texto «${HINT}»`, `título ${title ? 'visible' : 'ausente'} y texto ${hint ? 'visible' : 'ausente'}`)];
+      const roleHelp = await isVisible(page.getByText(ROLE_HELP, { exact: true }));
+      const order = await safe(() => page.getByTestId(ACCESO_TESTIDS.REGISTER_FORM).evaluate((form) => Array.from(form.querySelectorAll('input, select')).map((element) => element.id).filter((id) => id !== '')), []);
+      const inOrder = order.join(',') === FORM_ORDER.join(',');
+      return [
+        check(title && hint, `título «${TITLE}» con el texto «${HINT}»`, `título ${title ? 'visible' : 'ausente'} y texto ${hint ? 'visible' : 'ausente'}`),
+        check(roleHelp, `bajo «Rol solicitado» la ayuda «${ROLE_HELP}»`, roleHelp ? `ayuda «${ROLE_HELP}» visible` : 'sin la ayuda del rol'),
+        check(inOrder, 'los campos van en el orden de la historia', `orden de los campos: ${order.join(', ')}`),
+      ];
     },
   ],
   [
@@ -53,7 +64,11 @@ const INITIAL: ReadonlyMap<string, (page: Page) => Promise<readonly Check[]>> = 
     async (page) => {
       const empty = (await valueOf(field(page, 'Correo corporativo'))) === '';
       const help = await isVisible(page.getByText(HELP, { exact: true }));
-      return [check(empty && help, `está vacío y muestra la ayuda «${HELP}»`, `${empty ? 'vacío' : 'con texto'} y ayuda ${help ? 'visible' : 'ausente'}`)];
+      // La ayuda debe ir ligada al campo (`aria-describedby` apunta al elemento con ese texto)
+      const describedBy = (await attrOf(field(page, 'Correo corporativo'), 'aria-describedby')) ?? '';
+      const linkedText = describedBy.split(' ').includes('register-email-help') ? await textOf(page.locator('[id="register-email-help"]')) : undefined;
+      const linked = linkedText === HELP;
+      return [check(empty && help && linked, `está vacío y muestra la ayuda «${HELP}» ligada al campo`, `${empty ? 'vacío' : 'con texto'} y ayuda ${help ? 'visible' : 'ausente'}${linked ? ' ligada al campo' : ' sin ligar al campo'}`)];
     },
   ],
   [

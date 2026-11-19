@@ -1,4 +1,4 @@
-import type { Page } from '@playwright/test';
+import type { Locator, Page } from '@playwright/test';
 import { TENANT_A, resetTenants } from '../../../story-runs/support/prepare';
 import { ACTION, CEILING_MS, attrOf, isEnabled, isVisible, linesOf, pathOf, runSteps, safe, textOf, valueOf, waitUntil, quoted } from '../../support/browser';
 import { check, cell, conclude, preparationFailedWeb, strict, type Check } from '../../support/checks';
@@ -7,6 +7,7 @@ import {
   HINT,
   TERMS_SENTENCE,
   actionMissing,
+  afterObserving,
   barColors,
   expectedRuleStates,
   expectedStrength,
@@ -17,8 +18,9 @@ import {
   ruleChecks,
   ruleStates,
   rulesNamed,
-  strengthWordsIn,
   toggleButton,
+  visibleStrengthWords,
+  watchSubmissions,
 } from '../web/common';
 import { BACK_APPROXIMATION, DIRECT_APPROXIMATION, buttonNamed, onExpoWeb, onPrograms, openRegisterFromLogin, registerTitle, roleCombobox, seen, signInAsManager, textbox } from './common';
 
@@ -27,6 +29,18 @@ import { BACK_APPROXIMATION, DIRECT_APPROXIMATION, buttonNamed, onExpoWeb, onPro
 // «Tenant de trabajo» y «Solicitar acceso» (o carga directa de /register cuando la historia lo pide en la sesión).
 
 const HELP = 'Debe pertenecer a un dominio autorizado.';
+const ROLE_HELP = 'El rol admin solo se asigna manualmente.';
+
+/** Campos del formulario en el orden de la historia (de arriba abajo). */
+const FIELD_LOCATORS = (page: Page): readonly Locator[] => [
+  textbox(page, 'Nombre'),
+  textbox(page, 'Apellidos'),
+  textbox(page, 'Correo corporativo'),
+  textbox(page, 'Organización / Unidad'),
+  roleCombobox(page),
+  textbox(page, 'Contraseña'),
+  textbox(page, 'Confirmar contraseña'),
+];
 
 // --- Esquema 1: estado inicial de cada elemento del formulario ----------------------------------------------------------------
 
@@ -36,7 +50,15 @@ const ELEMENTS: ReadonlyMap<string, (page: Page) => Promise<readonly Check[]>> =
     async (page) => {
       const title = await isVisible(registerTitle(page));
       const hint = await isVisible(page.getByText(HINT, { exact: true }));
-      return [check(title && hint, `es el título de la pantalla, con el texto «${HINT}»`, `título ${title ? 'visible' : 'ausente'} y texto ${hint ? 'visible' : 'ausente'}`)];
+      const roleHelp = await isVisible(page.getByText(ROLE_HELP, { exact: true }));
+      // Cada campo debe estar más abajo que el anterior (posición vertical de su caja)
+      const tops = await Promise.all(FIELD_LOCATORS(page).map((locator) => locator.boundingBox({ timeout: 500 }).then((box) => box?.y ?? Number.NaN, () => Number.NaN)));
+      const inOrder = tops.every((top, index) => Number.isFinite(top) && (index === 0 || top > (tops[index - 1] ?? Number.NEGATIVE_INFINITY)));
+      return [
+        check(title && hint, `es el título de la pantalla, con el texto «${HINT}»`, `título ${title ? 'visible' : 'ausente'} y texto ${hint ? 'visible' : 'ausente'}`),
+        check(roleHelp, `bajo «Rol solicitado» la ayuda «${ROLE_HELP}»`, roleHelp ? `ayuda «${ROLE_HELP}» visible` : 'sin la ayuda del rol'),
+        check(inOrder, 'los campos van en el orden de la historia (de arriba abajo)', `posiciones verticales: ${tops.map((top) => Math.round(top)).join(', ')}`),
+      ];
     },
   ],
   [
@@ -57,8 +79,9 @@ const ELEMENTS: ReadonlyMap<string, (page: Page) => Promise<readonly Check[]>> =
   [
     '«Rol solicitado»',
     async (page) => {
-      const value = linesOf(await textOf(roleCombobox(page)))[0];
-      return [check(value === 'consultant', 'tiene seleccionado consultant', `tiene seleccionado ${value ?? '(ninguno)'}`)];
+      // La caja del selector trae el valor y el indicador «▾»: se compara solo el valor
+      const value = (linesOf(await textOf(roleCombobox(page)))[0] ?? '').replace('▾', '').trim();
+      return [check(value === 'consultant', 'tiene seleccionado consultant', `tiene seleccionado ${value || '(ninguno)'}`)];
     },
   ],
   [
@@ -111,13 +134,16 @@ const PRESSED: ReadonlyMap<string, boolean> = new Map([
   ['marcado como pulsado', true],
 ]);
 
+/** Tipo de cada campo de contraseña (`password` oculta, `text` en claro). */
+const typesOf = async (password: Locator, confirm: Locator): Promise<readonly (string | undefined)[]> => [await attrOf(password, 'type'), await attrOf(confirm, 'type')];
+
 const toggling: BrowserRowHandler = async (row, { page }) => {
   await resetTenants([TENANT_A]);
   const clicks = strict('veces', CLICKS, cell(row, 'veces'));
   const shown = strict('visibilidad', VISIBILITY, cell(row, 'visibilidad'));
   const pressed = strict('pulsado', PRESSED, cell(row, 'pulsado'));
   const label = quoted(cell(row, 'texto'));
-  const expected = `${cell(row, 'visibilidad')}; el control muestra «${label}» y ${cell(row, 'pulsado')}; los dos campos siguen con Abcdefghij1!`;
+  const expected = `${cell(row, 'visibilidad')}; el control muestra «${label}» y ${cell(row, 'pulsado')}; los dos campos siguen con Abcdefghij1!; no envía el formulario`;
   const opened = await openRegisterFromLogin(page);
   if (opened) return preparationFailedWeb(expected, opened);
   const typed = await runSteps([
@@ -125,26 +151,35 @@ const toggling: BrowserRowHandler = async (row, { page }) => {
     ['escribir «Confirmar contraseña»', () => textbox(page, 'Confirmar contraseña').fill('Abcdefghij1!', ACTION)],
   ]);
   if (typed) return preparationFailedWeb(expected, typed);
+  const watch = watchSubmissions(page);
   for (let index = 0; index < clicks; index += 1) {
     const failure = await runSteps([['pulsar el control de la contraseña', () => toggleButton(page).click(ACTION)]]);
     if (failure) return actionMissing(expected, failure);
   }
   const password = textbox(page, 'Contraseña');
   const confirm = textbox(page, 'Confirmar contraseña');
-  const types = [await attrOf(password, 'type'), await attrOf(confirm, 'type')];
+  // Los dos tipos se leen cuando ya son los de la fila: el cambio de `secureTextEntry` puede tardar un render
+  const expectedType = shown ? 'text' : 'password';
+  const settled = await waitUntil(async () => (await typesOf(password, confirm)).every((type) => type === expectedType), CEILING_MS);
+  const types = await typesOf(password, confirm);
   const clear = types.every((type) => type === 'text');
   const hidden = types.every((type) => type === 'password');
+  const sent = await afterObserving(watch);
   const control = toggleButton(page);
   const text = linesOf(await textOf(control))[0];
   const name = await attrOf(control, 'aria-label');
   const isPressed = (await attrOf(control, 'aria-pressed')) === 'true';
   const values = [await valueOf(password), await valueOf(confirm)];
-  return conclude([
-    check(shown ? clear : hidden, `«Contraseña» y «Confirmar contraseña» se ven ${cell(row, 'visibilidad')}`, `se ven ${clear ? 'en claro' : hidden ? 'ocultas' : 'con tipos mixtos'}`),
-    check(text === label && name === label, `el control muestra «${label}»`, `el control muestra «${text ?? '(sin texto)'}» (nombre «${name ?? '(sin nombre)'}»)`),
-    check(isPressed === pressed, cell(row, 'pulsado'), isPressed ? 'marcado como pulsado' : 'sin marcar como pulsado'),
-    check(values[0] === 'Abcdefghij1!' && values[1] === 'Abcdefghij1!', 'los dos campos siguen conteniendo Abcdefghij1!', `contienen ${String(values[0])} y ${String(values[1])}`),
-  ]);
+  return conclude(
+    [
+      check(settled.reached && (shown ? clear : hidden), `«Contraseña» y «Confirmar contraseña» se ven ${cell(row, 'visibilidad')}`, `se ven ${clear ? 'en claro' : hidden ? 'ocultas' : 'con tipos mixtos'} (tipos ${types.map(String).join(' y ')})`),
+      check(text === label && name === label, `el control muestra «${label}»`, `el control muestra «${text ?? '(sin texto)'}» (nombre «${name ?? '(sin nombre)'}»)`),
+      check(isPressed === pressed, cell(row, 'pulsado'), isPressed ? 'marcado como pulsado' : 'sin marcar como pulsado'),
+      check(values[0] === 'Abcdefghij1!' && values[1] === 'Abcdefghij1!', 'los dos campos siguen conteniendo Abcdefghij1!', `contienen ${String(values[0])} y ${String(values[1])}`),
+      check(sent === 0, 'el control no envía el formulario', `solicitudes enviadas: ${sent}`),
+    ],
+    { evidence: { tiposObservados: types.map(String) } },
+  );
 };
 
 // --- Esquema 3: el medidor cuenta las reglas cumplidas y muestra la fuerza ---------------------------------------------------
@@ -171,13 +206,14 @@ const meter: BrowserRowHandler = async (row, { page }) => {
   const typed = await runSteps([['escribir «Contraseña»', () => textbox(page, 'Contraseña').fill(password, ACTION)]]);
   if (typed) return actionMissing(expected, typed);
   const states = await ruleStates(gauge);
-  const words = await strengthWordsIn(gauge);
+  // El texto de la fuerza se ve en la pantalla en móvil: se cuenta solo lo visible
+  const words = await visibleStrengthWords(gauge);
   const colors = await barColors(gauge);
   const filled = filledBars(baseline, colors);
   const strengthOk = strength === undefined ? words.length === 0 : words.length === 1 && words[0] === strength;
   return conclude([
     ...ruleChecks(states, expectedRuleStates(named)),
-    check(strengthOk, strength === undefined ? 'sin texto de fuerza' : `la fuerza es «${strength}»`, `texto de fuerza: ${words.length === 0 ? 'ninguno' : words.join(', ')}`),
+    check(strengthOk, strength === undefined ? 'sin texto de fuerza' : `la fuerza es «${strength}» y se ve en la pantalla`, `texto de fuerza visible: ${words.length === 0 ? 'ninguno' : words.join(', ')}`),
     check(colors.length === 4 && filled === bars, `el medidor rellena ${bars} de sus cuatro barras`, `rellena ${filled} de ${colors.length} barras`),
   ]);
 };
@@ -224,7 +260,8 @@ const withSession: BrowserRowHandler = async (row, { page }) => {
   const opened = await runSteps([['abrir /register', () => page.goto('/register', { timeout: CEILING_MS })]]);
   if (opened) return actionMissing(expected, opened);
   const arrived = await waitUntil(() => onPrograms(page), CEILING_MS);
-  const form = await safe(() => seen(registerTitle(page)), false);
+  // Si la comprobación es ambigua (más de un título), no se da por cumplido «sin ver el formulario»: cuenta como visible
+  const form = await safe(() => seen(registerTitle(page)), true);
   return conclude(
     [
       check(arrived.reached, 'llega a /programs', arrived.reached ? 'llega a /programs' : `no llega a /programs (ruta ${pathOf(page)})`),
