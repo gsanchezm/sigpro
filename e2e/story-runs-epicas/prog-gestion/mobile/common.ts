@@ -4,7 +4,7 @@ import { TENANT_A, DEMO } from '../../../story-runs/support/prepare';
 import { ACTION, CEILING_MS, isVisible, runSteps, safe, textOf, waitUntil, type Step } from '../../support/browser';
 import { check, type Check } from '../../support/checks';
 import type { BrowserRowHandler } from '../../core/framework';
-import { type AccountName, MFA_CODE, codesOf, interact, tokensOf, type WebAction } from '../web/common';
+import { type AccountName, MFA_CODE, TOAST_KEY, armToasts, codesOf, interact, recordToasts, tokensOf, type WebAction } from '../web/common';
 
 // Piezas comunes de las filas de la app móvil de EP-PROG-GESTION, servida como web de Expo (390 × 844). NO es iOS ni Android
 // nativo: la hoja de compartir del sistema se sustituye por un `navigator.share` simulado que registra lo que la app le entrega.
@@ -93,6 +93,22 @@ export const cardCodes = async (page: Page): Promise<readonly string[]> => {
   return names.filter((name) => /^PRG-\d{3}$/.test(name));
 };
 
+/** Texto de un elemento solo si se ve de verdad: ni él ni sus ancestros con `hidden`, `display:none` o `visibility:hidden`. */
+export const visibleTextOf = (target: Locator): Promise<string | undefined> =>
+  safe(
+    () =>
+      target.first().evaluate((element) => {
+        let node: Element | null = element;
+        while (node !== null) {
+          const style = getComputedStyle(node);
+          if (node.hasAttribute('hidden') || style.display === 'none' || style.visibility === 'hidden') return undefined;
+          node = node.parentElement;
+        }
+        return (element as HTMLElement).innerText.trim();
+      }),
+    undefined,
+  );
+
 /** Un botón deshabilitado (propiedad `disabled` o `aria-disabled`). Una lectura fallida no cuenta como deshabilitado. */
 export const isDisabledControl = (target: Locator): Promise<boolean | undefined> =>
   safe(
@@ -104,7 +120,7 @@ export const isDisabledControl = (target: Locator): Promise<boolean | undefined>
 /** Estado de una acción visible en la pantalla móvil: habilitada o deshabilitada con su motivo como texto visible. */
 export const visibleStateCheck = async (target: Locator, reasonTarget: Locator, expected: { readonly enabled: boolean; readonly reason?: string }, label: string): Promise<Check> => {
   const disabled = await isDisabledControl(target);
-  const reason = (await textOf(reasonTarget)) ?? '(sin motivo visible)';
+  const reason = (await visibleTextOf(reasonTarget)) ?? '(sin motivo visible)';
   const observed = disabled === undefined ? '(sin leer)' : disabled ? `deshabilitado${reason === '(sin motivo visible)' ? '' : `, con el texto «${reason}»`}` : 'habilitado';
   const ok = expected.enabled ? disabled === false : disabled === true && (expected.reason === undefined || reason === expected.reason);
   return check(ok, expected.enabled ? `${label} habilitado` : `${label} deshabilitado${expected.reason ? `, con el texto «${expected.reason}»` : ''}`, `${label} ${observed}`);
@@ -127,6 +143,7 @@ const settledOrThrow = async (page: Page): Promise<void> => {
 export const signIn = (page: Page, account: AccountName): Promise<string | undefined> => {
   const credentials = account === 'gestor' ? DEMO.gestor : account === 'consultor' ? DEMO.consultor : account === 'auditor' ? DEMO.auditor : DEMO.admin;
   const steps: Step[] = [
+    ['instalar el registro de avisos', () => page.context().addInitScript(recordToasts, TOAST_KEY)],
     ['fijar el ancho de la ventana', () => page.setViewportSize({ width: 390, height: 844 })],
     ['abrir /login', () => page.goto(LOGIN_PATH, { timeout: CEILING_MS })],
     ['ver el título «Iniciar sesión»', () => heading1(page, 'Iniciar sesión').waitFor({ timeout: CEILING_MS })],
@@ -145,6 +162,7 @@ export const signIn = (page: Page, account: AccountName): Promise<string | undef
   steps.push(
     ['llegar a /programs', () => programsHeading(page).waitFor({ timeout: CEILING_MS })],
     ['ver la lista de programas', () => settledOrThrow(page)],
+    ['armar el registro de avisos', () => armToasts(page)],
   );
   return runSteps(steps);
 };

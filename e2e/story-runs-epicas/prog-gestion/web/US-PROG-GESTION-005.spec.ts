@@ -6,6 +6,9 @@ import { TENANT_A, resetTenants } from '../../../story-runs/support/prepare';
 import {
   accountOf,
   actionFailed,
+  checkedRowCount,
+  detailPanelOpen,
+  stillOnPrograms,
   bulkBar,
   bulkCount,
   chooseStatus,
@@ -60,9 +63,13 @@ const countAndHeader: BrowserRowHandler = async (row, { page }) => {
   await waitUntil(async () => (await normalized(bulkCount(page))) === contador);
   const count = await normalized(bulkCount(page));
   const header = await headerState(page);
+  const panelOpen = await detailPanelOpen(page);
+  const stays = stillOnPrograms(page);
   return conclude([
     check(count === contador, `la barra dice «${contador}»`, `la barra dice «${count ?? '(sin barra)'}»`),
     check(header === cell(row, 'cabecera'), `la cabecera queda ${cell(row, 'cabecera')}`, `la cabecera queda ${header}`),
+    check(!panelOpen, 'marcar no abre el panel lateral', panelOpen ? 'el panel lateral se abre' : 'el panel lateral no se abre'),
+    check(stays, 'marcar no cambia de página (sigue en /programs sin page=)', stays ? 'sigue en /programs sin cambiar de página' : `la ruta es ${page.url()}`),
   ]);
 };
 
@@ -88,7 +95,11 @@ const clearsSelection: BrowserRowHandler = async (row, { page }) => {
   if (blocked !== undefined) return actionFailed(expected, blocked);
   // La barra debe desaparecer: la reacción es local (se espera hasta el techo de la prueba)
   const gone = await waitUntil(async () => (await safe(() => bulkBar(page).isVisible(), false)) === false);
-  return conclude([check(gone.reached, 'la barra de acciones masivas no aparece', gone.reached ? 'la barra de acciones masivas no aparece' : 'la barra de acciones masivas sigue visible')]);
+  const checked = await checkedRowCount(page);
+  return conclude([
+    check(gone.reached, 'la barra de acciones masivas no aparece', gone.reached ? 'la barra de acciones masivas no aparece' : 'la barra de acciones masivas sigue visible'),
+    check(checked === 0, 'la selección se vacía: ninguna casilla queda marcada', `casillas marcadas: ${checked}`),
+  ]);
 };
 
 // --- Esquema 3: todos los roles pueden marcar programas con casillas --------------------------------------------------------------

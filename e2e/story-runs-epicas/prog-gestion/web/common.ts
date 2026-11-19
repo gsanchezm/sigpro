@@ -2,9 +2,10 @@ import type { Download, Locator, Page } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
 import { DEMO, TENANT_A, type Credentials } from '../../../story-runs/support/prepare';
 import { PROGRAMAS_DYNAMIC_TESTIDS, PROGRAMAS_TESTIDS, RESPONSIVE_DYNAMIC_TESTIDS } from '../../../../packages/shared/src/testids';
-import { ACTION, CEILING_MS, attrOf, holdsFor, isVisible, linesOf, runSteps, safe, textOf, waitUntil, type Step } from '../../support/browser';
+import { ACTION, CEILING_MS, attrOf, isVisible, runSteps, safe, textOf, waitUntil, type Step } from '../../support/browser';
 import { check, sleep, type Check } from '../../support/checks';
 import { outcome, type BrowserRowHandler, type Outcome } from '../../core/framework';
+import { rawExport, sessionFor } from '../api/common';
 
 // Piezas comunes de las filas web de EP-PROG-GESTION (escritorio 1440 px; diseño responsive 390 px, por debajo de 1024). Los
 // localizadores son de rol y de nombre; los ids de prueba solo donde la pantalla no ofrece otro rastro (recuento, barra de
@@ -77,6 +78,7 @@ export const signIn = (page: Page, layout: Layout, account: AccountName): Promis
   const credentials = CREDENTIALS_OF[account];
   const steps: Step[] = [
     ['fijar la preferencia de cookies', () => page.context().addInitScript(fixCookiePreference)],
+    ['instalar el registro de avisos', () => page.context().addInitScript(recordToasts, TOAST_KEY)],
     ['fijar el ancho de la ventana', () => page.setViewportSize(viewportOf(layout))],
     ['abrir /login?tenant=alumno01', () => page.goto(LOGIN_URL, { timeout: CEILING_MS })],
     ['escribir el correo', () => page.getByLabel('Correo electrónico', { exact: true }).fill(credentials.email, ACTION)],
@@ -93,6 +95,7 @@ export const signIn = (page: Page, layout: Layout, account: AccountName): Promis
   steps.push(
     ['llegar a /programs', () => page.waitForURL(/\/programs/, { timeout: CEILING_MS })],
     ['ver la lista de programas', () => settledOrThrow(page, layout)],
+    ['armar el registro de avisos', () => armToasts(page)],
   );
   return runSteps(steps);
 };
@@ -216,12 +219,6 @@ export const emptyBlock = (page: Page): Locator => page.getByTestId(PROGRAMAS_TE
 /** Recuento que muestra la lista (página 1 de 10) para `total` programas que cumplen los filtros. */
 export const recountFor = (total: number): string => (total === 0 ? '0–0 de 0' : `1–${Math.min(10, total)} de ${total}`);
 
-/** Tiempo que se observa para afirmar que NO aparece un aviso de éxito (la tolerancia de la prueba, no un plazo del producto). */
-export const QUIET_MS = 2_000;
-
-/** Durante `QUIET_MS` no hay ningún aviso de éxito en pantalla. */
-export const noOkToast = (page: Page): Promise<{ readonly held: boolean }> => holdsFor(async () => (await toastsOf(page, 'ok')).length === 0, QUIET_MS);
-
 /** Estado (texto) de una fila, leído de su contenido: una línea exacta entre los estados del catálogo. */
 const STATE_LABELS: readonly string[] = ['Borrador', 'Activo', 'En pausa', 'Cerrado', 'Cancelado'];
 export const stateOfRow = async (page: Page, layout: Layout, code: string): Promise<string | undefined> => {
@@ -234,20 +231,129 @@ export const rowLines = async (page: Page, layout: Layout, code: string): Promis
 
 // --- Avisos emergentes y descargas -------------------------------------------------------------------------------------------
 
-/** Primera línea (título) de cada aviso del tono, y el resto (cuerpo). */
-export const toastsOf = async (page: Page, tone: 'ok' | 'danger' | 'info' | 'warn'): Promise<readonly (readonly string[])[]> => {
-  const toasts = page.getByTestId(`toast-${tone}`);
-  const count = await safe(() => toasts.count(), 0);
-  const found: string[][] = [];
-  for (let index = 0; index < count; index += 1) found.push([...linesOf(await textOf(toasts.nth(index)))]);
-  return found;
+// --- Avisos emergentes: registro desde antes de la acción ----------------------------------------------------------------------
+
+/** Clave del registro de avisos en la ventana del navegador. */
+export const TOAST_KEY = '__sigproToasts';
+/** Ventana que se observa tras una acción para afirmar que NO aparece un aviso de éxito: mayor que su vida (3 s). */
+export const QUIET_WINDOW_MS = 4_000;
+
+/** Un aviso registrado: tono, título (primera línea), cuerpo (segunda) y marca de tiempo del navegador. */
+export interface ToastEntry {
+  readonly tone: string;
+  readonly title: string;
+  readonly body: string;
+  readonly at: number;
+}
+
+/** Se ejecuta en el navegador antes de cargar la app: registra cada aparición de un aviso, sin la cruz de cierre. No usa variables de fuera. */
+export const recordToasts = (key: string): void => {
+  const registry = window as unknown as Record<string, unknown>;
+  if (Array.isArray(registry[key])) return;
+  const log: { tone: string; title: string; body: string; at: number }[] = [];
+  registry[key] = log;
+  const toneOf = (element: Element): string | undefined => /^toast-(ok|danger|info|warn)$/.exec(element.getAttribute('data-testid') ?? '')?.[1];
+  const record = (element: Element, tone: string): void => {
+    const lines = (element as HTMLElement).innerText.split('\n').map((line) => line.trim()).filter((line) => line !== '' && line !== '×');
+    log.push({ tone, title: lines[0] ?? '', body: lines[1] ?? '', at: Date.now() });
+  };
+  const scan = (node: Node): void => {
+    if (!(node instanceof Element)) return;
+    const own = toneOf(node);
+    if (own !== undefined) record(node, own);
+    node.querySelectorAll('[data-testid^="toast-"]').forEach((element) => {
+      const tone = toneOf(element);
+      if (tone !== undefined) record(element, tone);
+    });
+  };
+  new MutationObserver((mutations) => mutations.forEach((mutation) => mutation.addedNodes.forEach(scan))).observe(document, { childList: true, subtree: true });
 };
 
-/** ¿Hay un aviso del tono con ese título (primera línea) y, si se da, ese cuerpo (segunda línea)? */
-export const toastShown = async (page: Page, tone: 'ok' | 'danger' | 'info' | 'warn', title: string, body?: string): Promise<{ readonly seen: boolean; readonly observed: string }> => {
-  const result = await waitUntil(async () => (await toastsOf(page, tone)).some((lines) => lines[0] === title && (body === undefined || lines[1] === body)));
-  const observed = (await toastsOf(page, tone)).map((lines) => lines.join(' / ')).join(' | ') || '(ninguno)';
-  return { seen: result.reached, observed };
+/** Registro de avisos de la página desde la última «armada». */
+export const toastLog = (page: Page): Promise<readonly ToastEntry[]> =>
+  safe(() => page.evaluate((key: string) => ((window as unknown as Record<string, unknown>)[key] as ToastEntry[] | undefined) ?? [], TOAST_KEY), []);
+
+/** Instante (hora de la página) en que se armó el registro: el de la acción que se prueba. */
+const armedAt = (page: Page): Promise<number> => safe(() => page.evaluate(() => Number((window as unknown as Record<string, unknown>).__sigproArmedAt ?? 0)), 0);
+
+/** Vacía el registro y marca el instante de la acción que se va a probar. Devuelve ese instante. */
+export const armToasts = (page: Page): Promise<number> =>
+  safe(
+    () =>
+      page.evaluate((key: string) => {
+        const registry = window as unknown as Record<string, unknown>;
+        const log = registry[key];
+        if (Array.isArray(log)) log.length = 0;
+        const at = Date.now();
+        registry.__sigproArmedAt = at;
+        return at;
+      }, TOAST_KEY),
+    Date.now(),
+  );
+
+export interface ToastResult {
+  readonly seen: boolean;
+  /** Lo que hay en el registro desde la «armada», en una frase. */
+  readonly observed: string;
+  /** Marca de tiempo de la primera aparición del aviso buscado. */
+  readonly firstAt?: number;
+  /** Milisegundos desde la «armada» hasta esa primera aparición. */
+  readonly delayMs?: number;
+}
+
+/**
+ * Busca en el registro un aviso del tono con ese título y, si se da, ese cuerpo. Consulta el registro, no la pantalla: el aviso dura
+ * 3 s y el registro lo guarda aunque ya no se vea. Espera (con techo) a que aparezca.
+ */
+export const toastShown = async (page: Page, tone: 'ok' | 'danger' | 'info' | 'warn', title: string, body?: string): Promise<ToastResult> => {
+  const matches = (entry: ToastEntry): boolean => entry.tone === tone && entry.title === title && (body === undefined || entry.body === body);
+  const found = await waitUntil(async () => (await toastLog(page)).some(matches));
+  const log = await toastLog(page);
+  const hit = log.find(matches);
+  const armed = await armedAt(page);
+  const observed = log.length === 0 ? '(ninguno)' : log.map((entry) => `${entry.tone} «${entry.title}»${entry.body === '' ? '' : ` / «${entry.body}»`}`).join(' | ');
+  return { seen: found.reached, observed, ...(hit === undefined ? {} : { firstAt: hit.at, delayMs: hit.at - armed }) };
+};
+
+/**
+ * Tras una acción que termina en `endedAt`, espera la ventana de observación (mayor que la vida del aviso) y dice si NO apareció
+ * ningún aviso de éxito desde la última «armada». Consulta el registro, así que un aviso ya cerrado también cuenta.
+ */
+export const noOkToast = async (page: Page, endedAt: number): Promise<{ readonly held: boolean; readonly seen: string }> => {
+  const remaining = endedAt + QUIET_WINDOW_MS - Date.now();
+  if (remaining > 0) await sleep(remaining);
+  const ok = (await toastLog(page)).filter((entry) => entry.tone === 'ok');
+  return { held: ok.length === 0, seen: ok.map((entry) => `«${entry.title}»`).join(', ') };
+};
+
+/** Marca de la primera aparición de un aviso del tono y título dados en el registro (undefined si no aparece). */
+export const firstToastAt = async (page: Page, tone: 'ok' | 'danger' | 'info' | 'warn', title: string): Promise<number | undefined> =>
+  (await toastLog(page)).find((entry) => entry.tone === tone && entry.title === title)?.at;
+
+/** Evidencia de tiempos: clic de la acción, respuesta de la API y primera aparición del aviso (ms desde el clic). Más de 10 s se anota. */
+export const timingOf = (clickAt: number, firstAt: number | undefined, responseAt?: number): { readonly evidence: Readonly<Record<string, unknown>>; readonly note?: string } => {
+  const firstMs = firstAt === undefined ? undefined : firstAt - clickAt;
+  const late = firstMs !== undefined && firstMs > 10_000;
+  return {
+    evidence: { clicMs: clickAt, respuestaApiMs: responseAt === undefined ? undefined : responseAt - clickAt, primeraAparicionAvisoMs: firstMs },
+    ...(late ? { note: `el aviso aparece tarde: ${firstMs} ms desde el clic (más de 10 s)` } : {}),
+  };
+};
+
+/** Instante de la primera respuesta de la API con ese método sobre una ruta que empieza por `prefix`, desde que se llama. */
+export const watchResponse = (page: Page, method: string, prefix: string): (() => number | undefined) => {
+  let at: number | undefined;
+  page.on('response', (response) => {
+    if (at === undefined && response.request().method() === method && new URL(response.url()).pathname.startsWith(prefix)) at = Date.now();
+  });
+  return () => at;
+};
+
+/** Texto de la exportación de la API con esos filtros y la cuenta dada: la misma descarga que hace la web. `undefined` si no hay sesión. */
+export const apiExport = async (account: AccountName, query: string | undefined): Promise<string | undefined> => {
+  const session = await sessionFor(account);
+  if (session.token === undefined) return undefined;
+  return (await rawExport(query, session.token)).text;
 };
 
 /** Descarga que dispara `trigger`: devuelve el nombre sugerido y el texto del archivo. Un fallo lanza (la fila lo recoge). */
@@ -371,3 +477,18 @@ export const normalized = async (target: Locator): Promise<string | undefined> =
 
 /** Elige un estado en «Estado» (el selector del filtro de la lista). */
 export const chooseStatus = (label: string): WebAction => (page) => interact(statusSelect(page), `elegir «${label}» en «Estado»`, (element) => element.selectOption({ label }, ACTION));
+
+// --- Lecturas para las reglas de la lista: selección, panel lateral y página ----------------------------------------------------
+
+/** Casillas de programa marcadas en la página (-1 si no se pudo leer). */
+export const checkedRowCount = (page: Page): Promise<number> =>
+  safe(() => page.getByRole('checkbox', { name: /^Seleccionar PRG-\d{3}$/ }).evaluateAll((elements) => elements.filter((element) => (element as HTMLInputElement).checked).length), -1);
+
+/** ¿Hay un panel lateral de detalle abierto? Su nombre accesible es «Detalle de PRG-…». */
+export const detailPanelOpen = (page: Page): Promise<boolean> => isVisible(page.locator('[aria-label^="Detalle de PRG-"]'));
+
+/** La página sigue en /programs sin cambiar de página (sin «page» en la dirección). */
+export const stillOnPrograms = (page: Page): boolean => {
+  const url = new URL(page.url());
+  return url.pathname === '/programs' && !url.searchParams.has('page');
+};

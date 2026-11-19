@@ -3,7 +3,7 @@ import { defineBrowserRows, type BrowserRowHandler } from '../../core/framework'
 import { cell, check, conclude, preparationFailedWeb, strict, type Check } from '../../support/checks';
 import { isVisible, quoted, waitUntil } from '../../support/browser';
 import { TENANT_A, resetTenants } from '../../../story-runs/support/prepare';
-import { accountOf, actionFailed, noOkToast, recountText, settle, toastShown } from '../web/common';
+import { accountOf, actionFailed, firstToastAt, noOkToast, recountText, timingOf, toastShown, watchResponse } from '../web/common';
 import {
   actionSheet,
   cardCodes,
@@ -103,11 +103,11 @@ const effectOfAction: BrowserRowHandler = async (row, { page }) => {
 // --- Esquema 3: eliminar desde la tarjeta pide confirmación y solo al confirmar borra el programa ------------------------------
 
 /** Resultado de cada celda «resultado», comprobado sobre el aviso, la lista y el recuento. */
-const DELETE_RESULTS: ReadonlyMap<string, (page: Page) => Promise<readonly Check[]>> = new Map<string, (page: Page) => Promise<readonly Check[]>>([
+const DELETE_RESULTS: ReadonlyMap<string, (page: Page, endedAt: number) => Promise<readonly Check[]>> = new Map<string, (page: Page, endedAt: number) => Promise<readonly Check[]>>([
   [
     'no aparece ningún aviso de éxito y PRG-001 sigue en la lista',
-    async (page) => {
-      const quiet = await noOkToast(page);
+    async (page, endedAt) => {
+      const quiet = await noOkToast(page, endedAt);
       const codes = await cardCodes(page);
       return [
         check(quiet.held, 'no aparece ningún aviso de éxito', quiet.held ? 'no aparece ningún aviso de éxito' : 'aparece un aviso de éxito'),
@@ -141,14 +141,17 @@ const deleteFromCard: BrowserRowHandler = async (row, { page }) => {
   if (removing !== undefined) return actionFailed(expected, removing);
   const dialog = await waitUntil(() => isVisible(confirmDialog(page)));
   if (!dialog.reached) return actionFailed(expected, { message: 'no se abrió la hoja «Eliminar programa»', note: 'Eliminar desde la tarjeta no abrió la hoja de confirmación.' });
+  const deletedAt = watchResponse(page, 'DELETE', '/api/programs/');
+  const clickAt = Date.now();
   const answered = await confirmAction(salida)(page);
   if (answered !== undefined) return actionFailed(expected, answered);
+  const endedAt = Date.now();
   await waitUntil(async () => (await recountText(page)) === recuento);
-  await settle();
   const verify = strict('resultado', DELETE_RESULTS, cell(row, 'resultado'));
-  const checks = await verify(page);
+  const checks = await verify(page, endedAt);
   const count = await recountText(page);
-  return conclude([...checks, check(count === recuento, `el recuento dice «${recuento}»`, `el recuento dice «${count ?? '(sin recuento)'}»`)]);
+  const firstAt = await firstToastAt(page, 'ok', 'PRG-001 eliminado');
+  return conclude([...checks, check(count === recuento, `el recuento dice «${recuento}»`, `el recuento dice «${count ?? '(sin recuento)'}»`)], timingOf(clickAt, firstAt, deletedAt()));
 };
 
 defineBrowserRows({

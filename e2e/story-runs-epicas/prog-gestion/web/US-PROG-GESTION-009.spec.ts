@@ -6,27 +6,31 @@ import {
   CSV_NAME,
   accountOf,
   actionFailed,
+  apiExport,
   chooseStatus,
   codesOf,
   codesOfCsv,
   downloadAfter,
   emptyBlock,
-  recountFor,
-  recountText,
   exportButton,
+  firstToastAt,
   inOrder,
   interact,
   onWeb,
   ownerCombobox,
+  recountFor,
+  recountText,
   searchBox,
   signIn,
   stateCheck,
+  timingOf,
   toastShown,
   type WebAction,
 } from './common';
 
 // US-PROG-GESTION-009 — Exportar a CSV la lista de programas desde la cabecera (web, escritorio 1440 px). Preparación de cada fila:
-// reinicio de alumno01 con el token de su administrador, inicio de sesión de la cuenta de la fila y llegada a /programs.
+// reinicio de alumno01 con el token de su administrador, inicio de sesión de la cuenta de la fila y llegada a /programs. La descarga
+// se compara con la exportación de la API con los mismos filtros (cabecera y líneas), y el aviso se lee del registro de avisos.
 
 const DESKTOP = 'escritorio' as const;
 const NO_EXPORT_REASON = 'No hay programas para exportar';
@@ -44,11 +48,11 @@ const pickOwner = (search: string, persona: RegExp): WebAction =>
     (page) => interact(page.getByRole('listbox', { name: 'Responsable', exact: true }).getByRole('option', { name: persona }), 'elegir la persona en «Responsable»', (element) => element.click(ACTION)),
   );
 
-/** Filtros que la fila aplica antes de exportar (texto de la celda → acciones). */
-const FILTROS: ReadonlyMap<string, WebAction> = new Map<string, WebAction>([
-  ['«Estado» en «En pausa»', chooseStatus('En pausa')],
-  ['PRG-001 en el buscador de la lista y 2024-07-01 en «Fin hasta»', inOrder(typeSearch('PRG-001'), endDate('2024-07-01'))],
-  ['ningún filtro', async () => undefined],
+/** Filtros que la fila aplica antes de exportar (texto de la celda → acción) y la consulta equivalente de la API. */
+const FILTROS: ReadonlyMap<string, { readonly act: WebAction; readonly query: string | undefined }> = new Map<string, { readonly act: WebAction; readonly query: string | undefined }>([
+  ['«Estado» en «En pausa»', { act: chooseStatus('En pausa'), query: 'status=on_hold' }],
+  ['PRG-001 en el buscador de la lista y 2024-07-01 en «Fin hasta»', { act: inOrder(typeSearch('PRG-001'), endDate('2024-07-01')), query: 'q=PRG-001&to=2024-07-01' }],
+  ['ningún filtro', { act: async () => undefined, query: undefined }],
 ]);
 
 /** Filtros que dejan la lista sin programas (el botón no se puede usar). */
@@ -63,13 +67,17 @@ const downloadsFiltered: BrowserRowHandler = async (row, { page }) => {
   await resetTenants([TENANT_A]);
   const codes = codesOf(cell(row, 'codigos'));
   const filas = cell(row, 'filas');
-  const expected = `se descarga ${CSV_NAME} con ${codes.join(', ')} y aviso «CSV generado» con «${filas} filas exportadas»`;
-  const prepared = await signIn(page, DESKTOP, accountOf(cell(row, 'cuenta')));
+  const expected = `se descarga ${CSV_NAME} con la cabecera y las líneas de la API con esos filtros (${codes.join(', ')}) y aviso «CSV generado» con «${filas} filas exportadas»`;
+  const account = accountOf(cell(row, 'cuenta'));
+  const prepared = await signIn(page, DESKTOP, account);
   if (prepared !== undefined) return preparationFailedWeb(expected, prepared);
-  const filtered = await strict('filtro', FILTROS, cell(row, 'filtro'))(page);
+  const filter = strict('filtro', FILTROS, cell(row, 'filtro'));
+  const filtered = await filter.act(page);
   if (filtered !== undefined) return actionFailed(expected, filtered);
+  // La lista debe haberse releído con los filtros antes de exportar (recuento de la historia)
   const listed = await waitUntil(async () => (await recountText(page)) === recountFor(Number(filas)) && (await safe(() => exportButton(page).isEnabled(), false)));
   if (!listed.reached) return actionFailed(expected, { message: 'la lista no se asienta con los filtros aplicados', note: 'El recuento no llega al de los programas que cumplen los filtros.' });
+  const clickAt = Date.now();
   let file: { readonly name: string; readonly text: string };
   try {
     file = await downloadAfter(page, () => exportButton(page).click(ACTION));
@@ -77,13 +85,19 @@ const downloadsFiltered: BrowserRowHandler = async (row, { page }) => {
     return actionFailed(expected, { message: `no se descargó el archivo: ${error instanceof Error ? (error.message.split('\n')[0] ?? '') : String(error)}`, note: 'Exportar CSV no produjo una descarga.' });
   }
   const toast = await toastShown(page, 'info', 'CSV generado', `${filas} filas exportadas`);
+  const firstAt = await firstToastAt(page, 'info', 'CSV generado');
+  const apiText = await apiExport(account, filter.query);
   const exported = codesOfCsv(file.text);
   const sameOrder = exported.length === codes.length && exported.every((code, index) => code === codes[index]);
-  return conclude([
-    check(file.name === CSV_NAME, `descarga ${CSV_NAME}`, `descarga ${file.name}`),
-    check(sameOrder, `las filas ${codes.join(', ')}`, `las filas ${exported.join(', ') || '(ninguna)'}`),
-    check(toast.seen, `aviso informativo «CSV generado» con «${filas} filas exportadas»`, `avisos informativos: ${toast.observed}`),
-  ]);
+  return conclude(
+    [
+      check(file.name === CSV_NAME, `descarga ${CSV_NAME}`, `descarga ${file.name}`),
+      check(sameOrder, `las filas ${codes.join(', ')}`, `las filas ${exported.join(', ') || '(ninguna)'}`),
+      check(apiText !== undefined && file.text === apiText, 'el archivo es, línea a línea, la exportación de la API con esos filtros', apiText === undefined ? 'la API no dio la exportación' : file.text === apiText ? 'el archivo coincide con la API' : 'el archivo no coincide con la API'),
+      check(toast.seen, `aviso informativo «CSV generado» con «${filas} filas exportadas»`, `avisos informativos: ${toast.observed}`),
+    ],
+    timingOf(clickAt, firstAt),
+  );
 };
 
 // --- Esquema 2: el botón no se puede usar si ningún programa cumple los filtros -----------------------------------------------
@@ -95,6 +109,7 @@ const disabledWithoutRows: BrowserRowHandler = async (row, { page }) => {
   if (prepared !== undefined) return preparationFailedWeb(expected, prepared);
   const filtered = await strict('filtro', EMPTY_FILTROS, cell(row, 'filtro'))(page);
   if (filtered !== undefined) return actionFailed(expected, filtered);
+  // La lista vacía muestra su bloque «Sin programas»: se espera a verlo antes de juzgar el botón
   const empty = await waitUntil(() => isVisible(emptyBlock(page)));
   if (!empty.reached) return actionFailed(expected, { message: 'no se ve el bloque «Sin programas»', note: 'La lista con esos filtros no muestra el bloque vacío.' });
   const state = await stateCheck(exportButton(page), 'deshabilitado', NO_EXPORT_REASON);

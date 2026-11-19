@@ -3,7 +3,7 @@ import { defineBrowserRows, type BrowserRowHandler } from '../../core/framework'
 import { cell, check, conclude, preparationFailedWeb, strict, type Check } from '../../support/checks';
 import { attrOf, isVisible, quoted, waitUntil } from '../../support/browser';
 import { TENANT_A, resetTenants } from '../../../story-runs/support/prepare';
-import { accountOf, actionFailed, noOkToast, normalized, settle, toastShown, type WebAction } from '../web/common';
+import { accountOf, actionFailed, firstToastAt, noOkToast, normalized, timingOf, toastShown, watchResponse, type WebAction } from '../web/common';
 import {
   barAction,
   bulkBar,
@@ -153,11 +153,11 @@ const archivesSelection: BrowserRowHandler = async (row, { page }) => {
 // --- Esquema 3: eliminar la selección pide confirmación y solo al confirmar borra los programas --------------------------
 
 /** Lo que cada resultado de la historia exige, comprobado sobre la lista y los avisos observados. */
-const DELETE_RESULTS: ReadonlyMap<string, (page: Page) => Promise<readonly Check[]>> = new Map<string, (page: Page) => Promise<readonly Check[]>>([
+const DELETE_RESULTS: ReadonlyMap<string, (page: Page, endedAt: number) => Promise<readonly Check[]>> = new Map<string, (page: Page, endedAt: number) => Promise<readonly Check[]>>([
   [
     'no aparece ningún aviso de éxito y los dos programas siguen en la lista',
-    async (page) => {
-      const quiet = await noOkToast(page);
+    async (page, endedAt) => {
+      const quiet = await noOkToast(page, endedAt);
       const codes = await cardCodes(page);
       const both = codes.includes('PRG-001') && codes.includes('PRG-002');
       return [
@@ -197,15 +197,18 @@ const deletesSelection: BrowserRowHandler = async (row, { page }) => {
   if (removing !== undefined) return actionFailed(expected, removing);
   const dialog = await waitUntil(() => isVisible(confirmDialog(page)));
   if (!dialog.reached) return actionFailed(expected, { message: 'no se abrió la hoja «Eliminar programa»', note: 'Eliminar de la barra no abrió la hoja de confirmación.' });
+  const deletedAt = watchResponse(page, 'DELETE', '/api/programs/');
+  const clickAt = Date.now();
   const answered = await confirmAction(salida)(page);
   if (answered !== undefined) return actionFailed(expected, answered);
+  const endedAt = Date.now();
   // Se espera al recuento de la historia: la lista se relee tras el borrado (o no, si se canceló)
   await waitUntil(async () => (await normalized(recountOf(page))) === recuento);
-  await settle();
   const verify = strict('resultado', DELETE_RESULTS, cell(row, 'resultado'));
-  const checks = await verify(page);
+  const checks = await verify(page, endedAt);
+  const firstAt = await firstToastAt(page, 'ok', '2 programas eliminados');
   const count = await normalized(recountOf(page));
-  return conclude([...checks, check(count === recuento, `el recuento dice «${recuento}»`, `el recuento dice «${count ?? '(sin recuento)'}»`)]);
+  return conclude([...checks, check(count === recuento, `el recuento dice «${recuento}»`, `el recuento dice «${count ?? '(sin recuento)'}»`)], timingOf(clickAt, firstAt, deletedAt()));
 };
 
 // --- Esquema 4: cada rol ve habilitadas solo las acciones masivas que su permiso permite ----------------------------------
