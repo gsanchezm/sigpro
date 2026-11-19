@@ -5,7 +5,7 @@ epica: EP-MFA
 titulo: "[API] Canjear el token temporal y el código por una sesión"
 etiquetas: [api]
 relacionadas: [US-LOGIN-001, US-MFA-002, US-MFA-003, US-MFA-004]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["POST /api/auth/mfa"]
 ---
 

@@ -5,7 +5,7 @@ epica: EP-MFA
 titulo: "[Web] Completar o abandonar la verificación en dos pasos"
 etiquetas: [web]
 relacionadas: [US-MFA-001, US-LOGIN-007, US-MFA-004]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["/login"]
 ---
 

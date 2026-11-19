@@ -5,7 +5,7 @@ epica: EP-MFA
 titulo: "[Móvil] Completar o abandonar la verificación en dos pasos"
 etiquetas: [movil]
 relacionadas: [US-MFA-001, US-LOGIN-012, US-MFA-003]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["/login"]
 ---
 

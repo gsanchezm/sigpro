@@ -5,7 +5,7 @@ epica: EP-MFA
 titulo: "[API] Impedir el canje si la cuenta quedó bloqueada o desactivada"
 etiquetas: [api]
 relacionadas: [US-MFA-001, US-LOGIN-003, US-LOGIN-002]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["POST /api/auth/mfa"]
 ---
 
