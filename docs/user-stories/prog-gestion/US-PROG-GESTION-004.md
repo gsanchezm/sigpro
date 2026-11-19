@@ -5,7 +5,7 @@ epica: EP-PROG-GESTION
 titulo: "[API] Exportar los programas a CSV con los filtros y el orden de la lista"
 etiquetas: [api]
 relacionadas: [US-LOGIN-001, US-PROG-LISTA-001, US-PROG-LISTA-002, US-PROG-LISTA-003, US-PROG-GESTION-009]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["GET /api/programs/export"]
 permisos: [program.export]
 ---

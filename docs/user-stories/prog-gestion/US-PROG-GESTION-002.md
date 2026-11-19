@@ -5,7 +5,7 @@ epica: EP-PROG-GESTION
 titulo: "[API] Duplicar un programa como borrador, sin hitos y con el código siguiente"
 etiquetas: [api]
 relacionadas: [US-LOGIN-001, US-PROG-LISTA-001, US-PROG-GESTION-001, US-PROG-GESTION-003]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["POST /api/programs/:code/duplicate"]
 permisos: [program.create]
 ---

@@ -5,7 +5,7 @@ epica: EP-PROG-GESTION
 titulo: "[Móvil] Archivar, duplicar y eliminar un programa desde el menú de su tarjeta"
 etiquetas: [movil]
 relacionadas: [US-LOGIN-012, US-PROG-LISTA-008, US-PROG-GESTION-001, US-PROG-GESTION-002, US-PROG-GESTION-003, US-PROG-GESTION-006, US-PROG-GESTION-008, US-PROG-GESTION-010]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["/programs"]
 permisos: [program.archive, program.create, program.delete]
 ---

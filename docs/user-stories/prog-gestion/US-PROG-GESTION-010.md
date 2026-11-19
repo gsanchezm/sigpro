@@ -5,7 +5,7 @@ epica: EP-PROG-GESTION
 titulo: "[Móvil] Seleccionar programas con «Seleccionar» y actuar sobre la selección"
 etiquetas: [movil]
 relacionadas: [US-LOGIN-012, US-PROG-LISTA-008, US-PROG-GESTION-005, US-PROG-GESTION-007, US-PROG-GESTION-008, US-PROG-GESTION-011, US-PROG-GESTION-012]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["/programs"]
 permisos: [program.archive, program.delete]
 ---

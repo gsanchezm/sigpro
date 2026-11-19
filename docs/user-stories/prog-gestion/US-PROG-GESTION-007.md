@@ -5,7 +5,7 @@ epica: EP-PROG-GESTION
 titulo: "[Web] Archivar, eliminar o exportar en lote los programas marcados"
 etiquetas: [web]
 relacionadas: [US-LOGIN-007, US-PROG-GESTION-004, US-PROG-GESTION-005, US-PROG-GESTION-006, US-PROG-GESTION-008, US-PROG-GESTION-009]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["/programs"]
 permisos: [program.archive, program.delete]
 ---

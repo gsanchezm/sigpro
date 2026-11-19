@@ -5,7 +5,7 @@ epica: EP-PROG-GESTION
 titulo: "[Móvil] Exportar la lista o la selección de programas con la hoja de compartir"
 etiquetas: [movil]
 relacionadas: [US-LOGIN-012, US-PROG-LISTA-008, US-PROG-GESTION-004, US-PROG-GESTION-009, US-PROG-GESTION-010]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["/programs"]
 permisos: [program.export]
 ---

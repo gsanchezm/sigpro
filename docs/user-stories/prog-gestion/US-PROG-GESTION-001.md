@@ -5,7 +5,7 @@ epica: EP-PROG-GESTION
 titulo: "[API] Archivar un programa: su estado pasa a closed y el resto de sus datos no cambia"
 etiquetas: [api]
 relacionadas: [US-LOGIN-001, US-PROG-LISTA-001, US-PROG-GESTION-002, US-PROG-GESTION-003]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["POST /api/programs/:code/archive"]
 permisos: [program.archive]
 ---

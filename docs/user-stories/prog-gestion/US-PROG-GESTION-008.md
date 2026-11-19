@@ -5,7 +5,7 @@ epica: EP-PROG-GESTION
 titulo: "[Web] Confirmar o cancelar el borrado de programas en un diálogo"
 etiquetas: [web]
 relacionadas: [US-LOGIN-007, US-PROG-GESTION-003, US-PROG-GESTION-006, US-PROG-GESTION-007, US-PROG-GESTION-011]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["/programs"]
 permisos: [program.delete]
 ---

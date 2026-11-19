@@ -5,7 +5,7 @@ epica: EP-PROG-GESTION
 titulo: "[Web] Exportar a CSV la lista de programas desde la cabecera"
 etiquetas: [web]
 relacionadas: [US-LOGIN-007, US-PROG-LISTA-002, US-PROG-LISTA-004, US-PROG-GESTION-004, US-PROG-GESTION-007]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["/programs"]
 permisos: [program.export]
 ---

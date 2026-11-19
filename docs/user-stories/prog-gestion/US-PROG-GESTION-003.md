@@ -5,7 +5,7 @@ epica: EP-PROG-GESTION
 titulo: "[API] Eliminar un programa con todo lo que cuelga de él, sin posibilidad de deshacer"
 etiquetas: [api]
 relacionadas: [US-LOGIN-001, US-PROG-LISTA-001, US-PROG-GESTION-001, US-PROG-GESTION-004, US-PROG-GESTION-008]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["DELETE /api/programs/:code"]
 permisos: [program.delete]
 ---

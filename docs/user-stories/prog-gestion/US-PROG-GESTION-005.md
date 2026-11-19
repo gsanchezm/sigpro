@@ -5,7 +5,7 @@ epica: EP-PROG-GESTION
 titulo: "[Web] Seleccionar programas con la casilla de cabecera y ver el contador de la selección"
 etiquetas: [web]
 relacionadas: [US-LOGIN-007, US-PROG-LISTA-004, US-PROG-LISTA-005, US-PROG-LISTA-006, US-PROG-GESTION-006, US-PROG-GESTION-007]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["/programs"]
 ---
 

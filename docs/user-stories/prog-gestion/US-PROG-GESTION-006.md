@@ -5,7 +5,7 @@ epica: EP-PROG-GESTION
 titulo: "[Web] Archivar, duplicar y eliminar un programa desde su menú de acciones"
 etiquetas: [web]
 relacionadas: [US-LOGIN-007, US-PROG-LISTA-005, US-PROG-LISTA-008, US-PROG-GESTION-001, US-PROG-GESTION-002, US-PROG-GESTION-003, US-PROG-GESTION-005, US-PROG-GESTION-008]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["/programs"]
 permisos: [program.archive, program.create, program.delete]
 ---
