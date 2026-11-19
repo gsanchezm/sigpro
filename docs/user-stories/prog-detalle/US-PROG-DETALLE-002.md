@@ -5,7 +5,7 @@ epica: EP-PROG-DETALLE
 titulo: "[Web] Ver la ficha de un programa: cabecera, datos, pestañas y botón de editar según el rol"
 etiquetas: [web]
 relacionadas: [US-PROG-DETALLE-001, US-PROG-DETALLE-003, US-PROG-DETALLE-004, US-PROG-DETALLE-005]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["/programs/:code"]
 permisos: [program.edit]
 ---

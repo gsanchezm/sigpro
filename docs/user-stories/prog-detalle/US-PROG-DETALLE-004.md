@@ -5,7 +5,7 @@ epica: EP-PROG-DETALLE
 titulo: "[Web] Ver el panel lateral de un programa desde la lista y pasar a su ficha completa"
 etiquetas: [web]
 relacionadas: [US-PROG-DETALLE-002, US-PROG-DETALLE-003]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["/programs/:code"]
 ---
 

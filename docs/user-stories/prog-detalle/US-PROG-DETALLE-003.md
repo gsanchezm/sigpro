@@ -5,7 +5,7 @@ epica: EP-PROG-DETALLE
 titulo: "[Web] Mostrar la carga, el aviso de no encontrado y el error de la ficha, y volver a Programas"
 etiquetas: [web]
 relacionadas: [US-PROG-DETALLE-002, US-PROG-DETALLE-006]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["/programs/:code"]
 ---
 

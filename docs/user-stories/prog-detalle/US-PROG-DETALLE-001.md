@@ -5,7 +5,7 @@ epica: EP-PROG-DETALLE
 titulo: "[API] Consultar el detalle de un programa del tenant"
 etiquetas: [api]
 relacionadas: [US-PROG-DETALLE-002, US-PROG-DETALLE-005, US-SESION-005]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["GET /api/programs/:code"]
 ---
 

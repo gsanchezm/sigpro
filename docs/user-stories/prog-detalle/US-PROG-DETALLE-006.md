@@ -5,7 +5,7 @@ epica: EP-PROG-DETALLE
 titulo: "[Móvil] Mostrar la carga, el aviso de no encontrado y el error de la ficha, y volver a Programas"
 etiquetas: [movil]
 relacionadas: [US-PROG-DETALLE-003, US-PROG-DETALLE-005]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["/programs/:code"]
 ---
 

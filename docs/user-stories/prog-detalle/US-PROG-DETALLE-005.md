@@ -5,7 +5,7 @@ epica: EP-PROG-DETALLE
 titulo: "[Móvil] Ver la ficha de un programa: cabecera, datos, opciones, requisitos y botón de editar según el rol"
 etiquetas: [movil]
 relacionadas: [US-PROG-DETALLE-002, US-PROG-DETALLE-006]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["/programs/:code"]
 permisos: [program.edit]
 ---
