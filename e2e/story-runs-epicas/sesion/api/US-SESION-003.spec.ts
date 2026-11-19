@@ -1,7 +1,7 @@
 import { call, sessionOf } from '../../../story-runs/support/api';
 import { DEMO, TENANT_A, resetTenants } from '../../../story-runs/support/prepare';
 import { cell, check, conclude, errorsOf, noTokensCheck, preparationFailed, responseCheck, strict, type Check } from '../../support/checks';
-import { defineApiRows, type ApiRowHandler } from '../../support/framework';
+import { defineApiRows, type ApiRowHandler } from '../../core/framework';
 import { alteredLast, loginAs, mfaTokenOfAdmin, refresh, shortText } from './common';
 
 // US-SESION-003 — Rechazar la renovación con un token que no sirve o con un cuerpo inválido (API). Preparación de cada fila: reinicio de

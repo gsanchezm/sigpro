@@ -1,7 +1,7 @@
 import { adminCredentials, errorCode, sessionOf, type ApiResult, type Session } from '../../../story-runs/support/api';
 import { DEMO, TENANT_A, TENANT_B, resetTenants, type Credentials } from '../../../story-runs/support/prepare';
 import { cell, check, conclude, preparationFailed, responseCheck, strict, type Check } from '../../support/checks';
-import { defineApiRows, type ApiRowHandler } from '../../support/framework';
+import { defineApiRows, type ApiRowHandler } from '../../core/framework';
 import { alteredLast, failGestor, loginAs, me, mfaTokenOfAdmin, patchUser, rawGet, redeemMfa, refresh, meUserOf, shortText } from './common';
 
 // US-SESION-005 — Identificar la sesión en GET /api/auth/me y rechazar las peticiones sin token válido (API). Preparación de cada fila:

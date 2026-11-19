@@ -1,7 +1,7 @@
 import { errorCode, sessionOf, type ApiResult } from '../../../story-runs/support/api';
 import { DEMO, TENANT_A, resetTenants } from '../../../story-runs/support/prepare';
 import { cell, check, conclude, preparationFailed, responseCheck, strict, type Check } from '../../support/checks';
-import { defineApiRows, type ApiRowHandler } from '../../support/framework';
+import { defineApiRows, type ApiRowHandler } from '../../core/framework';
 import { attemptText, failGestor, hasTokens, loginAs, patchUser, refresh, shortText, userOf } from './common';
 
 // US-SESION-002 — Rechazar la renovación de una cuenta bloqueada o desactivada (API). Preparación de cada fila: reinicio de alumno01,

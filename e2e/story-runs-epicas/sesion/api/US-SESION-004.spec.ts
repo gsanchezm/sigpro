@@ -1,7 +1,7 @@
 import { field, sessionOf, type ApiResult } from '../../../story-runs/support/api';
 import { DEMO, TENANT_A, resetTenants } from '../../../story-runs/support/prepare';
 import { cell, check, conclude, preparationFailed, responseCheck, sleep, strict, type Check } from '../../support/checks';
-import { defineApiRows, type ApiRowHandler } from '../../support/framework';
+import { defineApiRows, type ApiRowHandler } from '../../core/framework';
 import { ACCESS_TTL_S, accessAge, agedNotExecutable, hasTokens, iatOf, issuedAgo, lifetimeOf, loadAged, loginAs, me, meUserOf, refresh, shortText, tokensRecent, type AgedSet } from './common';
 
 /** Antigüedad máxima (segundos) de los tokens que devuelve una renovación para contar como «emitidos ahora». */

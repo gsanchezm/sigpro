@@ -1,7 +1,7 @@
 import { field, sessionOf, type ApiResult } from '../../../story-runs/support/api';
 import { DEMO, TENANT_A, TENANT_B, resetTenants, type Credentials } from '../../../story-runs/support/prepare';
 import { cell, check, conclude, preparationFailed, responseCheck, sleep, strict, type Check } from '../../support/checks';
-import { defineApiRows, type ApiRowHandler } from '../../support/framework';
+import { defineApiRows, type ApiRowHandler } from '../../core/framework';
 import { ACCESS_TTL_S, hasTokens, iatOf, loginAs, noMfaCheck, patchUser, refresh, shortText, userOf, userShapeOk } from './common';
 
 /** Espera entre el inicio de sesión y la renovación: `iat` va en segundos, y sin esta espera los dos tokens podrían tener el mismo `iat`. */
