@@ -42,6 +42,7 @@ import {
   type StepFailure,
   type WebView,
 } from './common';
+import { accionNc } from './nc-actions';
 
 // US-MISION-FEED-007 — Actualizar en vivo «NC abiertas», su gráfica por severidad y «Hitos cumplidos» sin recargar (web).
 // Preparación: alumno01 reiniciado; gestor abre /mission (NC abiertas = 8). Seed: NC-001 a NC-012 con 8 abiertas (2 menores, 2 mayores y 4
@@ -133,12 +134,13 @@ const ncAbiertasCambia: BrowserRowHandler = onWeb(async (row, { page }) => {
 
 // --- Esquema 2: la gráfica «NC abiertas por severidad» en su vista de tabla sigue a los cambios -------------------------
 
-const ACCION_TABLA: ReadonlyMap<string, NcAct | undefined> = new Map<string, NcAct | undefined>([
-  ['no se hace ningún cambio', undefined],
-  ['alumno01@sigpro.lab cambia la gravedad de NC-001 a critical con PATCH /api/nc/NC-001', ACCION_NC.get('alumno01@sigpro.lab cambia la gravedad de NC-001 a critical con PATCH /api/nc/NC-001')],
+/** Celda «cambio» de la tabla: «ninguno» (no se hace nada) o la acción de la historia (nunca `undefined`). */
+const ACCION_TABLA: ReadonlyMap<string, NcAct | 'ninguno'> = new Map<string, NcAct | 'ninguno'>([
+  ['no se hace ningún cambio', 'ninguno'],
+  ['alumno01@sigpro.lab cambia la gravedad de NC-001 a critical con PATCH /api/nc/NC-001', accionNc('alumno01@sigpro.lab cambia la gravedad de NC-001 a critical con PATCH /api/nc/NC-001')],
   [
     `alumno01@sigpro.lab crea con POST /api/nc una no conformidad en PRG-002 con severidad major y la descripción \`${DESC}\``,
-    ACCION_NC.get(`alumno01@sigpro.lab crea con POST /api/nc una no conformidad en PRG-002 con severidad major y la descripción \`${DESC}\``),
+    accionNc(`alumno01@sigpro.lab crea con POST /api/nc una no conformidad en PRG-002 con severidad major y la descripción \`${DESC}\``),
   ],
 ]);
 
@@ -166,7 +168,7 @@ const tablaSeveridad: BrowserRowHandler = onWeb(async (row, { page }) => {
   const admin = await adminAccess(TENANT);
   if (admin.token === undefined) return prepFailed(expected, { message: 'alumno01@sigpro.lab no inicia sesión', callLog: [] } satisfies StepFailure);
   let result: ApiResult | undefined;
-  if (act !== undefined) {
+  if (act !== 'ninguno') {
     const performed = await performNc(link, act, admin.token);
     result = performed.result;
   } else {
@@ -180,7 +182,7 @@ const tablaSeveridad: BrowserRowHandler = onWeb(async (row, { page }) => {
   }, SHOW_CEILING_MS);
   const counts = await tablaNc(page);
   return conclude([
-    ...(result === undefined || act === undefined ? [] : [actionCheck(result, act, 'la operación')]),
+    ...(result === undefined || act === 'ninguno' ? [] : [actionCheck(result, act, 'la operación')]),
     check(counts.Menor === want.Menor, `«Menor» ${menor}`, `«Menor» ${counts.Menor ?? '(sin leer)'}`),
     check(counts.Mayor === want.Mayor, `«Mayor» ${mayor}`, `«Mayor» ${counts.Mayor ?? '(sin leer)'}`),
     check(counts.Crítica === want.Crítica, `«Crítica» ${critica}`, `«Crítica» ${counts.Crítica ?? '(sin leer)'}`),

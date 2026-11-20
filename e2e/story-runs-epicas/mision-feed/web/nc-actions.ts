@@ -47,6 +47,13 @@ export const ACCION_NC: ReadonlyMap<string, NcAct> = new Map<string, NcAct>([
   ['alumno01@sigpro.lab añade a NC-006 el comentario `Seguimiento de prueba` con POST /api/nc/NC-006/comments', { run: (token) => commentNc(token, TENANT, 'NC-006', 'Seguimiento de prueba'), eventType: 'nc_commented' }],
 ]);
 
+/** La acción de la historia por el texto de su celda. Lanza si la celda no tiene acción: nunca devuelve `undefined` (no es un «no hacer nada»). */
+export const accionNc = (texto: string): NcAct => {
+  const act = ACCION_NC.get(texto);
+  if (act === undefined) throw new Error(`celda sin interpretación: acción de NC «${texto}»`);
+  return act;
+};
+
 /** Ejecuta el cambio: espera (con techo) el evento que la historia dice que llega, o asienta la pantalla si no debe llegar ninguno. */
 export const performNc = async (link: RealtimeLink, act: NcAct, token: string): Promise<{ readonly result: ApiResult; readonly arrived: boolean }> => {
   const before = link.eventTypes().length;

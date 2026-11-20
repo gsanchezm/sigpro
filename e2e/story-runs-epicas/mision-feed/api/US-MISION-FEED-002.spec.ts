@@ -17,10 +17,12 @@ import {
   prepFailureReason,
   quietWindow,
   resetTenants,
+  positiveControl,
   simulatorMsOf,
   summaryOf,
   tickOf,
   varCheck,
+  withNote,
   type RealtimeClient,
 } from './common';
 
@@ -98,6 +100,8 @@ const aislamiento: ApiRowHandler = async (row) => {
     if (expectation.kind === 'ninguno') {
       const received = await quietWindow(listened, OBSERVE_MS);
       checks.push(check(received === 0, 'no recibe ningún evento durante la observación', `recibe ${received} evento(s)`));
+      // Control positivo: la misma conexión sigue viva y recibe un evento de SU tenant (así el silencio prueba el aislamiento)
+      checks.push(await positiveControl(listened, listenTenant === TENANT_A ? adminA.token : adminB.token, listenTenant));
       return conclude(checks, { evidence: { acciones: cell(row, 'accion'), escucha: listenTenant, saludoEscucha: describeHandshake(listened.handshake) } });
     }
 
@@ -119,5 +123,13 @@ defineApiRows({
   story: 'US-MISION-FEED-002',
   surface: 'api',
   tenants: [TENANT_A, TENANT_B],
-  handlers: new Map<number, ApiRowHandler>([[1, aislamiento]]),
+  handlers: new Map<number, ApiRowHandler>([
+    [
+      1,
+      withNote(
+        aislamiento,
+        'La regla de historial guardado sin conexión abierta (los eventos sin conexión quedan en el historial de su tenant) no tiene fila: no se comprueba aquí; la fila de historial está en 005.',
+      ),
+    ],
+  ]),
 });

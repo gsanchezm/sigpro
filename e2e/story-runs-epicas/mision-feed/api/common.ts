@@ -4,7 +4,7 @@ import { MISSION_SOCKET_EVENT, MISSION_SOCKET_PATH, type MissionEventDto } from 
 import { misionEs } from '../../../../packages/shared/src/i18n/mision';
 import { waitUntil } from '../../support/browser';
 import { check, sleep, type Check } from '../../support/checks';
-import { outcome, type Outcome } from '../../core/framework';
+import { notExecutable, outcome, type ApiRowHandler, type Outcome } from '../../core/framework';
 
 // Piezas comunes de las filas de API de EP-MISION-FEED: la conexión en tiempo real (Socket.IO en su protocolo de texto, con
 // `WebSocket` de Node), las acciones que las historias nombran («alumno01@sigpro.lab crea con POST /api/nc…»), la lectura del
@@ -30,31 +30,54 @@ export const conclude = (checks: readonly Check[], extra: { readonly note?: stri
   });
 };
 
-/** Un paso de preparación que no se cumplió: qué se intentaba y la respuesta cruda (recortada, sin tokens). */
+/**
+ * Un paso de preparación que no se cumplió (una petición que la historia da por hecha no responde 2xx). NO es un hallazgo de la app:
+ * la fila no se pudo ejecutar, así que sale `no-ejecutable` con el paso y la respuesta cruda (recortada, sin tokens) en la nota.
+ */
 export const prepFailure = (expected: string, step: string, result: ApiResult): Outcome =>
-  outcome(false, expected, `la preparación no se cumplió: ${step} → ${result.status}`, {
-    note: 'No se pudo reproducir el estado inicial que da por hecho la historia; la app no hace lo que la preparación describe.',
-    evidence: { paso: step, respuesta: { status: result.status, cuerpo: JSON.stringify(result.body ?? null).slice(0, 300) } },
-  });
+  notExecutable(expected, `La preparación no se cumplió: ${step} → ${result.status}. La fila no se pudo ejecutar; no se atribuye a la app.`);
 
-/** Igual, para un motivo que no viene de una respuesta HTTP (p. ej., la pila no tiene la configuración que la historia da por hecha). */
+/** Igual, para un motivo que no viene de una respuesta HTTP (la pila no tiene la configuración que la historia da por hecha). */
 export const prepFailureReason = (expected: string, reason: string): Outcome =>
-  outcome(false, expected, `la preparación no se cumplió: ${reason}`, {
-    note: 'No se pudo reproducir el estado inicial que da por hecho la historia; la app no hace lo que la preparación describe.',
-  });
+  notExecutable(expected, `La preparación no se cumplió: ${reason}. La fila no se pudo ejecutar; no se atribuye a la app.`);
 
 /** Respuesta 2xx. */
 export const isOk = (result: ApiResult): boolean => result.status >= 200 && result.status < 300;
 
 /**
- * La historia da por hecho que la API arrancó con SIMULATOR_MS 0 (el arnés no cambia esa configuración): se lee del resumen con el token
- * del gestor. Devuelve el fallo de preparación si no es 0 (o no se puede leer); `undefined` si está bien.
+ * La historia da por hecho que la API arrancó con un SIMULATOR_MS concreto. El arnés no cambia esa configuración de la pila: se lee del
+ * resumen (`simulatorMs`) con el token del gestor. Si no es el valor que la fila necesita, la fila es `no-ejecutable` (no es un fallo de la app).
  */
-export const simulatorOffOutcome = async (expected: string): Promise<Outcome | undefined> => {
+export const simulatorMsOutcome = async (expected: string, want: number): Promise<Outcome | undefined> => {
   const gestor = await gestorSession(TENANT_A);
   if (gestor.session === undefined) return prepFailure(expected, 'gestor@sigpro.test inicia sesión (lectura del resumen)', gestor.result);
   const ms = simulatorMsOf(await summaryOf(gestor.session.accessToken, TENANT_A));
-  return ms === 0 ? undefined : prepFailureReason(expected, `la API no arrancó con SIMULATOR_MS 0 (resumen: ${String(ms ?? '(sin leer)')})`);
+  return ms === want ? undefined : notExecutable(expected, `requiere una pila con SIMULATOR_MS=${want}; la pila aislada usa ${String(ms ?? '(sin leer)')}`);
+};
+
+/** La fila que necesita el simulador apagado (SIMULATOR_MS 0). */
+export const simulatorOffOutcome = (expected: string): Promise<Outcome | undefined> => simulatorMsOutcome(expected, 0);
+
+/**
+ * Control positivo tras una ventana de silencio: la MISMA conexión recibe un evento propio del tenant. Prueba que el silencio de la fila
+ * no se debe a una conexión muerta (sin este control, «no recibe ningún evento» podría ser verdadero por una conexión rota).
+ */
+export const positiveControl = async (client: RealtimeClient, adminToken: string | undefined, tenant: string): Promise<Check> => {
+  if (adminToken === undefined) return check(false, 'control: la conexión escuchada recibe un evento propio del tenant', 'control: sin token de administrador');
+  const before = client.events().length;
+  const result = await tickOf(adminToken, tenant);
+  const event = await client.waitEvent((item) => item.origin === 'simulator' && client.events().length > before);
+  return check(
+    event !== undefined && isOk(result),
+    'control: la misma conexión recibe un evento propio del tenant tras la ventana',
+    `control: POST /api/mission/tick ${result.status}; ${event === undefined ? 'la conexión no recibe su evento propio' : `recibe ${describeEvent(event)}`}`,
+  );
+};
+
+/** Añade una nota (una regla de la historia que la fila no puede comprobar) al resultado de un manejador de API. */
+export const withNote = (handler: ApiRowHandler, text: string): ApiRowHandler => async (row) => {
+  const result = await handler(row);
+  return { ...result, note: result.note === undefined ? text : `${result.note} ${text}` };
 };
 
 /** Evidencia de una respuesta que no es 2xx (estado y cuerpo recortado). Vacía si fue 2xx. */

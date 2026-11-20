@@ -12,6 +12,7 @@ import {
   prepFailed,
   prepFailedReason,
   readWeb,
+  rowChecksOf,
   rowHas,
   settle,
   startWeb,
@@ -42,7 +43,7 @@ const historiaInicial: BrowserRowHandler = onWeb(async (row, { page }) => {
   if (failure) return prepFailed(expected, failure);
   const { view } = await waitView(page, (current) => current.feed.length === 6);
   const item = feedTexts(view)[posicion - 1];
-  return conclude([check(rowHas(item, texto), `la posición ${posicion} dice «${texto}»`, `la posición ${posicion} dice ${describeRow(item)}`), textCheck(view?.count, '6 eventos', 'el contador dice')], {
+  return conclude([check(rowHas(item, texto), `la posición ${posicion} dice «${texto}»`, `la posición ${posicion} dice ${describeRow(item)}`), textCheck(view?.count, '6 eventos', 'el contador dice'), ...(await rowChecksOf(item, 'web'))], {
     evidence: { filas: feedTexts(view).length },
   });
 });
@@ -73,6 +74,7 @@ const eventoNuevoArriba: BrowserRowHandler = onWeb(async (row, { page }) => {
       check(rowHas(first, textoPrimero), `la primera fila dice «${textoPrimero}»`, `la primera fila dice ${describeRow(first)}`),
       textCheck(view?.count, contador, 'el contador dice'),
       check(reload.marker && reload.loads === 0, 'la página no se recarga', `marcador ${String(reload.marker)}, cargas de página ${reload.loads}`),
+      ...(await rowChecksOf(first, 'web')),
     ],
     { evidence: { eventosProvocados: n } },
   );
@@ -137,6 +139,7 @@ const alReanudar: BrowserRowHandler = onWeb(async (row, { page }) => {
   return conclude([
     check(rowHas(first, textoPrimero), `la primera fila dice «${textoPrimero}»`, `la primera fila dice ${describeRow(first)}`),
     textCheck(view?.count, contador, 'el contador dice'),
+    ...(await rowChecksOf(first, 'web')),
     check(view?.pausedNote === undefined, 'el aviso de pausa ya no aparece', `el aviso de pausa ${view?.pausedNote === undefined ? 'no aparece' : `dice «${view.pausedNote}»`}`),
   ]);
 });
@@ -164,7 +167,8 @@ const tope50: BrowserRowHandler = onWeb(async (row, { page }) => {
   if (admin.token === undefined) return prepFailed(expected, { message: 'alumno01@sigpro.lab no inicia sesión', callLog: [] });
   const ticks = await tickMany(admin.token, TENANT_A, n);
   if (ticks.failed) return actionFailed(expected, { message: `${ticks.failed.step} respondió ${ticks.failed.result.status}`, callLog: [] });
-  const { view } = await waitView(page, (current) => current.count === contador, 15_000);
+  // Se espera al evento de la última secuencia (no al contador, que puede ir por delante o por detrás de la lista)
+  const { view } = await waitView(page, (current) => current.feed.some((item) => item.seq === 6 + n), 15_000);
   const present = feedTexts(view).some((item) => rowHas(item, TEXTO_PRG001_LATENCIA_20));
   const checks: Check[] = [
     textCheck(view?.count, contador, 'el contador dice'),
@@ -196,7 +200,7 @@ const origenEnPantalla: BrowserRowHandler = onWeb(async (row, { page }) => {
   const result = evento === 'nc' ? await createNc(admin.token, TENANT_A, 'minor') : await tickOf(admin.token, TENANT_A);
   const { view } = await waitView(page, (current) => current.feed.length === 7);
   const first = feedTexts(view)[0];
-  return conclude([check(rowHas(first, origen), `la fila nueva muestra el origen «${origen}»`, `la fila nueva dice ${describeRow(first)}`)], {
+  return conclude([check(rowHas(first, origen), `la fila nueva muestra el origen «${origen}»`, `la fila nueva dice ${describeRow(first)}`), ...(await rowChecksOf(first, 'web'))], {
     evidence: { respuesta: result.status, origenEtiquetaVisible: first?.origin },
   });
 });
@@ -233,6 +237,7 @@ const esperandoEventos: BrowserRowHandler = onWeb(async (row, { page }) => {
   return conclude([
     check(rowHas(first, 'Telemetría PRG-013: 766 paquetes/s'), 'la lista muestra «Telemetría PRG-013: 766 paquetes/s»', `la lista muestra ${describeRow(first)}`),
     check(view?.empty === undefined, `ya no muestra «${ESPERANDO}»`, view?.empty === undefined ? `no muestra «${ESPERANDO}»` : `aún muestra «${view.empty}»`),
+    ...(await rowChecksOf(first, 'web')),
   ], { evidence: { respuestaTick: result.status } });
 });
 

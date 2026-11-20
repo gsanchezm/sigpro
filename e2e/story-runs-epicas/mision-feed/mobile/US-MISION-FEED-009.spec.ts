@@ -2,7 +2,7 @@ import type { Page } from '@playwright/test';
 import { defineBrowserRows, type BrowserRowHandler } from '../../core/framework';
 import { quoted } from '../../support/browser';
 import { check, cell, strict } from '../../support/checks';
-import { adminAccess, intOf, resetTenants, tickOf, TENANT_A } from '../api/common';
+import { adminAccess, intOf, isOk, resetTenants, tickOf, TENANT_A } from '../api/common';
 import {
   actionFailed,
   conclude,
@@ -14,6 +14,7 @@ import {
   prepFailed,
   prepFailedReason,
   readWeb,
+  rowChecksOf,
   rowHas,
   settle,
   textCheck,
@@ -54,7 +55,7 @@ const historiaInicial: BrowserRowHandler = onExpoWeb(async (row, { page }) => {
   if (failure) return prepFailed(expected, failure);
   const { view } = await waitView(page, (current) => current.feed.length === INICIAL);
   const item = feedTexts(view)[posicion - 1];
-  return conclude([check(rowHas(item, texto), `la posición ${posicion} dice «${texto}»`, `la posición ${posicion} dice ${describeRow(item)}`), textCheck(view?.count, '6 eventos', 'el contador dice')]);
+  return conclude([check(rowHas(item, texto), `la posición ${posicion} dice «${texto}»`, `la posición ${posicion} dice ${describeRow(item)}`), textCheck(view?.count, '6 eventos', 'el contador dice'), ...(await rowChecksOf(item, 'movil'))]);
 });
 
 // --- Esquema 2: un evento nuevo aparece arriba sin recargar la pantalla --------------------------------------------------
@@ -69,7 +70,10 @@ const eventoNuevoArriba: BrowserRowHandler = onExpoWeb(async (row, { page }) => 
   const admin = await adminAccess(TENANT_A);
   if (admin.token === undefined) return prepFailed(expected, { message: 'alumno01@sigpro.lab no inicia sesión', callLog: [] });
   const reloads = await markNoReload(page);
-  for (let index = 0; index < n; index += 1) await tickOf(admin.token, TENANT_A);
+  for (let index = 0; index < n; index += 1) {
+    const ticked = await tickOf(admin.token, TENANT_A);
+    if (!isOk(ticked)) return prepFailed(expected, { message: `POST /api/mission/tick respondió ${ticked.status} al provocar el evento ${index + 1}`, callLog: [] });
+  }
   const { view } = await waitView(page, (current) => current.feed.length === INICIAL + n);
   const reload = await reloads();
   const first = feedTexts(view)[0];
@@ -77,6 +81,7 @@ const eventoNuevoArriba: BrowserRowHandler = onExpoWeb(async (row, { page }) => 
     check(rowHas(first, textoPrimero), `la primera fila dice «${textoPrimero}»`, `la primera fila dice ${describeRow(first)}`),
     textCheck(view?.count, contador, 'el contador dice'),
     check(reload.marker && reload.loads === 0, 'la pantalla no se recarga', `marcador ${String(reload.marker)}, cargas de página ${reload.loads}`),
+    ...(await rowChecksOf(first, 'movil')),
   ]);
 });
 
@@ -127,6 +132,7 @@ const alReanudar: BrowserRowHandler = onExpoWeb(async (row, { page }) => {
   return conclude([
     check(rowHas(first, textoPrimero), `la primera fila dice «${textoPrimero}»`, `la primera fila dice ${describeRow(first)}`),
     textCheck(view?.count, contador, 'el contador dice'),
+    ...(await rowChecksOf(first, 'movil')),
     check(view?.pausedNote === undefined, 'el aviso de pausa ya no aparece', `el aviso de pausa ${view?.pausedNote === undefined ? 'no aparece' : `dice «${view.pausedNote}»`}`),
   ]);
 });
@@ -181,12 +187,14 @@ const esperandoEventos: BrowserRowHandler = onExpoWeb(async (row, { page }) => {
   }
   const admin = await adminAccess(TENANT_A);
   if (admin.token === undefined) return prepFailed(expected, { message: 'alumno01@sigpro.lab no inicia sesión', callLog: [] });
-  await tickOf(admin.token, TENANT_A);
+  const ticked = await tickOf(admin.token, TENANT_A);
+  if (!isOk(ticked)) return prepFailed(expected, { message: `POST /api/mission/tick respondió ${ticked.status}`, callLog: [] });
   const { view } = await waitView(page, (current) => current.feed.length === 1);
   const first = feedTexts(view)[0];
   return conclude([
     check(rowHas(first, 'Telemetría PRG-013: 766 paquetes/s'), 'la lista muestra «Telemetría PRG-013: 766 paquetes/s»', `la lista muestra ${describeRow(first)}`),
     check(view?.empty === undefined, `ya no muestra «${ESPERANDO}»`, view?.empty === undefined ? `no muestra «${ESPERANDO}»` : `aún muestra «${view.empty}»`),
+    ...(await rowChecksOf(first, 'movil')),
   ]);
 });
 

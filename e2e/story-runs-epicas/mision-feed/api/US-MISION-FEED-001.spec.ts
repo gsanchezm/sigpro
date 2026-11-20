@@ -19,6 +19,7 @@ import {
   resetTenants,
   simulatorOffOutcome,
   varCheck,
+  withNote,
   type RealtimeClient,
 } from './common';
 
@@ -214,13 +215,30 @@ const cabeceraNoCambiaTenant: ApiRowHandler = async (row) => {
   }
 };
 
+// Reglas de la historia que ninguna fila puede comprobar (se anotan en la nota de cada fila, no se juzgan aquí):
+const NOTA_CADUCIDAD =
+  'Regla de caducidad (el accessToken caduca a los 900 s): ninguna fila la prueba; no se espera 15 minutos. Un token caducado no se ha probado.';
+// La conexión rechazada nunca se une a la sala del tenant: «no recibe ningún evento» es verdadero por construcción en las filas 2 y 3.
+const NOTA_RECHAZO =
+  'Las filas con refreshToken o mfaToken (y la rechazada en general) no tienen conexión abierta: «no recibe ningún evento» es verdadero por construcción. El valor de la fila está en «no se abre».';
+// El gateway solo lee `handshake.auth` (apps/api/src/mission/mission.gateway.ts): la cabecera `x-tenant` no entra en la decisión.
+const NOTA_CABECERA =
+  'El gateway no lee la cabecera x-tenant (solo handshake.auth): las filas alumno02 y (sin cabecera) son verdaderas por construcción; el upgrade no se inspecciona (la cabecera la pone el cliente de Node).';
+
+/** La nota de rechazo solo vale para las filas en las que la conexión NO se abre (la fila con accessToken sí se abre). */
+const rechazadaConNota: ApiRowHandler = async (row) => {
+  const result = await rechazadaSinEventos(row);
+  const extra = cell(row, 'resultado_conexion') === 'está abierta' ? NOTA_CADUCIDAD : `${NOTA_CADUCIDAD} ${NOTA_RECHAZO}`;
+  return { ...result, note: result.note === undefined ? extra : `${result.note} ${extra}` };
+};
+
 defineApiRows({
   story: 'US-MISION-FEED-001',
   surface: 'api',
   tenants: [TENANT_A],
   handlers: new Map<number, ApiRowHandler>([
-    [1, soloAccesoVigente],
-    [2, rechazadaSinEventos],
-    [3, cabeceraNoCambiaTenant],
+    [1, withNote(soloAccesoVigente, NOTA_CADUCIDAD)],
+    [2, rechazadaConNota],
+    [3, withNote(cabeceraNoCambiaTenant, `${NOTA_CADUCIDAD} ${NOTA_CABECERA}`)],
   ]),
 });

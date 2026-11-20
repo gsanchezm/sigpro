@@ -18,6 +18,7 @@ import {
   openRealtime,
   pairsOf,
   patchNcSeverity,
+  positiveControl,
   prepFailure,
   prepFailureReason,
   quietWindow,
@@ -67,6 +68,25 @@ const CAMBIO: ReadonlyMap<string, (token: string) => Promise<ApiResult>> = new M
   ['cambia la gravedad de NC-001 a critical con PATCH /api/nc/NC-001', (token) => patchNcSeverity(token, TENANT_A, 'NC-001', 'critical')],
   ['añade a NC-006 el comentario `Seguimiento de prueba` con POST /api/nc/NC-006/comments', (token) => commentNc(token, TENANT_A, 'NC-006', 'Seguimiento de prueba')],
 ]);
+
+/**
+ * Lo que dan por hecho la historia y el seed para cada cambio (celda «cambio»): el programa de la NC y las cifras por severidad tras el
+ * cambio (NC abiertas del seed: NC-001 y NC-007 menores; NC-002 y NC-008 mayores; NC-003, NC-006, NC-009 y NC-012 críticas).
+ */
+const CAMBIO_ESPERADO: ReadonlyMap<string, { readonly programCode: string; readonly counts: string }> = new Map<string, { readonly programCode: string; readonly counts: string }>([
+  ['pasa NC-001 a in_analysis con POST /api/nc/NC-001/transition', { programCode: 'PRG-001', counts: 'minor 2, major 2, critical 4' }],
+  ['pasa NC-002 a rejected con POST /api/nc/NC-002/transition', { programCode: 'PRG-001', counts: 'minor 2, major 1, critical 4' }],
+  [
+    'cierra NC-003 con POST /api/nc/NC-003/transition, to closed y el comentario `Acción correctiva verificada por calidad`',
+    { programCode: 'PRG-001', counts: 'minor 2, major 2, critical 3' },
+  ],
+  ['cambia la gravedad de NC-001 a critical con PATCH /api/nc/NC-001', { programCode: 'PRG-001', counts: 'minor 1, major 2, critical 5' }],
+  ['añade a NC-006 el comentario `Seguimiento de prueba` con POST /api/nc/NC-006/comments', { programCode: 'PRG-002', counts: 'minor 2, major 2, critical 4' }],
+]);
+
+/** Formato del identificador (`EV-` y cuatro cifras) y de la fecha (ISO 8601, como la emite `toISOString`). */
+const ID_EV = /^EV-\d{4}$/;
+const ISO_8601 = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z$/;
 
 /** Operaciones que la API rechaza (celda «operacion»). */
 const RECHAZADA: ReadonlyMap<string, (token: string) => Promise<ApiResult>> = new Map<string, (token: string) => Promise<ApiResult>>([
@@ -123,6 +143,8 @@ const altaConGravedad: ApiRowHandler = async (row) => {
         eventFieldCheck(event, 'seq', 7),
         eventFieldCheck(event, 'origin', 'system'),
         eventFieldCheck(event, 'programCode', 'PRG-002'),
+        check(event !== undefined && ID_EV.test(event.id) && event.id === 'EV-0007', 'id EV-0007', `id ${String(event?.id ?? '(sin leer)')}`),
+        check(event !== undefined && ISO_8601.test(event.at), 'at en ISO 8601', `at ${String(event?.at ?? '(sin leer)')}`),
         eventFieldCheck(event, 'severity', severidad),
         varCheck(event, 'code', 'NC-013'),
         varCheck(event, 'severity', gravedad),
@@ -155,11 +177,25 @@ const cambioEmiteTipo: ApiRowHandler = async (row) => {
   try {
     const result = await change(prep.adminToken);
     const event = await prep.client.waitEvent((item) => item.type === tipo);
+    const esperado = strict('cambio', CAMBIO_ESPERADO, cell(row, 'cambio'));
+    const wanted = countsOf(esperado.counts);
+    const observed = event?.ncBySeverity;
     const checks: Check[] = [
       check(isOk(result), 'la operación se acepta (2xx)', `la operación responde ${result.status}`),
       eventFieldCheck(event, 'type', tipo),
       eventFieldCheck(event, 'severity', severidad),
       check(event?.ncOpen === ncOpen, `ncOpen ${ncOpen}`, `ncOpen ${String(event?.ncOpen ?? '(sin leer)')}`),
+      // Regla 1 (forma del evento) y Regla 2 (origen system, programCode) y Regla 3 (cifras tras el cambio, por severidad)
+      eventFieldCheck(event, 'origin', 'system'),
+      eventFieldCheck(event, 'programCode', esperado.programCode),
+      eventFieldCheck(event, 'seq', 7),
+      check(event !== undefined && ID_EV.test(event.id) && event.id === 'EV-0007', 'id EV-0007', `id ${String(event?.id ?? '(sin leer)')}`),
+      check(event !== undefined && ISO_8601.test(event.at), 'at en ISO 8601', `at ${String(event?.at ?? '(sin leer)')}`),
+      check(
+        observed !== undefined && observed.minor === wanted.minor && observed.major === wanted.major && observed.critical === wanted.critical,
+        `ncBySeverity ${esperado.counts}`,
+        observed === undefined ? 'ncBySeverity (sin leer)' : `ncBySeverity minor ${observed.minor}, major ${observed.major}, critical ${observed.critical}`,
+      ),
     ];
     for (const [key, value] of Object.entries(variables)) checks.push(varCheck(event, key, value));
     return conclude(checks, { evidence: { eventoRecibido: describeEvent(event), respuesta: result.status } });
@@ -180,7 +216,11 @@ const rechazadaSinEvento: ApiRowHandler = async (row) => {
     const result = await operation(prep.adminToken);
     const received = await quietWindow(prep.client, OBSERVE_MS);
     return conclude(
-      [responseCheck(result, respuesta), check(received === 0, 'la conexión no recibe ningún evento durante la observación', `la conexión recibe ${received} evento(s)`)],
+      [
+        responseCheck(result, respuesta),
+        check(received === 0, 'la conexión no recibe ningún evento durante la observación', `la conexión recibe ${received} evento(s)`),
+        await positiveControl(prep.client, prep.adminToken, TENANT_A),
+      ],
       { evidence: { respuesta: result.status } },
     );
   } finally {
@@ -206,6 +246,7 @@ const descripcionMinima: ApiRowHandler = async (row) => {
     } else {
       const received = await quietWindow(prep.client, OBSERVE_MS);
       checks.push(check(received === 0, 'la conexión no recibe ningún evento durante la observación', `la conexión recibe ${received} evento(s)`));
+      checks.push(await positiveControl(prep.client, prep.adminToken, TENANT_A));
     }
     return conclude(checks, { evidence: { respuesta: result.status, longitudEnviada: descripcion.text.length } });
   } finally {

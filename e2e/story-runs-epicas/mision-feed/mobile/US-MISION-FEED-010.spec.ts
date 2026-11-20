@@ -2,7 +2,7 @@ import { defineBrowserRows, type BrowserRowHandler } from '../../core/framework'
 import { waitUntil } from '../../support/browser';
 import { cell, check, strict, type Check } from '../../support/checks';
 import { adminAccess, deleteProgram, gestorSession, intOf, ncOpenOf, patchMilestone, resetTenants, summaryOf, TENANT_A } from '../api/common';
-import { ACCION_NC, actionCheck, performNc, type NcAct } from '../web/nc-actions';
+import { ACCION_NC, accionNc, actionCheck, performNc, type NcAct } from '../web/nc-actions';
 import {
   actionFailed,
   conclude,
@@ -67,12 +67,13 @@ const tarjetaNc: BrowserRowHandler = onExpoWeb(async (row, { page }) => {
 
 // --- Esquema 2: la gráfica «NC abiertas por severidad» en su vista de tabla sigue a los cambios -----------------------
 
-const ACCION_TABLA: ReadonlyMap<string, NcAct | undefined> = new Map<string, NcAct | undefined>([
-  ['no se hace ningún cambio', undefined],
-  ['alumno01@sigpro.lab cambia la gravedad de NC-001 a critical con PATCH /api/nc/NC-001', ACCION_NC.get('alumno01@sigpro.lab cambia la gravedad de NC-001 a critical con PATCH /api/nc/NC-001')],
+/** Celda «cambio» de la tabla: «ninguno» (no se hace nada) o la acción de la historia (nunca `undefined`: `strict` no lo acepta). */
+const ACCION_TABLA: ReadonlyMap<string, NcAct | 'ninguno'> = new Map<string, NcAct | 'ninguno'>([
+  ['no se hace ningún cambio', 'ninguno'],
+  ['alumno01@sigpro.lab cambia la gravedad de NC-001 a critical con PATCH /api/nc/NC-001', accionNc('alumno01@sigpro.lab cambia la gravedad de NC-001 a critical con PATCH /api/nc/NC-001')],
   [
     'alumno01@sigpro.lab crea con POST /api/nc una no conformidad en PRG-002 con severidad major y la descripción `Desviación de prueba en la ejecución`',
-    ACCION_NC.get('alumno01@sigpro.lab crea con POST /api/nc una no conformidad en PRG-002 con severidad major y la descripción `Desviación de prueba en la ejecución`'),
+    accionNc('alumno01@sigpro.lab crea con POST /api/nc una no conformidad en PRG-002 con severidad major y la descripción `Desviación de prueba en la ejecución`'),
   ],
 ]);
 
@@ -94,8 +95,8 @@ const tablaSeveridad: BrowserRowHandler = onExpoWeb(async (row, { page }) => {
   if (toggled) return actionFailed(expected, toggled);
   const admin = await adminAccess(TENANT_A);
   if (admin.token === undefined) return prepFailed(expected, { message: 'alumno01@sigpro.lab no inicia sesión', callLog: [] });
-  const performed = act === undefined ? undefined : await performNc(link, act, admin.token);
-  if (act === undefined) await settle();
+  const performed = act === 'ninguno' ? undefined : await performNc(link, act, admin.token);
+  if (act === 'ninguno') await settle();
   const want = { Menor: String(menor), Mayor: String(mayor), Crítica: String(critica) };
   await waitUntil(async () => {
     const current = await mobileNcCounts(page);
@@ -103,7 +104,7 @@ const tablaSeveridad: BrowserRowHandler = onExpoWeb(async (row, { page }) => {
   }, SHOW_CEILING_MS);
   const counts = await mobileNcCounts(page);
   return conclude([
-    ...(performed === undefined || act === undefined ? [] : [actionCheck(performed.result, act, 'la operación')]),
+    ...(performed === undefined || act === 'ninguno' ? [] : [actionCheck(performed.result, act, 'la operación')]),
     valueCheck(counts.Menor, String(menor), '«Menor»'),
     valueCheck(counts.Mayor, String(mayor), '«Mayor»'),
     valueCheck(counts.Crítica, String(critica), '«Crítica»'),

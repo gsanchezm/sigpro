@@ -18,7 +18,7 @@ import {
   recentOf,
   renderEventText,
   resetTenants,
-  simulatorMsOf,
+  simulatorMsOutcome,
   summaryOf,
   tickMany,
   type RealtimeClient,
@@ -31,6 +31,17 @@ import {
 /** Lo que una fila de observación mide: cuánto se espera sin acciones (ms), con el simulador apagado o encendido. */
 const WINDOW_OFF_MS = 5_000;
 const WINDOW_ON_MS = 12_000;
+
+/** Gravedad de cada tipo del ciclo fijo del simulador (Regla 19 de la historia). */
+const GRAVEDAD_DEL_TIPO: ReadonlyMap<string, string> = new Map<string, string>([
+  ['link', 'info'],
+  ['telemetry', 'info'],
+  ['heartbeat', 'info'],
+  ['milestone', 'ok'],
+  ['test_pass', 'ok'],
+  ['thermal', 'warn'],
+  ['link_lost', 'danger'],
+]);
 
 /** Último `seq` del historial (el más reciente), o `undefined` si el resumen no lo trae. */
 const lastSeqOf = (summary: Awaited<ReturnType<typeof summaryOf>>): number | undefined => recentOf(summary)?.[0]?.seq;
@@ -55,7 +66,8 @@ const apagado: ApiRowHandler = async (row) => {
   const gestor = await gestorSession(TENANT_A);
   if (gestor.session === undefined) return prepFailure(expected, 'gestor@sigpro.test inicia sesión en alumno01', gestor.result);
   const before = await summaryOf(gestor.session.accessToken, TENANT_A);
-  if (simulatorMsOf(before) !== 0) return prepFailureReason(expected, `la API no arrancó con SIMULATOR_MS 0 (resumen: ${String(simulatorMsOf(before) ?? '(sin leer)')})`);
+  const notOff = await simulatorMsOutcome(expected, 0);
+  if (notOff) return notOff;
   if (lastSeqOf(before) !== 6) return prepFailureReason(expected, `el historial recién reiniciado no empieza en seq 6 (último: ${String(lastSeqOf(before) ?? '(sin leer)')})`);
   let client: RealtimeClient | undefined;
   if (situacion === 'con-conexion') {
@@ -100,7 +112,9 @@ const encendido: ApiRowHandler = async (row) => {
   const gestor = await gestorSession(TENANT_A);
   if (gestor.session === undefined) return prepFailure(expected, 'gestor@sigpro.test inicia sesión en alumno01', gestor.result);
   const before = await summaryOf(gestor.session.accessToken, TENANT_A);
-  if (simulatorMsOf(before) !== 4000) return prepFailureReason(expected, `la API no arrancó con SIMULATOR_MS 4000 (resumen: ${String(simulatorMsOf(before) ?? '(sin leer)')}); esta fila necesita una pila con ese valor`);
+  // Esta fila necesita una pila con SIMULATOR_MS=4000; con otra configuración no es ejecutable (no es un fallo de la app)
+  const notFourThousand = await simulatorMsOutcome(expected, 4000);
+  if (notFourThousand) return notFourThousand;
   if (lastSeqOf(before) !== 6) return prepFailureReason(expected, `el historial recién reiniciado no empieza en seq 6 (último: ${String(lastSeqOf(before) ?? '(sin leer)')})`);
   let client: RealtimeClient | undefined;
   if (situacion === 'con-conexion') {
@@ -147,15 +161,22 @@ const secuenciaFija: ApiRowHandler = async (row) => {
   if (admin.token === undefined) return prepFailure(expected, 'alumno01@sigpro.lab inicia sesión', admin.last);
   const gestor = await gestorSession(TENANT_A);
   if (gestor.session === undefined) return prepFailure(expected, 'gestor@sigpro.test inicia sesión en alumno01', gestor.result);
+  const notOff = await simulatorMsOutcome(expected, 0);
+  if (notOff) return notOff;
   const before = await summaryOf(gestor.session.accessToken, TENANT_A);
-  if (simulatorMsOf(before) !== 0) return prepFailureReason(expected, `la API no arrancó con SIMULATOR_MS 0 (resumen: ${String(simulatorMsOf(before) ?? '(sin leer)')})`);
+  // Antes de provocar: el último seq del historial es 6 (la historia inicial); si no, la secuencia no empieza donde la historia dice
+  const seqAntes = lastSeqOf(before);
   const ticks = await tickMany(admin.token, TENANT_A, n);
   if (ticks.failed) return conclude([check(false, 'POST /api/mission/tick responde 200', `POST /api/mission/tick respondió ${ticks.failed.result.status}`)], { evidence: { paso: ticks.failed.step } });
   const last = ticks.last;
   return conclude(
     [
+      check(seqAntes === 6, 'antes de provocar, el último seq del historial es 6', `antes de provocar, el último seq es ${String(seqAntes ?? '(sin leer)')}`),
       eventFieldCheck(last, 'seq', seq),
       eventFieldCheck(last, 'type', tipo),
+      eventFieldCheck(last, 'origin', 'simulator'),
+      // Regla 19: la gravedad de cada tipo del ciclo fijo
+      eventFieldCheck(last, 'severity', strict('tipo', GRAVEDAD_DEL_TIPO, tipo)),
       eventFieldCheck(last, 'programCode', programa),
       check(last !== undefined && renderEventText(last) === texto, `el texto «${texto}»`, `el texto «${last === undefined ? '(sin evento)' : renderEventText(last)}»`),
     ],

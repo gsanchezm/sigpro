@@ -132,3 +132,43 @@ export const valueCheck = (observed: string | undefined, expected: string, what:
 
 /** Lectura de la pantalla móvil (la misma forma que la web: mismas ids de prueba para cifras, feed y estado). */
 export const readMobile = (page: Page): Promise<WebView | undefined> => readWeb(page);
+
+/**
+ * Explicación del estado y posición del botón, leídas en UNA evaluación: la explicación debe ir bajo el título «Eventos en directo» y el
+ * botón «Reintentar» debajo de la explicación (Reglas 18 y 19 de la historia 011). Las posiciones son del rectángulo de cada nodo.
+ */
+export interface MobileExplanation {
+  readonly indicator?: string;
+  readonly explanation?: string;
+  readonly titleBottom?: number;
+  readonly explanationTop?: number;
+  readonly explanationBottom?: number;
+  readonly retryTop?: number;
+  readonly retryPresent: boolean;
+}
+
+export const readMobileExplanation = (page: Page): Promise<MobileExplanation | undefined> =>
+  safe(
+    () =>
+      page.evaluate(() => {
+        const byTestId = (id: string): HTMLElement | null => document.querySelector<HTMLElement>(`[data-testid="${id}"]`);
+        const textOf = (element: Element | null | undefined): string | undefined => (element ? (element.textContent ?? '').replace(/\u00a0/g, ' ').trim() : undefined);
+        const region = document.querySelector<HTMLElement>('[role="region"][aria-label="Eventos en directo"]');
+        const title = region
+          ? Array.from(region.querySelectorAll<HTMLElement>('*')).find((element) => element.children.length === 0 && (element.textContent ?? '').trim() === 'Eventos en directo')
+          : undefined;
+        const explanationElement = byTestId('mission-connection-tooltip');
+        const retryElement = byTestId('mission-connection-retry');
+        const explanationRect = explanationElement?.getBoundingClientRect();
+        return {
+          indicator: textOf(byTestId('mission-connection')),
+          explanation: textOf(explanationElement),
+          titleBottom: title?.getBoundingClientRect().bottom,
+          explanationTop: explanationRect?.top,
+          explanationBottom: explanationRect?.bottom,
+          retryTop: retryElement?.getBoundingClientRect().top,
+          retryPresent: retryElement !== null,
+        };
+      }) as Promise<MobileExplanation>,
+    undefined,
+  );
