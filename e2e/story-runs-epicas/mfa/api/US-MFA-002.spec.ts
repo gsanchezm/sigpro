@@ -1,43 +1,69 @@
-import { call, field, type ApiResult } from '../../../story-runs/support/api';
+import { call, field, usersByEmail, type ApiResult } from '../../../story-runs/support/api';
 import { DEMO, TENANT_A, failedLogins, patchAccountById, resetTenants, startSession } from '../../../story-runs/support/prepare';
-import { cell, check, conclude, noTokensCheck, parseResponse, preparationFailed, responseCheck, strict, type Check } from '../../support/checks';
-import { defineApiRows, type ApiRowHandler } from '../../support/framework';
+import { cell, check, conclude, describeResponse, noTokensCheck, preparationFailed, responseCheck, strict, type Check, type ExpectedResponse } from '../../support/checks';
+import { defineApiRows, outcome, type ApiRowHandler, type Outcome } from '../../support/framework';
 
 // US-MFA-002 — Impedir el canje si la cuenta quedó bloqueada o desactivada. Preparación de cada fila: reinicio del tenant alumno01,
 // mfaToken de admin@sigpro.test (POST /api/auth/login) y, ANTES del canje, el cambio de estado: PATCH /api/admin/users/u1 hecho por
 // alumno01@sigpro.lab para desactivar o reactivar, y cinco inicios de sesión con contraseña incorrecta para bloquear. Cada paso
-// previo se comprueba: si el estado que la historia da por hecho no se produce, la fila discrepa con ese motivo.
+// previo se comprueba: si el PATCH no responde 200 o el listado no muestra el `active` pedido, o si la quinta contraseña no bloquea,
+// la fila NO prueba lo que la historia da por hecho y se devuelve como preparación no cumplida.
 
 const ADMIN_ID = 'u1';
 const CODE = '123456';
 const WRONG_CODE = '000000';
+const NOT_PREPARED = 'No se pudo reproducir el estado inicial que da por hecha la historia; la app no hace lo que la preparación describe.';
 
-type Step = (token: string) => Promise<ApiResult | undefined>;
+const CODES: ReadonlyMap<string, string> = new Map<string, string>([
+  [CODE, CODE],
+  [WRONG_CODE, WRONG_CODE],
+]);
 
-/** Desactiva la cuenta (`active: false`) o la reactiva; devuelve la respuesta solo si no fue 200. */
+/** Respuestas que la columna «respuesta» admite en el Esquema 1. */
+const RESPONSES: ReadonlyMap<string, ExpectedResponse> = new Map<string, ExpectedResponse>([
+  ['423 account_locked', { status: 423, code: 'account_locked' }],
+  ['403 account_disabled', { status: 403, code: 'account_disabled' }],
+  ['401 invalid_mfa', { status: 401, code: 'invalid_mfa' }],
+]);
+
+/** Un paso de preparación: devuelve el motivo si no se cumplió, o `undefined` si sí. */
+type Step = () => Promise<string | undefined>;
+
+const notPrepared = (expected: string, reason: string): Outcome => outcome(false, expected, `la preparación no se cumplió: ${reason}`, { note: NOT_PREPARED });
+
+/** Desactiva (`active: false`) o reactiva la cuenta por el PATCH y LEE el listado: el `active` de la cuenta debe ser el pedido. */
 const setActive = (active: boolean): Step => async () => {
   const result = await patchAccountById(TENANT_A, ADMIN_ID, active);
-  return result.status === 200 ? undefined : result;
+  if (result.status !== 200) return `el PATCH respondió ${describeResponse(result)}`;
+  const after = (await usersByEmail(TENANT_A)).get(DEMO.admin.email)?.active;
+  return after === active ? undefined : `tras el PATCH, el listado muestra active ${String(after)} (se pidió ${String(active)})`;
 };
 
-/** Cinco inicios de sesión con contraseña incorrecta; el quinto debe bloquear la cuenta (423). Devuelve la respuesta solo si no fue así. */
+/** Cinco inicios de sesión con contraseña incorrecta; el quinto debe bloquear la cuenta (423). Devuelve el motivo si no fue así. */
 const lockByWrongPasswords: Step = async () => {
   const attempts = await failedLogins(TENANT_A, DEMO.admin.email, 5);
   const fifth = attempts[4];
-  return fifth !== undefined && fifth.status === 423 ? undefined : (fifth ?? attempts[attempts.length - 1]);
+  if (fifth === undefined) return 'no se enviaron cinco inicios de sesión';
+  return fifth.status === 423 ? undefined : `el quinto inicio de sesión con contraseña incorrecta respondió ${describeResponse(fifth)}`;
 };
 
-const STATES: ReadonlyMap<string, readonly { readonly name: string; readonly step: Step }[]> = new Map([
+const STATES: ReadonlyMap<string, readonly { readonly name: string; readonly step: Step }[]> = new Map<string, readonly { readonly name: string; readonly step: Step }[]>([
   ['bloqueada tras cinco contraseñas incorrectas', [{ name: 'cinco contraseñas incorrectas bloquean la cuenta (423 en la quinta)', step: lockByWrongPasswords }]],
-  ['desactivada por el administrador del tenant', [{ name: 'alumno01@sigpro.lab desactiva a admin@sigpro.test (PATCH, 200)', step: setActive(false) }]],
+  ['desactivada por el administrador del tenant', [{ name: 'alumno01@sigpro.lab desactiva a admin@sigpro.test (PATCH 200 y active false en el listado)', step: setActive(false) }]],
   [
     'desactivada y después bloqueada tras cinco contraseñas incorrectas',
     [
-      { name: 'alumno01@sigpro.lab desactiva a admin@sigpro.test (PATCH, 200)', step: setActive(false) },
+      { name: 'alumno01@sigpro.lab desactiva a admin@sigpro.test (PATCH 200 y active false en el listado)', step: setActive(false) },
       { name: 'cinco contraseñas incorrectas bloquean la cuenta (423 en la quinta)', step: lockByWrongPasswords },
     ],
   ],
 ]);
+
+/** Reactivación del Esquema 2: desactivar y volver a activar, cada paso comprobado igual que los del Esquema 1. */
+const REACTIVATION: readonly { readonly name: string; readonly step: Step }[] = [
+  { name: 'alumno01@sigpro.lab desactiva a admin@sigpro.test (PATCH 200 y active false en el listado)', step: setActive(false) },
+  { name: 'alumno01@sigpro.lab reactiva a admin@sigpro.test (PATCH 200 y active true en el listado)', step: setActive(true) },
+];
 
 const redeem = (mfaToken: string, code: string): Promise<ApiResult> => call('POST', '/auth/mfa', { tenant: TENANT_A, body: { mfaToken, code } });
 
@@ -50,16 +76,18 @@ const freshToken = async (): Promise<string | ApiResult> => {
 };
 
 const stateChange: ApiRowHandler = async (row) => {
+  const expectedResponse = strict('respuesta', RESPONSES, cell(row, 'respuesta'));
+  const steps = strict('estado', STATES, cell(row, 'estado'));
+  const code = strict('codigo', CODES, cell(row, 'codigo'));
   const expected = `${cell(row, 'respuesta')}; sin tokens de sesión`;
   const token = await freshToken();
   if (typeof token !== 'string') return preparationFailed(expected, 'admin@sigpro.test inicia sesión y recibe mfaToken', token);
-  const steps = strict('estado', STATES, cell(row, 'estado'));
   for (const { name, step } of steps) {
-    const failed = await step(token);
-    if (failed) return preparationFailed(expected, name, failed);
+    const reason = await step();
+    if (reason) return notPrepared(expected, `${name}: ${reason}`);
   }
-  const result = await redeem(token, strict('codigo', new Map([[CODE, CODE], [WRONG_CODE, WRONG_CODE]]), cell(row, 'codigo')));
-  return conclude([responseCheck(result, parseResponse(cell(row, 'respuesta'))), noTokensCheck(result)]);
+  const result = await redeem(token, code);
+  return conclude([responseCheck(result, expectedResponse), noTokensCheck(result)]);
 };
 
 const SUCCESS: ReadonlyMap<string, (result: ApiResult) => readonly Check[]> = new Map<string, (result: ApiResult) => readonly Check[]>([
@@ -79,14 +107,16 @@ const SUCCESS: ReadonlyMap<string, (result: ApiResult) => readonly Check[]> = ne
 
 const reactivated: ApiRowHandler = async (row) => {
   const expected = cell(row, 'respuesta');
+  const expectation = strict('respuesta', SUCCESS, expected);
+  const code = strict('codigo', CODES, cell(row, 'codigo'));
   const token = await freshToken();
   if (typeof token !== 'string') return preparationFailed(expected, 'admin@sigpro.test inicia sesión y recibe mfaToken', token);
-  for (const [name, step] of [['alumno01@sigpro.lab desactiva a admin@sigpro.test (PATCH, 200)', setActive(false)], ['alumno01@sigpro.lab reactiva a admin@sigpro.test (PATCH, 200)', setActive(true)]] as const) {
-    const failed = await step(token);
-    if (failed) return preparationFailed(expected, name, failed);
+  for (const { name, step } of REACTIVATION) {
+    const reason = await step();
+    if (reason) return notPrepared(expected, `${name}: ${reason}`);
   }
-  const result = await redeem(token, cell(row, 'codigo'));
-  return conclude(strict('respuesta', SUCCESS, expected)(result));
+  const result = await redeem(token, code);
+  return conclude(expectation(result));
 };
 
 defineApiRows({
