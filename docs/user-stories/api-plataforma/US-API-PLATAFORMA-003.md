@@ -5,7 +5,7 @@ epica: EP-API-PLATAFORMA
 titulo: "[API] Listar los tenants y los usuarios de prueba de la pantalla de acceso"
 etiquetas: [api]
 relacionadas: [US-API-PLATAFORMA-007, US-API-PLATAFORMA-008]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["GET /api/config/tenants", "GET /api/config/test-users"]
 ---
 

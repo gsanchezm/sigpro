@@ -5,7 +5,7 @@ epica: EP-API-PLATAFORMA
 titulo: "[Web] Panel «Usuarios de prueba» en /login: un clic rellena correo y contraseña"
 etiquetas: [web]
 relacionadas: [US-API-PLATAFORMA-003, US-API-PLATAFORMA-008, US-API-PLATAFORMA-009, US-LOGIN-007]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["/login", "/register"]
 ---
 

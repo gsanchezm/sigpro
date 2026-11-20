@@ -4,7 +4,7 @@ tipo: historia
 epica: EP-API-PLATAFORMA
 titulo: "[API] Publicar la documentación OpenAPI en /api/docs"
 etiquetas: [api]
-verificacion: codigo
+verificacion: ejecutada
 ---
 
 ## Historia

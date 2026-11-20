@@ -5,7 +5,7 @@ epica: EP-API-PLATAFORMA
 titulo: "[API] Leer la configuración pública del tenant con la cabecera x-tenant"
 etiquetas: [api]
 relacionadas: [US-API-PLATAFORMA-003]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["GET /api/config"]
 ---
 
