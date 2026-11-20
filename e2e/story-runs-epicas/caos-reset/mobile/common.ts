@@ -3,8 +3,8 @@ import { TENANT_A } from '../../../story-runs/support/prepare';
 import { ACTION, CEILING_MS, runSteps, safe, type Step } from '../../support/browser';
 import { check, type Check } from '../../support/checks';
 import { outcome, type BrowserRowHandler, type Outcome } from '../../core/framework';
-import { recordToasts, restoringAfter, TOAST_KEY } from '../web/common';
 import { withDifference } from '../api/common';
+import { interact, recordToasts, restoringAfter, TOAST_KEY, type Blocked } from '../web/common';
 
 // Piezas comunes de las filas MÓVILES de EP-CAOS-RESET: la app móvil servida como web de Expo a 390 × 844. NO es iOS ni Android nativo:
 // el veredicto vale para Expo web. Las lecturas de texto van acotadas a su elemento y las esperas, con techo (`waitUntil`).
@@ -12,7 +12,7 @@ import { withDifference } from '../api/common';
 export const MOBILE_VIEWPORT = { width: 390, height: 844 } as const;
 export const EXPO_NOTE = 'El veredicto vale para Expo web (390 × 844): no se ha comprobado en iOS ni en Android nativo.';
 
-/** Añade la salvedad de plataforma (Expo web no es nativo) al resultado de cada fila móvil. */
+/** Añade la salvedad de plataforma (Expo web no es nativo) y deja cada tenant de la fila como lo pide la historia al terminar. */
 export const onMobile = (handler: BrowserRowHandler, tenants: readonly string[] = [TENANT_A]): BrowserRowHandler =>
   restoringAfter(tenants, async (row, fixtures) => {
     const result = await handler(row, fixtures);
@@ -55,9 +55,12 @@ export const adminPath = (tab: 'chaos' | 'data'): string => `/admin?tab=${tab}`;
 export const ariaDisabled = (target: Locator): Promise<boolean | undefined> =>
   safe(async () => (await target.first().getAttribute('aria-disabled', { timeout: 1_000 })) === 'true', undefined);
 
-/** Estado `checked` de un interruptor (`role="switch"`): `undefined` si no se puede leer. */
+/** Estado `aria-checked` de un interruptor (`role="switch"`): se lee el atributo del elemento con el testid, de forma explícita. */
 export const switchOn = (target: Locator): Promise<boolean | undefined> =>
-  safe(() => target.first().isChecked({ timeout: 1_000 }), undefined);
+  safe(async () => {
+    const value = await target.first().getAttribute('aria-checked', { timeout: 1_000 });
+    return value === null ? undefined : value === 'true';
+  }, undefined);
 
 /** ¿Está el diálogo cerrado? Positivo solo si la lectura de visibilidad responde «no visible»; una lectura fallida NO cumple. */
 export const closedCheck = async (dialog: Locator, what: string): Promise<Check> => {
@@ -65,10 +68,13 @@ export const closedCheck = async (dialog: Locator, what: string): Promise<Check>
   return check(visible === false, `${what} cerrado`, visible === undefined ? `${what}: (sin leer)` : visible ? `${what} sigue abierto` : `${what} cerrado`);
 };
 
-/** Pulsa `count` veces un control con ese nombre accesible. Devuelve el motivo del primer clic que no se pueda hacer. */
-export const pressTimes = async (page: Page, name: string, count: number): Promise<string | undefined> => {
+/**
+ * Pulsa `count` veces un control con ese nombre accesible (p. ej. «Latencia máxima +100»). Devuelve el diagnóstico del primer clic que
+ * falle (clasificado por `interact`), o `undefined` si todos salen bien.
+ */
+export const pressTimes = async (page: Page, name: string, count: number): Promise<Blocked | undefined> => {
   for (let index = 0; index < count; index += 1) {
-    const failed = await runSteps([[`pulsar «${name}» (${index + 1} de ${count})`, () => page.getByRole('button', { name, exact: true }).click(ACTION)]]);
+    const failed = await interact(page.getByRole('button', { name, exact: true }), `pulsar «${name}» (${index + 1} de ${count})`, (element) => element.click(ACTION));
     if (failed !== undefined) return failed;
   }
   return undefined;

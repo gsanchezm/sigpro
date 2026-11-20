@@ -84,41 +84,35 @@ export const prepareTenant = async (tenant: string): Promise<void> => {
   await resetTenants([tenant]);
   const token = await adminAccess(tenant);
   const current = await call('GET', '/admin/chaos', { tenant, token });
+  if (current.status !== 200) throw new Error(`GET /api/admin/chaos de ${tenant} responde ${current.status}: no se puede comprobar el caos`);
   if (isRestChaos(current.body)) return;
-  await setChaos(tenant, NO_CHAOS);
+  const off = await setChaos(tenant, NO_CHAOS);
+  if (off.status !== 200) throw new Error(`PATCH /api/admin/chaos de ${tenant} responde ${off.status}: el caos no se apaga`);
 };
 
 /**
- * Deja cada tenant como lo pide la historia al terminar: lo reinicia y le apaga el caos. Nunca lanza: devuelve el motivo si algo
- * falló (la fila lo anota; el siguiente preparado vuelve a reiniciar y el marco vuelve a apagar el caos antes de cada fila).
+ * Deja cada tenant como lo pide la historia al terminar: lo reinicia y le apaga el caos. Si la limpieza falla LANZA (error de prueba del
+ * arnés, no un hallazgo sobre la app): la fila no queda como válida con el tenant sucio.
  */
-export const restoreTenants = async (tenants: readonly string[]): Promise<string | undefined> => {
-  const problems: string[] = [];
+export const restoreTenants = async (tenants: readonly string[]): Promise<void> => {
   for (const tenant of tenants) {
-    try {
-      await resetTenants([tenant]);
-      const off = await setChaos(tenant, NO_CHAOS);
-      if (off.status !== 200) problems.push(`el caos de ${tenant} no se apagó (PATCH /api/admin/chaos → ${off.status})`);
-    } catch (error) {
-      const message = error instanceof Error ? error.message.split('\n')[0] ?? 'error' : 'error';
-      problems.push(`${tenant} no se restauró: ${message.slice(0, 160)}`);
-    }
+    await resetTenants([tenant]);
+    const off = await setChaos(tenant, NO_CHAOS);
+    if (off.status !== 200) throw new Error(`limpieza de ${tenant}: PATCH /api/admin/chaos responde ${off.status}`);
   }
-  return problems.length === 0 ? undefined : problems.join('; ');
 };
 
-/** Ejecuta la fila y, pase lo que pase (también si lanza), restaura los tenants que usó: reinicio y caos apagado. */
+/** Ejecuta la fila y, pase lo que pase, restaura los tenants que usó: reinicio y caos apagado. Si la limpieza falla, lanza. */
 export const withRestore = async (tenants: readonly string[], run: () => Promise<Outcome>): Promise<Outcome> => {
   let result: Outcome;
   try {
     result = await run();
   } catch (error) {
-    await restoreTenants(tenants);
+    await restoreTenants(tenants).catch(() => undefined);
     throw error;
   }
-  const problem = await restoreTenants(tenants);
-  if (problem === undefined) return result;
-  return { ...result, note: [result.note, `Limpieza posterior de la fila: ${problem}.`].filter((part) => part !== undefined && part !== '').join(' ') };
+  await restoreTenants(tenants);
+  return result;
 };
 
 /** Respuesta esperada de una celda: código HTTP, `code` del cuerpo, `attempts` y si trae accessToken. */
@@ -201,12 +195,23 @@ export const withToken = (method: 'GET' | 'POST' | 'PATCH', path: string, tenant
     ...(body === undefined ? {} : { body }),
   });
 
-/** Acción del evento más reciente de la auditoría del tenant (`GET /api/audit`, del más reciente al más antiguo), o `undefined`. */
-export const newestAuditAction = async (tenant: string, token: string): Promise<string | undefined> => {
+/** Evento más reciente de la auditoría del tenant (`GET /api/audit`, del más reciente al más antiguo): id, acción y diff. */
+export interface NewestAudit {
+  readonly id?: string;
+  readonly action?: string;
+  readonly diff?: unknown;
+}
+export const newestAudit = async (tenant: string, token: string): Promise<NewestAudit> => {
   const page = await call('GET', '/audit', { tenant, token, query: 'limit=1' });
   const items = field(page.body, 'items');
-  const action = field(Array.isArray(items) ? items[0] : undefined, 'action');
-  return typeof action === 'string' ? action : undefined;
+  const first = Array.isArray(items) ? items[0] : undefined;
+  const id = field(first, 'id');
+  const action = field(first, 'action');
+  return {
+    ...(typeof id === 'string' ? { id } : {}),
+    ...(typeof action === 'string' ? { action } : {}),
+    diff: field(first, 'diff'),
+  };
 };
 
 /**

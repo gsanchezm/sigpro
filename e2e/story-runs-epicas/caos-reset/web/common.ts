@@ -3,13 +3,13 @@ import { LAB_TESTIDS } from '../../../../packages/shared/src/testids';
 import { TENANT_A, type Credentials } from '../../../story-runs/support/prepare';
 import { ACTION, CEILING_MS, attrOf, runSteps, safe, textOf, waitUntil } from '../../support/browser';
 import { check, sleep, type Check } from '../../support/checks';
-import { outcome, type BrowserRowHandler, type Outcome } from '../../core/framework';
+import { notExecutable, outcome, type BrowserRowHandler, type Outcome } from '../../core/framework';
 import { restoreTenants, withDifference } from '../api/common';
 
 // Piezas comunes de las filas WEB de EP-CAOS-RESET (escritorio 1440 × 900). Los localizadores son de rol y de nombre; los ids de
 // prueba solo donde la pantalla no ofrece otro rastro. Los avisos se leen de un REGISTRO instalado ANTES de la acción (`recordToasts`):
-// un registro ausente o una lectura fallida NUNCA cuenta como «ningún aviso». Toda acción pasa por `interact`: si falla, la nota dice si
-// el elemento no existe, si otro lo tapa, o si recibe el clic pero la acción no ocurre.
+// un registro ausente o no legible NUNCA cuenta como «ningún aviso». Toda acción pasa por `interact`, que clasifica el fallo: si el
+// elemento no existe, la app no lo ofrece (discrepa); si hay error de localizador o de clic, la fila no es ejecutable (con el error).
 
 export const WEB_VIEWPORT = { width: 1440, height: 900 } as const;
 export const LOGIN_URL = `/login?tenant=${TENANT_A}`;
@@ -24,7 +24,7 @@ export const onWeb = (handler: BrowserRowHandler, tenants: readonly string[] = [
 
 /**
  * Deja cada tenant de la fila como lo pide la historia al terminar, pase lo que pase (también si la fila lanza): reinicio y caos
- * apagado. Un fallo de esa limpieza se anota en la nota de la fila; no cambia el veredicto.
+ * apagado. Si la limpieza falla, LANZA: el marco la registra como error de prueba (no es un hallazgo sobre la app).
  */
 export const restoringAfter =
   (tenants: readonly string[], handler: BrowserRowHandler): BrowserRowHandler =>
@@ -33,12 +33,11 @@ export const restoringAfter =
     try {
       result = await handler(row, fixtures);
     } catch (error) {
-      await restoreTenants(tenants);
+      await restoreTenants(tenants).catch(() => undefined);
       throw error;
     }
-    const problem = await restoreTenants(tenants);
-    if (problem === undefined) return result;
-    return { ...result, note: [result.note, `Limpieza posterior de la fila: ${problem}.`].filter((part) => part !== undefined && part !== '').join(' ') };
+    await restoreTenants(tenants);
+    return result;
   };
 
 /** Fija SOLO la preferencia de cookies: el aviso tapa zonas de la página y no es una sesión. */
@@ -100,34 +99,53 @@ export const prepareBrowser = async (page: Page): Promise<void> => {
   await page.setViewportSize(WEB_VIEWPORT);
 };
 
-/** Registro de avisos de la página desde la última «armada». */
-export const toastLog = (page: Page): Promise<readonly ToastEntry[]> =>
-  safe(() => page.evaluate((key: string) => ((window as unknown as Record<string, unknown>)[key] as ToastEntry[] | undefined) ?? [], TOAST_KEY), []);
+/**
+ * Registro de avisos de la página desde la última «armada». `undefined` = NO LEGIBLE (el registro no existe en la página o la lectura
+ * falla): nunca equivale a «ningún aviso».
+ */
+export const toastLog = async (page: Page): Promise<readonly ToastEntry[] | undefined> => {
+  const raw = await safe<ToastEntry[] | null | undefined>(
+    () =>
+      page.evaluate((key: string) => {
+        const value = (window as unknown as Record<string, unknown>)[key];
+        return Array.isArray(value) ? (value as { tone: string; title: string; body: string; at: number }[]) : null;
+      }, TOAST_KEY),
+    undefined,
+  );
+  return raw === null || raw === undefined ? undefined : raw;
+};
 
-/** Vacía el registro justo antes de la acción que se va a observar. */
-export const armToasts = (page: Page): Promise<void> =>
+/**
+ * Vacía el registro justo antes de la acción que se va a observar. Devuelve `true` si el registro existe (control positivo de que está
+ * armado); `false` si no existe y las lecturas posteriores darán «no legible».
+ */
+export const armToasts = (page: Page): Promise<boolean> =>
   safe(
     () =>
       page.evaluate((key: string) => {
         const registry = window as unknown as Record<string, unknown>;
         const log = registry[key];
-        if (Array.isArray(log)) log.length = 0;
+        if (!Array.isArray(log)) return false;
+        log.length = 0;
+        return true;
       }, TOAST_KEY),
-    undefined,
+    false,
   );
 
-/** Espera (con techo) a que aparezca un aviso del tono y título dados en el registro. Devuelve el encontrado (si lo hay) y el registro. */
-export const waitToast = async (page: Page, tone: ToneName, title: string): Promise<{ readonly found?: ToastEntry; readonly log: readonly ToastEntry[] }> => {
+/** Espera (con techo) a que aparezca un aviso del tono y título dados en el registro. `log` es `undefined` si el registro no es legible. */
+export const waitToast = async (page: Page, tone: ToneName, title: string): Promise<{ readonly found?: ToastEntry; readonly log: readonly ToastEntry[] | undefined }> => {
   const matches = (entry: ToastEntry): boolean => entry.tone === tone && entry.title === title;
-  await waitUntil(async () => (await toastLog(page)).some(matches));
+  await waitUntil(async () => ((await toastLog(page)) ?? []).some(matches));
   const log = await toastLog(page);
-  const found = log.find(matches);
+  const found = log?.find(matches);
   return found === undefined ? { log } : { found, log };
 };
 
-/** Lo que hay en el registro, en una frase (o «ningún aviso»). */
-export const describeLog = (log: readonly ToastEntry[]): string =>
-  log.length === 0 ? 'ningún aviso' : log.map((entry) => `${entry.tone} «${entry.title}»${entry.body === '' ? '' : ` / «${entry.body}»`}`).join(' | ');
+/** Lo que hay en el registro, en una frase: «ningún aviso» solo si el registro es legible y está vacío. */
+export const describeLog = (log: readonly ToastEntry[] | undefined): string => {
+  if (log === undefined) return '(registro de avisos no legible)';
+  return log.length === 0 ? 'ningún aviso' : log.map((entry) => `${entry.tone} «${entry.title}»${entry.body === '' ? '' : ` / «${entry.body}»`}`).join(' | ');
+};
 
 /** Comprobación de un aviso del tono y título dados, con su cuerpo exacto si se da. */
 export const toastCheck = async (page: Page, tone: ToneName, title: string, body?: string): Promise<Check> => {
@@ -139,12 +157,14 @@ export const toastCheck = async (page: Page, tone: ToneName, title: string, body
 
 /**
  * Tras una acción que termina en `endedAt`, espera la ventana de observación (mayor que la vida del aviso) y dice si NO apareció
- * ningún aviso de éxito desde la última «armada». Consulta el registro: un aviso ya cerrado también cuenta.
+ * ningún aviso de éxito desde la última «armada». `held` es `undefined` si el registro no es legible (no cumple, no es «ningún aviso»).
  */
-export const noOkToast = async (page: Page, endedAt: number): Promise<{ readonly held: boolean; readonly seen: string }> => {
+export const noOkToast = async (page: Page, endedAt: number): Promise<{ readonly held: boolean | undefined; readonly seen: string }> => {
   const remaining = endedAt + QUIET_WINDOW_MS - Date.now();
   if (remaining > 0) await sleep(remaining);
-  const ok = (await toastLog(page)).filter((entry) => entry.tone === 'ok');
+  const log = await toastLog(page);
+  if (log === undefined) return { held: undefined, seen: '(registro de avisos no legible)' };
+  const ok = log.filter((entry) => entry.tone === 'ok');
   return { held: ok.length === 0, seen: ok.map((entry) => `«${entry.title}»`).join(', ') };
 };
 
@@ -184,13 +204,18 @@ export const observeTexts = async (target: Locator, ms: number): Promise<Readonl
   return seen;
 };
 
-/** Resumen de lo muestreado: ««Guardar» (n veces), «Guardar cambios» (m veces)», o «(sin lectura)». */
+/** Resumen de lo muestreado: «Guardar» (n veces), «Guardar cambios» (m veces), o «(sin lectura)». */
 export const describeSeen = (seen: ReadonlyMap<string, number>): string =>
   seen.size === 0 ? '(sin lectura)' : [...seen.entries()].map(([text, count]) => `«${text}» (${count} veces)`).join(', ');
 
 // --- Acciones con diagnóstico ------------------------------------------------------------------------------------------------------
 
+/**
+ * Fallo de una acción. `kind`: «ausente» = 0 coincidencias (la app no ofrece el elemento → discrepa); «localizador» = más de una
+ * coincidencia o lectura imposible (error del arnés → no ejecutable); «clic» = el elemento existe y la acción falla (no ejecutable).
+ */
 export interface Blocked {
+  readonly kind: 'ausente' | 'localizador' | 'clic';
   readonly message: string;
   readonly note: string;
   readonly evidence?: Readonly<Record<string, unknown>>;
@@ -211,25 +236,28 @@ const hitAtCenter = (node: Element): Hit => {
   return { hit: name, inside: hit === node || node.contains(hit) };
 };
 
-/** Lo que se registra de una acción fallida: primeras líneas del error, la línea «intercepts pointer events» y quién recibe el clic. */
+/** Lo que se registra de una acción fallida: clase del fallo, primeras líneas del error y quién recibe el clic. */
 const describeFailure = async (target: Locator, label: string, error: unknown): Promise<Blocked> => {
   const lines = (error instanceof Error ? error.message : String(error))
     .split('\n')
     .map((line) => line.trim())
     .filter((line) => line !== '');
   const intercept = lines.find((line) => line.includes('intercepts pointer events'));
-  const present = (await safe(() => target.count(), 0)) > 0;
+  const count = await safe<number | undefined>(() => target.count(), undefined);
   const message = `no se pudo ${label}: ${lines.slice(0, 3).join(' · ')}${intercept === undefined ? '' : ` · ${intercept}`}`;
-  if (!present) return { message, note: 'La historia nombra un elemento que la pantalla no ofrece (no existe con ese nombre).' };
+  if (count === 0) return { kind: 'ausente', message, note: 'La historia nombra un elemento que la pantalla no ofrece (no existe con ese nombre).' };
+  if (count === undefined || count > 1) {
+    return { kind: 'localizador', message: `${message} · coincidencias: ${count ?? '(no legible)'}`, note: 'Error de localizador (no es un hallazgo sobre la app): el nombre no identifica un único elemento.' };
+  }
   const probe = await safe<Hit | undefined>(() => target.first().evaluate(hitAtCenter, undefined, { timeout: 2_000 }), undefined);
-  if (probe === undefined) return { message: `${message} · recibe el clic: (no se pudo leer)`, note: 'el elemento existe pero no se pudo comprobar qué lo tapa' };
+  if (probe === undefined) return { kind: 'clic', message: `${message} · recibe el clic: (no se pudo leer)`, note: 'el elemento existe pero no se pudo comprobar qué lo tapa' };
   const note = probe.inside
     ? 'el elemento existe y recibe el clic en su centro, pero la acción no se completó (ver el mensaje de Playwright)'
     : `el elemento existe pero otro lo tapa: ${probe.hit}`;
-  return { message: `${message} · recibe el clic: ${probe.hit}`, note, evidence: { recibeElClic: probe.hit, dentroDelElemento: probe.inside } };
+  return { kind: 'clic', message: `${message} · recibe el clic: ${probe.hit}`, note, evidence: { recibeElClic: probe.hit, dentroDelElemento: probe.inside } };
 };
 
-/** Ejecuta una acción sobre un elemento; si falla, devuelve el diagnóstico (no lanza). */
+/** Ejecuta una acción sobre un elemento; si falla, devuelve el diagnóstico clasificado (no lanza). */
 export const interact = async (target: Locator, label: string, run: (element: Locator) => Promise<unknown>): Promise<Blocked | undefined> => {
   try {
     await run(target);
@@ -239,12 +267,22 @@ export const interact = async (target: Locator, label: string, run: (element: Lo
   }
 };
 
-/** Una acción fallida con su diagnóstico, como resultado de la fila. */
-export const actionFailed = (expected: string, blocked: Blocked): Outcome =>
-  outcome(false, expected, blocked.message, { note: blocked.note, ...(blocked.evidence === undefined ? {} : { evidence: blocked.evidence }) });
+/**
+ * Resultado de una acción fallida. «ausente» discrepa (la app no ofrece el elemento que la historia nombra); localizador y clic son
+ * errores del arnés o de la interacción, así que la fila NO es ejecutable, con el error como motivo.
+ */
+export const actionFailed = (expected: string, blocked: Blocked): Outcome => {
+  const evidence = blocked.evidence === undefined ? {} : { evidence: blocked.evidence };
+  if (blocked.kind === 'ausente') return outcome(false, expected, blocked.message, { note: blocked.note, ...evidence });
+  return { ...notExecutable(expected, `${blocked.note}. ${blocked.message}`), ...evidence };
+};
 
-/** Un control habilitado o deshabilitado con su motivo en `title`. Una lectura fallida NO cumple la condición. */
+/**
+ * Un control habilitado o deshabilitado con su motivo en `title`. Se hace `hover` antes de leer el motivo; el tooltip nativo no es
+ * observable en el navegador de la prueba, así que el motivo se lee del atributo `title` (aproximación anotada en la fila).
+ */
 export const controlCheck = async (target: Locator, what: string, expected: 'habilitado' | 'deshabilitado', reason?: string): Promise<Check> => {
+  await safe(() => target.first().hover({ timeout: 1_000 }), undefined);
   const disabled = await disabledOf(target);
   const title = await attrOf(target, 'title');
   const observed = disabled === undefined ? '(sin leer)' : disabled ? `deshabilitado${title === undefined ? '' : `, con el motivo «${title}»`}` : 'habilitado';
@@ -252,6 +290,9 @@ export const controlCheck = async (target: Locator, what: string, expected: 'hab
   const ok = expected === 'habilitado' ? disabled === false : disabled === true && reasonOk;
   return check(ok, `${what} ${expected}${reason === undefined ? '' : `, con el motivo «${reason}»`}`, `${what} ${observed}`);
 };
+
+/** Nota de aproximación para las filas que miran un motivo en `title` (el tooltip nativo no es observable). */
+export const TOOLTIP_NOTE = 'El motivo se lee del atributo title tras un hover: el tooltip nativo del navegador no es observable en la prueba, así que esta es una aproximación.';
 
 /** Un texto visible igual al esperado (`undefined` = no legible = no cumplido). */
 export const textCheck = (observed: string | undefined, expected: string, what: string): Check =>
@@ -290,11 +331,11 @@ export const rowOutcome = (checks: readonly Check[], extra: Pick<Outcome, 'note'
 
 /**
  * Mueve un deslizador (`input type=range`) hasta `target` como lo haría una persona: foco y flechas, en pasos de `step`. Devuelve el
- * diagnóstico si no se puede enfocar o pulsar (no lanza).
+ * diagnóstico si no se puede leer, enfocar o pulsar (no lanza).
  */
 export const moveSlider = async (slider: Locator, target: number, step: number): Promise<Blocked | undefined> => {
   const current = Number(await inputOf(slider));
-  if (!Number.isFinite(current)) return { message: 'no se pudo leer el valor del deslizador', note: 'el deslizador no expone su valor (input range)' };
+  if (!Number.isFinite(current)) return { kind: 'localizador', message: 'no se pudo leer el valor del deslizador', note: 'el deslizador no expone su valor (input range)' };
   const presses = Math.round((target - current) / step);
   const key = presses >= 0 ? 'ArrowRight' : 'ArrowLeft';
   return interact(slider, `mover el deslizador a ${target}`, async (element) => {

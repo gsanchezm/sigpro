@@ -4,22 +4,22 @@ import { call } from '../../../story-runs/support/api';
 import { DEMO, TENANT_A, type Credentials } from '../../../story-runs/support/prepare';
 import { ACTION, CEILING_MS, isVisible, quoted, textOf, waitUntil } from '../../support/browser';
 import { cell, check, preparationFailedWeb, strict, type Check } from '../../support/checks';
-import { defineBrowserRows, type BrowserRowHandler, type Outcome } from '../../core/framework';
+import { defineBrowserRows, type BrowserRowHandler } from '../../core/framework';
 import { adminAccess, prepareTenant, studentAdmin } from '../api/common';
-import { armToasts, describeSeen, interact, observeTexts, textCheck, toastCheck, waitForValue } from '../web/common';
+import { actionFailed, armToasts, describeSeen, interact, observeTexts, textCheck, toastCheck, waitForValue } from '../web/common';
 import { adminPath, ariaDisabled, mobileOutcome, onMobile, pressTimes, prepareMobile, signInMobile, switchOn } from './common';
 
 // US-CAOS-RESET-013 — Modo caos en Administración (app móvil, Expo web a 390 px). Los deslizadores son de pasos: «−» y «+» junto a su
 // valor, con el nombre accesible «<etiqueta> +100» (latencia) y «<etiqueta> +5» (errores). Cada fila reinicia alumno01 y deja el caos
-// apagado al terminar.
+// apagado al terminar. El interruptor y el botón de ejemplo se localizan por testid: su nombre cambia o se repite.
 
 const LATENCY_LABEL = 'Latencia máxima';
 const ERRORS_LABEL = 'Errores 500 en escrituras';
-const FLAKY_NAME = 'Textos alternos («Guardar» / «Guardar cambios»)';
 const UPDATED_TOAST = 'Modo caos actualizado';
 const FORBIDDEN_HEADING = 'Tu rol no permite administrar el tenant';
 const FORBIDDEN_BODY = 'Solo admin puede entrar en Administración.';
 const OFF_BADGE = 'Caos apagado';
+const NO_CHANGES = 'No hay cambios que guardar';
 
 /** Cuentas de la fila (Esquema 1). */
 const ACCOUNTS: ReadonlyMap<string, Credentials> = new Map<string, Credentials>([
@@ -60,25 +60,21 @@ const SAVED_FLAKY: ReadonlyMap<string, boolean> = new Map<string, boolean>([
 
 const latencyValue = (page: Page): Locator => page.getByTestId(ADMIN_TESTIDS.ADMIN_CHAOS_LATENCY_VALUE);
 const statusBadge = (page: Page): Locator => page.getByTestId(ADMIN_TESTIDS.ADMIN_CHAOS_STATUS);
-const applyButton = (page: Page): Locator => page.getByTestId(ADMIN_TESTIDS.ADMIN_CHAOS_APPLY);
-const offButton = (page: Page): Locator => page.getByTestId(ADMIN_TESTIDS.ADMIN_CHAOS_OFF);
+const applyButton = (page: Page): Locator => page.getByTestId(ADMIN_TESTIDS.ADMIN_CHAOS_APPLY).first();
+const offButton = (page: Page): Locator => page.getByTestId(ADMIN_TESTIDS.ADMIN_CHAOS_OFF).first();
 const offReason = (page: Page): Locator => page.getByTestId(MOVIL_ADMIN_TESTIDS.CHAOS_OFF_REASON);
 const applyReason = (page: Page): Locator => page.getByTestId(MOVIL_ADMIN_TESTIDS.CHAOS_APPLY_REASON);
-const flakySwitch = (page: Page): Locator => page.getByRole('switch', { name: FLAKY_NAME, exact: true });
-const previewButton = (page: Page): Locator => page.getByRole('button', { name: /^Guardar( cambios)?$/ });
+/** Interruptor de textos alternos: el testid está en el propio `role="switch"` (SwitchField); el primero es el elemento de la fila. */
+const flakySwitch = (page: Page): Locator => page.getByTestId(ADMIN_TESTIDS.ADMIN_CHAOS_FLAKY).first();
+/** Botón de ejemplo: su nombre cambia entre «Guardar» y «Guardar cambios», así que se localiza por su testid. */
+const previewButton = (page: Page): Locator => page.getByTestId(ADMIN_TESTIDS.ADMIN_CHAOS_PREVIEW).first();
 const chaosHeading = (page: Page): Locator => page.getByRole('heading', { name: 'Modo caos', exact: true });
 
 /** Abre /admin?tab=chaos con la sesión de la fila y espera a la pestaña. */
-const openChaos = async (page: Page): Promise<void> => {
-  await page.goto(adminPath('chaos'), { timeout: CEILING_MS });
-  await waitUntil(() => isVisible(chaosHeading(page)));
-};
+const openChaos = async (page: Page): Promise<boolean> => (await waitUntil(() => isVisible(chaosHeading(page)))).reached;
 
 /** Texto de un valor leído, o «(no legible)». */
 const shown = (value: string | undefined): string => (value === undefined ? '(no legible)' : `«${value}»`);
-
-/** Resultado de una fila móvil que no pudo ejecutar su paso: el motivo queda en la comprobación. */
-const stepFailed = (expected: string, reason: string): Outcome => mobileOutcome([check(false, expected, reason)]);
 
 // --- Esquema 1: solo el admin ve la pestaña Modo caos -------------------------------------------------------------------------
 
@@ -93,19 +89,21 @@ const onlyAdminSeesChaos: BrowserRowHandler = async (row, { page }) => {
   await page.goto(adminPath('chaos'), { timeout: CEILING_MS });
   if (result === 'aviso') {
     const notice = page.getByTestId(ADMIN_TESTIDS.ADMIN_FORBIDDEN);
-    await waitUntil(() => isVisible(notice));
-    const lines = (await textOf(notice) ?? '').split('\n').map((line) => line.trim()).filter((line) => line !== '');
+    const noticeShown = await waitUntil(() => isVisible(notice));
+    if (!noticeShown.reached) return mobileOutcome([check(false, `el aviso «${FORBIDDEN_HEADING}»`, 'no aparece el aviso de rol tras esperar')]);
+    const lines = ((await textOf(notice)) ?? '').split('\n').map((line) => line.trim()).filter((line) => line !== '');
     const back = page.getByTestId(ADMIN_TESTIDS.ADMIN_FORBIDDEN_BACK);
+    const backShown = await isVisible(back);
     return mobileOutcome([
       check(lines.includes(FORBIDDEN_HEADING), `el aviso «${FORBIDDEN_HEADING}»`, lines.length === 0 ? 'no aparece el aviso' : `el aviso dice ${lines.map((line) => `«${line}»`).join(' ')}`),
       check(lines.includes(FORBIDDEN_BODY), `el texto «${FORBIDDEN_BODY}»`, lines.includes(FORBIDDEN_BODY) ? `el texto «${FORBIDDEN_BODY}»` : 'no aparece el texto de rol'),
-      check(await isVisible(back), 'una acción para volver', (await isVisible(back)) ? 'una acción para volver' : 'no aparece la acción para volver'),
+      check(backShown, 'una acción para volver', backShown ? 'una acción para volver' : 'no aparece la acción para volver'),
     ]);
   }
-  await waitUntil(() => isVisible(chaosHeading(page)));
+  const headingShown = await openChaos(page);
   const badge = await textOf(statusBadge(page));
   return mobileOutcome([
-    check(await isVisible(chaosHeading(page)), 'el título «Modo caos»', (await isVisible(chaosHeading(page))) ? 'el título «Modo caos»' : 'no aparece el título «Modo caos»'),
+    check(headingShown, 'el título «Modo caos»', headingShown ? 'el título «Modo caos»' : 'no aparece el título «Modo caos»'),
     textCheck(badge, OFF_BADGE, 'la insignia del modo caos muestra'),
   ]);
 };
@@ -124,25 +122,38 @@ const appliesFromControls: BrowserRowHandler = async (row, { page }) => {
   const login = await signInMobile(page, studentAdmin(TENANT_A).email, studentAdmin(TENANT_A).password);
   if (login) return preparationFailedWeb(expected, `alumno01@sigpro.lab no inicia sesión en la app móvil: ${login}`);
   await openChaos(page);
+  // Regla sin cambios: «Aplicar» deshabilitado con el motivo «No hay cambios que guardar» como texto visible junto al botón
+  const idleDisabled = (await ariaDisabled(applyButton(page))) === true;
+  const idleReason = await textOf(applyReason(page));
+  const idleChecks: Check[] = [
+    check(idleDisabled, `«Aplicar» deshabilitado sin cambios`, idleDisabled ? '«Aplicar» deshabilitado sin cambios' : '«Aplicar» activo sin cambios'),
+    textCheck(idleReason, NO_CHANGES, 'el motivo visible junto a «Aplicar» es'),
+  ];
   const latencyDone = await pressTimes(page, `${LATENCY_LABEL} +100`, latencyPresses);
-  if (latencyDone !== undefined) return stepFailed(expected, `no se pudo mover «${LATENCY_LABEL}»: ${latencyDone}`);
+  if (latencyDone !== undefined) return actionFailed(expected, latencyDone);
   const errorsDone = await pressTimes(page, `${ERRORS_LABEL} +5`, errorPresses);
-  if (errorsDone !== undefined) return stepFailed(expected, `no se pudo mover «${ERRORS_LABEL}»: ${errorsDone}`);
+  if (errorsDone !== undefined) return actionFailed(expected, errorsDone);
   if ((await switchOn(flakySwitch(page))) !== switchWanted) {
-    const toggled = await interact(flakySwitch(page), `poner «${FLAKY_NAME}» activado`, (element) => element.click(ACTION));
-    if (toggled) return stepFailed(expected, `no se pudo activar «${FLAKY_NAME}»: ${toggled.message}`);
+    const toggled = await interact(flakySwitch(page), 'poner «Textos alternos» activado', (element) => element.click(ACTION));
+    if (toggled) return actionFailed(expected, toggled);
   }
+  const switchNow = await waitForValue(
+    async () => ((await switchOn(flakySwitch(page))) === true ? 'true' : 'false'),
+    (value) => value === (switchWanted ? 'true' : 'false'),
+  );
   const apply = applyButton(page);
   const enabledBefore = (await ariaDisabled(apply)) === false;
   await armToasts(page);
   const applied = await interact(apply, 'pulsar «Aplicar»', (element) => element.click({ timeout: 5_000 }));
   if (applied) {
     const reason = (await textOf(applyReason(page))) ?? '(sin motivo visible)';
-    return mobileOutcome([check(false, expected, `«Aplicar» no se pudo pulsar (motivo visible: «${reason}»): ${applied.message}`)], { note: applied.note });
+    return actionFailed(expected, { ...applied, message: `${applied.message} · motivo visible junto a «Aplicar»: «${reason}»` });
   }
   const toast = await toastCheck(page, 'ok', UPDATED_TOAST, body);
   const badgeNow = await waitForValue(() => textOf(statusBadge(page)), (value) => value === badge);
   return mobileOutcome([
+    ...idleChecks,
+    check(switchNow === (switchWanted ? 'true' : 'false'), 'el interruptor de textos alternos queda activado', `el interruptor queda ${switchNow === 'true' ? 'activado' : 'desactivado'} (aria-checked)`),
     check(enabledBefore, 'el botón «Aplicar» está activo con cambios sin aplicar', enabledBefore ? 'el botón «Aplicar» está activo' : 'el botón «Aplicar» está deshabilitado con cambios'),
     toast,
     textCheck(badgeNow, badge, 'la insignia del modo caos muestra'),
@@ -167,7 +178,7 @@ const offReturnsRestMobile: BrowserRowHandler = async (row, { page }) => {
   const shownLatency = await waitForValue(() => textOf(latencyValue(page)), (value) => value === `${latency} ms`);
   await armToasts(page);
   const off = await interact(offButton(page), 'pulsar «Apagar caos»', (element) => element.click(ACTION));
-  if (off) return stepFailed(expected, `no se pudo pulsar «Apagar caos»: ${off.message}`);
+  if (off) return actionFailed(expected, off);
   const toast = await toastCheck(page, 'ok', UPDATED_TOAST, 'Latencia 0 ms · errores 0 % · textos alternos no');
   const badgeNow = await waitForValue(() => textOf(statusBadge(page)), (value) => value === OFF_BADGE);
   const disabled = (await ariaDisabled(offButton(page))) === true;
@@ -199,7 +210,7 @@ const exampleAlternatesOnlyWhenSaved: BrowserRowHandler = async (row, { page }) 
   const before = await textOf(previewButton(page));
   await armToasts(page);
   const clicked = await interact(previewButton(page), 'pulsar el «Botón de ejemplo»', (element) => element.click(ACTION));
-  if (clicked) return stepFailed(expected, `no se pudo pulsar el «Botón de ejemplo»: ${clicked.message}`);
+  if (clicked) return actionFailed(expected, clicked);
   const toast = await toastCheck(page, 'info', `Has pulsado «${before ?? '(sin texto)'}»`);
   const behaves = flaky ? seen.has('Guardar') && seen.has('Guardar cambios') : seen.size === 1 && seen.has('Guardar');
   const behavesCheck: Check = check(behaves, `el botón de ejemplo ${behavior}`, `el botón de ejemplo muestra ${describeSeen(seen)}`);
@@ -217,4 +228,3 @@ defineBrowserRows({
     [4, onMobile(exampleAlternatesOnlyWhenSaved)],
   ]),
 });
-

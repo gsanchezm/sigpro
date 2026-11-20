@@ -3,8 +3,8 @@ import { DEMO, TENANT_A, type Credentials } from '../../../story-runs/support/pr
 import { ACTION, CEILING_MS, isVisible, quoted, safe, waitUntil } from '../../support/browser';
 import { cell, check, preparationFailedWeb, strict } from '../../support/checks';
 import { defineBrowserRows, type BrowserRowHandler } from '../../core/framework';
-import { markerKept, markerProgram, prepareTenant, studentAdmin } from '../api/common';
-import { actionFailed, armToasts, controlCheck, describeLog, interact, noOkToast, onWeb, prepareBrowser, rowOutcome, signInWeb, waitToast } from './common';
+import { markerKept, markerProgram, prepareTenant, studentAdmin, withToken } from '../api/common';
+import { actionFailed, armToasts, controlCheck, describeLog, interact, noOkToast, onWeb, prepareBrowser, rowOutcome, signInWeb, TOOLTIP_NOTE, waitToast } from './common';
 
 // US-CAOS-RESET-009 — Reiniciar los datos del tenant desde /lab y desde Administración (web). Los diálogos son los NATIVOS del navegador
 // (`confirm()`): se registran con `page.once('dialog')` antes de cada clic y se aceptan o cancelan según la fila.
@@ -43,6 +43,9 @@ const acceptedDialogRestores: BrowserRowHandler = async (row, { page }) => {
   const aviso = quoted(cell(row, 'aviso'));
   const expected = `pulsa «${button}», acepta el diálogo «${screen.confirm}» y ve el aviso ok «${aviso}» con el tenant alumno01 y los milisegundos del reinicio en el cuerpo`;
   await prepareTenant(TENANT_A);
+  // Marca de datos: el reinicio debe borrar el programa dado de alta antes de aceptar el diálogo
+  const marker = await markerProgram(TENANT_A);
+  if (marker.token === undefined || marker.code === undefined) return preparationFailedWeb(expected, marker.error ?? 'sin marca de datos');
   await prepareBrowser(page);
   const opened = await openAsAdmin(page, screen);
   if (opened) return preparationFailedWeb(expected, opened);
@@ -59,6 +62,8 @@ const acceptedDialogRestores: BrowserRowHandler = async (row, { page }) => {
   await waitUntil(async () => dialog.message !== undefined);
   const toast = await waitToast(page, 'ok', aviso);
   const body = toast.found?.body;
+  // El aviso llega cuando la API ya ha reiniciado: el programa de la marca debe haber desaparecido
+  const gone = await withToken('GET', `/programs/${marker.code}`, TENANT_A, marker.token);
   return rowOutcome([
     check(dialog.message === screen.confirm, `el diálogo de confirmación dice «${screen.confirm}»`, `el diálogo dice «${dialog.message ?? '(no apareció)'}»`),
     check(toast.found !== undefined, `aviso ok «${aviso}»`, describeLog(toast.log)),
@@ -67,6 +72,7 @@ const acceptedDialogRestores: BrowserRowHandler = async (row, { page }) => {
       'con el tenant alumno01 y los milisegundos del reinicio en el cuerpo',
       `cuerpo del aviso «${body ?? '(sin aviso)'}»`,
     ),
+    check(gone.status !== 200, `el programa ${marker.code} dado de alta antes desaparece (el reinicio borra lo creado en la prueba)`, `GET /api/programs/${marker.code} responde ${gone.status}`),
   ]);
 };
 
@@ -101,7 +107,7 @@ const cancelledDialogDoesNothing: BrowserRowHandler = async (row, { page }) => {
   const kept = await markerKept(TENANT_A, marker.token, marker.code);
   return rowOutcome([
     check(dialog.message === screen.confirm, `el diálogo de confirmación dice «${screen.confirm}»`, `el diálogo dice «${dialog.message ?? '(no apareció)'}»`),
-    check(quiet.held, 'no aparece ningún aviso de éxito', quiet.held ? 'no aparece ningún aviso de éxito' : `aparece el aviso ok ${quiet.seen}`),
+    check(quiet.held === true, 'no aparece ningún aviso de éxito', quiet.held === true ? 'no aparece ningún aviso de éxito' : quiet.held === undefined ? 'registro de avisos no legible (no cumple)' : `aparece el aviso ok ${quiet.seen}`),
     available,
     kept,
   ]);
@@ -130,7 +136,7 @@ const labButtonNeedsAdmin: BrowserRowHandler = async (row, { page }) => {
   });
   const attempted = await safe(() => button.click({ timeout: 1_000 }).then(() => true), false);
   const notPressed = check(!dialog.opened && !attempted, 'el clic no abre ningún diálogo de confirmación', attempted ? 'el clic se realizó' : `el clic no se realizó; ${dialog.opened ? 'se abrió un diálogo' : 'no se abrió diálogo'}`);
-  return rowOutcome([shown, notPressed]);
+  return rowOutcome([shown, notPressed], { note: TOOLTIP_NOTE });
 };
 
 defineBrowserRows({

@@ -4,7 +4,7 @@ import { ACTION, CEILING_MS, holdsFor, isVisible, pathOf, quoted, textOf, waitUn
 import { cell, check, preparationFailedWeb, strict } from '../../support/checks';
 import { defineBrowserRows, type BrowserRowHandler } from '../../core/framework';
 import { prepareTenant } from '../api/common';
-import { actionFailed, armToasts, credentialRows, describeLog, interact, onWeb, prepareBrowser, rowOutcome, signInWeb, textCheck, toastCheck, waitForValue, waitToast } from './common';
+import { actionFailed, armToasts, credentialRows, interact, onWeb, prepareBrowser, rowOutcome, signInWeb, textCheck, toastCheck, waitForValue } from './common';
 
 // US-CAOS-RESET-008 — Credenciales de demo y tenant de trabajo en /lab (web). Cada fila reinicia alumno01 y alumno02 con su
 // administrador y deja el caos apagado; la fila empieza sin sesión salvo que la historia diga otra cosa.
@@ -40,9 +40,17 @@ const credentialsShown: BrowserRowHandler = async (row, { page }) => {
   const found = rows.find((cells) => cells[0] === name);
   const wanted = [name, email, password, role, note];
   const same = found !== undefined && wanted.every((text, index) => found[index] === text);
+  // Regla: /lab sin sesión tiene una cabecera mínima con el enlace «Entrar» que lleva a /login
+  const loginLinkShown = await isVisible(page.getByTestId(LAB_TESTIDS.LAB_LOGIN_LINK));
   return rowOutcome(
-    [check(same, expected, found === undefined ? `no hay fila de ${name} (filas leídas: ${rows.length})` : `fila: ${found.join(' · ')}`)],
-    { evidence: { filasLeidas: rows.length } },
+    [
+      check(same, expected, found === undefined ? `no hay fila de ${name} (filas leídas: ${rows.length})` : `fila: ${found.join(' · ')}`),
+      check(loginLinkShown, 'la cabecera mínima de /lab tiene el enlace «Entrar»', loginLinkShown ? 'la cabecera mínima tiene el enlace «Entrar»' : 'no aparece el enlace «Entrar» de la cabecera'),
+    ],
+    {
+      evidence: { filasLeidas: rows.length },
+      note: 'Regla sin fila propia, no comprobada: el selector «Tenant de trabajo» ofrece demo y alumno01 a alumno25; depende de cuántos tenants de alumno tenga la pila.',
+    },
   );
 };
 
@@ -117,12 +125,11 @@ const workTenantSwitchEndsSession: BrowserRowHandler = async (row, { page }) => 
   const entrar = page.getByRole('button', { name: 'Entrar', exact: true });
   await waitUntil(() => isVisible(entrar));
   const stays = await holdsFor(() => isVisible(entrar));
-  const logs = await waitToast(page, 'info', toastText);
   return rowOutcome([
     toast,
     check(atLogin.reached, 'llega a /login', atLogin.reached ? 'llega a /login' : `no llega a /login (ruta ${pathOf(page)})`),
     check(stays.held, 'sin sesión iniciada: abrir /programs acaba en /login y se queda ahí', stays.held ? 'sin sesión: abrir /programs acaba en /login' : `con sesión: abrir /programs muestra ${pathOf(page)}`),
-  ], { evidence: { avisos: describeLog(logs.log) } });
+  ]);
 };
 
 defineBrowserRows({

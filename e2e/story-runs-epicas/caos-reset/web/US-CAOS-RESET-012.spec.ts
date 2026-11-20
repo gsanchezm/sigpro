@@ -3,7 +3,7 @@ import { LAB_TESTIDS } from '../../../../packages/shared/src/testids';
 import { TENANT_A } from '../../../story-runs/support/prepare';
 import { call } from '../../../story-runs/support/api';
 import { ACTION, CEILING_MS, attrOf, isVisible, quoted, textOf, waitUntil } from '../../support/browser';
-import { cell, check, preparationFailedWeb, strict } from '../../support/checks';
+import { cell, check, preparationFailedWeb, strict, type Check } from '../../support/checks';
 import { defineBrowserRows, type BrowserRowHandler } from '../../core/framework';
 import { adminAccess, prepareTenant, studentAdmin } from '../api/common';
 import { actionFailed, armToasts, describeSeen, interact, observeTexts, onWeb, prepareBrowser, rowOutcome, signInWeb, textCheck, toastCheck } from './common';
@@ -74,7 +74,15 @@ const overlapButtonsToast: BrowserRowHandler = async (row, { page }) => {
   const toast = await toastCheck(page, 'ok', label);
   const active = await textOf(page.getByTestId(LAB_TESTIDS.LAB_OVERLAP_ACTIVE));
   const count = await textOf(page.getByTestId(LAB_TESTIDS.LAB_OVERLAP_ACTIVE_COUNT));
-  return rowOutcome([toast, textCheck(active, 'Activo', 'la insignia muestra'), textCheck(count, 'Activo (3)', 'la insignia muestra')]);
+  // Regla del bloque 1 (tabla de contraejemplos): tres filas con «…» en la segunda columna
+  const table = (await textOf(page.getByTestId(LAB_TESTIDS.LAB_XPATH_TABLE))) ?? '';
+  const codesShown = ['PRG-003', 'PRG-004', 'PRG-005'].every((code) => table.includes(code)) && table.includes('…');
+  return rowOutcome([
+    toast,
+    textCheck(active, 'Activo', 'la insignia muestra'),
+    textCheck(count, 'Activo (3)', 'la insignia muestra'),
+    check(codesShown, 'el bloque 1 muestra PRG-003, PRG-004 y PRG-005 con «…» en la segunda columna', codesShown ? 'el bloque 1 muestra PRG-003, PRG-004 y PRG-005 con «…»' : `el bloque 1 dice «${table.slice(0, 120)}»`),
+  ]);
 };
 
 // --- Esquema 2: el botón de ejemplo alterna solo con una sesión iniciada ----------------------------------------------------
@@ -97,9 +105,14 @@ const exampleAlternatesOnlyInSession: BrowserRowHandler = async (row, { page }) 
   const seen = await observeTexts(exampleButton(page), 6_000);
   const badgeNow = await textOf(flakyBadge(page));
   const behaves = behavior === 'alterna' ? seen.has('Guardar') && seen.has('Guardar cambios') : seen.size === 1 && seen.has('Guardar');
+  // Regla: pulsar el botón de ejemplo muestra el aviso «Guardado» (lab.ts, flakySaved)
+  await armToasts(page);
+  const clicked = await interact(exampleButton(page), 'pulsar el botón de ejemplo', (element) => element.click(ACTION));
+  const saved: Check = clicked === undefined ? await toastCheck(page, 'ok', 'Guardado') : check(false, 'pulsar el botón de ejemplo muestra el aviso «Guardado»', `no se pudo pulsar: ${clicked.message}`);
   return rowOutcome([
     check(behaves, `el botón de ejemplo ${cell(row, 'comportamiento')}`, `el botón de ejemplo muestra ${describeSeen(seen)}`),
     textCheck(badgeNow, badge, 'la insignia muestra'),
+    saved,
   ]);
 };
 
@@ -120,9 +133,16 @@ const faqAnswerShows: BrowserRowHandler = async (row, { page }) => {
   const region = page.getByRole('region', { name: question, exact: true });
   await waitUntil(() => isVisible(region));
   const answer = await textOf(region);
+  const checks: Check[] = [check(answer !== undefined && answer.includes(fragment), expected, answer === undefined ? 'la respuesta no es legible' : `la respuesta dice «${answer}»`)];
+  if (described) {
+    // La respuesta solo nombra la sección: el enlace de descarga («Descargar sigpro-examples.zip») debe existir en esa sección
+    const link = page.getByTestId(LAB_TESTIDS.LAB_DOWNLOAD_EXAMPLES);
+    const linkShown = await isVisible(link);
+    checks.push(check(linkShown, `el enlace de descarga del material de ejemplo («${DESCRIBED_LINK}») es visible`, linkShown ? 'el enlace de descarga es visible' : 'no aparece el enlace de descarga del material'));
+  }
   return rowOutcome(
-    [check(answer !== undefined && answer.includes(fragment), expected, answer === undefined ? 'la respuesta no es legible' : `la respuesta dice «${answer}»`)],
-    described ? { note: `La celda describe el contenido de la respuesta («${fragmentCell}»): la fila comprueba que nombra «${DESCRIBED_LINK}», el lugar del enlace de descarga.` } : {},
+    checks,
+    described ? { note: `La celda describe el contenido de la respuesta («${fragmentCell}»): la fila comprueba que nombra «${DESCRIBED_LINK}» y que existe el enlace de descarga.` } : {},
   );
 };
 
@@ -137,14 +157,24 @@ const openingFoldsPrevious: BrowserRowHandler = async (row, { page }) => {
   const first = questionToggle(page, FIRST_QUESTION);
   const opened = await interact(first, `pulsar «${FIRST_QUESTION}»`, (element) => element.click(ACTION));
   if (opened) return preparationFailedWeb(expected, `no se despliega «${FIRST_QUESTION}»: ${opened.message}`);
-  await waitUntil(async () => (await attrOf(first, 'aria-expanded')) === 'true');
+  const firstOpen = await waitUntil(async () => (await attrOf(first, 'aria-expanded')) === 'true');
+  if (!firstOpen.reached) return preparationFailedWeb(expected, `«${FIRST_QUESTION}» no queda desplegada tras pulsarla`);
   const toggled = await interact(questionToggle(page, question), `pulsar «${question}»`, (element) => element.click(ACTION));
   if (toggled) return actionFailed(expected, toggled);
   const target = questionToggle(page, question);
-  await waitUntil(async () => (await attrOf(target, 'aria-expanded')) === 'true' && (await attrOf(first, 'aria-expanded')) === 'false');
+  // Espera con techo a que el estado cambie; después se lee y se compara lo leído (no lo que se esperaba)
+  const switched = await waitUntil(async () => (await attrOf(target, 'aria-expanded')) === 'true' && (await attrOf(first, 'aria-expanded')) === 'false');
+  const firstState = await attrOf(first, 'aria-expanded');
+  const targetState = await attrOf(target, 'aria-expanded');
+  // Signos: «+» en la pregunta plegada y «−» (U+2212) en la desplegada (lab.ts y LabPage.tsx)
+  const firstSign = ((await textOf(first)) ?? '').endsWith('+');
+  const targetSign = ((await textOf(target)) ?? '').endsWith('−');
   return rowOutcome([
-    textCheck(await attrOf(first, 'aria-expanded'), 'false', `la respuesta de «${FIRST_QUESTION}» (aria-expanded)`),
-    textCheck(await attrOf(target, 'aria-expanded'), 'true', `la respuesta de «${question}» (aria-expanded)`),
+    check(switched.reached, `la pregunta «${question}» queda desplegada y «${FIRST_QUESTION}» plegada`, `estado tras esperar: «${FIRST_QUESTION}» ${firstState ?? '(no legible)'}, «${question}» ${targetState ?? '(no legible)'}`),
+    textCheck(firstState, 'false', `la respuesta de «${FIRST_QUESTION}» (aria-expanded)`),
+    textCheck(targetState, 'true', `la respuesta de «${question}» (aria-expanded)`),
+    check(firstSign, `el signo de «${FIRST_QUESTION}» plegada es «+»`, firstSign ? 'el signo es «+»' : 'el signo de la pregunta plegada no es «+»'),
+    check(targetSign, `el signo de «${question}» desplegada es «−»`, targetSign ? 'el signo es «−»' : 'el signo de la pregunta desplegada no es «−»'),
   ]);
 };
 

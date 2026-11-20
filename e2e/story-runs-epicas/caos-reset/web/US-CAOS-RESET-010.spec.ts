@@ -4,7 +4,8 @@ import { DEMO, TENANT_A, type Credentials } from '../../../story-runs/support/pr
 import { CEILING_MS, isVisible, waitUntil } from '../../support/browser';
 import { cell, check, preparationFailedWeb, strict } from '../../support/checks';
 import { defineBrowserRows, type BrowserRowHandler } from '../../core/framework';
-import { prepareTenant, studentAdmin } from '../api/common';
+import { adminAccess, prepareTenant, studentAdmin } from '../api/common';
+import { call } from '../../../story-runs/support/api';
 import {
   actionFailed,
   armToasts,
@@ -20,6 +21,7 @@ import {
   rowOutcome,
   signInWeb,
   toastCheck,
+  TOOLTIP_NOTE,
   waitChecked,
   waitForValue,
   waitToast,
@@ -79,6 +81,19 @@ const offButton = (page: Page): Locator => page.getByRole('button', { name: OFF_
 const labHeading = (page: Page): Locator => page.getByRole('heading', { name: 'Laboratorio', exact: true });
 const exampleButton = (page: Page): Locator => page.getByTestId(LAB_TESTIDS.LAB_FLAKY_GROUP).getByRole('button');
 
+/** Cuenta de la fila del Esquema 5 (la celda `cuenta`). */
+const ACCOUNTS: ReadonlyMap<string, Credentials> = new Map<string, Credentials>([['alumno01@sigpro.lab', studentAdmin(TENANT_A)]]);
+
+/**
+ * Fija el caos por API ANTES de iniciar sesión (la web lee la configuración al iniciar sesión). Devuelve el motivo si no responde 200.
+ * Sirve para partir de un estado previo distinto del de la fila.
+ */
+const presetChaos = async (flags: { readonly latencyMs: number; readonly errorRate: number; readonly flakyLabels: boolean }): Promise<string | undefined> => {
+  const admin = await adminAccess(TENANT_A);
+  const preset = await call('PATCH', '/admin/chaos', { tenant: TENANT_A, token: admin, body: flags });
+  return preset.status === 200 ? undefined : `PATCH /api/admin/chaos responde ${preset.status}`;
+};
+
 /** Abre /lab (con o sin la sesión que ya hay en la página) y espera a que la pantalla esté montada. */
 const openLab = async (page: Page): Promise<void> => {
   await page.goto(`/lab?tenant=${TENANT_A}`, { timeout: CEILING_MS });
@@ -121,6 +136,9 @@ const appliesAndKeeps: BrowserRowHandler = async (row, { page }) => {
   const flaky = strict('casilla', FLAKY_STATES, cell(row, 'casilla'));
   const expected = `ve el aviso ok «${APPLIED_TOAST}»; al recargar /lab los campos muestran ${latency} y ${rate}, y la casilla queda ${cell(row, 'casilla')}`;
   await prepareTenant(TENANT_A);
+  // Estado previo distinto de la fila en TODOS los campos (la casilla, al contrario): así aplicar cambia algo de verdad
+  const presetError = await presetChaos({ latencyMs: 100, errorRate: 0.1, flakyLabels: !flaky });
+  if (presetError !== undefined) return preparationFailedWeb(expected, `alumno01@sigpro.lab fija un estado previo: ${presetError}`);
   await prepareBrowser(page);
   const login = await signInWeb(page, studentAdmin(TENANT_A));
   if (login) return preparationFailedWeb(expected, `alumno01@sigpro.lab no inicia sesión: ${login}`);
@@ -226,18 +244,18 @@ const controlsNeedAdmin: BrowserRowHandler = async (row, { page }) => {
     await controlCheck(flakyBox(page), 'la casilla «Textos de botón variables»', 'deshabilitado', NEED_ADMIN),
     await controlCheck(applyButton(page), 'el botón «Aplicar caos»', 'deshabilitado', NEED_ADMIN),
     await controlCheck(offButton(page), 'el botón «Desactivar caos»', 'deshabilitado', NEED_ADMIN),
-  ]);
+  ], { note: TOOLTIP_NOTE });
 };
 
 // --- Esquema 5: tras aplicar los textos variables, el botón de ejemplo alterna sin recargar la página --------------------------
 
 const exampleAlternatesAfterApply: BrowserRowHandler = async (row, { page }) => {
-  const account = cell(row, 'cuenta');
+  const account = strict('cuenta', ACCOUNTS, cell(row, 'cuenta'));
   const expected = 'el botón de ejemplo de «Contraejemplos» alterna entre «Guardar» y «Guardar cambios» sin recargar la página';
   await prepareTenant(TENANT_A);
   await prepareBrowser(page);
-  const login = await signInWeb(page, studentAdmin(TENANT_A));
-  if (login) return preparationFailedWeb(expected, `${account} no inicia sesión: ${login}`);
+  const login = await signInWeb(page, account);
+  if (login) return preparationFailedWeb(expected, `${cell(row, 'cuenta')} no inicia sesión: ${login}`);
   await openLab(page);
   const applied = await applyOnLab(page, { latency: '0', rate: '0', flaky: true });
   if (applied) return actionFailed(expected, applied);
@@ -253,7 +271,7 @@ const exampleAlternatesAfterApply: BrowserRowHandler = async (row, { page }) => 
     alternates
       ? {}
       : {
-          note: 'Causa probable por lectura del código (LabPage.tsx, applyChaos): aquí no se vuelve a leer la configuración tras aplicar (solo lo hace ChaosPanel de Administración), así que el botón conserva su texto hasta recargar. DECISIONS.md dice que tras aplicar se relee.',
+          note: 'Inferencia por lectura del código, no observación: LabPage.tsx (applyChaos, líneas 118-122) no vuelve a leer la configuración tras aplicar (solo lo hace ChaosPanel de Administración), así que el botón de ejemplo no cambia sin recargar. La observación de esta fila es solo la lectura del texto durante la ventana.',
         },
   );
 };

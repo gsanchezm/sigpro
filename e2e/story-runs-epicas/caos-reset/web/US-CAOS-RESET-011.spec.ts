@@ -12,6 +12,7 @@ import {
   ariaChecked,
   armToasts,
   controlCheck,
+  TOOLTIP_NOTE,
   describeSeen,
   inputOf,
   interact,
@@ -41,6 +42,9 @@ const FORBIDDEN_BODY = 'Solo admin puede entrar en Administración.';
 const DRAFT_PENDING = 'Cambios sin aplicar';
 const OFF_BADGE = 'Caos apagado';
 const NO_CHANGES = 'No hay cambios que guardar';
+/** Texto de ayuda de la pestaña y explicación del botón de ejemplo (admin.ts, chaosHint y chaosPreviewHint). */
+const CHAOS_HINT = 'Solo afecta a este tenant: latencia aleatoria, errores 500 en las escrituras y textos de botón que alternan. Se guarda al aplicar.';
+const PREVIEW_HINT = 'Con los textos alternos activos, este botón cambia entre «Guardar» y «Guardar cambios».';
 
 /** Cuentas de la fila (Esquema 1). */
 const ACCOUNTS: ReadonlyMap<string, Credentials> = new Map<string, Credentials>([
@@ -86,7 +90,7 @@ const flakySwitch = (page: Page): Locator => page.getByRole('switch', { name: FL
 const applyButton = (page: Page): Locator => page.getByRole('button', { name: APPLY_TEXT, exact: true });
 const offButton = (page: Page): Locator => page.getByRole('button', { name: OFF_TEXT, exact: true });
 const statusBadge = (page: Page): Locator => page.getByTestId(ADMIN_TESTIDS.ADMIN_CHAOS_STATUS);
-const previewButton = (page: Page): Locator => page.getByRole('button', { name: /^Guardar( cambios)?$/ });
+const previewButton = (page: Page): Locator => page.getByTestId(ADMIN_TESTIDS.ADMIN_CHAOS_PREVIEW).first();
 const chaosHeading = (page: Page): Locator => page.getByRole('heading', { name: 'Modo caos', exact: true });
 
 /** Abre /admin?tab=chaos y espera a que la pestaña esté montada (el título «Modo caos» o el aviso de rol). */
@@ -120,9 +124,13 @@ const onlyAdminSeesChaos: BrowserRowHandler = async (row, { page }) => {
     ]);
   }
   const badge = await textOf(statusBadge(page));
+  // Reglas de la pestaña: el texto de ayuda y el de la vista previa (admin.ts:52 y :68)
+  const panel = (await textOf(page.getByTestId(ADMIN_TESTIDS.ADMIN_CHAOS_PANEL))) ?? '';
   return rowOutcome([
     check(await isVisible(chaosHeading(page)), 'el título «Modo caos»', (await isVisible(chaosHeading(page))) ? 'el título «Modo caos»' : 'no aparece el título «Modo caos»'),
     textCheck(badge, OFF_BADGE, 'la insignia del modo caos muestra'),
+    check(panel.includes(CHAOS_HINT), `el texto de ayuda «${CHAOS_HINT}»`, panel.includes(CHAOS_HINT) ? `el texto de ayuda «${CHAOS_HINT}»` : 'no aparece el texto de ayuda de la pestaña'),
+    check(panel.includes(PREVIEW_HINT), `el texto «${PREVIEW_HINT}»`, panel.includes(PREVIEW_HINT) ? `el texto «${PREVIEW_HINT}»` : 'no aparece la explicación del botón de ejemplo'),
   ]);
 };
 
@@ -154,7 +162,9 @@ const appliesDraft: BrowserRowHandler = async (row, { page }) => {
   if (applied) return actionFailed(expected, applied);
   const toast = await toastCheck(page, 'ok', UPDATED_TOAST, body);
   const badgeNow = await waitForValue(() => textOf(statusBadge(page)), (value) => value === badge);
-  return rowOutcome([toast, textCheck(badgeNow, badge, 'la insignia del modo caos muestra')]);
+  return rowOutcome([toast, textCheck(badgeNow, badge, 'la insignia del modo caos muestra')], {
+    note: 'Regla de la historia sin fila propia, no comprobada: si guardar falla, el aviso de error sale con la traza y el borrador se conserva. Los deslizadores no admiten un valor fuera de rango, así que esta fila no fuerza el fallo.',
+  });
 };
 
 // --- Esquema 3: apagar caos devuelve el modo a reposo ---------------------------------------------------------------------
@@ -179,11 +189,14 @@ const offReturnsRest: BrowserRowHandler = async (row, { page }) => {
   const toast = await toastCheck(page, 'ok', UPDATED_TOAST, 'Latencia 0 ms · errores 0 % · textos alternos no');
   const badgeNow = await waitForValue(() => textOf(statusBadge(page)), (value) => value === OFF_BADGE);
   const sliderNow = await waitForValue(() => inputOf(latencySlider(page)), (value) => value !== undefined && Number(value) === 0);
+  // Regla: «Apagar caos» queda deshabilitado con el motivo «Caos apagado» cuando el caos guardado está apagado y no hay cambios
+  const offDisabled = await controlCheck(offButton(page), 'el botón «Apagar caos»', 'deshabilitado', OFF_BADGE);
   return rowOutcome([
     toast,
     textCheck(badgeNow, OFF_BADGE, 'la insignia del modo caos muestra'),
     numberCheck(sliderNow, 0, `el deslizador «${LATENCY_SLIDER}» vuelve a`),
-  ]);
+    offDisabled,
+  ], { note: TOOLTIP_NOTE });
 };
 
 // --- Esquema 4: el botón Aplicar depende de que haya cambios sin guardar -------------------------------------------------
@@ -209,7 +222,7 @@ const applyNeedsChanges: BrowserRowHandler = async (row, { page }) => {
       ? await controlCheck(applyButton(page), `el botón «${APPLY_TEXT}»`, 'deshabilitado', NO_CHANGES)
       : await controlCheck(applyButton(page), `el botón «${APPLY_TEXT}»`, 'habilitado');
   const pendingCheck = action === 'sin cambios' ? await absentCheck(pending, `el texto «${DRAFT_PENDING}»`) : check(await isVisible(pending), `aparece el texto «${DRAFT_PENDING}»`, (await isVisible(pending)) ? `aparece el texto «${DRAFT_PENDING}»` : `no aparece el texto «${DRAFT_PENDING}»`);
-  return rowOutcome([apply, pendingCheck, textCheck(badge, OFF_BADGE, 'la insignia del modo caos muestra')]);
+  return rowOutcome([apply, pendingCheck, textCheck(badge, OFF_BADGE, 'la insignia del modo caos muestra')], { note: TOOLTIP_NOTE });
 };
 
 // --- Esquema 5: el botón de ejemplo alterna solo con los textos alternos guardados ---------------------------------------

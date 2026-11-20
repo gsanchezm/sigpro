@@ -70,24 +70,29 @@ const delayIsBounded: ApiRowHandler = async (row) => {
     for (let index = 0; index < 3; index += 1) reference.push(await withToken('GET', '/programs', TENANT_A, token));
     const preset = await withToken('PATCH', '/admin/chaos', TENANT_A, token, { latencyMs });
     if (preset.status !== 200) return preparationFailed(expected, `alumno01@sigpro.lab fija con PATCH latencyMs ${latencyMs}`, preset);
-    // Diez lecturas a la vez: cada una mide su propio tiempo (el retardo es por petición), así la fila dura lo que la más lenta.
-    const samples = await Promise.all(Array.from({ length: 10 }, () => withToken('GET', '/programs', TENANT_A, token)));
+    // Diez lecturas SECUENCIALES (como dice la historia): cada una mide su propia respuesta con el caos fijado
+    const samples: ApiResult[] = [];
+    for (let index = 0; index < 10; index += 1) samples.push(await withToken('GET', '/programs', TENANT_A, token));
     const referenceTimes = timingsOf(reference);
     const sampleTimes = timingsOf(samples);
     const referenceMean = mean(referenceTimes.ms);
     const sampleMean = mean(sampleTimes.ms);
     const difference = sampleMean - referenceMean;
-    const ok = referenceTimes.allOk && sampleTimes.allOk && (exceeds ? difference > 1000 : difference <= 1000);
+    // Cota por lectura: ninguna supera la referencia + el retardo fijado + un margen de 1 s (el retardo es aleatorio entre 0 y el máximo)
+    const slowest = Math.max(...sampleTimes.ms);
+    const perSampleOk = sampleTimes.ms.every((ms) => ms <= referenceMean + latencyMs + 1000);
+    const meanOk = exceeds ? difference > 1000 : difference <= 1000;
+    const ok = referenceTimes.allOk && sampleTimes.allOk && perSampleOk && meanOk;
     return rowOutcome(
       [
         check(
           ok,
           expected,
-          `la media de las diez respuestas es ${Math.round(sampleMean)} ms y la de la referencia ${Math.round(referenceMean)} ms (diferencia ${Math.round(difference)} ms)${sampleTimes.allOk && referenceTimes.allOk ? '' : '; alguna lectura no respondió 200'}`,
+          `la media de las diez respuestas es ${Math.round(sampleMean)} ms y la de la referencia ${Math.round(referenceMean)} ms (diferencia ${Math.round(difference)} ms); la más lenta ${Math.round(slowest)} ms${sampleTimes.allOk && referenceTimes.allOk ? '' : '; alguna lectura no respondió 200'}${perSampleOk ? '' : `; alguna lectura supera la referencia + ${latencyMs} ms + 1000 ms`}`,
         ),
       ],
       {
-        note: 'Las diez lecturas se lanzan a la vez (cada una mide su propio tiempo, así la fila dura lo que tarda la más lenta). La referencia son tres lecturas secuenciales con el caos en reposo.',
+        note: 'Las diez lecturas se hacen en serie (como dice la historia): con 5000 ms de latencia la fila tarda unos 25 s de media. La referencia son tres lecturas con el caos en reposo.',
         evidence: { latenciaFijadaMs: latencyMs, mediaReferenciaMs: Math.round(referenceMean), mediaDiezMs: Math.round(sampleMean), msPorLectura: sampleTimes.ms.map((ms) => Math.round(ms)) },
       },
     );
@@ -118,7 +123,9 @@ const writeFailsWithoutCreating: ApiRowHandler = async (row) => {
         `la nueva alta recibe el código ${FIRST_NEW_CODE} (la fallida no creó nada)`,
         `la nueva alta recibe el código ${codeOf(created.body) ?? '(ausente)'}`,
       ),
-    ]);
+    ], {
+      note: 'Reglas de la historia sin fila propia, no comprobadas: con errorRate 0 ninguna escritura falla; con solo flakyLabels activo no hay retardo ni errores; PUT, PATCH y DELETE no se ejercitan (aquí solo POST).',
+    });
   });
 };
 
@@ -184,8 +191,8 @@ const isolatedBetweenTenants: ApiRowHandler = async (row) => {
     if (preset.status !== 200) return preparationFailed(expected, 'alumno01@sigpro.lab fija con PATCH errorRate 1', preset);
     const gestorB = await sessionOfAccount(TENANT_B, GESTOR);
     if (gestorB.token === undefined) return preparationFailed(expected, 'gestor@sigpro.test inicia sesión con x-tenant alumno02', gestorB.result);
-    const other = await withToken('POST', path, TENANT_B, gestorB.token);
-    const own = await withToken('POST', path, TENANT_A, adminA);
+    const other = await withToken('POST', path, TENANT_B, gestorB.token, {});
+    const own = await withToken('POST', path, TENANT_A, adminA, {});
     return rowOutcome([
       expectCheck(other, `la petición de alumno02 responde ${cell(row, 'respuesta_otro')}`, otherExpect),
       expectCheck(own, `la petición de alumno01 responde ${cell(row, 'respuesta_alumno')}`, ownExpect),

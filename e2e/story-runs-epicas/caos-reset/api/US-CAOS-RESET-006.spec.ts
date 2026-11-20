@@ -2,7 +2,7 @@ import { call, field } from '../../../story-runs/support/api';
 import { TENANT_A, TENANT_B } from '../../../story-runs/support/prepare';
 import { cell, check, errorsOf, preparationFailed, strict } from '../../support/checks';
 import { defineApiRows, type ApiRowHandler } from '../../core/framework';
-import { adminAccess, chaosIs, expectCheck, newestAuditAction, prepareTenant, rowOutcome, shown, withRestore, withToken } from './common';
+import { adminAccess, chaosIs, expectCheck, newestAudit, prepareTenant, rowOutcome, shown, withRestore, withToken } from './common';
 
 // US-CAOS-RESET-006 — Leer y fijar el modo caos del tenant (API). Cada fila reinicia alumno01 antes de actuar; alumno02 solo aparece
 // en la cabecera de un ejemplo. Al terminar, `withRestore` reinicia los tenants que usa y les apaga el caos.
@@ -61,6 +61,8 @@ const BOUNDARY_VALUES: ReadonlyMap<string, number | boolean> = new Map<string, n
 
 const ZERO_CHAOS = { latencyMs: 0, errorRate: 0, flakyLabels: false } as const;
 const SET_CHAOS = { latencyMs: 400, errorRate: 0.5, flakyLabels: true } as const;
+/** Valores no nulos (flakyLabels en falso para que un cambio a true se vea): la preparación de los Esquemas que cambian un campo. */
+const NON_REST_PRESET = { latencyMs: 400, errorRate: 0.5, flakyLabels: false } as const;
 
 // --- Esquema 1: leer el modo caos devuelve los valores de reposo ---------------------------------------------------------------
 
@@ -111,15 +113,29 @@ const partialChangeKeepsOthers: ApiRowHandler = async (row) => {
     const token = await adminAccess(TENANT_A);
     const preset = await withToken('PATCH', '/admin/chaos', TENANT_A, token, { latencyMs: 400, flakyLabels: true });
     if (preset.status !== 200) return preparationFailed(expected, 'alumno01@sigpro.lab fija con PATCH latencyMs 400 y flakyLabels true', preset);
-    const patched = await withToken('PATCH', '/admin/chaos', TENANT_A, token, body);
-    const read = await withToken('GET', '/admin/chaos', TENANT_A, token);
     const expectedValues = { latencyMs: 400, errorRate: rate, flakyLabels: flaky };
     // Regla: cada cambio aplicado queda en la auditoría del tenant con la acción chaos.updated (un cuerpo vacío no cambia nada)
     const changes = Object.keys(body as object).length > 0;
-    const audit = changes ? await newestAuditAction(TENANT_A, token) : undefined;
-    const auditChecks = changes
-      ? [check(audit === 'chaos.updated', 'el cambio queda en la auditoría del tenant con la acción chaos.updated', `la entrada más reciente de la auditoría tiene la acción ${shown(audit)}`)]
-      : [];
+    const before = changes ? await newestAudit(TENANT_A, token) : undefined;
+    const patched = await withToken('PATCH', '/admin/chaos', TENANT_A, token, body);
+    const read = await withToken('GET', '/admin/chaos', TENANT_A, token);
+    const after = changes ? await newestAudit(TENANT_A, token) : undefined;
+    const diffOf = (value: unknown): Readonly<Record<string, unknown>> => (typeof value === 'object' && value !== null ? (value as Record<string, unknown>) : {});
+    const auditChecks =
+      changes && before !== undefined && after !== undefined
+        ? [
+            check(
+              after.action === 'chaos.updated' && after.id !== undefined && after.id !== before.id,
+              'el cambio queda en la auditoría del tenant como un evento nuevo con la acción chaos.updated',
+              `el evento más reciente es ${shown(after.action)} (id ${after.id === before.id ? 'el mismo que antes' : 'nuevo'})`,
+            ),
+            check(
+              diffOf(after.diff).latencyMs === 400 && diffOf(after.diff).errorRate === rate && diffOf(after.diff).flakyLabels === flaky,
+              'el diff del evento lleva los valores fijados (latencyMs 400, errorRate y flakyLabels de la fila)',
+              `el diff del evento es ${JSON.stringify(after.diff ?? null)}`,
+            ),
+          ]
+        : [];
     return rowOutcome([
       expectCheck(patched, 'la respuesta es 200', { status: 200 }),
       chaosIs(patched.body, expectedValues, 'la respuesta trae'),
@@ -160,14 +176,25 @@ const boundaryValueSaved: ApiRowHandler = async (row) => {
   return withRestore([TENANT_A], async () => {
     await prepareTenant(TENANT_A);
     const token = await adminAccess(TENANT_A);
+    // Preparación con valores NO nulos: un PATCH que ignorara el cuerpo dejaría estos valores y la comprobación lo vería
+    const preset = await withToken('PATCH', '/admin/chaos', TENANT_A, token, NON_REST_PRESET);
+    if (preset.status !== 200) return preparationFailed(expected, 'alumno01@sigpro.lab fija valores no nulos con PATCH /api/admin/chaos', preset);
+    const before = await newestAudit(TENANT_A, token);
     const saved = await withToken('PATCH', '/admin/chaos', TENANT_A, token, body);
     const observed = field(saved.body, campo);
-    // Regla: el cambio guardado queda en la auditoría del tenant con la acción chaos.updated
-    const audit = saved.status === 200 ? await newestAuditAction(TENANT_A, token) : undefined;
+    const read = await withToken('GET', '/admin/chaos', TENANT_A, token);
+    const readBack = field(read.body, campo);
+    // Regla: el cambio guardado queda en la auditoría del tenant con la acción chaos.updated (un evento nuevo)
+    const after = saved.status === 200 ? await newestAudit(TENANT_A, token) : undefined;
     return rowOutcome([
       expectCheck(saved, 'la respuesta es 200', { status: 200 }),
       check(observed === valor, expected, `la respuesta trae ${campo} igual a ${shown(observed)}`),
-      check(audit === 'chaos.updated', 'el cambio queda en la auditoría del tenant con la acción chaos.updated', `la entrada más reciente de la auditoría tiene la acción ${shown(audit)}`),
+      check(readBack === valor, `GET /api/admin/chaos devuelve ${campo} igual a ${String(valor)}`, `GET /api/admin/chaos devuelve ${campo} igual a ${shown(readBack)}`),
+      check(
+        after?.action === 'chaos.updated' && after.id !== undefined && after.id !== before.id,
+        'el cambio queda en la auditoría del tenant como un evento nuevo con la acción chaos.updated',
+        `el evento más reciente es ${shown(after?.action)} (${after?.id === before.id ? 'el mismo que antes' : 'nuevo'})`,
+      ),
     ]);
   });
 };

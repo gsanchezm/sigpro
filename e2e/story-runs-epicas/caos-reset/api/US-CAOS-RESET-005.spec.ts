@@ -83,7 +83,13 @@ const rejectsWithoutValidToken: ApiRowHandler = async (row) => {
       token = session.refreshToken;
     }
     const result: ApiResult = await withToken(request.method, request.path, TENANT_A, token, request.body);
-    return rowOutcome([expectCheck(result, `la respuesta es ${expectedText}`, expect)]);
+    // Tras el rechazo, el caos sigue en reposo (un PATCH que hubiera pasado el filtro lo habría cambiado)
+    const admin = await adminAccess(TENANT_A);
+    const chaos = await withToken('GET', '/admin/chaos', TENANT_A, admin);
+    return rowOutcome([
+      expectCheck(result, `la respuesta es ${expectedText}`, expect),
+      chaosIs(chaos.body, { latencyMs: 0, errorRate: 0, flakyLabels: false }, 'GET /api/admin/chaos con el token de alumno01@sigpro.lab devuelve'),
+    ]);
   });
 };
 

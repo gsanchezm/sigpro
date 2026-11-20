@@ -1,7 +1,7 @@
-import { call, errorCode, login } from '../../../story-runs/support/api';
+import { call, login } from '../../../story-runs/support/api';
 import { NEW_ACCOUNT_PASSWORD, TENANT_A, requestAccount } from '../../../story-runs/support/prepare';
 import { cell, check, preparationFailed, strict } from '../../support/checks';
-import { defineApiRows, notExecutable, type ApiRowHandler } from '../../core/framework';
+import { defineApiRows, type ApiRowHandler } from '../../core/framework';
 import {
   FIRST_NEW_CODE,
   GESTOR,
@@ -37,6 +37,10 @@ const RESPONSES: ReadonlyMap<string, Expect> = new Map<string, Expect>([
 ]);
 
 /** Número de altas previas del Esquema 2. */
+/** Nombre del seed de PRG-001 (apps/api/src/seed/data.ts, PROGRAM_NAMES[0]): tras el reinicio el programa vuelve a tenerlo. */
+const SEED_NAME_PRG_001 = 'Sistema de mando táctico Ártemis';
+/** Nombres de las altas previas del Esquema 2: cada una lleva el cuerpo base con un nombre distinto (historia 003, Reglas). */
+const PREVIOUS_NAMES: readonly string[] = ['Programa de prueba alfa', 'Programa de prueba beta'];
 const PREVIOUS_CREATIONS: ReadonlyMap<string, number> = new Map<string, number>([
   ['1', 1],
   ['2', 2],
@@ -81,17 +85,14 @@ const restartsProgramNumbering: ApiRowHandler = async (row) => {
     await prepareTenant(TENANT_A);
     const gestor = await sessionOfAccount(TENANT_A, GESTOR);
     if (gestor.token === undefined) return preparationFailed(expected, 'gestor@sigpro.test inicia sesión en alumno01', gestor.result);
+    // Cada alta previa lleva el cuerpo base con un nombre distinto (la API rechaza un nombre repetido con 422 duplicate_name)
     for (let index = 1; index <= previous; index += 1) {
-      const created = await withToken('POST', '/programs', TENANT_A, gestor.token, PROGRAM_BODY);
-      // El cuerpo base usa siempre el mismo nombre y la API no admite dos programas con el mismo nombre (422 duplicate_name): en ese
-      // caso el estado previo que la historia pide no se puede reproducir con su cuerpo, y la fila no es ejecutable.
-      if (index > 1 && created.status === 422 && errorCode(created) === 'duplicate_name') {
-        return notExecutable(
-          expected,
-          `historia no reproducible tal como está escrita: pide ${previous} altas con el cuerpo base (mismo nombre «${PROGRAM_NAME}») y la API rechaza la segunda con 422 duplicate_name (nombre único por tenant). Hay que decidir si las altas previas usan otro nombre.`,
-        );
+      const name = PREVIOUS_NAMES[index - 1] ?? `${PROGRAM_NAME} ${index}`;
+      const created = await withToken('POST', '/programs', TENANT_A, gestor.token, { ...PROGRAM_BODY, name });
+      const expectedCode = `PRG-0${24 + index}`;
+      if (created.status !== 201 || codeOf(created.body) !== expectedCode) {
+        return preparationFailed(expected, `gestor@sigpro.test da de alta el programa ${index} («${name}») con el cuerpo base (se espera 201 con ${expectedCode})`, created);
       }
-      if (created.status !== 201) return preparationFailed(expected, `gestor@sigpro.test da de alta el programa ${index} con el cuerpo base`, created);
     }
     const reset = await call('POST', '/admin/reset', { tenant: TENANT_A, token: await adminAccess(TENANT_A) });
     const afterReset = await withToken('POST', '/programs', TENANT_A, gestor.token, PROGRAM_BODY);
@@ -124,8 +125,8 @@ const restoresChangedProgramName: ApiRowHandler = async (row) => {
     return rowOutcome([
       expectCheck(reset, 'la respuesta del reinicio es 200', { status: 200 }),
       check(
-        read.status === 200 && name !== undefined && name !== RENAMED_NAME,
-        expected,
+        read.status === 200 && name === SEED_NAME_PRG_001,
+        `${expected}; el nombre que devuelve el reinicio es el del seed de PRG-001 («${SEED_NAME_PRG_001}»)`,
         `respuesta ${read.status} con el nombre «${shown(name)}»`,
       ),
     ]);
