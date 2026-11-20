@@ -4,7 +4,7 @@ import { cell, check, conclude, preparationFailedWeb, strict, type Check } from 
 import { defineBrowserRows, type BrowserRowHandler } from '../../core/framework';
 import { ACCOUNTS } from '../api/common';
 import { actionFailed, clickAction, prepareWeb } from '../web/common';
-import { MORE, MOBILE, TABS, expo, moreRow, moreSequence, openFromMore, signInMobile, tabActive, tabOf, type TabInfo } from './common';
+import { MORE, MOBILE, TABS, expo, moreReached, moreRow, moreSequence, openFromMore, signInMobile, tabActive, tabOf, type TabInfo } from './common';
 
 // US-NAVEGACION-011 — Pestañas inferiores y menú «Más» según el rol (app móvil, Expo web a 390 × 844). Preparación de cada fila:
 // reinicio de alumno01 y, después, inicio de sesión en la app con la cuenta de la fila y «alumno01» en «Tenant de trabajo».
@@ -44,8 +44,17 @@ const moreRows: BrowserRowHandler = async (row, { page }) => {
   if (failure) return preparationFailedWeb(expected, failure);
   const opened = await clickAction(page, tabOf(page, MORE), 'tocar la pestaña «Más»');
   if (opened) return actionFailed(expected, opened);
-  await waitUntil(() => isVisible(moreRow(page, 'search')));
-  // La secuencia se lee del DOM (filas de «Más» en su orden de pantalla) y se compara entera, no solo por presencia
+  // Antes de leer: la pantalla «Más» debe estar alcanzada (contenedor visible y pestaña «Más» seleccionada). Si no, la fila no
+  // llegó a lo que mide: notExecutable con el diagnóstico, nunca discrepa.
+  const reached = await waitUntil(() => moreReached(page), 5_000);
+  if (!reached.reached)
+    return actionFailed(expected, {
+      message: 'la prueba no llegó a la pantalla «Más»',
+      note: `el contenedor de «Más» no se ve o la pestaña «Más» no queda seleccionada (ruta ${pathOf(page)})`,
+      kind: 'not-rendered',
+      evidence: { ruta: pathOf(page) },
+    });
+  // La secuencia se lee solo dentro de la pantalla «Más» (su orden en el DOM) y se compara entera, no solo por presencia
   const sequence = await moreSequence(page);
   const checks: Check[] = [
     check(sameList(sequence, visible), `filas en orden: ${visible.join(', ')}`, `filas en pantalla: ${sequence.join(', ') || '(ninguna)'}`),
@@ -103,7 +112,9 @@ const insideMore: BrowserRowHandler = async (row, { page }) => {
   if (failure) return preparationFailedWeb(expected, failure);
   const opened = await clickAction(page, tabOf(page, MORE), 'tocar la pestaña «Más»');
   if (opened) return actionFailed(expected, opened);
-  await waitUntil(() => isVisible(moreRow(page, 'search')));
+  const reachedMore = await waitUntil(() => moreReached(page), 5_000);
+  if (!reachedMore.reached)
+    return actionFailed(expected, { message: 'la prueba no llegó a la pantalla «Más»', note: `la pantalla «Más» no está alcanzada antes de tocar «${label}» (ruta ${pathOf(page)})`, kind: 'not-rendered' });
   const tapped = await clickAction(page, moreRow(page, target.key), `tocar «${label}»`);
   if (tapped) return actionFailed(expected, tapped);
   const arrived = await waitUntil(async () => pathOf(page) === route);

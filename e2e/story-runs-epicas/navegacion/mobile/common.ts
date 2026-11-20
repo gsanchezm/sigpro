@@ -1,5 +1,5 @@
 import type { Locator, Page } from '@playwright/test';
-import { BUSQUEDA_DYNAMIC_TESTIDS, BUSQUEDA_TESTIDS, MOVIL_DYNAMIC_TESTIDS, MOVIL_SEARCH_DYNAMIC_TESTIDS, MOVIL_SEARCH_TESTIDS, PROGRAMAS_DYNAMIC_TESTIDS } from '../../../../packages/shared/src/testids';
+import { BUSQUEDA_DYNAMIC_TESTIDS, BUSQUEDA_TESTIDS, MOVIL_DYNAMIC_TESTIDS, MOVIL_SEARCH_DYNAMIC_TESTIDS, MOVIL_SEARCH_TESTIDS, MOVIL_TESTIDS, PROGRAMAS_DYNAMIC_TESTIDS } from '../../../../packages/shared/src/testids';
 import type { Credentials } from '../../../story-runs/support/prepare';
 import { ACTION, CEILING_MS, attrOf, isVisible, runSteps, safe, textOf, type Step } from '../../support/browser';
 import type { BrowserRowHandler } from '../../core/framework';
@@ -58,9 +58,15 @@ export const tabActive = async (page: Page, tab: TabInfo): Promise<boolean> => {
   return selected === 'true' || current === 'page';
 };
 
-/** Ítems de «Más» en el orden del DOM (su nombre accesible): la secuencia que se compara con la de la historia. */
+/** Contenedor de la pantalla «Más» (su testid de pantalla, MoreScreen.tsx): solo sus filas cuentan, nunca otras listas de la página. */
+export const moreScreen = (page: Page): Locator => page.getByTestId(MOVIL_TESTIDS.MORE_PAGE);
+
+/** ¿La pantalla «Más» está alcanzada? Su contenedor se ve y la pestaña «Más» se ve seleccionada. */
+export const moreReached = async (page: Page): Promise<boolean> => (await isVisible(moreScreen(page))) && (await tabActive(page, MORE));
+
+/** Filas de la pantalla «Más» en el orden del DOM (su nombre accesible). Llamar solo con `moreReached` cierto. */
 export const moreSequence = (page: Page): Promise<readonly string[]> =>
-  safe(() => page.getByRole('list').getByRole('link').evaluateAll((links) => links.map((link) => link.getAttribute('aria-label') ?? '')), []);
+  safe(() => moreScreen(page).getByRole('link').evaluateAll((links) => links.map((link) => link.getAttribute('aria-label') ?? '')), []);
 
 /** Fila de la pantalla «Más» por su clave (su nombre accesible es el de la historia). */
 export const moreRow = (page: Page, key: string): Locator => page.getByTestId(MOVIL_DYNAMIC_TESTIDS.MORE_ITEM(key));

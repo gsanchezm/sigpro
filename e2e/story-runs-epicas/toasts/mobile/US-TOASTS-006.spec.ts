@@ -14,6 +14,7 @@ import {
   boxOf,
   bodySmallerCheck,
   chaosReplyCheck,
+  confirmedReplyCheck,
   conclude,
   duplicateVerify,
   lifetimeOf,
@@ -164,7 +165,9 @@ const errorMobile: BrowserRowHandler = restoringChaos(async (row, { page }) => {
   const viewport = await viewportOf(page);
   const life = await lifetimeOf(page, seen.entry, 'aviso');
   const archive = collected.find((reply) => reply.method === 'POST' && reply.path.includes('PRG-001/archive'));
-  return conclude([...live, roleCheck(seen, role), topPlacement(box, viewport), life.check, chaosReplyCheck(archive)], {
+  // La fila de éxito (tasa 0) exige 2xx; solo la de error (tasa 100) atribuye el fallo al caos (500 chaos_error)
+  const serverCheck = rate === 0 ? confirmedReplyCheck(archive, 'el archivado') : chaosReplyCheck(archive);
+  return conclude([...live, roleCheck(seen, role), topPlacement(box, viewport), life.check, serverCheck], {
     note: `${PLACEMENT_NOTE} ${FRANJA_NOTE}`,
     evidence: { ...appearance(seen), msDeVida: life.ms ?? '(sin retirada)' },
   });

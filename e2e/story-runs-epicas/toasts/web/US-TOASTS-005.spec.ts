@@ -96,16 +96,20 @@ const informative: BrowserRowHandler = async (row, { page }) => {
     return actionFailed(expected, blocked);
   }
   const seen = await awaitTitle(page, title);
-  // Ventana de escrituras: la vida entera del aviso (no solo hasta que aparece)
+  // Lo que se ve y dice el aviso se mira en el instante de aparición (antes de la ventana de escrituras, que dura más que el aviso)
+  const shown = await toastChecks(page, seen, 'info', title, body);
+  const roleOk = roleCheck(seen, 'status');
+  const franja = await franjaCheck(page, seen, 'info');
+  // Ventana de escrituras: la vida entera del aviso (solo para las peticiones)
   if (seen.entry !== undefined) await sleepUntilPage(page, seen.entry.at + WATCH_MS);
   writes.stop();
   const fileName = await downloaded;
   const downloadCheck = isDownload ? [check(fileName === body, `se descarga el archivo ${body}`, fileName === undefined ? 'no llegó ningún evento de descarga' : `se descarga el archivo ${fileName}`)] : [];
   return conclude(
     [
-      ...(await toastChecks(page, seen, 'info', title, body)),
-      roleCheck(seen, 'status'),
-      await franjaCheck(page, seen, 'info'),
+      ...shown,
+      roleOk,
+      franja,
       check(writes.writes.length === 0, 'el aviso informativo no cambia ningún dato (ninguna escritura a la API en la vida del aviso)', writes.writes.length === 0 ? 'ninguna escritura a la API' : `escrituras: ${writes.writes.join(', ')}`),
       ...downloadCheck,
     ],
@@ -135,6 +139,10 @@ const emptyComment: BrowserRowHandler = async (row, { page }) => {
     return actionFailed(expected, blocked);
   }
   const seen = await awaitTitle(page, WARN_TITLE);
+  // Lo que se ve y dice el aviso se mira en el instante de aparición (antes de la ventana de escrituras)
+  const shown = await toastChecks(page, seen, 'warn', WARN_TITLE);
+  const roleOk = roleCheck(seen, 'status');
+  const franja = await franjaCheck(page, seen, 'warn');
   // Vigila las escrituras durante la vida entera del aviso (3,5 s desde que aparece)
   if (seen.entry !== undefined) await sleepUntilPage(page, seen.entry.at + WATCH_MS);
   else await sleep(1_000);
@@ -146,9 +154,9 @@ const emptyComment: BrowserRowHandler = async (row, { page }) => {
   return conclude(
     [
       check(prompt.kinds.includes('prompt'), 'llega el cuadro del navegador para escribir el comentario', prompt.kinds.length === 0 ? 'no llega ningún cuadro del navegador' : `llega un cuadro de tipo ${prompt.kinds.join(', ')}`),
-      ...(await toastChecks(page, seen, 'warn', WARN_TITLE)),
-      roleCheck(seen, 'status'),
-      await franjaCheck(page, seen, 'warn'),
+      ...shown,
+      roleOk,
+      franja,
       check(writes.writes.length === 0, 'no llega ninguna petición de escritura al servidor', writes.writes.length === 0 ? 'ninguna petición de escritura al servidor' : `escrituras: ${writes.writes.join(', ')}`),
       check(sameComments, 'NC-001 no tiene ningún comentario nuevo', after === undefined ? '(no se pudo leer NC-001)' : sameComments ? `NC-001 tiene ${after.length} comentarios, los mismos que antes` : `NC-001 pasó de ${before.length} a ${after.length} comentarios (nuevos: ${added.join(', ') || 'ninguno identificable'})`),
     ],
