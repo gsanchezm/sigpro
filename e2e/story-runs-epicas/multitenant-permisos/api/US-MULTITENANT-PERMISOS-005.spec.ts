@@ -7,8 +7,8 @@ import { ROLE_ACCOUNTS, accessOf, adminOf, conclude, isFailed, runMultipart } fr
 // US-MULTITENANT-PERMISOS-005: la matriz de permisos por rol en la API. Preparación de cada fila: alumno01 se reinicia con el token de su
 // administrador (alumno01@sigpro.lab) y la cuenta del rol de la fila inicia sesión con x-tenant alumno01. Cada operación usa la petición
 // mínima de la regla «Operaciones de la matriz». Persistencia comprobada por API: antes y después de cada petición se lee, con el token
-// de administrador, el recurso que la operación toca (su «sonda»). Si la operación responde 2xx y escribe, se comprueba su efecto; en
-// cualquier otro caso (401, 403, lectura) el recurso no debe cambiar.
+// de administrador, el recurso que la operación toca (su «sonda»). Si la operación responde 2xx y escribe, se comprueba su efecto (y,
+// cuando la operación lo tiene, el oráculo del registro de auditoría); en cualquier otro caso (401, 403, lectura) el recurso no cambia.
 
 interface Probe {
   readonly status: number;
@@ -25,6 +25,12 @@ interface Op {
   readonly probe: string;
   /** Lo que debe verse en la sonda tras una escritura correcta. */
   readonly effect?: { readonly text: string; readonly holds: (before: Probe, after: Probe) => boolean };
+  /** Búsqueda del registro de auditoría cuyo total debe ganar un evento tras una escritura 2xx (oráculo de escritura). */
+  readonly audit?: string;
+  /** Lo que debe tener el cuerpo de una respuesta 2xx (forma, no solo el código). */
+  readonly shape?: (result: ApiResult) => readonly Check[];
+  /** Estado del recurso que la operación necesita antes (si no se cumple, la fila no se puede preparar). */
+  readonly precondition?: (before: Probe) => boolean;
 }
 
 /** Petición a alumno01 con el token que se le pase (sin token, cuando es `undefined`). */
@@ -44,6 +50,11 @@ const countOf = (probe: Probe, key: string): number => {
 };
 const hasMilestone = (probe: Probe, id: string, name?: string): boolean =>
   itemsOf(probe.body).some((item) => field(item, 'id') === id && (name === undefined || field(item, 'name') === name));
+
+/** Forma del cuerpo de una respuesta 2xx de una lectura de la matriz. */
+const shapeOf = (label: string, ok: (result: ApiResult) => boolean, wanted: string): ((result: ApiResult) => readonly Check[]) => {
+  return (result) => [check(ok(result), `${label}: ${wanted}`, `${label}: ${ok(result) ? wanted : `forma no esperada (respuesta ${result.status})`}`)];
+};
 
 const OPERATIONS: ReadonlyMap<string, Op> = new Map<string, Op>([
   // Programas
@@ -83,7 +94,15 @@ const OPERATIONS: ReadonlyMap<string, Op> = new Map<string, Op>([
       effect: { text: 'PRG-024 deja de existir', holds: (_before, after) => after.status === 404 },
     },
   ],
-  ['exportar programas', { send: api('GET', '/programs/export'), write: false, probe: '/programs' }],
+  [
+    'exportar programas',
+    {
+      send: api('GET', '/programs/export'),
+      write: false,
+      probe: '/programs',
+      shape: shapeOf('CSV de programas', (result) => typeof result.body === 'string' && result.body.split('\n').length > 1, 'un archivo con cabecera y al menos un programa'),
+    },
+  ],
   // Requisitos
   [
     'crear requisito',
@@ -97,10 +116,11 @@ const OPERATIONS: ReadonlyMap<string, Op> = new Map<string, Op>([
   [
     'editar requisito',
     {
-      send: api('PATCH', '/requirements/REQ-001', { priority: 'high' }),
+      send: api('PATCH', '/requirements/REQ-001', { priority: 'low' }),
       write: true,
       probe: '/requirements/REQ-001',
-      effect: { text: 'REQ-001 tiene prioridad high', holds: (_before, after) => field(after.body, 'priority') === 'high' },
+      effect: { text: 'REQ-001 tiene prioridad low', holds: (_before, after) => field(after.body, 'priority') === 'low' },
+      audit: 'REQ-001',
     },
   ],
   [
@@ -150,7 +170,15 @@ const OPERATIONS: ReadonlyMap<string, Op> = new Map<string, Op>([
     },
   ],
   // Documentos
-  ['ver documento restringido', { send: api('GET', '/documents/DOC-003'), write: false, probe: '/documents/DOC-003' }],
+  [
+    'ver documento restringido',
+    {
+      send: api('GET', '/documents/DOC-003'),
+      write: false,
+      probe: '/documents/DOC-003',
+      shape: shapeOf('documento DOC-003', (result) => field(result.body, 'id') === 'DOC-003', 'el documento DOC-003 con su ficha'),
+    },
+  ],
   [
     'publicar versión',
     {
@@ -161,8 +189,24 @@ const OPERATIONS: ReadonlyMap<string, Op> = new Map<string, Op>([
     },
   ],
   // Auditoría y usuarios
-  ['ver auditoría', { send: api('GET', '/audit'), write: false, probe: '/audit' }],
-  ['listar usuarios', { send: api('GET', '/admin/users'), write: false, probe: '/admin/users' }],
+  [
+    'ver auditoría',
+    {
+      send: api('GET', '/audit'),
+      write: false,
+      probe: '/audit',
+      shape: shapeOf('registro de auditoría', (result) => Array.isArray(field(result.body, 'items')) && typeof field(result.body, 'total') === 'number', 'una página con items y total'),
+    },
+  ],
+  [
+    'listar usuarios',
+    {
+      send: api('GET', '/admin/users'),
+      write: false,
+      probe: '/admin/users',
+      shape: shapeOf('usuarios del tenant', (result) => Array.isArray(result.body) && result.body.length > 0 && typeof field(result.body[0], 'email') === 'string', 'una lista con al menos un usuario y su correo'),
+    },
+  ],
   // No conformidades
   [
     'abrir no conformidad',
@@ -226,6 +270,7 @@ const OPERATIONS: ReadonlyMap<string, Op> = new Map<string, Op>([
       write: true,
       probe: '/programs/PRG-001/milestones',
       effect: { text: 'PRG-001-M01 deja de existir', holds: (_before, after) => !hasMilestone(after, 'PRG-001-M01') },
+      precondition: (before) => hasMilestone(before, 'PRG-001-M01'),
     },
   ],
 ]);
@@ -236,14 +281,23 @@ const CREDENTIALS: ReadonlyMap<string, string | undefined> = new Map<string, str
   ['Bearer texto-sin-formato-JWT', 'texto-sin-formato-JWT'],
 ]);
 
+/** Regla de la historia sin fila que la pruebe: se anota en la nota de las filas sin token, sin añadir ningún veredicto. */
+const NO_COVERAGE_NOTE =
+  'regla sin cobertura en esta historia: «el permiso se comprueba antes que la validación del cuerpo y que la existencia del recurso» (el 403 gana aunque el cuerpo o el recurso fallen); ninguna fila lo prueba, y la app responde 404 o 409 antes del 403 en transiciones (requirements.service.ts:135-138, nc.service.ts:179-180).';
+
 const probeRead = async (token: string, path: string): Promise<Probe> => {
   const result = await call('GET', path, { tenant: TENANT_A, token });
   return { status: result.status, body: result.body };
 };
 
+const auditTotal = async (token: string, query: string): Promise<number> => {
+  const result = await call('GET', `/audit?q=${query}`, { tenant: TENANT_A, token });
+  return Number(field(result.body, 'total'));
+};
+
 const sameProbe = (before: Probe, after: Probe): boolean => JSON.stringify(before) === JSON.stringify(after);
 
-/** Comprobaciones de persistencia: el efecto tras una escritura 2xx, o que el recurso no cambió en cualquier otro caso. */
+/** Persistencia: el efecto tras una escritura 2xx, o que el recurso no cambió en cualquier otro caso. */
 const persistence = (op: Op, status: number, before: Probe, after: Probe): Check[] => {
   if (op.write && status >= 200 && status < 300 && op.effect) {
     const holds = op.effect.holds(before, after);
@@ -251,6 +305,15 @@ const persistence = (op: Op, status: number, before: Probe, after: Probe): Check
   }
   const same = sameProbe(before, after);
   return [check(same, `${op.probe} sin cambios`, same ? `${op.probe} sin cambios` : `${op.probe} cambió (estado ${before.status} → ${after.status})`)];
+};
+
+/** Oráculo del registro de auditoría: una escritura 2xx gana un evento (requirement.updated); cualquier otra respuesta no añade ninguno. */
+const auditOracle = (op: Op, status: number, before: number | undefined, after: number | undefined): Check[] => {
+  if (op.audit === undefined || before === undefined || after === undefined) return [];
+  if (status >= 200 && status < 300) {
+    return [check(after === before + 1, `el registro de auditoría de ${op.audit} gana un evento`, `total de auditoría ${before} → ${after}`)];
+  }
+  return [check(after === before, `el registro de auditoría de ${op.audit} sin eventos nuevos`, `total de auditoría ${before} → ${after}`)];
 };
 
 const adminToken = async (): Promise<string | { readonly failed: ApiResult }> => {
@@ -269,10 +332,16 @@ const matrixRow: ApiRowHandler = async (row) => {
   if (typeof admin !== 'string') return preparationFailed(cell(row, 'respuesta'), 'administrador de alumno01 inicia sesión', admin.failed);
   const access = await accessOf(TENANT_A, credentials);
   if (isFailed(access)) return preparationFailed(cell(row, 'respuesta'), `el rol ${cell(row, 'rol')} inicia sesión con x-tenant alumno01`, access.failed);
+  // Preparación: el recurso de la operación existe con los datos del seed (y, si la operación lo exige, el hito)
   const before = await probeRead(admin, op.probe);
+  if (before.status !== 200) return preparationFailed(cell(row, 'respuesta'), `el recurso ${op.probe} existe`, { status: before.status, body: before.body, ms: 0 });
+  if (op.precondition && !op.precondition(before)) return preparationFailed(cell(row, 'respuesta'), `el recurso ${op.probe} tiene PRG-001-M01`, { status: before.status, body: before.body, ms: 0 });
+  const auditBefore = op.audit === undefined ? undefined : await auditTotal(admin, op.audit);
   const result = await op.send(access.token);
   const after = await probeRead(admin, op.probe);
-  return conclude([responseCheck(result, expected), ...persistence(op, result.status, before, after)], {
+  const auditAfter = op.audit === undefined ? undefined : await auditTotal(admin, op.audit);
+  const shapes = result.status >= 200 && result.status < 300 && op.shape ? [...op.shape(result)] : [];
+  return conclude([responseCheck(result, expected), ...persistence(op, result.status, before, after), ...auditOracle(op, result.status, auditBefore, auditAfter), ...shapes], {
     evidence: { rol: cell(row, 'rol'), operacion: cell(row, 'operacion'), sonda: op.probe },
   });
 };
@@ -292,6 +361,7 @@ const noValidToken: ApiRowHandler = async (row) => {
   const result = await op.send(token);
   const after = await probeRead(admin, op.probe);
   return conclude([responseCheck(result, expected), ...persistence(op, result.status, before, after)], {
+    note: NO_COVERAGE_NOTE,
     evidence: { credencial: cell(row, 'credencial'), operacion: cell(row, 'operacion'), sonda: op.probe },
   });
 };

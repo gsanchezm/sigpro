@@ -63,7 +63,10 @@ const demoAccount: ApiRowHandler = async (row) => {
   const email = cell(row, 'correo');
   const expect = expectOf(cell(row, 'respuesta'));
   const result = await login({ tenant, email, password: cell(row, 'contraseña') });
-  return conclude(expect(result, email), { evidence: { tenant, email } });
+  return conclude(expect(result, email), {
+    note: 'la regla dice «en cada tenant existen las cuatro cuentas»: la fila comprueba solo tres tenants (alumno01, alumno02 y alumno25) y una cuenta por fila',
+    evidence: { tenant, email },
+  });
 };
 
 // --- Esquema 2: la cuenta de administración de un alumno solo entra en su tenant ---------------------------------------------

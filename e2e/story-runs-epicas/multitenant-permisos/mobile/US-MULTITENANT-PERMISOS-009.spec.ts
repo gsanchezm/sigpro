@@ -1,6 +1,6 @@
 import type { Locator, Page } from '@playwright/test';
-import { ACTION, CEILING_MS, attrOf, isVisible, pathOf, textOf, waitUntil } from '../../support/browser';
-import { cell, check, preparationFailedWeb, strict, type Check } from '../../support/checks';
+import { ACTION, CEILING_MS, isVisible, pathOf, waitUntil } from '../../support/browser';
+import { cell, check, conclude as concludeChecks, preparationFailedWeb, strict, type Check } from '../../support/checks';
 import { defineBrowserRows, notExecutable, type BrowserRowHandler, type Outcome } from '../../core/framework';
 import {
   ADMIN_TESTIDS,
@@ -8,26 +8,27 @@ import {
   HITOS_DYNAMIC_TESTIDS,
   HITOS_TESTIDS,
   MOVIL_DOCUMENTS_TESTIDS,
-  MOVIL_DYNAMIC_TESTIDS,
   MOVIL_NC_TESTIDS,
-  MOVIL_TESTIDS,
   MOVIL_PROGRAMS_DYNAMIC_TESTIDS,
   MOVIL_REQUIREMENTS_DYNAMIC_TESTIDS,
+  MOVIL_DYNAMIC_TESTIDS,
+  MOVIL_TESTIDS,
   PROGRAMAS_DYNAMIC_TESTIDS,
   VERIFICACION_TESTIDS,
 } from '../../../../packages/shared/src/testids';
-import { ROLE_LOGIN, blocked, conclude as concludeWithNote, interact, resetAlumno01, type Diagnosis } from '../web/common';
+import { ROLE_LOGIN, absentFor, blocked, interact, resetAlumno01, type Diagnosis } from '../web/common';
 
-// US-MULTITENANT-PERMISOS-009 — Acciones por rol en la app móvil (Expo web a 390 × 844; NO es nativo: el veredicto vale para la web de
-// Expo). Preparación de cada fila: reinicio de alumno01 con el token de su administrador, contexto nuevo sin sesión, «alumno01» en
-// «Tenant de trabajo» y la cuenta del rol. La app no pone `title` en los botones: un control deshabilitado se mide por su `aria-disabled`
-// y su motivo se lee por su id de prueba, que debe aparecer una sola vez (si hay dos, la lectura es ambigua y no cuenta).
+// US-MULTITENANT-PERMISOS-009 — Acciones por rol en la app móvil (Expo web a 390 × 844; NO es nativo: el veredicto vale para la web de Expo).
+// Preparación de cada fila: reinicio de alumno01 con el token de su administrador, contexto nuevo sin sesión, «alumno01» en «Tenant de
+// trabajo» y la cuenta del rol. Un control se mide por sus atributos propios (`aria-disabled`, `data-reason`, `aria-description`) y, si el
+// botón no lleva motivo propio, por el motivo visible de su id de prueba (que debe aparecer una sola vez). Una lectura no legible sale
+// `no-ejecutable`; no se compara la posición del motivo bajo el control (solo su presencia y su atributo).
 
+const EXPO_NOTE =
+  'Expo web a 390 × 844: no es la app nativa; el veredicto vale para la web de Expo (no se ha comprobado en iOS ni en Android). El motivo se mide por el atributo del propio control o por su presencia visible; no se compara su posición bajo el control.';
 const EXPO_EVIDENCE = { plataforma: 'Expo web, 390 × 844 px (no nativo)' };
-const EXPO_NOTE = 'Expo web a 390 × 844: no es la app nativa; el veredicto vale para la web de Expo (no se ha comprobado en iOS ni en Android).';
-
-/** Veredicto de una fila móvil: lleva siempre la salvedad de Expo web (la preferencia de cookies de la web no aplica aquí). */
-const conclude = (checks: readonly Check[], extra: Pick<Outcome, 'note' | 'evidence'> = {}): Outcome => concludeWithNote(checks, { note: EXPO_NOTE, ...extra });
+/** Ventana fija para afirmar que algo NO aparece (la página ya está montada). */
+const HOLD_MS = 2000;
 
 const REASON_DELETE = 'Solo admin puede eliminar';
 const REASON_APPROVE = 'Solo el gestor de programa o el admin pueden aprobar';
@@ -36,7 +37,10 @@ const REASON_PUBLISH = 'Solo admin y gestor pueden publicar versiones';
 const REASON_CLOSE = 'Tu rol no permite cerrar no conformidades';
 const REASON_MILESTONE = 'Tu rol no permite eliminar hitos';
 
-/** Lo que la celda pide: habilitado (y sin el motivo de la acción), o deshabilitado con su motivo visible. */
+/** Veredicto de una fila móvil: lleva siempre la salvedad de Expo web. */
+const conclude = (checks: readonly Check[], extra: Pick<Outcome, 'note' | 'evidence'> = {}): Outcome => concludeChecks(checks, { note: EXPO_NOTE, ...extra });
+
+/** Lo que la celda pide: habilitado (sin motivo), o deshabilitado con su motivo. */
 interface Want {
   readonly enabled: boolean;
   readonly reason: string;
@@ -47,6 +51,46 @@ const parseWant = (text: string, denialReason: string): Want => {
   const reason = /«([^»]+)»$/.exec(text.trim())?.[1];
   if (text.startsWith('deshabilitad') && reason !== undefined) return { enabled: false, reason };
   throw new Error(`celda sin interpretación: estado «${text}»`);
+};
+
+/** Estado leído de un control: sus atributos propios y el motivo visible de su id de prueba. */
+interface MobileState {
+  readonly readable: boolean;
+  readonly visible: boolean;
+  readonly disabled: boolean;
+  readonly ariaDisabled: string | undefined;
+  readonly reason: string | undefined;
+}
+
+const UNREADABLE: MobileState = { readable: false, visible: false, disabled: false, ariaDisabled: undefined, reason: undefined };
+
+const nonEmpty = (value: string | null): string | undefined => (value === null || value === '' ? undefined : value);
+
+/** Lee el control y su motivo. Un error de lectura o un selector ambiguo (más de un elemento) no es legible. */
+const readControl = async (control: Locator, reasonText: Locator): Promise<MobileState> => {
+  try {
+    const found = await control.count();
+    if (found > 1) return UNREADABLE;
+    if (found === 0) return { readable: true, visible: false, disabled: false, ariaDisabled: undefined, reason: undefined };
+    const one = control.first();
+    const visible = await one.isVisible();
+    if (!visible) return { readable: true, visible: false, disabled: false, ariaDisabled: undefined, reason: undefined };
+    const ariaDisabledRaw = await one.getAttribute('aria-disabled', { timeout: 500 });
+    const disabledProp = await one.isDisabled({ timeout: 500 });
+    const own = nonEmpty(await one.getAttribute('data-reason', { timeout: 500 })) ?? nonEmpty(await one.getAttribute('aria-description', { timeout: 500 }));
+    const textCount = await reasonText.count();
+    if (own === undefined && textCount > 1) return UNREADABLE;
+    const textShown = own === undefined && textCount === 1 && (await reasonText.isVisible()) ? (await reasonText.textContent())?.trim() : undefined;
+    return {
+      readable: true,
+      visible: true,
+      disabled: ariaDisabledRaw === 'true' || disabledProp,
+      ariaDisabled: ariaDisabledRaw ?? undefined,
+      reason: own ?? (textShown === '' ? undefined : textShown),
+    };
+  } catch {
+    return UNREADABLE;
+  }
 };
 
 const tenantField = (page: Page): Locator => page.getByRole('textbox', { name: 'Tenant de trabajo', exact: true });
@@ -72,25 +116,20 @@ const loginMobile = async (page: Page, credentials: { readonly email: string; re
   return arrived.reached ? undefined : { failure: `no se llegó a /programs tras «Entrar» (ruta ${pathOf(page)})`, evidence: { ruta: pathOf(page) } };
 };
 
-/** Estado de un control (aria-disabled) y de su motivo visible (un único elemento por id de prueba). */
-const controlCheck = async (control: Locator, reason: Locator, label: string, want: Want): Promise<Check> => {
-  // El control (y, si se espera deshabilitado, su motivo) pueden tardar: se espera a que aparezcan antes de leer su estado
+/** Espera el control y compara su estado con la celda. Una lectura no legible sale `no-ejecutable`, nunca «habilitada». */
+const controlOutcome = async (control: Locator, reasonText: Locator, label: string, want: Want, expected: string): Promise<Outcome> => {
   await waitUntil(() => isVisible(control));
-  if (!want.enabled) await waitUntil(() => isVisible(reason));
-  const visible = await isVisible(control);
-  const disabled = visible ? (await attrOf(control, 'aria-disabled')) === 'true' : false;
-  const count = await reason.count().catch(() => 0);
-  const ambiguous = count > 1;
-  const reasonShown = count === 1 && (await isVisible(reason));
-  const shown = reasonShown ? await textOf(reason) : undefined;
-  const ok = want.enabled ? visible && !disabled && !reasonShown : visible && disabled && shown === want.reason;
-  const state = !visible ? 'no aparece' : disabled ? 'deshabilitada' : 'habilitada';
-  const motive = ambiguous ? 'con varios motivos (lectura ambigua)' : shown === undefined ? 'sin motivo visible' : `y debajo aparece «${shown}»`;
-  const wanted = want.enabled ? `«${label}» habilitada sin motivo` : `«${label}» deshabilitada y debajo aparece «${want.reason}»`;
-  return check(ok, wanted, `«${label}» ${state}${visible ? ` ${motive}` : ''}`);
+  if (!want.enabled) await waitUntil(() => isVisible(reasonText));
+  const state = await readControl(control, reasonText);
+  if (!state.readable) return notExecutable(expected, `lectura no legible de «${label}» (error de lectura o selector ambiguo): no se puede juzgar`);
+  const ok = want.enabled ? state.visible && !state.disabled && state.reason === undefined : state.visible && state.disabled && state.reason === want.reason;
+  const shown = !state.visible ? 'no aparece' : state.disabled ? 'deshabilitada' : 'habilitada';
+  const motive = state.reason === undefined ? 'sin motivo' : `con el motivo «${state.reason}»`;
+  const wanted = want.enabled ? `«${label}» habilitada sin motivo` : `«${label}» deshabilitada con el motivo «${want.reason}»`;
+  return conclude([check(ok, wanted, `«${label}» ${shown} ${motive} (aria-disabled ${state.ariaDisabled ?? '(ausente)'})`)], { evidence: EXPO_EVIDENCE });
 };
 
-/** Espera la aparición del control de una pantalla ya abierta; si no aparece, la pantalla no se alcanzó. */
+/** Espera la aparición de la marca de la pantalla; si no aparece, la pantalla no se alcanzó. */
 const screenMarker = async (page: Page, marker: string, expected: string, path: string): Promise<Outcome | undefined> => {
   const shown = await waitUntil(() => isVisible(page.getByText(marker).first()));
   return shown.reached ? undefined : notExecutable(expected, `no se ve «${marker}» en ${path}: la pantalla no se alcanzó`);
@@ -112,9 +151,13 @@ const deleteFromList: BrowserRowHandler = async (row, { page }) => {
   const sheet = page.getByRole('dialog');
   const sheetUp = await waitUntil(() => isVisible(sheet));
   if (!sheetUp.reached) return notExecutable(expected, 'la hoja de acciones de PRG-001 no se abrió tras el clic: la pantalla no se alcanzó');
-  const remove = sheet.getByRole('button', { name: 'Eliminar', exact: true });
-  const reason = page.getByTestId(MOVIL_PROGRAMS_DYNAMIC_TESTIDS.ACTION_REASON('delete'));
-  return conclude([await controlCheck(remove, reason, 'Eliminar', want)], { evidence: EXPO_EVIDENCE });
+  return controlOutcome(
+    sheet.getByRole('button', { name: 'Eliminar', exact: true }),
+    page.getByTestId(MOVIL_PROGRAMS_DYNAMIC_TESTIDS.ACTION_REASON('delete')),
+    'Eliminar',
+    want,
+    expected,
+  );
 };
 
 // --- Esquema 2: aprobar un requisito en borrador -------------------------------------------------------------------------
@@ -133,9 +176,13 @@ const approveDraft: BrowserRowHandler = async (row, { page }) => {
   const sheet = page.getByRole('dialog', { name: 'Detalle del requisito', exact: true });
   const sheetUp = await waitUntil(() => isVisible(sheet));
   if (!sheetUp.reached) return notExecutable(expected, 'el detalle de REQ-017 no se abrió tras el clic: la pantalla no se alcanzó');
-  const approve = sheet.getByRole('button', { name: 'Aprobar', exact: true });
-  const reason = page.getByTestId(MOVIL_REQUIREMENTS_DYNAMIC_TESTIDS.TRANSITION_REASON('approved'));
-  return conclude([await controlCheck(approve, reason, 'Aprobar', want)], { evidence: EXPO_EVIDENCE });
+  return controlOutcome(
+    sheet.getByRole('button', { name: 'Aprobar', exact: true }),
+    page.getByTestId(MOVIL_REQUIREMENTS_DYNAMIC_TESTIDS.TRANSITION_REASON('approved')),
+    'Aprobar',
+    want,
+    expected,
+  );
 };
 
 // --- Esquema 3: registrar una ejecución de TC-001 -------------------------------------------------------------------------
@@ -150,9 +197,13 @@ const runForm: BrowserRowHandler = async (row, { page }) => {
   if (opened) return blocked(expected, opened);
   const screen = await screenMarker(page, 'TC-001', expected, '/verification/TC-001');
   if (screen) return screen;
-  const submit = page.getByRole('button', { name: 'Registrar ejecución', exact: true });
-  const reason = page.getByTestId(VERIFICACION_TESTIDS.RUN_DENIED);
-  return conclude([await controlCheck(submit, reason, 'Registrar ejecución', want)], { evidence: EXPO_EVIDENCE });
+  return controlOutcome(
+    page.getByRole('button', { name: 'Registrar ejecución', exact: true }),
+    page.getByTestId(VERIFICACION_TESTIDS.RUN_DENIED),
+    'Registrar ejecución',
+    want,
+    expected,
+  );
 };
 
 // --- Esquema 4: publicar una versión de DOC-001 ----------------------------------------------------------------------------
@@ -167,12 +218,16 @@ const publishVersion: BrowserRowHandler = async (row, { page }) => {
   if (opened) return blocked(expected, opened);
   const screen = await screenMarker(page, 'DOC-001', expected, '/documents/DOC-001');
   if (screen) return screen;
-  const publish = page.getByRole('button', { name: 'Publicar nueva versión', exact: true });
-  const reason = page.getByTestId(MOVIL_DOCUMENTS_TESTIDS.PUBLISH_REASON);
-  return conclude([await controlCheck(publish, reason, 'Publicar nueva versión', want)], { evidence: EXPO_EVIDENCE });
+  return controlOutcome(
+    page.getByRole('button', { name: 'Publicar nueva versión', exact: true }),
+    page.getByTestId(MOVIL_DOCUMENTS_TESTIDS.PUBLISH_REASON),
+    'Publicar nueva versión',
+    want,
+    expected,
+  );
 };
 
-// --- Esquema 5: mover NC-003 a «Cerrada» ----------------------------------------------------------------------------------
+// --- Esquema 5: mover NC-003 a «Cerrada» -----------------------------------------------------------------------------------
 
 const closeNc: BrowserRowHandler = async (row, { page }) => {
   const expected = cell(row, 'estado');
@@ -188,10 +243,14 @@ const closeNc: BrowserRowHandler = async (row, { page }) => {
   const sheet = page.getByRole('dialog', { name: 'Detalle de NC-003', exact: true });
   const sheetUp = await waitUntil(() => isVisible(sheet));
   if (!sheetUp.reached) return notExecutable(expected, 'el detalle de NC-003 no se abrió tras el clic: la pantalla no se alcanzó');
-  const toClosed = sheet.getByRole('button', { name: 'Mover a «Cerrada»', exact: true });
-  // El motivo de la sección de transiciones es uno solo, el de la primera opción denegada
-  const reason = page.getByTestId(MOVIL_NC_TESTIDS.TRANSITION_REASON);
-  return conclude([await controlCheck(toClosed, reason, 'Mover a «Cerrada»', want)], { evidence: EXPO_EVIDENCE });
+  // El motivo del grupo «Mover a…» es uno solo; el botón lleva el suyo propio (data-reason / aria-description) cuando está deshabilitado
+  return controlOutcome(
+    sheet.getByRole('button', { name: 'Mover a «Cerrada»', exact: true }),
+    page.getByTestId(MOVIL_NC_TESTIDS.TRANSITION_REASON),
+    'Mover a «Cerrada»',
+    want,
+    expected,
+  );
 };
 
 // --- Esquema 6: eliminar un hito del programa ------------------------------------------------------------------------------
@@ -216,16 +275,20 @@ const deleteMilestone: BrowserRowHandler = async (row, { page }) => {
   const sheet = page.getByRole('dialog');
   const sheetUp = await waitUntil(() => isVisible(sheet));
   if (!sheetUp.reached) return notExecutable(expected, 'la hoja de acciones del hito PRG-001-M01 no se abrió tras el clic: la pantalla no se alcanzó');
-  const remove = sheet.getByRole('button', { name: 'Eliminar', exact: true }).or(page.getByTestId(HITOS_TESTIDS.MILESTONE_MENU_DELETE));
-  const reason = page.getByTestId(MOVIL_PROGRAMS_DYNAMIC_TESTIDS.ACTION_REASON('milestone-delete'));
-  return conclude([await controlCheck(remove, reason, 'Eliminar', want)], { evidence: EXPO_EVIDENCE });
+  return controlOutcome(
+    sheet.getByRole('button', { name: 'Eliminar', exact: true }).or(page.getByTestId(HITOS_TESTIDS.MILESTONE_MENU_DELETE)),
+    page.getByTestId(MOVIL_PROGRAMS_DYNAMIC_TESTIDS.ACTION_REASON('milestone-delete')),
+    'Eliminar',
+    want,
+    expected,
+  );
 };
 
 // --- Esquemas 7 y 8: accesos de la pestaña Más (Auditoría y Administración) -------------------------------------------------
 
 const MORE_ENTRY = /^(aparece|no aparece) «(.+)»$/;
 
-/** Abre la pestaña «Más» y comprueba la entrada de la clave. */
+/** Pestaña «Más»: el control positivo es que la página «Más» se monta. */
 const moreTab = (page: Page): Locator => page.getByTestId(PROGRAMAS_DYNAMIC_TESTIDS.MOBILE_TAB('more')).or(page.getByRole('tab', { name: 'Más', exact: true }));
 
 const moreRow = (key: 'audit' | 'admin', forbiddenTestId: string, pageTestId: string, label: string): BrowserRowHandler => {
@@ -240,16 +303,19 @@ const moreRow = (key: 'audit' | 'admin', forbiddenTestId: string, pageTestId: st
     if (login) return blocked(expected, login);
     const tabOpened = await interact([['abrir la pestaña «Más»', () => moreTab(page).first().click(ACTION)]]);
     if (tabOpened) return blocked(expected, tabOpened);
-    // Antes de mirar las entradas, la página «Más» debe estar montada
+    // Control positivo: la página «Más» está montada antes de afirmar que una entrada no aparece
     const moreUp = await waitUntil(() => isVisible(page.getByTestId(MOVIL_TESTIDS.MORE_PAGE)));
     if (!moreUp.reached) return notExecutable(expected, 'la página «Más» no se abrió tras pulsar la pestaña: la pantalla no se alcanzó');
     const entry = page.getByTestId(MOVIL_DYNAMIC_TESTIDS.MORE_ITEM(key)).or(page.getByRole('link', { name: label, exact: true }));
-    const shown = await isVisible(entry);
-    const checks: Check[] = [check(shown === wantShown, cell(row, 'menu'), `«${label}» ${shown ? 'aparece' : 'no aparece'} en la pestaña Más`)];
-    if (shown) {
+    const checks: Check[] = [];
+    if (wantShown) {
+      const shownNow = await waitUntil(() => isVisible(entry));
+      checks.push(check(shownNow.reached, cell(row, 'menu'), shownNow.reached ? `«${label}» aparece en la pestaña Más` : `«${label}» no aparece en la pestaña Más`));
       const followed = await interact([[`abrir «${label}» desde Más`, () => entry.first().click(ACTION)]]);
       if (followed) return blocked(expected, followed);
     } else {
+      const held = await absentFor(entry, HOLD_MS);
+      checks.push(check(held, cell(row, 'menu'), held ? `«${label}» no aparece en la pestaña Más durante ${HOLD_MS / 1000} s` : `«${label}» aparece en la pestaña Más`));
       // Sin entrada no hay forma de llegar desde Más: la página se abre por su dirección para ver lo que muestra
       const direct = await interact([[`abrir la dirección de «${label}»`, () => page.goto(`/${key === 'audit' ? 'audit' : 'admin'}`, { timeout: CEILING_MS })]]);
       if (direct) return blocked(expected, direct);
@@ -257,8 +323,9 @@ const moreRow = (key: 'audit' | 'admin', forbiddenTestId: string, pageTestId: st
     if (view === 'el registro de auditoría' || view === 'la pantalla de administración del tenant') {
       const landed = await waitUntil(() => isVisible(page.getByTestId(pageTestId)));
       checks.push(check(landed.reached, view, landed.reached ? view : `no se ve ${view} (ruta ${pathOf(page)})`));
-      return conclude(checks, { evidence: EXPO_EVIDENCE });
+      return conclude(checks);
     }
+    // Rol sin permiso: el aviso de permiso se ve, y el contenido de la página NO aparece durante una ventana fija
     const alert = page.getByTestId(forbiddenTestId);
     const shownAlert = await waitUntil(() => isVisible(alert));
     checks.push(check(shownAlert.reached, 'el aviso de permiso denegado', shownAlert.reached ? 'se ve el aviso de permiso denegado' : `no se ve el aviso (ruta ${pathOf(page)})`));
@@ -266,7 +333,9 @@ const moreRow = (key: 'audit' | 'admin', forbiddenTestId: string, pageTestId: st
       const seen = await isVisible(alert.getByText(text, { exact: true }));
       checks.push(check(seen, `el aviso muestra «${text}»`, seen ? `muestra «${text}»` : `no muestra «${text}»`));
     }
-    return conclude(checks, { evidence: EXPO_EVIDENCE });
+    const contentHidden = await absentFor(page.getByTestId(pageTestId), HOLD_MS);
+    checks.push(check(contentHidden, `ningún contenido de ${label} durante ${HOLD_MS / 1000} s`, contentHidden ? `sin contenido de ${label}` : `aparece el contenido de ${label}`));
+    return conclude(checks);
   };
 };
 

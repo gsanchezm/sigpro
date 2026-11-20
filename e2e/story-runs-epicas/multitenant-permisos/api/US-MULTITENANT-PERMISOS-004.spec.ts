@@ -57,7 +57,9 @@ const noTokenNoData: ApiRowHandler = async (row) => {
   const result = await call(op.method, op.path, { tenant: TENANT_B });
   // «No se ha reiniciado»: PRG-025 sigue existiendo con su nombre en alumno02 (se lee con el token de alumno02)
   const still = await call('GET', '/programs/PRG-025', { tenant: TENANT_B, token: prepared.ok.token02 });
-  return conclude([responseCheck(result, parseResponse('401 missing_token')), statusCheck(still, 200), valueCheck(still, 'name', 'Programa de aislamiento nuevo', 'nombre de PRG-025')]);
+  return conclude([responseCheck(result, parseResponse('401 missing_token')), statusCheck(still, 200), valueCheck(still, 'name', 'Programa de aislamiento nuevo', 'nombre de PRG-025')], {
+    note: 'la regla dice «con cualquier valor de la cabecera»: en esta familia sin token la fila solo usa la cabecera de alumno02; los demás valores no se prueban aquí',
+  });
 };
 
 // --- Esquema 3: el reinicio con un token de alumno01 reinicia solo alumno01 ---------------------------------------------------

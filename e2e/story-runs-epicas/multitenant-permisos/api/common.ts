@@ -17,6 +17,17 @@ export const conclude = (checks: readonly Check[], extra: Pick<Outcome, 'note' |
   return { ...result, note: [extra.note, differs].filter((part) => part !== undefined && part !== '').join(' | ') };
 };
 
+/** Salvedad de las filas que solo ejecutan la parte de API: se nombra en el esperado y en el observado de cada comprobación. */
+export const API_ONLY = "solo por API: la parte «desde la interfaz» no se ejecuta en esta superficie";
+
+/** Nombra la llamada en cada comprobación de una fila que solo se ejecuta por la API (el veredicto no cambia). */
+export const apiOnly = (checks: readonly Check[], prefix: string): Check[] =>
+  checks.map((entry) => ({
+    ok: entry.ok,
+    expected: `${prefix}: ${entry.expected} [${API_ONLY}]`,
+    observed: `${prefix}: ${entry.observed} [${API_ONLY}]`,
+  }));
+
 /**
  * Envoltorio de una fila que toca un tenant ajeno: reinicia los tenants indicados ANTES (lo hace la preparación) y DESPUÉS, aunque la
  * fila lance, para que ninguna fila deje a alumno02 con los datos que creó.

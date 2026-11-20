@@ -2,7 +2,7 @@ import { call, field, type ApiResult } from '../../../story-runs/support/api';
 import { TENANT_A, resetTenants } from '../../../story-runs/support/prepare';
 import { cell, check, parseResponse, preparationFailed, responseCheck, strict, type Check } from '../../support/checks';
 import { defineApiRows, type ApiRowHandler } from '../../core/framework';
-import { ROLE_ACCOUNTS, accessOf, adminOf, conclude, isFailed, runMultipart } from './common';
+import { ROLE_ACCOUNTS, accessOf, adminOf, apiOnly, conclude, isFailed, runMultipart } from './common';
 
 // US-MULTITENANT-PERMISOS-007: la API decide el permiso. Esta superficie es la API: la parte «desde la interfaz» de cada Esquema NO se
 // ejecuta aquí (la cubren 008 y 009 en la web y en la app móvil), y la fila lo declara en su evidencia. Preparación de cada fila: alumno01
@@ -96,7 +96,7 @@ const deniedDirectCall: ApiRowHandler = async (row) => {
   const result = await action.send(access.token);
   const after = await probeRead(admin, action.probe);
   const auditAfter = await auditTotal(admin);
-  return conclude([responseCheck(result, expected), ...noChange(action.probe, before, after, auditBefore, auditAfter)], {
+  return conclude(apiOnly([responseCheck(result, expected), ...noChange(action.probe, before, after, auditBefore, auditAfter)], 'llamada directa a la API'), {
     note: NOT_IN_THIS_SURFACE,
     evidence: { rol: cell(row, 'rol'), accion: cell(row, 'accion') },
   });
@@ -118,7 +118,7 @@ const noSessionCall: ApiRowHandler = async (row) => {
   const result = await action.send(token);
   const after = await probeRead(admin, action.probe);
   const auditAfter = await auditTotal(admin);
-  return conclude([responseCheck(result, expected), ...noChange(action.probe, before, after, auditBefore, auditAfter)], {
+  return conclude(apiOnly([responseCheck(result, expected), ...noChange(action.probe, before, after, auditBefore, auditAfter)], 'llamada directa a la API'), {
     note: NOT_IN_THIS_SURFACE,
     evidence: { credencial: cell(row, 'credencial'), accion: cell(row, 'accion') },
   });

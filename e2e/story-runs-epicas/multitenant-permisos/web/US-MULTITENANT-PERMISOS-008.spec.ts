@@ -10,23 +10,39 @@ import {
   REQUISITOS_DYNAMIC_TESTIDS,
   REQUISITOS_TESTIDS,
 } from '../../../../packages/shared/src/testids';
-import { ROLE_LOGIN, blocked, conclude, interact, loginAs, parseWebState, quotedItems, resetAlumno01, stateCheck, stateOf } from './common';
+import {
+  ROLE_LOGIN,
+  absentFor,
+  blocked,
+  conclude,
+  interact,
+  loginAs,
+  menuLoaded,
+  parseWebState,
+  quotedItems,
+  resetAlumno01,
+  stateCheck,
+  stateOf,
+  type Diagnosis,
+} from './common';
 
 // US-MULTITENANT-PERMISOS-008 — Acciones por rol en la web (1440 px). Preparación de cada fila: reinicio de alumno01 con el token de su
 // administrador, /login?tenant=alumno01 en un contexto sin sesión y entrada con la cuenta del rol. Un control se mide por su estado
-// (aria-disabled / disabled) y por el motivo en su atributo `title`, que es lo que la web muestra al pasar el ratón. Si la pantalla
-// correcta no se alcanza (ruta o marca) o falla un clic o un localizador, la fila es `no-ejecutable` con el error como evidencia; si la
-// pantalla está y el control no aparece o su estado no coincide, es un hallazgo.
+// (disabled / visibilidad) y por el motivo en su atributo `title`, que es lo que la web muestra al pasar el ratón. Si la pantalla correcta
+// no se alcanza (ruta o marca) o falla un clic o un localizador, la fila es `no-ejecutable` con el error como evidencia; si la pantalla
+// está y el control no aparece o su estado no coincide, es un hallazgo; si una lectura no se puede hacer, también es `no-ejecutable`.
 
 const expectedOf = (text: string): 'habilitado' | { readonly disabledWith: string } => {
   const state = parseWebState(text);
   return state.enabled ? 'habilitado' : { disabledWith: state.reason };
 };
 
-/** Espera el control (su aparición o su ausencia dentro del techo) y compara su estado con la celda. */
-const inspect = async (control: Locator, label: string, expected: string): Promise<Outcome> => {
+/** Espera el control y compara su estado con la celda. Una lectura no legible sale `no-ejecutable`, nunca «habilitado». */
+const inspect = async (control: Locator, label: string, expected: string, screenNote?: string): Promise<Outcome> => {
   await waitUntil(() => isVisible(control));
-  return conclude([stateCheck(await stateOf(control), label, expectedOf(expected))]);
+  const state = await stateOf(control);
+  if (!state.readable) return notExecutable(expected, `lectura no legible del control «${label}» (error de lectura o selector ambiguo): no se puede juzgar`);
+  return conclude([stateCheck(state, label, expectedOf(expected))], screenNote === undefined ? {} : { note: screenNote });
 };
 
 /** Abre una ruta y comprueba la marca de la pantalla antes de mirar ningún control: sin marca la pantalla no se alcanzó. */
@@ -39,7 +55,7 @@ const openScreen = async (page: Page, path: string, marker: string, expected: st
 
 /** Entra con la cuenta del rol; devuelve el resultado bloqueado si no llega a /programs. */
 const enter = async (page: Page, role: string, expected: string): Promise<Outcome | undefined> => {
-  const login = await loginAs(page, strict('rol', ROLE_LOGIN, role));
+  const login: Diagnosis | undefined = await loginAs(page, strict('rol', ROLE_LOGIN, role));
   return login ? blocked(expected, login) : undefined;
 };
 
@@ -126,6 +142,7 @@ const deleteMilestone: BrowserRowHandler = async (row, { page }) => {
   const screen = await openScreen(page, '/programs/PRG-001', 'PRG-001', expected);
   if (screen) return screen;
   const opened = await interact([
+    // La pestaña «Hitos» es un `role="tab"` del detalle del programa
     ['abrir la pestaña «Hitos»', () => page.getByRole('tab', { name: 'Hitos', exact: true }).click(ACTION)],
     // El ⋯ del hito se nombra con el nombre del hito («SRR»); su id de prueba es el respaldo
     [
@@ -145,11 +162,13 @@ const deleteMilestone: BrowserRowHandler = async (row, { page }) => {
   );
 };
 
-// --- Esquemas 7 y 8: enlaces del menú lateral y su página directa -----------------------------------------------------------------
+// --- Esquemas 7 y 8: enlaces del menú lateral y su página directa -----------------------------------------------------------
 
 const MENU_CELL = /^(aparece|no aparece) «(.+)»$/;
+/** Espera que el contenido de la página (registro o pantalla) aparezca: es el control positivo de la fila que sí lo tiene. */
+const CONTENT_HOLD_MS = 2000;
 
-/** Menú lateral (escritorio) y página de la dirección: el registro o la pantalla si el rol la tiene; si no, el aviso de permiso. */
+/** Menú lateral (escritorio) y página de la dirección: el registro o la pantalla si el rol la tiene; si no, el aviso de permiso y ningún contenido. */
 const accessRow = (label: string, path: string, pageTestId: string, forbiddenTestId: string): BrowserRowHandler => {
   return async (row, { page }) => {
     const menu = MENU_CELL.exec(cell(row, 'menu'));
@@ -160,10 +179,18 @@ const accessRow = (label: string, path: string, pageTestId: string, forbiddenTes
     await resetAlumno01();
     const blockedAt = await enter(page, cell(row, 'rol'), expected);
     if (blockedAt) return blockedAt;
-    // Antes de afirmar que un enlace no está, el menú lateral debe estar montado: se espera a que haya algún enlace visible
-    await waitUntil(() => isVisible(page.getByRole('link').first()));
-    const shown = await isVisible(page.getByRole('link', { name: label, exact: true }));
-    const checks: Check[] = [check(shown === wantShown, cell(row, 'menu'), `«${label}» ${shown ? 'aparece' : 'no aparece'} en el menú lateral`)];
+    const entry = page.getByRole('link', { name: label, exact: true });
+    // Control positivo: el menú lateral está montado; si no, la ausencia de «label» no significaría nada
+    const loaded = await menuLoaded(page);
+    if (!loaded) return notExecutable(expected, 'el menú lateral no se montó tras entrar: la pantalla no se alcanzó');
+    const checks: Check[] = [];
+    if (wantShown) {
+      const shownNow = await waitUntil(() => isVisible(entry));
+      checks.push(check(shownNow.reached, cell(row, 'menu'), shownNow.reached ? `«${label}» aparece en el menú lateral` : `«${label}» no aparece en el menú lateral`));
+    } else {
+      const held = await absentFor(entry, CONTENT_HOLD_MS);
+      checks.push(check(held, cell(row, 'menu'), held ? `«${label}» no aparece en el menú lateral durante ${CONTENT_HOLD_MS / 1000} s` : `«${label}» aparece en el menú lateral`));
+    }
     const opened = await interact([[`abrir la dirección ${path}`, () => page.goto(path, { timeout: CEILING_MS })]]);
     if (opened) return blocked(expected, opened);
     if (view === 'el registro de auditoría' || view === 'la pantalla de administración del tenant') {
@@ -171,6 +198,7 @@ const accessRow = (label: string, path: string, pageTestId: string, forbiddenTes
       checks.push(check(landed.reached, view, landed.reached ? view : `no se ve ${view} en ${path}`));
       return conclude(checks);
     }
+    // Rol sin permiso: el aviso de permiso se ve, y el contenido de la página NO aparece durante una ventana fija
     const alert = page.getByTestId(forbiddenTestId);
     const alertUp = await waitUntil(() => isVisible(alert));
     checks.push(check(alertUp.reached, 'el aviso de permiso denegado', alertUp.reached ? 'se ve el aviso de permiso denegado' : `no se ve el aviso en ${path}`));
@@ -178,6 +206,8 @@ const accessRow = (label: string, path: string, pageTestId: string, forbiddenTes
       const seen = await isVisible(alert.getByText(text, { exact: true }));
       checks.push(check(seen, `el aviso muestra «${text}»`, seen ? `muestra «${text}»` : `no muestra «${text}»`));
     }
+    const contentHidden = await absentFor(page.getByTestId(pageTestId), CONTENT_HOLD_MS);
+    checks.push(check(contentHidden, `ningún contenido de ${label} (sin registro ni panel) durante ${CONTENT_HOLD_MS / 1000} s`, contentHidden ? `sin contenido de ${label}` : `aparece el contenido de ${label}`));
     return conclude(checks);
   };
 };

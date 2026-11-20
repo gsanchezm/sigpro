@@ -71,13 +71,14 @@ const OPS_OTHER: ReadonlyMap<string, Op> = new Map<string, Op>([
 /** Comprobaciones «Y» del Esquema 1: lo que la historia dice de alumno02 tras el intento. */
 const OTHER_CHECKS: ReadonlyMap<string, (ctx: Ctx) => readonly Check[]> = new Map<string, (ctx: Ctx) => readonly Check[]>([
   [
-    'el programa PRG-025 de alumno02 sigue con el nombre «Programa de aislamiento nuevo» y la descripción del seed',
+    'el programa PRG-025 de alumno02 sigue con el nombre «Programa de aislamiento nuevo» y la descripción que tenía antes del intento',
     (ctx) => {
+      // PRG-025 no está en el seed: su descripción es la que dejó el alta (vacía) y se compara con la leída antes del intento
       const now = bodyAt(ctx.after.b, '/programs/PRG-025');
       const before = field(bodyAt(ctx.before.b, '/programs/PRG-025'), 'description');
       return [
         check(field(now, 'name') === 'Programa de aislamiento nuevo', 'PRG-025 con el nombre «Programa de aislamiento nuevo»', `PRG-025 con el nombre «${String(field(now, 'name'))}»`),
-        check(field(now, 'description') === before, 'la descripción de PRG-025 sin cambios', `descripción «${String(field(now, 'description'))}»`),
+        check(field(now, 'description') === before, 'la descripción de PRG-025 igual que antes del intento', `descripción «${String(field(now, 'description'))}» (antes «${String(before)}»)`),
       ];
     },
   ],
@@ -175,7 +176,8 @@ const FOREIGN_CHECKS: ReadonlyMap<string, (ctx: Ctx) => Promise<readonly Check[]
     'GET /api/nc/NC-013 con el mismo token responde 404 nc_not_found',
     async (ctx) => {
       const probe = await call('GET', '/nc/NC-013', { tenant: TENANT_A, token: ctx.token01 });
-      return [responseCheck(probe, parseResponse('404 nc_not_found'))];
+      // Además, la lista de no conformidades de alumno01 no gana NC-013 ni ninguna otra con ese código (antes y después)
+      return [responseCheck(probe, parseResponse('404 nc_not_found')), unchanged(ctx.before.a, ctx.after.a, ['/nc'], 'la lista de no conformidades de alumno01')];
     },
   ],
 ]);
