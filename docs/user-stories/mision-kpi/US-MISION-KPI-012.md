@@ -5,7 +5,7 @@ epica: EP-MISION-KPI
 titulo: "[Móvil] Botón «Emitir evento de prueba»: solo lo pulsa el administrador"
 etiquetas: [movil]
 relacionadas: [US-MISION-KPI-004, US-MISION-KPI-005, US-MISION-KPI-009]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["/mission"]
 permisos: [users.manage]
 ---

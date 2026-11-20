@@ -5,7 +5,7 @@ epica: EP-MISION-KPI
 titulo: "[Móvil] Panel de misión: gráficas, leyenda, vista de tabla y estados de carga y vacío"
 etiquetas: [movil]
 relacionadas: [US-MISION-KPI-002, US-MISION-KPI-007, US-MISION-KPI-008, US-MISION-KPI-010]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["/mission"]
 ---
 

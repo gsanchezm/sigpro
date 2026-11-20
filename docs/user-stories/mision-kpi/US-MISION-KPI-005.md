@@ -5,7 +5,7 @@ epica: EP-MISION-KPI
 titulo: "[API] Emitir el siguiente evento del simulador con POST /api/mission/tick (solo admin)"
 etiquetas: [api]
 relacionadas: [US-MISION-KPI-004, US-MISION-KPI-009, US-MISION-KPI-012, US-MISION-FEED-004]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["POST /api/mission/tick"]
 permisos: [users.manage]
 ---

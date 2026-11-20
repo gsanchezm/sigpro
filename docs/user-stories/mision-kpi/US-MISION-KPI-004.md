@@ -5,7 +5,7 @@ epica: EP-MISION-KPI
 titulo: "[API] Resumen de misión: actividad reciente y valor del simulador"
 etiquetas: [api]
 relacionadas: [US-MISION-KPI-001, US-MISION-KPI-005, US-MISION-KPI-009, US-MISION-KPI-012, US-MISION-FEED-003, US-MISION-FEED-005]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["GET /api/mission/summary"]
 ---
 

@@ -5,7 +5,7 @@ epica: EP-MISION-KPI
 titulo: "[Web] Panel de misión: cuatro indicadores con su cifra y su explicación"
 etiquetas: [web]
 relacionadas: [US-MISION-KPI-001, US-MISION-KPI-003, US-MISION-KPI-010, US-MISION-FEED-007]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["/mission"]
 ---
 

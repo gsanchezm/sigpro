@@ -5,7 +5,7 @@ epica: EP-MISION-KPI
 titulo: "[Móvil] Panel de misión: cuatro indicadores con su hoja de explicación"
 etiquetas: [movil]
 relacionadas: [US-MISION-KPI-001, US-MISION-KPI-003, US-MISION-KPI-006, US-MISION-KPI-011]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["/mission"]
 ---
 

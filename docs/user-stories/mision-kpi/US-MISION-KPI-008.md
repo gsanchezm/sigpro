@@ -5,7 +5,7 @@ epica: EP-MISION-KPI
 titulo: "[Web] Panel de misión: estados de carga, vacío y error"
 etiquetas: [web]
 relacionadas: [US-MISION-KPI-006, US-MISION-KPI-007, US-MISION-KPI-011]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["/mission"]
 ---
 

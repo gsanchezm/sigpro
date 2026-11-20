@@ -5,7 +5,7 @@ epica: EP-MISION-KPI
 titulo: "[API] Resumen de misión: datos de las gráficas de avance por programa y de NC por severidad"
 etiquetas: [api]
 relacionadas: [US-MISION-KPI-001, US-MISION-KPI-007, US-MISION-KPI-011]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["GET /api/mission/summary"]
 ---
 

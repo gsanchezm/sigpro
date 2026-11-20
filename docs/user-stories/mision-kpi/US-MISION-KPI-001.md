@@ -5,7 +5,7 @@ epica: EP-MISION-KPI
 titulo: "[API] Resumen de misión: forma de la respuesta y sesión obligatoria"
 etiquetas: [api]
 relacionadas: [US-MISION-KPI-002, US-MISION-KPI-003, US-MISION-KPI-004, US-PROG-METRICAS-001]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["GET /api/mission/summary"]
 ---
 

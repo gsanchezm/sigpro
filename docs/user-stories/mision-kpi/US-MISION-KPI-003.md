@@ -5,7 +5,7 @@ epica: EP-MISION-KPI
 titulo: "[API] Resumen de misión: verificación superada por caso de prueba"
 etiquetas: [api]
 relacionadas: [US-MISION-KPI-006, US-MISION-KPI-010]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["GET /api/mission/summary"]
 ---
 

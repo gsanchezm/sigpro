@@ -5,7 +5,7 @@ epica: EP-MISION-KPI
 titulo: "[Web] Panel de misión: gráficas de hitos y de NC con vista de tabla"
 etiquetas: [web]
 relacionadas: [US-MISION-KPI-002, US-MISION-KPI-008, US-MISION-KPI-011, US-MISION-FEED-007]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["/mission"]
 ---
 

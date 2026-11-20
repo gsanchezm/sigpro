@@ -5,7 +5,7 @@ epica: EP-MISION-KPI
 titulo: "[Web] Botón «Simular evento»: solo lo pulsa el administrador"
 etiquetas: [web]
 relacionadas: [US-MISION-KPI-004, US-MISION-KPI-005, US-MISION-KPI-012, US-MISION-FEED-006]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["/mission"]
 permisos: [users.manage]
 ---
