@@ -9,6 +9,9 @@ import { enterAccessWeb, phoneContext, pickLangWeb, signInWeb, webContext, type 
 
 export type Platform = 'web' | 'movil';
 
+/** Nota de las filas de app móvil de las historias transversales: la historia declara superficie web y la fila mide la app móvil. */
+export const TRANSVERSAL_NOTE = 'Historia transversal con superficie web y una fila de la app móvil: la fila mide la app móvil como web de Expo (390 px) y necesita Expo en MOBILE_URL durante esta superficie.';
+
 /** La celda «plataforma» de los Esquemas: `web` o `app móvil`. */
 export const PLATFORMS: ReadonlyMap<string, Platform> = new Map<string, Platform>([
   ['web', 'web'],

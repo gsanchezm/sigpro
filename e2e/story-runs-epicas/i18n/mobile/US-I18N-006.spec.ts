@@ -3,11 +3,27 @@ import { TENANT_A, resetTenants } from '../../../story-runs/support/prepare';
 import { ACTION, quoted } from '../../support/browser';
 import { cell, preparationFailedWeb, strict } from '../../support/checks';
 import { defineBrowserRows, type BrowserRowHandler } from '../../core/framework';
-import { conclude, ACCESS, MOBILE_NOTE, actionMissing, callLogOf, oneVisibleCheck, runStepsLogged, textCheck, titleCheck, valueCheck, withNote } from '../web/common';
+import {
+  ACCESS,
+  MOBILE_NOTE,
+  MOBILE_URL,
+  actionMissing,
+  callLogOf,
+  conclude,
+  oneVisibleCheck,
+  reachable,
+  runStepsLogged,
+  textCheck,
+  titleCheck,
+  unreachableMobile,
+  valueCheck,
+  withNote,
+} from '../web/common';
 import { button, combo, enterAccessMobile, pickLangMobile, textbox } from './common';
 
 // US-I18N-006 — Elegir el idioma en la pantalla de Acceso y conservarlo (app móvil como web de Expo a 390 × 844; NO nativa). Preparación
-// de cada fila: reinicio de alumno01 y /login con «alumno01» en «Tenant de trabajo», sin sesión ni elección de idioma guardada.
+// de cada fila: reinicio de alumno01 y /login con «alumno01» en «Tenant de trabajo», sin sesión ni elección de idioma guardada. Cada fila
+// empieza sondeando Expo: si no responde, la fila no se ejecuta aquí (notExecutable por entorno), no es un hallazgo.
 
 const REOPEN_NOTE = 'Expo web no es la app nativa: «cierra la app y la vuelve a abrir» se aproxima cerrando la página y abriendo otra en el mismo contexto (el almacenamiento se conserva).';
 
@@ -23,6 +39,7 @@ const chooseEnglish: BrowserRowHandler = async (row, { page }) => {
   const enlace = quoted(cell(row, 'enlace'));
   const selector = quoted(cell(row, 'nombre_selector'));
   const expected = `título «${titulo}», pista «${pista}», etiquetas «${correo}», «${contrasena}» y «${tenant}», botón «${boton}», enlace «${enlace}» y selector «${selector}»`;
+  if (!(await reachable(`${MOBILE_URL}/login`))) return unreachableMobile(expected);
   await resetTenants([TENANT_A]);
   const prepared = await runStepsLogged(enterAccessMobile(page));
   if (prepared) return preparationFailedWeb(expected, prepared);
@@ -50,6 +67,7 @@ const backToSpanish: BrowserRowHandler = async (row, { page }) => {
   const boton = quoted(cell(row, 'boton'));
   const selector = quoted(cell(row, 'nombre_selector'));
   const expected = `título «${titulo}», botón «${boton}» y selector «${selector}»`;
+  if (!(await reachable(`${MOBILE_URL}/login`))) return unreachableMobile(expected);
   await resetTenants([TENANT_A]);
   const prepared = await runStepsLogged([...enterAccessMobile(page), ...pickLangMobile(page, ACCESS.es.language, 'en')]);
   if (prepared) return preparationFailedWeb(expected, prepared);
@@ -107,6 +125,7 @@ const keepsOnReturn: BrowserRowHandler = async (row, { page }) => {
   const accion = cell(row, 'accion');
   const resultado = cell(row, 'resultado');
   const expected = resultado;
+  if (!(await reachable(`${MOBILE_URL}/login`))) return unreachableMobile(expected);
   await resetTenants([TENANT_A]);
   const prepared = await runStepsLogged([...enterAccessMobile(page), ...pickLangMobile(page, ACCESS.es.language, 'en')]);
   if (prepared) return preparationFailedWeb(expected, prepared);
@@ -128,6 +147,7 @@ const keepsForm: BrowserRowHandler = async (row, { page }) => {
   const correo = cell(row, 'correo');
   const contrasena = cell(row, 'contrasena');
   const expected = `el campo «Email» contiene ${correo}, el campo «Password» contiene ${contrasena} y el tenant de trabajo sigue en ${TENANT_A}`;
+  if (!(await reachable(`${MOBILE_URL}/login`))) return unreachableMobile(expected);
   await resetTenants([TENANT_A]);
   const prepared = await runStepsLogged([
     ...enterAccessMobile(page),

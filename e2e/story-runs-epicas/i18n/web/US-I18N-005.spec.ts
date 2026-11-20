@@ -11,12 +11,16 @@ import {
   actionMissing,
   enterAccessWeb,
   fixCookiePreference,
+  markOf,
+  markPage,
   oneVisibleCheck,
   onProgramsAny,
   pathCheck,
   pickLangWeb,
   runStepsLogged,
   signInWeb,
+  sinRecargaCheck,
+  textCheck,
   titleCheck,
   valueCheck,
 } from './common';
@@ -24,11 +28,24 @@ import {
 // US-I18N-005 — Cambiar el idioma desde la cabecera de la aplicación de escritorio (web, 1440 px). Preparación de cada fila: reinicio
 // de alumno01; gestor@sigpro.test entra por /login?tenant=alumno01 (la elección de la cabecera se hace DESPUÉS de entrar, salvo en el
 // Esquema 4). El menú lateral debe estar desplegado: si la fila lo encuentra plegado, se despliega con su botón antes de actuar.
+// La Regla «pasa al idioma elegido sin recargarla» se mide en cada elección de la cabecera: marca en la ventana, título y migas.
 
 const GESTOR = DEMO.gestor;
 
+/** Lo que la historia dice y esta épica no mide: la ventana de menos de 1024 px (decisión pendiente) y el almacenamiento del navegador. */
+const COVERAGE_NOTE = 'No cubierto: la Regla de la ventana de menos de 1024 px (sin selector en la cabecera: decisión pendiente) y «se guarda en el navegador» (no se inspecciona el almacenamiento).';
+
+const NOTE_005 = `${COOKIE_NOTE} ${COVERAGE_NOTE}`;
+
 /** El enlace de la sección en el menú lateral: la `nav` dentro de la `aside` de la barra lateral (no las migas ni otros enlaces). */
 const sidebarLink = (page: Page, name: string): Locator => page.locator('aside nav').getByRole('link', { name, exact: true });
+
+/** La miga actual (la última, con `aria-current`) de la barra de migas de la cabecera. */
+const crumbCheck = (page: Page, name: string): Promise<Check> =>
+  textCheck(page.getByTestId(PROGRAMAS_TESTIDS.LAYOUT_BREADCRUMBS).locator('[aria-current="page"]'), 'miga actual', name);
+
+/** Marca como extra de la Regla «sin recargarla / títulos / migas» (el Esquema no lo nombra): el texto esperado lleva «[regla]». */
+const rule = <T extends Check>(entry: T): T => ({ ...entry, expected: `[regla] ${entry.expected}` });
 
 /** Despliega el menú lateral si está plegado; devuelve el fallo, si lo hay. */
 const expandSidebar = async (page: Page): Promise<string | undefined> => {
@@ -59,15 +76,19 @@ const chooseEnglish: BrowserRowHandler = async (row, { page, context }) => {
   await context.addInitScript(fixCookiePreference);
   const prepared = await enterPrograms(page, expected);
   if (prepared) return prepared;
+  await markPage(page);
   const acted = await runStepsLogged([pickLangWeb(page, 'Idioma', 'en')]);
   if (acted) return actionMissing(expected, acted);
   return conclude(
     [
+      sinRecargaCheck(await markOf(page)),
+      rule(await titleCheck(page, programas)),
+      rule(await crumbCheck(page, programas)),
       await oneVisibleCheck(sidebarLink(page, programas), `enlace «${programas}» del menú lateral`),
       await oneVisibleCheck(sidebarLink(page, verificacion), `enlace «${verificacion}» del menú lateral`),
       await oneVisibleCheck(page.getByRole('button', { name: boton, exact: true }), `botón «${boton}»`),
     ],
-    { note: COOKIE_NOTE },
+    { note: NOTE_005 },
   );
 };
 
@@ -84,15 +105,19 @@ const backToSpanish: BrowserRowHandler = async (row, { page, context }) => {
   if (prepared) return prepared;
   const chosenEn = await runStepsLogged([pickLangWeb(page, 'Idioma', 'en')]);
   if (chosenEn) return preparationFailedWeb(expected, chosenEn);
+  await markPage(page);
   const acted = await runStepsLogged([pickLangWeb(page, 'Language', 'es')]);
   if (acted) return actionMissing(expected, acted);
   return conclude(
     [
+      sinRecargaCheck(await markOf(page)),
+      rule(await titleCheck(page, programas)),
+      rule(await crumbCheck(page, programas)),
       await oneVisibleCheck(sidebarLink(page, programas), `enlace «${programas}» del menú lateral`),
       await oneVisibleCheck(sidebarLink(page, verificacion), `enlace «${verificacion}» del menú lateral`),
       await oneVisibleCheck(page.getByRole('button', { name: boton, exact: true }), `botón «${boton}»`),
     ],
-    { note: COOKIE_NOTE },
+    { note: NOTE_005 },
   );
 };
 
@@ -133,13 +158,16 @@ const keepsChoice: BrowserRowHandler = async (row, { page, context }) => {
   await context.addInitScript(fixCookiePreference);
   const prepared = await enterPrograms(page, expected);
   if (prepared) return prepared;
+  // La elección de la precondición también es una elección de la cabecera: se mide sin recarga, título y migas
+  await markPage(page);
   const chosen = await runStepsLogged([pickLangWeb(page, 'Idioma', 'en')]);
   if (chosen) return preparationFailedWeb(expected, chosen);
+  const regla = [sinRecargaCheck(await markOf(page)), rule(await titleCheck(page, 'Programs')), rule(await crumbCheck(page, 'Programs'))];
   const acted = strict('accion', ACTIONS, cell(row, 'accion'))(page);
   const failure = await runStepsLogged(acted);
   if (failure) return actionMissing(expected, failure);
   const result = strict('resultado', RESULTS, resultado);
-  return conclude([await result(page)], { note: COOKIE_NOTE });
+  return conclude([...regla, await result(page)], { note: NOTE_005 });
 };
 
 // --- Esquema 4: la elección hecha antes de entrar se mantiene dentro de la aplicación ----------------------------------
@@ -150,10 +178,7 @@ const keepsBeforeLogin: BrowserRowHandler = async (row, { page, context }) => {
   const expected = 'llega a /programs y ve «Programs» en el menú lateral; el selector de idioma de la cabecera queda en «EN»';
   await resetTenants([TENANT_A]);
   await context.addInitScript(fixCookiePreference);
-  const prepared = await runStepsLogged([
-    ...enterAccessWeb(page),
-    pickLangWeb(page, ACCESS.es.language, 'en'),
-  ]);
+  const prepared = await runStepsLogged([...enterAccessWeb(page), pickLangWeb(page, ACCESS.es.language, 'en')]);
   if (prepared) return preparationFailedWeb(expected, prepared);
   const sent = await runStepsLogged([
     [`escribir «${ACCESS.en.email}»`, () => page.getByLabel(ACCESS.en.email, { exact: true }).fill(correo, ACTION)],
@@ -168,7 +193,7 @@ const keepsBeforeLogin: BrowserRowHandler = async (row, { page, context }) => {
       await oneVisibleCheck(sidebarLink(page, 'Programs'), 'enlace «Programs» del menú lateral'),
       await valueCheck(page.getByRole('combobox', { name: 'Language', exact: true }), '[regla] el selector de la cabecera vale', 'en'),
     ],
-    { note: COOKIE_NOTE },
+    { note: NOTE_005 },
   );
 };
 

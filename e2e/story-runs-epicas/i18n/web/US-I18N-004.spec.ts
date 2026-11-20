@@ -17,8 +17,10 @@ import {
   onLoginFormAny,
   onMfaAny,
   onProgramsAny,
+  BELOW_NOTE,
   passwordNote,
   passwordSent,
+  withNote,
   pathCheck,
   pickLangWeb,
   runStepsLogged,
@@ -40,6 +42,9 @@ const typed = (text: string): string => {
 
 const EMAIL_ERROR = ACCESO_TESTIDS.LOGIN_EMAIL_ERROR;
 const PASSWORD_ERROR = ACCESO_TESTIDS.LOGIN_PASSWORD_ERROR;
+
+/** La Regla «un aviso nuevo nunca se muestra en el idioma anterior» se mide con los avisos que aparecen DESPUÉS de elegir EN. */
+const NEW_ALERT_NOTE = 'La Regla «un aviso nuevo nunca se muestra en el idioma anterior» se mide con los avisos que aparecen después de elegir EN. El caso de un aviso ya visible al cambiar de idioma está en Decisiones pendientes y no se mide.';
 
 /** Escribe los dos campos en inglés y pulsa «Sign in» (lo que la fila hace dentro del Cuando). */
 const submitInEnglish = (page: Page, correo: string, contrasena: string): readonly Step[] => [
@@ -65,7 +70,7 @@ const rejected: BrowserRowHandler = async (row, { page }) => {
     // Lo último: la comprobación navega a /programs para ver si la sesión existe
     await noSessionCheck(page, onLoginFormAny, onProgramsAny),
   ]);
-  return passwordNote(cell(row, 'contrasena'), result);
+  return withNote(passwordNote(cell(row, 'contrasena'), result), NEW_ALERT_NOTE);
 };
 
 // --- Esquema 2: un campo vacío o con formato no válido avisa debajo del campo en inglés ----------------------------------
@@ -93,7 +98,7 @@ const fieldErrors: BrowserRowHandler = async (row, { page }) => {
   }
   if (emailText === undefined) checks.push(await noVisibleCheck(page.getByTestId(EMAIL_ERROR), 'debajo de «Email»'));
   if (passwordText === undefined) checks.push(await noVisibleCheck(page.getByTestId(PASSWORD_ERROR), 'debajo de «Password»'));
-  return conclude(checks);
+  return withNote(conclude(checks), `${BELOW_NOTE} ${NEW_ALERT_NOTE}`);
 };
 
 // --- Esquema 3: el código incorrecto del segundo paso avisa en inglés y no inicia sesión --------------------------------

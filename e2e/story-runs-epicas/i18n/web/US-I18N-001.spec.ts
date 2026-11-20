@@ -1,23 +1,27 @@
+import { HOLD_MS, holdsFor, quoted, safe } from '../../support/browser';
+import { cell, check, preparationFailedWeb, strict, type Check } from '../../support/checks';
+import { defineBrowserRows, type BrowserRowHandler, type Outcome } from '../../core/framework';
 import { TENANT_A, resetTenants } from '../../../story-runs/support/prepare';
-import { quoted, safe } from '../../support/browser';
-import { cell, preparationFailedWeb, strict } from '../../support/checks';
-import { defineBrowserRows, type BrowserRowHandler } from '../../core/framework';
 import {
-  conclude,
   ACCESS,
   MOBILE_NOTE,
   MOBILE_URL,
   absentAll,
   absentText,
   browserOf,
+  conclude,
+  heading1,
+  internalCodesCheck,
   oneVisibleCheck,
   reachable,
   runStepsLogged,
+  spanishShownCheck,
   titleCheck,
   unreachableMobile,
+  visibleCount,
   withNote,
 } from './common';
-import { PLATFORMS, enterAccessFor, openContext, pickLangFor, type Platform } from './transversal';
+import { PLATFORMS, TRANSVERSAL_NOTE, enterAccessFor, openContext, pickLangFor, type Platform } from './transversal';
 
 // US-I18N-001 — Idioma por defecto español y textos completos en inglés (TRANSVERSAL: filas web a 1440 px y de la app móvil servida
 // como web de Expo a 390 px; NO nativa). Preparación de cada fila: reinicio de alumno01 y una pantalla de Acceso en un contexto nuevo,
@@ -36,14 +40,30 @@ const SYSTEM_LANGUAGE: ReadonlyMap<string, SystemLanguage> = new Map<string, Sys
 /** Los textos en español de Acceso que citan las historias de la épica (la lista no es todo el catálogo). */
 const SPANISH_ACCESS: readonly string[] = ['Iniciar sesión', 'Entrar', '¿Olvidaste la contraseña?', 'Mantener la sesión en este equipo', '¿Sin cuenta?', 'Correo electrónico', 'Contraseña'];
 
+/** Solo la web muestra «Mantener la sesión en este equipo»: en la app móvil su ausencia es trivial. */
+const WEB_ONLY_SPANISH = 'Mantener la sesión en este equipo';
+
+/** Motivos de error y códigos de rol: nunca deben aparecer como texto (ver la Regla de 001). */
+const INTERNAL_CODES: readonly string[] = ['required', 'badEmail', 'eMfa', 'e401', 'e403', 'e423', 'e409', 'pwShort', 'pwMismatch', 'termsReq', 'invalid_credentials', 'account_locked', 'pending_approval', 'program_manager', 'consultant'];
+
 const LIST_NOTE = 'La lista de textos en español son los que citan las historias de Acceso de esta épica; no es todo el catálogo.';
 
+const CODES_NOTE = 'Los códigos internos son los motivos de error y los códigos de rol: la web los muestra en el badge de «Usuarios de prueba» (TestUsers.tsx:37) y la app móvil en el chip de cada usuario (login.tsx:184). Si aparecen, es una discrepancia real.';
+
+const FRENCH_NOTE = 'La fila no distingue: el catálogo no tiene francés, así que una app que ignorara el idioma del navegador mostraría igual el español; la fila solo prueba que el español es el idioma por defecto.';
+
 const EXPECTED_ACCESS = 've el título «Iniciar sesión» y el botón «Entrar»';
+
+/** Notas de la fila móvil de una historia transversal (superficie web, filas de Expo). */
+const movilNotes: readonly string[] = [MOBILE_NOTE, TRANSVERSAL_NOTE];
+
+const withNotes = (result: Outcome, notes: readonly string[]): Outcome => notes.reduce((acc, note) => withNote(acc, note), result);
 
 // --- Esquema 1: sin elección guardada la pantalla de acceso se ve en español, aunque el sistema esté en otro idioma -----------
 
 const systemLanguage: BrowserRowHandler = async (row, { context }) => {
-  const system = strict('idioma_sistema', SYSTEM_LANGUAGE, cell(row, 'idioma_sistema'));
+  const systemText = cell(row, 'idioma_sistema');
+  const system = strict('idioma_sistema', SYSTEM_LANGUAGE, systemText);
   const platform: Platform = strict('plataforma', PLATFORMS, cell(row, 'plataforma'));
   if (platform === 'movil' && !(await reachable(`${MOBILE_URL}/login`))) return unreachableMobile(EXPECTED_ACCESS);
   await resetTenants([TENANT_A]);
@@ -55,11 +75,13 @@ const systemLanguage: BrowserRowHandler = async (row, { context }) => {
     // La precondición de la historia es el idioma del navegador o del dispositivo: se lee, no se supone
     const navigatorLanguage = await safe(() => page.evaluate(() => window.navigator.language), '(no legible)');
     if (!navigatorLanguage.startsWith(system.prefix)) return preparationFailedWeb(EXPECTED_ACCESS, `el navegador dice «${navigatorLanguage}», no «${system.prefix}»`);
-    const result = conclude(
-      [await titleCheck(page, 'Iniciar sesión'), await oneVisibleCheck(page.getByRole('button', { name: 'Entrar', exact: true }), 'botón «Entrar»')],
-      { evidence: { idiomaNavegador: navigatorLanguage } },
-    );
-    return platform === 'movil' ? withNote(result, MOBILE_NOTE) : result;
+    const title = await titleCheck(page, ACCESS.es.title);
+    const button = await oneVisibleCheck(page.getByRole('button', { name: 'Entrar', exact: true }), 'botón «Entrar»');
+    // Ventana de observación: la pantalla no cambia a otro idioma después de cargar (la preferencia de la app móvil se lee de forma asíncrona)
+    const stays = await holdsFor(async () => (await visibleCount(heading1(page, ACCESS.es.title))) === 1);
+    const steady = check(stays.held, `sigue en «${ACCESS.es.title}» durante ${HOLD_MS / 1000} s`, stays.held ? `sigue en «${ACCESS.es.title}»` : `cambia a otro título a los ${stays.brokeAtMs ?? 0} ms`);
+    const notes = [...(platform === 'movil' ? movilNotes : []), ...(system.prefix === 'fr' ? [FRENCH_NOTE] : [])];
+    return withNotes(conclude([title, button, steady], { evidence: { idiomaNavegador: navigatorLanguage } }), notes);
   } finally {
     await own.close();
   }
@@ -78,12 +100,22 @@ const noSpanish: BrowserRowHandler = async (row, { context }) => {
     const page = await own.newPage();
     const prepared = await runStepsLogged(enterAccessFor(platform, page));
     if (prepared) return preparationFailedWeb(expected, prepared);
+    // Control positivo: antes de elegir EN, los textos de la lista que esta plataforma muestra se ven en español
+    const shownList = platform === 'web' ? SPANISH_ACCESS : SPANISH_ACCESS.filter((text) => text !== WEB_ONLY_SPANISH);
+    const control = await spanishShownCheck(page, shownList);
     const chosen = await runStepsLogged(pickLangFor(platform, page, ACCESS.es.language, 'en'));
     if (chosen) return preparationFailedWeb(expected, chosen);
     // El título en inglés es el ancla: sin él las ausencias serían ciertas por una pantalla sin cargar
-    const result = conclude([await titleCheck(page, ACCESS.en.title), await absentText(page, texto), await absentAll(page, SPANISH_ACCESS, 'Acceso')]);
-    const withList = withNote(result, LIST_NOTE);
-    return platform === 'movil' ? withNote(withList, MOBILE_NOTE) : withList;
+    const checks: Check[] = [
+      control,
+      await titleCheck(page, ACCESS.en.title),
+      await absentText(page, texto),
+      await absentAll(page, SPANISH_ACCESS),
+      await internalCodesCheck(page, INTERNAL_CODES),
+    ];
+    const movilOnly = platform === 'movil' ? [...movilNotes, `En la app móvil «${WEB_ONLY_SPANISH}» no existe: su ausencia es trivial y el control positivo usa los otros ${shownList.length} textos.`] : [];
+    const notes = [LIST_NOTE, CODES_NOTE, ...movilOnly];
+    return withNotes(conclude(checks), notes);
   } finally {
     await own.close();
   }

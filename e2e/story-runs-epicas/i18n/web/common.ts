@@ -81,6 +81,9 @@ export const COOKIE_NOTE = 'La prueba fija la preferencia de cookies (sigpro.coo
 /** Nota de las filas de la app móvil: se miden como web de Expo a 390 px, no como iOS ni Android nativos. */
 export const MOBILE_NOTE = 'Se mide la app móvil como web de Expo a 390 × 844 px: no es nativo (no hay iOS ni Android).';
 
+/** Nota de la comprobación «debajo de un campo»: solo mide la posición vertical del aviso, no que sea el de ese campo. */
+export const BELOW_NOTE = 'La comprobación «debajo del campo» es laxa: solo mide que el aviso empieza por debajo del borde inferior del campo, no que sea el aviso de ese campo.';
+
 /** Se ejecuta en cada carga: fija la preferencia de cookies solo si no hay ninguna (no es sesión ni elección de idioma). */
 export const fixCookiePreference = (): void => {
   try {
@@ -114,7 +117,7 @@ export const reachable = (url: string): Promise<boolean> => safe(async () => (aw
 export const notRunning = (url: string): string =>
   `Entorno: la app móvil (Expo web) no responde en ${url} durante esta superficie; la fila no se ejecuta aquí (hace falta Expo levantado en ese puerto).`;
 
-/** Texto sin espacios no separables (U+00A0 y U+202F pasan a espacio normal): solo se normaliza la tipografía del espacio. */
+/** Texto con espacios no separables (U+00A0 y U+202F) pasados a espacio normal: solo para comparar textos sin tipografía. */
 export const normalizeSpaces = (text: string): string => text.replace(/[\u00a0\u202f]/g, ' ').trim();
 
 // --- Lecturas (no lanzan, con plazo) --------------------------------------------------------------------------------------------
@@ -147,16 +150,23 @@ export const describeCount = (count: number): string => {
 
 // --- Comprobaciones (cada una con lo que la historia dice y lo medido) -----------------------------------------------------
 
-/** Plazo de una reacción local de la pantalla (cambio de idioma, aparición de un texto o de un campo): 3 s, como en la historia. */
+/** Plazo de una reacción local (cambio de idioma, aparición de un texto o de un campo): tolerancia del arnés (3 s locales). */
 export const REACTION_MS = 3_000;
-/** Plazo de algo que pasa por la red o por una navegación (título tras cargar, aviso del servidor): 5 s, como en la historia. */
+/** Plazo de algo que pasa por la red o por una navegación: tolerancia del arnés (5 s de red o de navegación). */
 export const NETWORK_MS = 5_000;
 
+/** Una comprobación con el tiempo que tardó en cumplirse: dato aparte (el README pide registrar la espera, no compararla). */
+export interface TimedCheck extends Check {
+  readonly waitedMs: number;
+}
+
+const timed = (entry: Check, waitedMs: number): TimedCheck => ({ ...entry, waitedMs });
+
 /** «<etiqueta> «X»»: el único elemento visible tiene ese texto exacto (espera con techo). */
-export const textCheck = async (target: Locator, label: string, expected: string, ceilingMs: number = REACTION_MS): Promise<Check> => {
+export const textCheck = async (target: Locator, label: string, expected: string, ceilingMs: number = REACTION_MS): Promise<TimedCheck> => {
   const reached = await waitUntil(async () => (await readVisible(target)) === expected, ceilingMs);
   const measured = await readVisible(target);
-  return check(reached.reached, `${label} «${expected}»`, measured === undefined ? `${label}: ${describeCount(await visibleCount(target))}` : `${label} «${measured}»`);
+  return timed(check(reached.reached, `${label} «${expected}»`, measured === undefined ? `${label}: ${describeCount(await visibleCount(target))}` : `${label} «${measured}»`), reached.elapsedMs);
 };
 
 /** Los encabezados de nivel 1 que se ven, con espacios normalizados (lo observado del título). */
@@ -164,58 +174,78 @@ const visibleHeadings = (page: Page): Promise<readonly string[]> =>
   safe<readonly string[]>(async () => (await page.getByRole('heading', { level: 1 }).filter({ visible: true }).allInnerTexts()).map(normalizeSpaces), []);
 
 /** «título «X»»: el encabezado de nivel 1 con ese nombre se ve (tras una carga o navegación: plazo de red). */
-export const titleCheck = async (page: Page, expected: string): Promise<Check> => {
+export const titleCheck = async (page: Page, expected: string): Promise<TimedCheck> => {
   const reached = await waitUntil(async () => (await visibleCount(heading1(page, expected))) === 1, NETWORK_MS);
   const shown = await visibleHeadings(page);
-  return check(reached.reached, `título «${expected}»`, `títulos visibles: ${shown.length > 0 ? shown.map((text) => `«${text}»`).join(', ') : '(ninguno)'}`);
+  return timed(check(reached.reached, `título «${expected}»`, `títulos visibles: ${shown.length > 0 ? shown.map((text) => `«${text}»`).join(', ') : '(ninguno)'}`), reached.elapsedMs);
 };
 
 /** Un control o elemento que debe verse una sola vez (espera con techo); lo observado es cuántos se ven. */
-export const oneVisibleCheck = async (target: Locator, label: string): Promise<Check> => {
+export const oneVisibleCheck = async (target: Locator, label: string): Promise<TimedCheck> => {
   const reached = await waitUntil(async () => (await visibleCount(target)) === 1, REACTION_MS);
   const count = await visibleCount(target);
-  return check(reached.reached, `${label} visible`, `${label}: ${describeCount(count)}`);
+  return timed(check(reached.reached, `${label} visible`, `${label}: ${describeCount(count)}`), reached.elapsedMs);
 };
 
 /** Un campo con ese valor exacto (espera con techo). */
-export const valueCheck = async (target: Locator, label: string, expected: string): Promise<Check> => {
+export const valueCheck = async (target: Locator, label: string, expected: string): Promise<TimedCheck> => {
   const reached = await waitUntil(async () => (await readValue(target)) === expected, REACTION_MS);
   const measured = await readValue(target);
-  return check(reached.reached, `${label} «${expected}»`, measured === undefined ? `${label}: ${describeCount(await visibleCount(target))}` : `${label} «${measured}»`);
+  return timed(check(reached.reached, `${label} «${expected}»`, measured === undefined ? `${label}: ${describeCount(await visibleCount(target))}` : `${label} «${measured}»`), reached.elapsedMs);
 };
 
 /** `lang` del documento: espera con techo a que sea el de la elección. */
-export const langCheck = async (page: Page, expected: string): Promise<Check> => {
+export const langCheck = async (page: Page, expected: string): Promise<TimedCheck> => {
   const current = (): Promise<string | null | undefined> => safe(() => page.locator('html').getAttribute('lang', { timeout: 1_000 }), undefined);
   const reached = await waitUntil(async () => (await current()) === expected, REACTION_MS);
   const measured = await current();
-  return check(reached.reached, `idioma declarado de la página «${expected}»`, `idioma declarado «${measured ?? '(sin atributo)'}»`);
+  return timed(check(reached.reached, `idioma declarado de la página «${expected}»`, `idioma declarado «${measured ?? '(sin atributo)'}»`), reached.elapsedMs);
 };
 
-/** «Ningún elemento visible con ese texto exacto» durante una ventana de observación (el ancla positiva va antes). */
+/** Escapa un texto para usarlo dentro de una expresión regular. */
+const escapeRegExp = (text: string): string => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+/**
+ * Un texto de la interfaz como lo busca una persona: por subcadena y sensible a mayúsculas. El texto de un enlace puede compartir
+ * elemento con otro texto («¿Sin cuenta?» y «Solicitar acceso» van en el mismo párrafo), así que la coincidencia exacta no sirve.
+ */
+export const textOfUi = (page: Page, text: string): Locator => page.getByText(new RegExp(escapeRegExp(text)));
+
+/** «Ningún elemento visible con ese texto» durante una ventana de observación (el ancla positiva va antes). */
 export const absentText = async (page: Page, text: string): Promise<Check> => {
-  const held = await holdsFor(async () => (await visibleCount(page.getByText(text, { exact: true }))) === 0);
-  const count = held.held ? 0 : await visibleCount(page.getByText(text, { exact: true }));
+  const held = await holdsFor(async () => (await visibleCount(textOfUi(page, text))) === 0);
+  const count = held.held ? 0 : await visibleCount(textOfUi(page, text));
   return check(held.held, `no ve «${text}»`, held.held ? `no aparece «${text}» durante ${HOLD_MS / 1000} s` : `aparece «${text}» (${describeCount(count)}) a los ${held.brokeAtMs ?? 0} ms`);
 };
 
-/** Ninguno de los textos de la lista se ve durante la ventana de observación; lo observado son los que siguen visibles. */
-export const absentAll = async (page: Page, texts: readonly string[], label: string): Promise<Check> => {
+/** [Regla] Ninguno de los textos de la lista se ve durante la ventana de observación; lo observado son los que siguen visibles. */
+export const absentAll = async (page: Page, texts: readonly string[]): Promise<Check> => {
   const found = async (): Promise<readonly string[]> => {
-    const counts = await Promise.all(texts.map((text) => visibleCount(page.getByText(text, { exact: true }))));
+    const counts = await Promise.all(texts.map((text) => visibleCount(textOfUi(page, text))));
     return texts.filter((_text, index) => counts[index] !== 0);
   };
   const held = await holdsFor(async () => (await found()).length === 0);
   const remaining = held.held ? [] : await found();
-  return check(held.held, `[regla] ningún texto en español del ${label} visible`, held.held ? `ninguno de los ${texts.length} textos en español visible durante ${HOLD_MS / 1000} s` : `siguen visibles: ${remaining.join(', ')}`);
+  return check(held.held, `[regla] ninguno de los ${texts.length} textos en español listados`, held.held ? `ninguno de los ${texts.length} visible durante ${HOLD_MS / 1000} s` : `siguen visibles: ${remaining.join(', ')}`);
 };
 
-/** El aviso (`role=alert`) tiene ese título: se mira la primera línea, porque la traza HTTP va debajo. */
-export const alertCheck = async (target: Locator, expected: string): Promise<Check> => {
-  const first = async (): Promise<string | undefined> => linesOf(await readVisible(target))[0];
-  const reached = await waitUntil(async () => (await first()) === expected, NETWORK_MS);
-  const measured = await first();
-  return check(reached.reached, `aviso «${expected}»`, measured === undefined ? `aviso: ${describeCount(await visibleCount(target))}` : `aviso «${measured}»`);
+/** [Control] Cada texto de la lista se ve en español antes de elegir el idioma: sin esto, la ausencia posterior no prueba nada. */
+export const spanishShownCheck = async (page: Page, texts: readonly string[]): Promise<Check> => {
+  const missing = async (): Promise<readonly string[]> => {
+    const counts = await Promise.all(texts.map((text) => visibleCount(textOfUi(page, text))));
+    return texts.filter((_text, index) => (counts[index] ?? 0) < 1);
+  };
+  const reached = await waitUntil(async () => (await missing()).length === 0, REACTION_MS);
+  const absent = reached.reached ? [] : await missing();
+  return check(reached.reached, `[control] los ${texts.length} textos de la lista se ven en español antes de elegir el idioma`, reached.reached ? `se ven los ${texts.length}` : `no se ven: ${absent.join(', ')}`);
+};
+
+/** [Regla] Ningún código interno aparece como texto visible (una frase sin versión no se sustituye por su clave). Lectura fallida = no cumplida. */
+export const internalCodesCheck = async (page: Page, codes: readonly string[]): Promise<Check> => {
+  const text = await safe<string | undefined>(() => page.locator('body').innerText({ timeout: 1_000 }), undefined);
+  if (text === undefined) return check(false, '[regla] ningún código interno visible', 'lectura fallida del texto de la página');
+  const found = codes.filter((code) => new RegExp(`(^|[^A-Za-z0-9_])${code}($|[^A-Za-z0-9_])`).test(text));
+  return check(found.length === 0, `[regla] ningún código interno visible (${codes.join(', ')})`, found.length === 0 ? `ninguno de los ${codes.length} códigos aparece como texto` : `aparecen como texto: ${found.join(', ')}`);
 };
 
 /** Ningún aviso visible en ese lugar durante la ventana de observación (el ancla positiva va antes). */
@@ -223,6 +253,14 @@ export const noVisibleCheck = async (target: Locator, label: string): Promise<Ch
   const held = await holdsFor(async () => (await visibleCount(target)) === 0);
   const count = held.held ? 0 : await visibleCount(target);
   return check(held.held, `ningún aviso ${label}`, held.held ? `ningún aviso ${label} durante ${HOLD_MS / 1000} s` : `aviso ${label}: ${describeCount(count)}`);
+};
+
+/** El aviso (`role=alert`) tiene ese título: se mira la primera línea, porque la traza HTTP va debajo. */
+export const alertCheck = async (target: Locator, expected: string): Promise<TimedCheck> => {
+  const first = async (): Promise<string | undefined> => linesOf(await readVisible(target))[0];
+  const reached = await waitUntil(async () => (await first()) === expected, NETWORK_MS);
+  const measured = await first();
+  return timed(check(reached.reached, `aviso «${expected}»`, measured === undefined ? `aviso: ${describeCount(await visibleCount(target))}` : `aviso «${measured}»`), reached.elapsedMs);
 };
 
 interface Box {
@@ -237,7 +275,7 @@ const boxOf = (target: Locator): Promise<Box | undefined> =>
     return box ?? undefined;
   }, undefined);
 
-/** «debajo de «X»»: el aviso empieza por debajo del borde inferior del campo (posiciones medidas). */
+/** «debajo de «X»»: el aviso empieza por debajo del borde inferior del campo (posiciones medidas; comprobación laxa, ver BELOW_NOTE). */
 export const belowField = async (error: Locator, field: Locator, fieldName: string): Promise<Check> => {
   const [errorBox, fieldBox] = await Promise.all([boxOf(error), boxOf(field)]);
   if (errorBox === undefined) return check(false, `aviso debajo de «${fieldName}»`, 'aviso: sin posición legible');
@@ -251,6 +289,24 @@ export const pathCheck = (page: Page, expected: string): Check => {
   const measured = pathOf(page);
   return check(measured === expected, `en ${expected}`, `en ${measured}`);
 };
+
+// --- Recarga (la Regla «pasa al idioma elegido sin recargarla») -----------------------------------------------------------
+
+const MARK_KEY = 'marcaSinRecarga';
+
+/** Marca la ventana: si la página se recarga, la marca desaparece. */
+export const markPage = (page: Page): Promise<void> =>
+  page.evaluate((key: string) => {
+    (window as unknown as Record<string, string>)[key] = 'antes';
+  }, MARK_KEY);
+
+/** La marca que queda tras la acción (undefined si la lectura falla o la página se recargó). */
+export const markOf = (page: Page): Promise<string | undefined> =>
+  safe(() => page.evaluate((key: string) => (window as unknown as Record<string, string | undefined>)[key], MARK_KEY), undefined);
+
+/** [Regla] La página no se recargó al elegir: la marca de la ventana sobrevive. */
+export const sinRecargaCheck = (marker: string | undefined): Check =>
+  check(marker === 'antes', '[regla] la página no se recarga al elegir', marker === 'antes' ? 'la página no se recargó (la marca sobrevive)' : `la marca desapareció (${marker ?? 'sin marca'})`);
 
 // --- Resultados -----------------------------------------------------------------------------------------------------------------
 
@@ -282,14 +338,15 @@ export const runStepsLogged = async (steps: readonly Step[]): Promise<string | u
 export const actionMissing = (expected: string, failure: string): Outcome =>
   outcome(false, expected, failure, { note: `La historia nombra un elemento que la pantalla no ofrece. Llamada de Playwright: ${failure}` });
 
-/** Resultado de una fila a partir de sus comprobaciones. Si alguna difiere, la nota dice cuál (esperado / observado) y se conserva la nota de la fila. */
+/** Resultado de una fila a partir de sus comprobaciones. Si alguna difiere, la nota dice cuál (esperado / observado) y se conserva la nota de la fila. La espera más larga va a la evidencia. */
 export const conclude = (checks: readonly Check[], extra: Pick<Outcome, 'note' | 'evidence'> = {}): Outcome => {
   const differing = checks.filter((entry) => !entry.ok).map((entry) => `esperado «${entry.expected}» / observado «${entry.observed}»`);
   const notes = [differing.length > 0 ? `Difiere en: ${differing.join('; ')}.` : undefined, extra.note].filter((note): note is string => note !== undefined);
-  return concludeChecks(checks, { ...extra, note: notes.length > 0 ? notes.join(' ') : undefined });
+  const longestWaitMs = Math.max(0, ...checks.map((entry) => (entry as Partial<TimedCheck>).waitedMs ?? 0));
+  return concludeChecks(checks, { ...extra, evidence: { ...extra.evidence, esperaMaximaMs: longestWaitMs }, note: notes.length > 0 ? notes.join(' ') : undefined });
 };
 
-/** Añade una nota de plataforma o de preparación al resultado, sin perder la que ya tenga. */
+/** Añade una nota de plataforma o de preparación al resultado, sin perder la que ya tenga (las notas se concatenan). */
 export const withNote = (result: Outcome, note: string): Outcome => ({ ...result, note: result.note ? `${result.note} ${note}` : note });
 
 /** Fila de la app móvil sin Expo levantado: no se ejecuta, con el motivo de entorno. */

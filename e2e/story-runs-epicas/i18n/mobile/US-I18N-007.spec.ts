@@ -3,14 +3,16 @@ import { ACCESO_TESTIDS } from '../../../../packages/shared/src/testids';
 import { DEMO, TENANT_A, resetTenants } from '../../../story-runs/support/prepare';
 import { ACTION, noSessionCheck, quoted, waitUntil, type Step } from '../../support/browser';
 import { cell, preparationFailedWeb, type Check } from '../../support/checks';
-import { defineBrowserRows, type BrowserRowHandler } from '../../core/framework';
+import { defineBrowserRows, type BrowserRowHandler, type Outcome } from '../../core/framework';
 import {
-  conclude,
   ACCESS,
+  BELOW_NOTE,
   MOBILE_NOTE,
+  MOBILE_URL,
   actionMissing,
   alertCheck,
   belowField,
+  conclude,
   heading1,
   noVisibleCheck,
   oneVisibleCheck,
@@ -20,8 +22,10 @@ import {
   passwordNote,
   passwordSent,
   pathCheck,
+  reachable,
   runStepsLogged,
   textCheck,
+  unreachableMobile,
   withNote,
 } from '../web/common';
 import { button, enterAccessMobile, pickLangMobile, textbox } from './common';
@@ -29,6 +33,9 @@ import { button, enterAccessMobile, pickLangMobile, textbox } from './common';
 // US-I18N-007 — Mensajes de error de Acceso en el idioma elegido (app móvil como web de Expo a 390 × 844; NO nativa). Preparación de
 // cada fila: reinicio de alumno01; /login con «alumno01» en «Tenant de trabajo», sin sesión ni elección de idioma guardada. Cada fila
 // elige «EN» en «Idioma» dentro de su Cuando, antes de enviar el formulario.
+
+/** La Regla «un aviso nuevo nunca se muestra en el idioma anterior» se mide con los avisos que aparecen DESPUÉS de elegir EN. */
+const NEW_ALERT_NOTE = 'La Regla «un aviso nuevo nunca se muestra en el idioma anterior» se mide con los avisos que aparecen después de elegir EN. El caso de un aviso ya visible al cambiar de idioma está en Decisiones pendientes y no se mide.';
 
 /** Lo que la celda de un aviso de campo dice: `ve «X»` → «X»; `no ve ningún aviso` → ninguno. Otro texto lanza. */
 const avisoOf = (text: string): string | undefined => (text === 'no ve ningún aviso' ? undefined : quoted(text.replace(/^ve /, '')));
@@ -48,26 +55,27 @@ const submitInEnglish = (page: Page, correo: string, contrasena: string): readon
   [`pulsar «${ACCESS.en.submit}»`, () => button(page, ACCESS.en.submit).click(ACTION)],
 ];
 
+/** Notas de la fila: la de plataforma y las que correspondan. */
+const withNotes = (result: Outcome, notes: readonly string[]): Outcome => notes.reduce((acc, note) => withNote(acc, note), result);
+
 // --- Esquema 1: un acceso rechazado muestra su aviso en inglés y no inicia sesión -------------------------------------------
 
 const rejected: BrowserRowHandler = async (row, { page }) => {
   const aviso = quoted(cell(row, 'aviso'));
   const expected = `ve el aviso «${aviso}» y sigue en /login sin sesión iniciada`;
+  if (!(await reachable(`${MOBILE_URL}/login`))) return unreachableMobile(expected);
   await resetTenants([TENANT_A]);
   const prepared = await runStepsLogged(enterAccessMobile(page));
   if (prepared) return preparationFailedWeb(expected, prepared);
   const sent = await runStepsLogged(submitInEnglish(page, cell(row, 'correo'), passwordSent(cell(row, 'contrasena'))));
   if (sent) return actionMissing(expected, sent);
-  const result = withNote(
-    conclude([
-      await alertCheck(page.getByTestId(ACCESO_TESTIDS.LOGIN_ERROR), aviso),
-      pathCheck(page, '/login'),
-      // Lo último: la comprobación navega a /programs para ver si la sesión existe
-      await noSessionCheck(page, onLoginFormAny, onProgramsAny),
-    ]),
-    MOBILE_NOTE,
-  );
-  return passwordNote(cell(row, 'contrasena'), result);
+  const result = conclude([
+    await alertCheck(page.getByTestId(ACCESO_TESTIDS.LOGIN_ERROR), aviso),
+    pathCheck(page, '/login'),
+    // Lo último: la comprobación navega a /programs para ver si la sesión existe
+    await noSessionCheck(page, onLoginFormAny, onProgramsAny),
+  ]);
+  return passwordNote(cell(row, 'contrasena'), withNotes(result, [MOBILE_NOTE, NEW_ALERT_NOTE]));
 };
 
 // --- Esquema 2: un campo vacío o con formato no válido avisa debajo del campo en inglés ---------------------------------
@@ -76,6 +84,7 @@ const fieldErrors: BrowserRowHandler = async (row, { page }) => {
   const avisoCorreo = cell(row, 'aviso_correo');
   const avisoContrasena = cell(row, 'aviso_contrasena');
   const expected = `${avisoCorreo} debajo de «Email» y ${avisoContrasena} debajo de «Password»`;
+  if (!(await reachable(`${MOBILE_URL}/login`))) return unreachableMobile(expected);
   await resetTenants([TENANT_A]);
   const prepared = await runStepsLogged(enterAccessMobile(page));
   if (prepared) return preparationFailedWeb(expected, prepared);
@@ -97,7 +106,7 @@ const fieldErrors: BrowserRowHandler = async (row, { page }) => {
   }
   if (emailText === undefined) checks.push(await noVisibleCheck(emailError, 'debajo de «Email»'));
   if (passwordText === undefined) checks.push(await noVisibleCheck(passwordError, 'debajo de «Password»'));
-  return withNote(conclude(checks), MOBILE_NOTE);
+  return withNotes(conclude(checks), [MOBILE_NOTE, BELOW_NOTE, NEW_ALERT_NOTE]);
 };
 
 // --- Esquema 3: el código incorrecto del segundo paso avisa en inglés y no inicia sesión -------------------------------
@@ -105,6 +114,7 @@ const fieldErrors: BrowserRowHandler = async (row, { page }) => {
 const wrongSecondStep: BrowserRowHandler = async (row, { page }) => {
   const codigo = cell(row, 'codigo');
   const expected = 've el aviso «Incorrect or expired code» y sigue en «Two-step verification» sin sesión iniciada';
+  if (!(await reachable(`${MOBILE_URL}/login`))) return unreachableMobile(expected);
   await resetTenants([TENANT_A]);
   const prepared = await runStepsLogged(enterAccessMobile(page));
   if (prepared) return preparationFailedWeb(expected, prepared);
@@ -117,13 +127,13 @@ const wrongSecondStep: BrowserRowHandler = async (row, { page }) => {
     [`pulsar «${ACCESS.en.verify}»`, () => button(page, ACCESS.en.verify).click(ACTION)],
   ]);
   if (sentCode) return actionMissing(expected, sentCode);
-  return withNote(
+  return withNotes(
     conclude([
       await alertCheck(page.getByTestId(ACCESO_TESTIDS.MFA_ERROR), 'Incorrect or expired code'),
       await oneVisibleCheck(heading1(page, ACCESS.en.mfaTitle), 'título «Two-step verification»'),
       await noSessionCheck(page, onLoginFormAny, onProgramsAny),
     ]),
-    MOBILE_NOTE,
+    [MOBILE_NOTE],
   );
 };
 

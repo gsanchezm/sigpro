@@ -1,7 +1,7 @@
 import type { Page } from '@playwright/test';
 import { TENANT_A, resetTenants } from '../../../story-runs/support/prepare';
-import { ACTION, quoted, safe, type Step } from '../../support/browser';
-import { cell, preparationFailedWeb, strict, check, type Check } from '../../support/checks';
+import { ACTION, quoted, type Step } from '../../support/browser';
+import { cell, preparationFailedWeb, strict } from '../../support/checks';
 import { defineBrowserRows, type BrowserRowHandler } from '../../core/framework';
 import {
   conclude,
@@ -10,12 +10,16 @@ import {
   actionMissing,
   enterAccessWeb,
   langCheck,
+  markOf,
+  markPage,
   oneVisibleCheck,
   pickLangWeb,
   runStepsLogged,
+  sinRecargaCheck,
   textCheck,
   titleCheck,
   valueCheck,
+  withNote,
   type Lang,
 } from './common';
 
@@ -23,21 +27,8 @@ import {
 // alumno01 y /login?tenant=alumno01 en un contexto nuevo (sin sesión ni elección de idioma guardada). Las Reglas «sin recargar la
 // pantalla» y «la elección se guarda en el navegador» se comprueban además en el primer Esquema, porque la fila las da por hechas.
 
-const MARK = 'marcaSinRecarga';
-
-/** Marca la ventana: si la página se recarga, la marca desaparece. */
-const markPage = (page: Page): Promise<void> =>
-  page.evaluate((key: string) => {
-    (window as unknown as Record<string, string>)[key] = 'antes';
-  }, MARK);
-
-const markOf = (page: Page): Promise<string | undefined> =>
-  safe(() => page.evaluate((key: string) => (window as unknown as Record<string, string | undefined>)[key], MARK), undefined);
-
-const NO_RELOAD_NOTE = 'Además se comprueban las Reglas «sin recargar la pantalla» (marca en la ventana antes de elegir).';
-
-const sinRecarga = (marker: string | undefined): Check =>
-  check(marker === 'antes', '[regla] la página no se recarga al elegir', marker === 'antes' ? 'la página no se recargó' : `la marca desapareció (${marker ?? 'sin marca'})`);
+/** Las Reglas «sin recargar la pantalla» se miden además del Esquema (marca en la ventana antes de elegir; ver `markPage`). */
+const NO_RELOAD_NOTE = 'Además se comprueba la Regla «sin recargar la pantalla» (marca en la ventana antes de elegir, marcada [regla]).';
 
 // --- Esquema 1: elegir inglés cambia todos los textos del formulario de acceso ----------------------------------------------
 
@@ -68,9 +59,9 @@ const chooseEnglish: BrowserRowHandler = async (row, { page }) => {
     await oneVisibleCheck(page.getByRole('combobox', { name: selector, exact: true }), `selector «${selector}»`),
     // El panel de marca es decorativo (aria-hidden): se localiza por su texto dentro del `aside`
     await textCheck(page.locator('aside').getByText(marca, { exact: true }), 'panel de marca', marca),
-    sinRecarga(await markOf(page)),
+    sinRecargaCheck(await markOf(page)),
   ]);
-  return { ...result, note: NO_RELOAD_NOTE };
+  return withNote(result, NO_RELOAD_NOTE);
 };
 
 // --- Esquema 2: volver al español devuelve los textos y el idioma declarado ------------------------------------------------
@@ -83,14 +74,20 @@ const backToSpanish: BrowserRowHandler = async (row, { page }) => {
   await resetTenants([TENANT_A]);
   const prepared = await runStepsLogged([...enterAccessWeb(page), pickLangWeb(page, ACCESS.es.language, 'en')]);
   if (prepared) return preparationFailedWeb(expected, prepared);
+  // El atributo `lang` de index.html es «es»: antes de volver al español se comprueba que la elección de inglés lo cambió a «en»
+  const englishLang = await langCheck(page, 'en');
+  if (!englishLang.ok) return preparationFailedWeb(expected, `tras elegir EN, ${englishLang.observed}`);
   const acted = await runStepsLogged([pickLangWeb(page, ACCESS.en.language, 'es')]);
   if (acted) return actionMissing(expected, acted);
-  return conclude([
-    await titleCheck(page, titulo),
-    await oneVisibleCheck(page.getByRole('button', { name: boton, exact: true }), `botón «${boton}»`),
-    await oneVisibleCheck(page.getByRole('combobox', { name: selector, exact: true }), `selector «${selector}»`),
-    await langCheck(page, cell(row, 'lang')),
-  ]);
+  return withNote(
+    conclude([
+      await titleCheck(page, titulo),
+      await oneVisibleCheck(page.getByRole('button', { name: boton, exact: true }), `botón «${boton}»`),
+      await oneVisibleCheck(page.getByRole('combobox', { name: selector, exact: true }), `selector «${selector}»`),
+      await langCheck(page, cell(row, 'lang')),
+    ]),
+    'El atributo lang de index.html es «es»: la fila comprueba que la elección de inglés lo pasó a «en» y que la vuelta al español lo devuelve a «es».',
+  );
 };
 
 // --- Esquema 3: la elección se conserva al recargar y al cambiar de pantalla de acceso --------------------------------------
