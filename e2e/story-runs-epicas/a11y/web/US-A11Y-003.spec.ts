@@ -105,12 +105,19 @@ interface WebButtonRead {
 /** Motivo de un botón de la web: su `title` o, si no lo tiene, su descripción accesible. */
 const reasonOf = (read: WebButtonRead): string | undefined => read.title ?? read.description;
 
+/** Texto de un atributo o de una descripción: vacío o solo espacios es AUSENCIA de motivo, no un motivo vacío. */
+const meaningful = (text: string | undefined): string | undefined => {
+  const trimmed = (text ?? '').trim();
+  return trimmed === '' ? undefined : trimmed;
+};
+
 const readWebButton = async (button: Locator): Promise<WebButtonRead> => {
-  const ariaDescription = await attrOf(button, 'aria-description');
+  const ariaDescription = meaningful(await attrOf(button, 'aria-description'));
   return {
     disabled: await isDisabled(button),
-    title: await attrOf(button, 'title'),
-    description: ariaDescription ?? (await describedByText(button)),
+    title: meaningful(await attrOf(button, 'title')),
+    // aria-describedby que apunta a un nodo vacío o inexistente da una descripción vacía: también es ausencia
+    description: ariaDescription ?? meaningful(await describedByText(button)),
   };
 };
 
@@ -153,6 +160,57 @@ const nearControl = async (page: Page, text: string, control: Locator, label: st
       visible === 1 && near,
       `se ve el texto «${text}» ${label} (a ${NEAR_PX} px o menos del control)`,
       visible !== 1 ? `no se ve el texto «${text}» (${visible} visibles)` : gap === undefined ? 'el texto o el control no tienen caja visible' : `el texto se ve a ${Math.round(gap)} px del control`,
+    ),
+  ];
+};
+
+/** Criterio de «junto»: 80 px es un umbral de esta prueba; la historia dice «junto» y no fija distancia. */
+const NEAR_PX_NOTE = `«Junto» se mide con ${NEAR_PX} px: criterio de esta prueba (la historia no fija distancia).`;
+
+interface Box {
+  readonly x: number;
+  readonly y: number;
+  readonly width: number;
+  readonly height: number;
+}
+
+/**
+ * Caja del formulario que contiene el botón de enviar: el ancestro más cercano del botón que contiene algún control de entrada
+ * (campos, opciones, notas). Así se mide contra el contenedor que agrupa los campos y el botón, no contra el botón solo.
+ */
+const formBoxOf = (button: Locator): Promise<Box | undefined> =>
+  safe(
+    () =>
+      button.evaluate((element) => {
+        const controls = 'input, textarea, select, [role="radio"], [role="radiogroup"], [role="checkbox"], [role="combobox"], [role="textbox"]';
+        let node: HTMLElement | null = element.parentElement;
+        while (node !== null && node.querySelector(controls) === null) node = node.parentElement;
+        if (node === null) return undefined;
+        const rect = node.getBoundingClientRect();
+        return { x: rect.x, y: rect.y, width: rect.width, height: rect.height };
+      }),
+    undefined,
+  );
+
+/** Distancia entre dos cajas: 0 si una contiene a la otra o se solapan; si no, la separación mayor en un eje. */
+const boxGap = (a: Box, b: Box): number => {
+  const dx = Math.max(b.x - (a.x + a.width), a.x - (b.x + b.width), 0);
+  const dy = Math.max(b.y - (a.y + a.height), a.y - (b.y + b.height), 0);
+  return Math.max(dx, dy);
+};
+
+/** «Junto al formulario»: el texto único y visible está dentro de la caja del formulario de «Registrar ejecución» o a 80 px o menos de ella. */
+const nearForm = async (page: Page, text: string, button: Locator): Promise<Check[]> => {
+  const visible = await visibleTextCount(page, text);
+  const textBox = visible === 1 ? await safe(() => page.getByText(text, { exact: true }).filter({ visible: true }).first().boundingBox({ timeout: 1_000 }), null) : null;
+  const form = await formBoxOf(button);
+  const gap = textBox !== null && form !== undefined && form !== null ? boxGap(textBox, form) : undefined;
+  const near = gap !== undefined && gap <= NEAR_PX;
+  return [
+    check(
+      visible === 1 && near,
+      `se ve el texto «${text}» junto al formulario (dentro de su caja o a ${NEAR_PX} px o menos)`,
+      visible !== 1 ? `no se ve el texto «${text}» (${visible} visibles)` : form === undefined || form === null ? 'no hay un contenedor de formulario con controles junto al botón' : gap === undefined ? 'el texto no tiene caja visible' : gap === 0 ? 'el texto está dentro del formulario' : `el texto se ve a ${Math.round(gap)} px del formulario`,
     ),
   ];
 };
@@ -325,7 +383,7 @@ const verifyOnPhone: BrowserRowHandler = async (row, { context }) => {
         check(disabled.reached, '«Verificar» deshabilitado', disabled.reached ? '«Verificar» deshabilitado' : '«Verificar» habilitado'),
         ...(await nearControl(page, CODE_INCOMPLETE, button, 'junto al botón')),
       ],
-      { note: `${MOBILE_NOTE} ${PHONE_REASON_NOTE} ${PHONE_SURFACE_NOTE}` },
+      { note: `${MOBILE_NOTE} ${PHONE_REASON_NOTE} ${PHONE_SURFACE_NOTE} ${NEAR_PX_NOTE}` },
     );
   } finally {
     await releaseContextRoutes(phone);
@@ -385,9 +443,9 @@ const runDeniedPhone: BrowserRowHandler = async (row, { context }) => {
     return conclude(
       [
         check(disabled.reached, '«Registrar ejecución» deshabilitado', disabled.reached ? '«Registrar ejecución» deshabilitado' : '«Registrar ejecución» habilitado'),
-        ...(await nearControl(page, RUN_DENIED, button, 'junto al formulario')),
+        ...(await nearForm(page, RUN_DENIED, button)),
       ],
-      { note: `${MOBILE_NOTE} ${PHONE_SURFACE_NOTE}` },
+      { note: `${MOBILE_NOTE} ${PHONE_SURFACE_NOTE} ${NEAR_PX_NOTE}` },
     );
   } finally {
     await releaseContextRoutes(phone);
