@@ -11,15 +11,15 @@ import { gestorSession, recentOf, simulatorMsOf, summaryOf } from '../api/common
 // Piezas comunes de las filas WEB de EP-MISION-FEED (escritorio 1440 px). Los localizadores son de rol y nombre accesible cuando la
 // pantalla los ofrece; los ids de prueba, donde no hay otro rastro. Cada lectura de la pantalla va en UNA sola evaluación atómica.
 //
-// CORTE DE LA CONEXIÓN («el servidor no responde»). La app usa SOLO WebSocket (transports: ['websocket'] en apps/web/src/state/live.tsx
-// y apps/mobile/src/features/mission/use-mission-socket.ts): socket.io-client no hace polling. Por eso el corte:
-//  - mientras NO hay corte, el WebSocket de la página se reenvía al servidor real (`connectToServer`) y se guarda cada conexión abierta;
-//  - para CORTAR: se marca `cut`, se cierran los WebSocket abiertos y cada intento nuevo se cierra al instante (el cliente lo ve como un
-//    fallo y reintenta según su backoff); las peticiones de polling de engine.io (si las hubiera) fallan con `route.abort`;
-//  - para RESTABLECER: `cut=false`; el siguiente reintento pasa por el proxy y la conexión vuelve.
-// CONTROL: tras cortar, el indicador debe salir de «En vivo» en 5 s. Si no sale, la fila es `no-ejecutable` con la lectura como evidencia.
-// PERMANENCIA: se muestrea el indicador durante 3 s; nunca debe volver a «En vivo» y, de las muestras, la mayoría debe decir «Sin conexión»
-// (entre reintentos el cliente muestra «Conectando…» un instante).
+// CORTE («el servidor no responde»). Es un fallo de conexión SIMULADO DENTRO DE LA PÁGINA (aproximación): `installSocketWrapper` sustituye
+// `window.WebSocket` antes de que cargue la app. Solo toca las conexiones de socket.io (URL con `/socket.io/`):
+//  - sin corte, pasan al servidor real y cada mensaje de texto se reenvía a Node (`__sigproFrame`: saludos y eventos);
+//  - con corte, las conexiones abiertas se cierran (close 4000 al servidor y error + close 1006 a la app) y cada intento nuevo falla como
+//    una conexión rechazada (error y luego close 1006, de forma asíncrona). El cliente reintenta según su backoff y falla otra vez;
+//  - al restablecer, el siguiente intento abre un WebSocket real.
+// No hay proxy de red (routeWebSocket) ni intercepción de polling: la app usa solo WebSocket (transports: ['websocket']).
+// CONTROL: tras cortar, el indicador debe salir de «En vivo» en 5 s. PERMANENCIA: muestreo de 3 s; nunca «En vivo» y la mayoría de las
+// lecturas «Sin conexión». Si no es estable, la fila sale notExecutable con los recuentos.
 
 export const LOGIN_URL = `/login?tenant=${TENANT_A}`;
 export const MISSION_PATH = '/mission';
@@ -43,9 +43,12 @@ const PERMANENCIA_PASO_MS = 100;
 /** Fracción mínima de muestras con «Sin conexión» para afirmar que el corte es estable. */
 export const ESTABLE_MINIMO = 0.8;
 
-/** Nota de todo corte: el mecanismo y su alcance (la app no usa polling). */
+/** Nombre del binding por el que la página envía al Node los mensajes de texto que recibe de socket.io. */
+const FRAME_BINDING = '__sigproFrame';
+
+/** Nota de todo corte: aproximación (fallo simulado dentro de la página, no un corte de red real). */
 export const CUT_NOTE =
-  'El corte se hace en la prueba: cierra los WebSocket abiertos y rechaza cada intento nuevo mientras dura (la app usa solo WebSocket, así que el corte por polling de engine.io no aplica).';
+  'Aproximación: el corte es un fallo de conexión simulado dentro de la página (las conexiones de socket.io se cierran con 1006 y los intentos nuevos fallan como una conexión rechazada); no es un corte de red real.';
 
 /** Añade a cada resultado de una fila web la salvedad de cookies. */
 export const onWeb =
@@ -113,21 +116,18 @@ export const openMission = (page: Page): Promise<StepFailure | undefined> =>
     ['ver la pantalla del panel de misión', () => page.getByTestId(MISION_TESTIDS.MISSION_PAGE).waitFor({ timeout: CEILING_MS })],
   ]);
 
-// --- Conexión en tiempo real: proxy, registro y corte --------------------------------------------------------------------
+// --- Conexión en tiempo real: envoltorio de WebSocket dentro de la página ---------------------------------------------
 
-/** Ruta de WebSocket del lado del navegador (el tipo de `page.routeWebSocket`). */
-type ClientRoute = Parameters<Parameters<Page['routeWebSocket']>[1]>[0];
-
-/** Control de la conexión en tiempo real de la página: saludos aceptados, eventos recibidos y el corte. */
+/** Control de la conexión en tiempo real de la página: saludos aceptados, eventos recibidos y el corte simulado. */
 export interface RealtimeLink {
   /** Saludos aceptados (paquete `40{…}` del servidor) desde que se instaló el control. */
   readonly accepted: () => number;
   /** Tipos de los `mission:event` que llegaron por la conexión, en orden. */
   readonly eventTypes: () => readonly string[];
-  /** Corta: marca el corte, cierra los WebSocket abiertos y rechaza los intentos nuevos hasta `restore`. */
+  /** Corta: los intentos de socket.io fallan (y las conexiones abiertas se cierran) hasta `restore`. */
   readonly cut: () => Promise<void>;
-  /** Restablece: los siguientes intentos pasan por el proxy al servidor real. */
-  readonly restore: () => void;
+  /** Restablece: el siguiente intento abre un WebSocket real. */
+  readonly restore: () => Promise<void>;
 }
 
 const parseJson = (text: string): unknown => {
@@ -138,12 +138,133 @@ const parseJson = (text: string): unknown => {
   }
 };
 
-/** Instala el control ANTES de abrir la página (la conexión se crea al iniciar sesión). Solo afecta a las rutas `/socket.io/`. */
-export const installRealtimeLink = async (page: Page): Promise<RealtimeLink> => {
+/**
+ * Se ejecuta EN LA PÁGINA antes que la app (addInitScript): sustituye `window.WebSocket` por un envoltorio que solo toca las conexiones de
+ * socket.io (la URL contiene `/socket.io/`); el resto (p. ej., el HMR de Vite) pasa tal cual. No usa variables de fuera: se serializa.
+ */
+const installSocketWrapper = (): void => {
+  const win = window as unknown as Record<string, unknown>;
+  if (win.__sigproWrapped === true) return;
+  win.__sigproWrapped = true;
+  const Native = window.WebSocket;
   let cut = false;
+  const kills = new Set<() => void>();
+  const frame = (text: string): void => {
+    const send = win.__sigproFrame;
+    if (typeof send === 'function') (send as (value: string) => void)(text);
+  };
+  type Handler = (event: Event) => void;
+  const makeSocket = (url: string, protocols: string | string[] | undefined): Record<string, unknown> => {
+    const listeners = new Map<string, Handler[]>();
+    let inner: WebSocket | undefined = undefined;
+    let fakeState = 0;
+    let muted = false;
+    let binary: BinaryType = 'blob';
+    const fire = (type: string, event: Event): void => {
+      const handler = sock[`on${type}`];
+      if (typeof handler === 'function') (handler as Handler).call(sock, event);
+      for (const listener of listeners.get(type) ?? []) listener.call(sock, event);
+    };
+    // Fallo de conexión: error y luego close 1006, de forma asíncrona (como un intento rechazado)
+    const dropped = (): void => {
+      setTimeout(() => {
+        fakeState = 3;
+        fire('error', new Event('error'));
+        fire('close', new CloseEvent('close', { code: 1006, reason: '', wasClean: false }));
+      }, 0);
+    };
+    // Corte de una conexión abierta: se libera el socket real y la app ve un 1006
+    const kill = (): void => {
+      if (muted) return;
+      muted = true;
+      try {
+        if (inner !== undefined) inner.close(4000, 'corte de la prueba');
+      } catch {
+        // ya cerrado
+      }
+      dropped();
+    };
+    const sock: Record<string, unknown> = {
+      url,
+      protocol: '',
+      extensions: '',
+      bufferedAmount: 0,
+      onopen: null,
+      onmessage: null,
+      onerror: null,
+      onclose: null,
+      get readyState(): number {
+        return inner === undefined ? fakeState : inner.readyState;
+      },
+      get binaryType(): BinaryType {
+        return binary;
+      },
+      set binaryType(value: BinaryType) {
+        binary = value;
+        if (inner !== undefined) inner.binaryType = value;
+      },
+      send(data: string): void {
+        if (inner !== undefined && !muted) inner.send(data);
+      },
+      close(code?: number, reason?: string): void {
+        if (inner !== undefined && !muted) inner.close(code, reason);
+        else fakeState = 3;
+      },
+      addEventListener(type: string, handler: Handler): void {
+        listeners.set(type, [...(listeners.get(type) ?? []), handler]);
+      },
+      removeEventListener(type: string, handler: Handler): void {
+        listeners.set(
+          type,
+          (listeners.get(type) ?? []).filter((item) => item !== handler),
+        );
+      },
+      dispatchEvent(event: Event): boolean {
+        fire(event.type, event);
+        return true;
+      },
+    };
+    if (cut) {
+      dropped();
+      return sock;
+    }
+    inner = protocols === undefined ? new Native(url) : new Native(url, protocols);
+    inner.binaryType = binary;
+    inner.onopen = (): void => {
+      if (!muted) fire('open', new Event('open'));
+    };
+    inner.onmessage = (event: MessageEvent): void => {
+      if (muted) return;
+      if (typeof event.data === 'string') frame(event.data);
+      fire('message', new MessageEvent('message', { data: event.data }));
+    };
+    inner.onerror = (): void => {
+      if (!muted) fire('error', new Event('error'));
+    };
+    inner.onclose = (event: CloseEvent): void => {
+      kills.delete(kill);
+      if (!muted) fire('close', new CloseEvent('close', { code: event.code, reason: event.reason, wasClean: event.wasClean }));
+    };
+    kills.add(kill);
+    return sock;
+  };
+  const Wrapped = function (url: string | URL, protocols?: string | string[]): unknown {
+    const text = String(url);
+    if (!text.includes('/socket.io/')) return protocols === undefined ? new Native(text) : new Native(text, protocols);
+    return makeSocket(text, protocols);
+  };
+  Object.assign(Wrapped, { CONNECTING: 0, OPEN: 1, CLOSING: 2, CLOSED: 3 });
+  window.WebSocket = Wrapped as unknown as typeof WebSocket;
+  win.__sigproSetCut = (on: boolean): void => {
+    cut = on;
+    if (on) for (const kill of [...kills]) kill();
+  };
+};
+
+/** Instala el control ANTES de abrir la página (la conexión se crea al iniciar sesión). */
+export const installRealtimeLink = async (page: Page): Promise<RealtimeLink> => {
   let accepted = 0;
   const types: string[] = [];
-  const open = new Set<ClientRoute>();
   const record = (text: string): void => {
     if (text.startsWith('40{')) accepted += 1;
     if (!text.startsWith('42')) return;
@@ -152,37 +273,19 @@ export const installRealtimeLink = async (page: Page): Promise<RealtimeLink> => 
     const type = field(packet[1], 'type');
     if (typeof type === 'string') types.push(type);
   };
-  // Guarda para el polling de engine.io: durante el corte, sus peticiones fallan al instante (la app usa solo WebSocket)
-  await page.route(
-    (url) => url.pathname.startsWith('/socket.io/'),
-    (route) => (cut ? route.abort('failed').catch(() => undefined) : route.continue().catch(() => undefined)),
-  );
-  await page.routeWebSocket(/\/socket\.io\//, (route) => {
-    if (cut) {
-      // Intento nuevo durante el corte: se cierra al instante (el cliente lo ve como un fallo y reintenta según su backoff)
-      void route.close({ code: 4000, reason: 'corte de la prueba' }).catch(() => undefined);
-      return;
-    }
-    const server = route.connectToServer();
-    open.add(route);
-    // Los mensajes del servidor pasan por aquí (se registran y se reenvían tal cual); los de la página se reenvían solos
-    server.onMessage((message) => {
-      record(typeof message === 'string' ? message : message.toString('utf8'));
-      route.send(message);
-    });
-  });
+  await page.exposeFunction(FRAME_BINDING, (text: string) => record(text));
+  await page.addInitScript(installSocketWrapper);
+  const setCut = (on: boolean): Promise<void> =>
+    page.evaluate((value: boolean) => {
+      const win = window as unknown as Record<string, unknown>;
+      const set = win.__sigproSetCut;
+      if (typeof set === 'function') (set as (v: boolean) => void)(value);
+    }, on);
   return {
     accepted: () => accepted,
     eventTypes: () => [...types],
-    cut: async () => {
-      cut = true;
-      const routes = [...open];
-      open.clear();
-      await Promise.all(routes.map((route) => route.close({ code: 4000, reason: 'corte de la prueba' }).catch(() => undefined)));
-    },
-    restore: () => {
-      cut = false;
-    },
+    cut: () => setCut(true),
+    restore: () => setCut(false),
   };
 };
 
@@ -217,13 +320,12 @@ export const cutLink = async (page: Page, link: RealtimeLink): Promise<Cut> => {
   };
 };
 
-/** Restablece la conexión cortada: los intentos vuelven a pasar por el proxy. */
-export const restoreLink = (_page: Page, link: RealtimeLink, _cut: Cut): Promise<void> => {
-  link.restore();
-  return Promise.resolve();
+/** Restablece la conexión cortada: el siguiente intento abre un WebSocket real. */
+export const restoreLink = async (_page: Page, link: RealtimeLink, _cut: Cut): Promise<void> => {
+  await link.restore();
 };
 
-/** Nota de un corte: el mecanismo y su alcance. */
+/** Nota de un corte: aproximación (fallo simulado dentro de la página). */
 export const cutNote = (_cut: Cut): string => CUT_NOTE;
 
 /** Una muestra de permanencia: cuántas veces se leyó cada estado durante la ventana y la lectura final. */
