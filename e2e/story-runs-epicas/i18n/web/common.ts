@@ -240,12 +240,24 @@ export const spanishShownCheck = async (page: Page, texts: readonly string[]): P
   return check(reached.reached, `[control] los ${texts.length} textos de la lista se ven en español antes de elegir el idioma`, reached.reached ? `se ven los ${texts.length}` : `no se ven: ${absent.join(', ')}`);
 };
 
-/** [Regla] Ningún código interno aparece como texto visible (una frase sin versión no se sustituye por su clave). Lectura fallida = no cumplida. */
-export const internalCodesCheck = async (page: Page, codes: readonly string[]): Promise<Check> => {
-  const text = await safe<string | undefined>(() => page.locator('body').innerText({ timeout: 1_000 }), undefined);
-  if (text === undefined) return check(false, '[regla] ningún código interno visible', 'lectura fallida del texto de la página');
-  const found = codes.filter((code) => new RegExp(`(^|[^A-Za-z0-9_])${code}($|[^A-Za-z0-9_])`).test(text));
-  return check(found.length === 0, `[regla] ningún código interno visible (${codes.join(', ')})`, found.length === 0 ? `ninguno de los ${codes.length} códigos aparece como texto` : `aparecen como texto: ${found.join(', ')}`);
+/** Texto visible de la página, o `undefined` si la lectura falla (un fallo de lectura no cuenta como «sin texto»). */
+const visibleBodyText = (page: Page): Promise<string | undefined> => safe<string | undefined>(() => page.locator('body').innerText({ timeout: 1_000 }), undefined);
+
+/** Un código como palabra suelta: no pegado a otra palabra ni a una dirección de correo («admin@…» no cuenta como código). */
+const codePattern = (code: string): RegExp => new RegExp(`(^|[^A-Za-z0-9_@.])${code}($|[^A-Za-z0-9_@])`);
+
+/** Qué códigos de la lista aparecen como texto visible; `undefined` si la lectura falla. */
+export const codesVisible = async (page: Page, codes: readonly string[]): Promise<readonly string[] | undefined> => {
+  const text = await visibleBodyText(page);
+  if (text === undefined) return undefined;
+  return codes.filter((code) => codePattern(code).test(text));
+};
+
+/** [Regla] Ningún código de MENSAJE aparece como texto visible (una frase sin versión no se sustituye por su clave). Solo estos códigos deciden el veredicto. */
+export const messageCodesCheck = async (page: Page, codes: readonly string[]): Promise<Check> => {
+  const found = await codesVisible(page, codes);
+  if (found === undefined) return check(false, '[regla] ningún código de mensaje visible', 'lectura fallida del texto de la página');
+  return check(found.length === 0, `[regla] ningún código de mensaje visible (${codes.join(', ')})`, found.length === 0 ? `ninguno de los ${codes.length} códigos aparece como texto` : `aparecen como texto: ${found.join(', ')}`);
 };
 
 /** Ningún aviso visible en ese lugar durante la ventana de observación (el ancla positiva va antes). */

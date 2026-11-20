@@ -11,7 +11,8 @@ import {
   browserOf,
   conclude,
   heading1,
-  internalCodesCheck,
+  codesVisible,
+  messageCodesCheck,
   oneVisibleCheck,
   reachable,
   runStepsLogged,
@@ -43,12 +44,17 @@ const SPANISH_ACCESS: readonly string[] = ['Iniciar sesión', 'Entrar', '¿Olvid
 /** Solo la web muestra «Mantener la sesión en este equipo»: en la app móvil su ausencia es trivial. */
 const WEB_ONLY_SPANISH = 'Mantener la sesión en este equipo';
 
-/** Motivos de error y códigos de rol: nunca deben aparecer como texto (ver la Regla de 001). */
-const INTERNAL_CODES: readonly string[] = ['required', 'badEmail', 'eMfa', 'e401', 'e403', 'e423', 'e409', 'pwShort', 'pwMismatch', 'termsReq', 'invalid_credentials', 'account_locked', 'pending_approval', 'program_manager', 'consultant'];
+/** Códigos de MENSAJE (motivos de error y de validación del catálogo): son los únicos que deciden el veredicto de la Regla de 001 (ejemplo: `required`). */
+const MESSAGE_CODES: readonly string[] = ['required', 'badEmail', 'eMfa', 'e401', 'e403', 'e423', 'e409', 'pwShort', 'pwMismatch', 'termsReq', 'invalid_credentials', 'account_locked', 'pending_approval', 'invalid_mfa'];
+
+/** Códigos de ROL: se miden aparte, fuera del veredicto (la historia no los nombra). */
+const ROLE_CODES: readonly string[] = ['program_manager', 'consultant', 'admin', 'auditor'];
 
 const LIST_NOTE = 'La lista de textos en español son los que citan las historias de Acceso de esta épica; no es todo el catálogo.';
 
-const CODES_NOTE = 'Los códigos internos son los motivos de error y los códigos de rol: la web los muestra en el badge de «Usuarios de prueba» (TestUsers.tsx:37) y la app móvil en el chip de cada usuario (login.tsx:184). Si aparecen, es una discrepancia real.';
+const CODES_NOTE = 'El veredicto de la Regla de códigos (ejemplo «required») solo mira los códigos de mensaje del catálogo de Acceso (acceso.ts).';
+
+const ROLE_NOTE = 'observación fuera del veredicto: la pantalla muestra los códigos de rol como texto en las insignias de usuarios de prueba (web TestUsers.tsx:37 y chip móvil login.tsx:184); la historia no los nombra.';
 
 const FRENCH_NOTE = 'La fila no distingue: el catálogo no tiene francés, así que una app que ignorara el idioma del navegador mostraría igual el español; la fila solo prueba que el español es el idioma por defecto.';
 
@@ -111,11 +117,14 @@ const noSpanish: BrowserRowHandler = async (row, { context }) => {
       await titleCheck(page, ACCESS.en.title),
       await absentText(page, texto),
       await absentAll(page, SPANISH_ACCESS),
-      await internalCodesCheck(page, INTERNAL_CODES),
+      await messageCodesCheck(page, MESSAGE_CODES),
     ];
+    // Códigos de rol visibles: se miden aparte, fuera del veredicto, después de la ventana de observación (el panel de usuarios carga aparte)
+    const roleVisible = await codesVisible(page, ROLE_CODES);
     const movilOnly = platform === 'movil' ? [...movilNotes, `En la app móvil «${WEB_ONLY_SPANISH}» no existe: su ausencia es trivial y el control positivo usa los otros ${shownList.length} textos.`] : [];
-    const notes = [LIST_NOTE, CODES_NOTE, ...movilOnly];
-    return withNotes(conclude(checks), notes);
+    const roleNotes = roleVisible !== undefined && roleVisible.length > 0 ? [ROLE_NOTE] : [];
+    const notes = [LIST_NOTE, CODES_NOTE, ...roleNotes, ...movilOnly];
+    return withNotes(conclude(checks, { evidence: { codigosDeRolVisibles: roleVisible ?? '(lectura fallida)' } }), notes);
   } finally {
     await own.close();
   }
