@@ -5,7 +5,7 @@ epica: EP-PERFIL
 titulo: "[Web] Ver la cuenta y lo que permite el rol en el perfil"
 etiquetas: [web]
 relacionadas: [US-PERFIL-002, US-PERFIL-003, US-SESION-007]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["/profile"]
 permisos: [nc.create, nc.transition, nc.close, milestone.edit, users.manage, audit.view]
 ---

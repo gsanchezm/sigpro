@@ -5,7 +5,7 @@ epica: EP-PERFIL
 titulo: "[Móvil] Cambiar las preferencias en borrador y guardarlas en el perfil"
 etiquetas: [movil]
 relacionadas: [US-PERFIL-002, US-PERFIL-003, US-PERFIL-005, US-LOGIN-013]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["/profile"]
 ---
 

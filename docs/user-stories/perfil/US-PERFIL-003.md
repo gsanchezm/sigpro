@@ -5,7 +5,7 @@ epica: EP-PERFIL
 titulo: "[Móvil] Ver la cuenta y lo que permite el rol en el perfil"
 etiquetas: [movil]
 relacionadas: [US-PERFIL-001, US-PERFIL-004, US-LOGIN-011, US-SESION-010]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["/profile"]
 permisos: [nc.create, nc.transition, nc.close, milestone.edit, users.manage, audit.view]
 ---

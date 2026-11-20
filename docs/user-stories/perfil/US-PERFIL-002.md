@@ -5,7 +5,7 @@ epica: EP-PERFIL
 titulo: "[Web] Cambiar las preferencias en borrador y guardarlas en el perfil"
 etiquetas: [web]
 relacionadas: [US-PERFIL-001, US-PERFIL-004, US-PERFIL-005]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["/profile"]
 ---
 
