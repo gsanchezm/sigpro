@@ -166,6 +166,24 @@ export const openPage = async (page: Page, context: BrowserContext, path: string
   return runStepsLogged([[`abrir ${path}`, () => page.goto(path, { timeout: CEILING_MS })]]);
 };
 
+/** Abre una URL absoluta (p. ej. la web de una pila auxiliar) en un contexto limpio, con la preferencia de cookies fijada. */
+export const openAt = async (page: Page, context: BrowserContext, url: string): Promise<string | undefined> => {
+  await context.addInitScript(fixCookiePreference);
+  return runStepsLogged([[`abrir ${url}`, () => page.goto(url, { timeout: CEILING_MS })]]);
+};
+
+/**
+ * Registra las respuestas de la PROPIA página a /api/config/test-users («código URL»). Se arma antes de abrir la página: sin esto,
+ * un panel vacío por una petición fallida y un panel vacío por producción se confunden.
+ */
+export const watchTestUsers = (page: Page): string[] => {
+  const seen: string[] = [];
+  page.on('response', (response) => {
+    if (response.url().includes('/api/config/test-users')) seen.push(`${response.status()} ${response.url()}`);
+  });
+  return seen;
+};
+
 // --- Localizadores de la web ---------------------------------------------------------------------------------------------------
 
 export const loginHeading = (page: Page): Locator => page.getByRole('heading', { name: 'Iniciar sesión', exact: true });

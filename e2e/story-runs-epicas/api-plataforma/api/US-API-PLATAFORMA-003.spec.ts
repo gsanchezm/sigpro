@@ -1,12 +1,15 @@
 import { field } from '../../../story-runs/support/api';
 import { TENANT_A } from '../../../story-runs/support/prepare';
-import { cell, check, strict } from '../../support/checks';
-import { defineApiRows, notExecutable, type ApiRowHandler } from '../../core/framework';
-import { ENV_NOTE, judge, prepareAlumno, raw, show, statusCheck } from './common';
+import { cell, check, preparationFailedWeb, strict, type Check } from '../../support/checks';
+import { defineApiRows, type ApiRowHandler } from '../../core/framework';
+import { judge, prepareAlumno, raw, show, statusCheck, type Raw } from './common';
+import { prepareAux, withAuxApi, type AuxClient } from './aux-api';
 
 // US-API-PLATAFORMA-003 — Listar los tenants y los usuarios de prueba. Preparación de cada fila: alumno01 reiniciado y caos apagado.
 // El número de tenants (26) depende del seed por defecto que lanza env.sh (SEED_STUDENT_TENANTS=25): se mide y se compara con la historia.
 // Los seis usuarios de prueba y sus datos salen de la tabla de la historia (no de la API).
+// Esquema 4 (staging y production): la pila principal es APP_ENV=dev, así que esas filas arrancan una segunda instancia de la API
+// (mismo dist, misma base aislada) con su APP_ENV (aux-api.ts). Si no arranca, la fila es notExecutable con el motivo.
 
 const LIST_ROUTES: ReadonlyMap<string, string> = new Map<string, string>([
   ['/api/config/tenants', '/api/config/tenants'],
@@ -140,29 +143,42 @@ const ENVIRONMENTS: ReadonlyMap<string, string> = new Map<string, string>([
   ['production', 'production'],
 ]);
 
+/** Comprobaciones del Esquema 4 sobre la lista de usuarios de prueba de una instancia. */
+const testUsersChecks = (res: Raw, resultado: 'seis' | 'vacia'): Check[] => {
+  const list: readonly unknown[] = Array.isArray(res.body) ? res.body : [];
+  const emails = list.map((entry) => field(entry, 'email'));
+  return [
+    statusCheck(res, 200),
+    resultado === 'seis'
+      ? check(JSON.stringify(emails) === JSON.stringify(SIX_EMAILS), 'una lista con las seis cuentas de demostración (en el orden de la tabla)', `lista de ${list.length} cuentas: ${show(emails)}`)
+      : check(list.length === 0, 'una lista vacía', `${list.length} cuentas`),
+  ];
+};
+
 const testUsersByEnvironment: ApiRowHandler = async (row) => {
   const entorno = strict('entorno', ENVIRONMENTS, cell(row, 'entorno'));
   const resultado = strict('resultado', RESULTS, cell(row, 'resultado'));
   const expected = `200 con ${cell(row, 'resultado')}`;
-  // Solo la instancia con APP_ENV=dev existe en la pila aislada: staging y production no se pueden fijar
-  if (entorno !== 'dev') return notExecutable(expected, ENV_NOTE(entorno));
-  await prepareAlumno();
-  const res = await raw('GET', '/api/config/test-users');
-  const list: readonly unknown[] = Array.isArray(res.body) ? res.body : [];
-  const emails = list.map((entry) => field(entry, 'email'));
-  const sameSix = JSON.stringify(emails) === JSON.stringify(SIX_EMAILS);
-  return judge([
-    statusCheck(res, 200),
-    resultado === 'seis'
-      ? check(sameSix, 'una lista con las seis cuentas de demostración (en el orden de la tabla)', `lista de ${list.length} cuentas: ${show(emails)}`)
-      : check(list.length === 0, 'una lista vacía', `${list.length} cuentas`),
-  ]);
+  if (entorno === 'dev') {
+    await prepareAlumno();
+    const res = await raw('GET', '/api/config/test-users');
+    return judge(testUsersChecks(res, resultado));
+  }
+  // staging y production: segunda instancia con ese APP_ENV; la principal no se toca
+  return withAuxApi({ label: `003 E4 ${entorno}`, env: { APP_ENV: entorno }, expected }, async (aux: AuxClient) => {
+    const prep = await prepareAux(aux);
+    if (prep !== undefined) return preparationFailedWeb(expected, prep);
+    const res = await aux.http('GET', '/api/config/test-users');
+    return judge(testUsersChecks(res, resultado));
+  });
 };
 
 defineApiRows({
   story: 'US-API-PLATAFORMA-003',
   surface: 'api',
   tenants: [TENANT_A],
+  // Las filas de instancia auxiliar arrancan y paran una API: su plazo es mayor que el de las demás
+  rowTimeoutMs: (row) => (row.esquemaIndex === 4 ? 180_000 : 120_000),
   handlers: new Map<number, ApiRowHandler>([
     [1, tenantAtPosition],
     [2, listIgnoresTenant],

@@ -3,7 +3,7 @@ import { DEMO, TENANT_A, WRONG_PASSWORD } from '../../../story-runs/support/prep
 import { ACTION, CEILING_MS, attrOf, holdsFor, pathOf, safe, waitUntil } from '../../support/browser';
 import { cell, check, preparationFailedWeb, strict } from '../../support/checks';
 import { defineBrowserRows, notExecutable, type BrowserRowHandler } from '../../core/framework';
-import { ENV_NOTE, judge, prepareAlumno } from '../api/common';
+import { judge, prepareAlumno } from '../api/common';
 import {
   ALERT_LOGIN,
   HOLD_MS,
@@ -169,8 +169,8 @@ const tapClearsError: BrowserRowHandler = async (row, { page }) => {
 const panelByEnvironment: BrowserRowHandler = async (row, { page }) => {
   const entorno = strict('entorno', ENVIRONMENTS, cell(row, 'entorno'));
   const expected = cell(row, 'resultado');
-  // La pila aislada se lanza con APP_ENV=dev (docs/story-runs/entorno/env.sh): staging y production no se pueden fijar
-  if (entorno !== 'dev') return notExecutable(expected, ENV_NOTE(entorno));
+  // Staging y production no se ejecutan: el build de Expo fija la URL de la API en el bundle (no hay instancia auxiliar que apuntar)
+  if (entorno !== 'dev') return notExecutable(expected, 'el build de Expo lleva la URL de la API fija en el bundle: EXPO_PUBLIC_API_URL');
   const opened = await openMobileLogin(page);
   if (opened) return preparationFailedWeb(STEP, opened);
   const group = panelGroup(page);

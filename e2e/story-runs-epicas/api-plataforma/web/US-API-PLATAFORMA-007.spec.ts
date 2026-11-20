@@ -1,9 +1,10 @@
-import type { Locator } from '@playwright/test';
+import type { Page } from '@playwright/test';
 import { DEMO, TENANT_A, WRONG_PASSWORD } from '../../../story-runs/support/prepare';
-import { ACTION, pathOf, quoted, safe, waitUntil } from '../../support/browser';
+import { ACTION, holdsFor, pathOf, quoted, safe, waitUntil } from '../../support/browser';
 import { cell, check, preparationFailedWeb, strict, type Check } from '../../support/checks';
-import { defineBrowserRows, notExecutable, type BrowserRowHandler } from '../../core/framework';
-import { ENV_NOTE, judge } from '../api/common';
+import { defineBrowserRows, type BrowserRowHandler, type Outcome } from '../../core/framework';
+import { judge } from '../api/common';
+import { prepareAux, withAuxStack, type AuxStack } from '../api/aux-api';
 import { ACCESO_TESTIDS } from '../../../../packages/shared/src/testids';
 import {
   ALERT_LOGIN,
@@ -20,11 +21,13 @@ import {
   enterButton,
   focusedOf,
   loginHeading,
+  openAt,
   openPage,
   panelOf,
   passwordField,
   presence,
   readingOf,
+  readingText,
   runStepsLogged,
   sessionCheck,
   stillOnLogin,
@@ -36,17 +39,25 @@ import {
   waitHidden,
   waitVisible,
   watchLogins,
+  watchTestUsers,
 } from './common';
 
 // US-API-PLATAFORMA-007 — Panel «Usuarios de prueba» en /login (web, 1440 × 900). Preparación de cada fila: alumno01 reiniciado, caos
 // apagado y /login?tenant=alumno01 en un contexto nuevo sin sesión. Las seis cuentas y sus datos salen de la tabla de la historia. La
 // insignia se lee dentro de su tarjeta (el estado «bloqueado» también aparece en el correo de la cuenta).
+// Esquema 6 (staging y production): la pila principal es APP_ENV=dev; esas filas arrancan una pila auxiliar (API con ese APP_ENV y la
+// web de su build apuntando a ella, aux-api.ts). El cableado se comprueba al arrancar y la página debe pedir su lista a la web auxiliar.
 
 const STEP = 'abrir /login?tenant=alumno01 sin sesión y con el panel «Usuarios de prueba» visible';
+const STEP_AUX = 'preparar alumno01 y abrir /login en la pila auxiliar';
 const PANEL_ENVIRONMENTS: ReadonlyMap<string, string> = new Map<string, string>([
   ['dev', 'dev'],
   ['staging', 'staging'],
   ['production', 'production'],
+]);
+const PANEL_RESULTS: ReadonlyMap<string, 'visible' | 'absent'> = new Map<string, 'visible' | 'absent'>([
+  ['ve el encabezado «Usuarios de prueba» con las seis tarjetas', 'visible'],
+  ['no ve el encabezado «Usuarios de prueba» ni ninguna tarjeta', 'absent'],
 ]);
 
 // --- Esquema 1: cada tarjeta muestra el nombre, el correo y la contraseña de su cuenta --------------------------------------
@@ -199,27 +210,75 @@ const registerPick: BrowserRowHandler = async (row, { page, context }) => {
 
 // --- Esquema 6: el panel depende del entorno de la API -----------------------------------------------------------------------
 
+/** Lo que se comprueba del panel en la página abierta. El cableado (la página pide su lista a la web auxiliar) se mira al final. */
+interface Wiring {
+  readonly origin: string;
+  readonly seen: readonly string[];
+}
+
+const panelChecks = async (page: Page, wanted: 'visible' | 'absent', wiring: Wiring | undefined): Promise<Outcome> => {
+  const wiringChecks = (): Check[] =>
+    wiring === undefined
+      ? []
+      : [
+          check(
+            wiring.seen.some((entry) => entry.startsWith(`200 ${wiring.origin}/api/config/test-users`)),
+            `la página pide su lista de usuarios de prueba a ${wiring.origin} y recibe 200`,
+            `peticiones: ${wiring.seen.length === 0 ? '(ninguna)' : wiring.seen.join(' | ')}`,
+          ),
+        ];
+  if (wanted === 'visible') {
+    const panel = panelOf(page);
+    await waitVisible(panel);
+    const count = await safe(() => panel.getByRole('button').count(), -1);
+    return judge(
+      [
+        presence(await readingOf(panel.getByRole('heading', { name: PANEL_NAME })), true, 'el encabezado «Usuarios de prueba»'),
+        check(count === 6, 'las seis tarjetas', `${count} tarjetas`),
+        ...wiringChecks(),
+      ],
+      { note: COOKIE_NOTE },
+    );
+  }
+  // Ausencia: primero que la pantalla de acceso está lista (si no, la ausencia no mide nada) y después una ventana fija
+  await waitVisible(loginHeading(page));
+  const absent = await holdsFor(async () => (await readingOf(panelOf(page))) === 'oculto', HOLD_MS);
+  return judge(
+    [
+      presence(await readingOf(loginHeading(page)), true, 'la pantalla de acceso lista'),
+      check(absent.held, 'no ve el encabezado «Usuarios de prueba» ni ninguna tarjeta', `panel ${readingText(await readingOf(panelOf(page)))} durante ${HOLD_MS} ms`),
+      ...wiringChecks(),
+    ],
+    { note: COOKIE_NOTE },
+  );
+};
+
 const panelByEnvironment: BrowserRowHandler = async (row, { page, context }) => {
   const entorno = strict('entorno', PANEL_ENVIRONMENTS, cell(row, 'entorno'));
   const expected = cell(row, 'resultado');
-  // La pila aislada se lanza con APP_ENV=dev (docs/story-runs/entorno/env.sh): staging y production no se pueden fijar
-  if (entorno !== 'dev') return notExecutable(expected, ENV_NOTE(entorno));
-  const opened = await openPage(page, context, LOGIN_PATH);
-  if (opened) return preparationFailedWeb(STEP, opened);
-  const panel: Locator = panelOf(page);
-  await waitVisible(panel);
-  const count = await safe(() => panel.getByRole('button').count(), -1);
-  const checks: Check[] = [
-    presence(await readingOf(panel.getByRole('heading', { name: PANEL_NAME })), true, 'el encabezado «Usuarios de prueba»'),
-    check(count === 6, 'las seis tarjetas', `${count} tarjetas`),
-  ];
-  return judge(checks, { note: COOKIE_NOTE });
+  const wanted = strict('resultado', PANEL_RESULTS, expected);
+  if (entorno === 'dev') {
+    const opened = await openPage(page, context, LOGIN_PATH);
+    if (opened) return preparationFailedWeb(STEP, opened);
+    return panelChecks(page, wanted, undefined);
+  }
+  // staging y production: pila auxiliar (API con ese APP_ENV y la web de su build apuntando a ella); la principal no se toca
+  return withAuxStack({ label: `007 E6 ${entorno}`, env: { APP_ENV: entorno }, expected }, async (stack: AuxStack) => {
+    const prep = await prepareAux(stack.api);
+    if (prep !== undefined) return preparationFailedWeb(STEP_AUX, prep);
+    const seen = watchTestUsers(page);
+    const opened = await openAt(page, context, `${stack.web.origin}${LOGIN_PATH}`);
+    if (opened !== undefined) return preparationFailedWeb(STEP_AUX, opened);
+    return panelChecks(page, wanted, { origin: stack.web.origin, seen });
+  });
 };
 
 defineBrowserRows({
   story: 'US-API-PLATAFORMA-007',
   surface: 'web',
   tenants: [TENANT_A],
+  // La fila de pila auxiliar levanta API y web y las para: su plazo es mayor que el de las demás
+  rowTimeoutMs: (row) => (row.esquemaIndex === 6 ? 200_000 : 120_000),
   handlers: new Map<number, BrowserRowHandler>([
     [1, cardShows],
     [2, badgeShows],

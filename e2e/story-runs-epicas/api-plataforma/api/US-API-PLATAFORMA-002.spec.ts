@@ -1,19 +1,22 @@
 import { NO_CHAOS, setChaos, type ChaosFlags } from '../../../story-runs/support/api';
 import { TENANT_A } from '../../../story-runs/support/prepare';
-import { cell, check, preparationFailed, strict } from '../../support/checks';
-import { defineApiRows, notExecutable, type ApiRowHandler } from '../../core/framework';
-import { ENV_NOTE, bodyOf, describeChaos, judge, prepareAlumno, raw, sameChaos, show, statusCheck, withRestore } from './common';
+import { cell, check, preparationFailed, preparationFailedWeb, strict, type Check } from '../../support/checks';
+import { defineApiRows, notExecutable, type ApiRowHandler, type Outcome } from '../../core/framework';
+import { ORIGIN, bodyOf, describeChaos, judge, prepareAlumno, raw, rawHttp, sameChaos, sentHeaderLine, show, statusCheck, withRestore, type Raw } from './common';
+import { prepareAux, withAuxApi, type AuxClient } from './aux-api';
 
 // US-API-PLATAFORMA-002 — Leer la configuración pública del tenant con la cabecera x-tenant. Preparación de cada fila: alumno01
 // reiniciado y caos apagado. Las filas con caos fijan sus valores con PATCH /api/admin/chaos (alumno01@sigpro.lab) y, al terminar,
 // vuelven a apagarlo y a reiniciar alumno01 (withRestore). alumno02 solo se lee por cabecera; nunca se escribe.
+// Esquema 4 (staging y production): la pila principal es APP_ENV=dev, así que esas filas arrancan una segunda instancia de la API
+// (mismo dist, misma base aislada) con su APP_ENV (aux-api.ts). Si no arranca, la fila es notExecutable con el motivo.
 
 // --- Esquema 1: la configuración de un tenant sin caos -----------------------------------------------------------------------
 
 const SPACED = '(alumno01 con un espacio delante y otro detrás)';
-/** La fila con espacios no se puede observar por HTTP: el recorte ocurre antes de que la petición salga o llegue a la API. */
+/** La fila con espacios se ejecuta con la línea que sale por el socket (lineaEnviada); el analizador del servidor la recorta después. */
 const SPACED_NOTE =
-  'No observable por HTTP: fetch normaliza el valor de la cabecera y quita los espacios de los extremos antes de enviarla (WHATWG Fetch), y el analizador HTTP del servidor los quita también (RFC 7230 §3.2.4). La API recibe lo mismo que con «alumno01», así que el .trim() de config.controller.ts:25 no se distingue.';
+  'El analizador HTTP del servidor elimina los espacios de los extremos del valor (RFC 7230 §3.2.4) antes de que la app lo lea: esta fila no distingue el .trim() de la app (config.controller.ts:25) del recorte del servidor. Mide lo que la API devuelve para esa petición, que es lo que dice la fila; la línea enviada está en la evidencia (lineaEnviada).';
 
 const TENANT_HEADERS: ReadonlyMap<string, string | undefined> = new Map<string, string | undefined>([
   ['(sin cabecera)', undefined],
@@ -24,29 +27,46 @@ const TENANT_HEADERS: ReadonlyMap<string, string | undefined> = new Map<string, 
   ['noexiste', 'noexiste'],
 ]);
 
+/** Comprobaciones del Esquema 1 sobre una respuesta de /api/config. */
+const tenantChecks = (res: Raw, expectedTenant: string): Check[] => {
+  const body = bodyOf(res);
+  return [
+    statusCheck(res, 200),
+    check(body.tenant === expectedTenant, `tenant ${expectedTenant}`, `tenant ${show(body.tenant)}`),
+    check(body.env === 'dev', 'env «dev»', `env ${show(body.env)}`),
+    check(body.version === '0.1.0', 'version «0.1.0»', `version ${show(body.version)}`),
+    check(body.testUsers === true, 'testUsers true', `testUsers ${show(body.testUsers)}`),
+  ];
+};
+
+/** Cabecera con espacios: se comprueba primero que la línea sale con sus espacios; si no, la fila no se puede ejecutar. */
+const spacedRow = async (expectedTenant: string, header: string): Promise<Outcome> => {
+  const expected = `200 con tenant ${expectedTenant}, env dev, version 0.1.0 y testUsers true`;
+  const line = await sentHeaderLine(header);
+  if (!(line.startsWith('x-tenant:  ') && line.endsWith(' alumno01 '))) {
+    return notExecutable(expected, `la cabecera no sale con sus espacios (se envió ${show(line)}): el cliente la recorta antes de enviarla, así que esta fila no se puede ejecutar`);
+  }
+  await prepareAlumno();
+  const res = await rawHttp(ORIGIN, '/api/config', { 'x-tenant': header });
+  return judge(tenantChecks(res, expectedTenant), { note: SPACED_NOTE, evidence: { lineaEnviada: line } });
+};
+
 const tenantOfHeader: ApiRowHandler = async (row) => {
   const cabecera = cell(row, 'cabecera');
   const header = strict('cabecera', TENANT_HEADERS, cabecera);
   const expectedTenant = cell(row, 'tenant_devuelto');
-  if (cabecera === SPACED) return notExecutable(`200 con tenant ${expectedTenant}`, SPACED_NOTE);
+  if (cabecera === SPACED && header !== undefined) return spacedRow(expectedTenant, header);
   await prepareAlumno();
   const res = await raw('GET', '/api/config', { headers: header === undefined ? {} : { 'x-tenant': header } });
-  const body = bodyOf(res);
   // Con cabecera vacía, la API responde demo igual que sin cabecera: la fila no distingue entre ambas (sí distingue el valor por defecto de un tenant vacío)
-  const note = cabecera === '(cabecera vacía)' ? 'Con cabecera vacía la API responde demo, igual que sin cabecera: esta fila no distingue la cabecera vacía de la ausente; sí comprueba el valor por defecto frente a un tenant vacío.' : undefined;
-  return judge(
-    [
-      statusCheck(res, 200),
-      check(body.tenant === expectedTenant, `tenant ${expectedTenant}`, `tenant ${show(body.tenant)}`),
-      check(body.env === 'dev', 'env «dev»', `env ${show(body.env)}`),
-      check(body.version === '0.1.0', 'version «0.1.0»', `version ${show(body.version)}`),
-      check(body.testUsers === true, 'testUsers true', `testUsers ${show(body.testUsers)}`),
-    ],
-    {
-      ...(note === undefined ? {} : { note }),
-      evidence: { celdaCabecera: cabecera, cabeceraEnviada: header === undefined ? '(sin cabecera)' : header },
-    },
-  );
+  const note =
+    cabecera === '(cabecera vacía)'
+      ? 'Con cabecera vacía la API responde demo, igual que sin cabecera: esta fila no distingue la cabecera vacía de la ausente; sí comprueba el valor por defecto frente a un tenant vacío.'
+      : undefined;
+  return judge(tenantChecks(res, expectedTenant), {
+    ...(note === undefined ? {} : { note }),
+    evidence: { celdaCabecera: cabecera, cabeceraEnviada: header === undefined ? '(sin cabecera)' : header },
+  });
 };
 
 // --- Esquema 2: el caos del tenant aparece en la configuración ---------------------------------------------------------------
@@ -66,7 +86,7 @@ const LABELS: ReadonlyMap<string, boolean> = new Map<string, boolean>([
   ['true', true],
 ]);
 
-/** El caos exime /api/config (chaos.ts:5) y errorRate solo afecta a escrituras (chaos.ts:20): «no retrasa ni falla» se mide como «no más lento». */
+/** El caos exime /api/config y /api/health (chaos/chaos.ts:5) y errorRate solo afecta a escrituras (chaos/chaos.ts:20): «no retrasa ni falla» se mide como «no más lento». */
 const TIMING_NOTE =
   'El caos exime /api/config y /api/health (chaos/chaos.ts:5) y errorRate solo afecta a escrituras (chaos/chaos.ts:20): «no retrasa ni falla» se mide como «no más lento». Los milisegundos son un dato aparte, sin umbral (README, Tolerancias).';
 /** Con todo a cero, la preparación ya deja el caos así: la fila no prueba que el PATCH surta efecto. */
@@ -123,20 +143,32 @@ const BOOLEAN_TEXT: ReadonlyMap<string, boolean> = new Map<string, boolean>([
   ['false', false],
 ]);
 
+/** Comprobaciones del Esquema 4 sobre una respuesta de /api/config de una instancia con el APP_ENV de la fila. */
+const envChecks = (res: Raw, entorno: string, testUsers: boolean): Check[] => {
+  const body = bodyOf(res);
+  return [
+    statusCheck(res, 200),
+    check(body.env === entorno, `env ${entorno}`, `env ${show(body.env)}`),
+    check(body.testUsers === testUsers, `testUsers ${String(testUsers)}`, `testUsers ${show(body.testUsers)}`),
+  ];
+};
+
 const envTestUsers: ApiRowHandler = async (row) => {
   const entorno = strict('entorno', ENVIRONMENTS, cell(row, 'entorno'));
   const testUsers = strict('testUsers', BOOLEAN_TEXT, cell(row, 'testUsers'));
   const expected = `200 con env ${entorno} y testUsers ${cell(row, 'testUsers')}`;
-  // La pila aislada solo existe con APP_ENV=dev: las filas de staging y production no se pueden fijar aquí
-  if (entorno !== 'dev') return notExecutable(expected, ENV_NOTE(entorno));
-  await prepareAlumno();
-  const res = await raw('GET', '/api/config', { headers: { 'x-tenant': TENANT_A } });
-  const body = bodyOf(res);
-  return judge([
-    statusCheck(res, 200),
-    check(body.env === entorno, `env ${entorno}`, `env ${show(body.env)}`),
-    check(body.testUsers === testUsers, `testUsers ${String(testUsers)}`, `testUsers ${show(body.testUsers)}`),
-  ]);
+  if (entorno === 'dev') {
+    await prepareAlumno();
+    const res = await raw('GET', '/api/config', { headers: { 'x-tenant': TENANT_A } });
+    return judge(envChecks(res, entorno, testUsers));
+  }
+  // staging y production: segunda instancia con ese APP_ENV; la principal no se toca
+  return withAuxApi({ label: `002 E4 ${entorno}`, env: { APP_ENV: entorno }, expected }, async (aux: AuxClient) => {
+    const prep = await prepareAux(aux);
+    if (prep !== undefined) return preparationFailedWeb(expected, prep);
+    const res = await aux.http('GET', '/api/config', { headers: { 'x-tenant': TENANT_A } });
+    return judge(envChecks(res, entorno, testUsers));
+  });
 };
 
 // --- Esquema 5: un tenant que no existe tiene el caos apagado ----------------------------------------------------------------
@@ -169,6 +201,8 @@ defineApiRows({
   story: 'US-API-PLATAFORMA-002',
   surface: 'api',
   tenants: [TENANT_A],
+  // Las filas de instancia auxiliar arrancan y paran una API: su plazo es mayor que el de las demás
+  rowTimeoutMs: (row) => (row.esquemaIndex === 4 ? 180_000 : 120_000),
   handlers: new Map<number, ApiRowHandler>([
     [1, tenantOfHeader],
     [2, chaosShown],

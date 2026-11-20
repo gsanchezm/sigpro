@@ -1,12 +1,14 @@
 import { field } from '../../../story-runs/support/api';
 import { TENANT_A } from '../../../story-runs/support/prepare';
-import { cell, check, strict } from '../../support/checks';
-import { defineApiRows, notExecutable, type ApiRowHandler } from '../../core/framework';
-import { DOCS_NOTE, judge, prepareAlumno, raw, show, statusCheck } from './common';
+import { cell, check, preparationFailedWeb, strict } from '../../support/checks';
+import { defineApiRows, type ApiRowHandler } from '../../core/framework';
+import { judge, prepareAlumno, raw, show, statusCheck } from './common';
+import { prepareAux, withAuxApi } from './aux-api';
 
 // US-API-PLATAFORMA-005 — Publicar la documentación OpenAPI en /api/docs. Preparación de cada fila: alumno01 reiniciado y caos apagado.
-// Los Esquemas 1 a 3 necesitan que la API no tenga credenciales de documentación (la pila aislada no las tiene). El Esquema 4 las exige
-// configuradas: la pila aislada se lanza sin DOCS_BASIC_AUTH (docs/story-runs/entorno/env.sh), así que se devuelve notExecutable.
+// Los Esquemas 1 a 3 necesitan que la API no tenga credenciales de documentación (la pila principal no las tiene).
+// El Esquema 4 las exige configuradas: la pila principal no define DOCS_BASIC_AUTH (docs/story-runs/entorno/env.sh), así que esas
+// filas arrancan una segunda instancia de la API (mismo dist, misma base aislada) con una credencial de PRUEBA declarada abajo.
 // Las reglas sin Esquema (descripción general, esquemas de seguridad, cabecera x-tenant en las operaciones) se comprueban sobre el
 // mismo JSON que ya se descarga en los Esquemas 2 y 3, y sus fallos son discrepancias como cualquier otra comprobación.
 
@@ -103,8 +105,7 @@ const groupedByTag: ApiRowHandler = async (row) => {
   // Reglas sin Esquema, del mismo JSON: el parámetro x-tenant es opcional con ayuda que dice que el valor por defecto es demo
   const parameters: readonly unknown[] = Array.isArray(field(operation, 'parameters')) ? (field(operation, 'parameters') as readonly unknown[]) : [];
   const tenantParam = parameters.find((entry) => field(entry, 'name') === 'x-tenant');
-  const tenantOptional =
-    field(tenantParam, 'in') === 'header' && field(tenantParam, 'required') !== true && String(field(tenantParam, 'description') ?? '').includes('demo');
+  const tenantOptional = field(tenantParam, 'in') === 'header' && field(tenantParam, 'required') !== true && String(field(tenantParam, 'description') ?? '').includes('demo');
   // Y los dos esquemas de seguridad: bearer (Authorization) y admin-key (cabecera X-Admin-Key)
   const schemes = field(field(res.body, 'components'), 'securitySchemes');
   const bearer = field(schemes, 'bearer');
@@ -123,26 +124,61 @@ const groupedByTag: ApiRowHandler = async (row) => {
   ]);
 };
 
-// --- Esquema 4: con credenciales de documentación configuradas, las rutas piden HTTP Basic ----------------------------------------
+// --- Esquema 4: con credenciales de documentación configuradas, las rutas piden HTTP Basic ----------------------------------
 
-const CREDENTIALS: ReadonlyMap<string, string> = new Map<string, string>([
-  ['(sin credenciales)', '(sin credenciales)'],
-  ['(credenciales incorrectas)', '(credenciales incorrectas)'],
-  ['(las credenciales configuradas)', '(las credenciales configuradas)'],
+/** Credenciales de PRUEBA de la instancia auxiliar (declaradas: no son de ningún entorno real). */
+const DOCS_TEST_CREDENTIAL = 'sigpro:docs-secret-1';
+const DOCS_WRONG_CREDENTIAL = 'sigpro:clave-incorrecta';
+const DOCS_TEST_NOTE =
+  'Credenciales de PRUEBA declaradas para la instancia auxiliar: sigpro:docs-secret-1 (ninguna de un entorno real); «credenciales incorrectas» usa sigpro:clave-incorrecta.';
+
+const basic = (credential: string): Readonly<Record<string, string>> => ({ authorization: `Basic ${Buffer.from(credential, 'utf8').toString('base64')}` });
+
+const CREDENTIALS: ReadonlyMap<string, Readonly<Record<string, string>>> = new Map<string, Readonly<Record<string, string>>>([
+  ['(sin credenciales)', {}],
+  ['(credenciales incorrectas)', basic(DOCS_WRONG_CREDENTIAL)],
+  ['(las credenciales configuradas)', basic(DOCS_TEST_CREDENTIAL)],
+]);
+
+const RESPONSES: ReadonlyMap<string, 'denied' | 'page'> = new Map<string, 'denied' | 'page'>([
+  ['401 con la cabecera WWW-Authenticate y el texto Authentication required', 'denied'],
+  ['200 con la página de documentación interactiva', 'page'],
 ]);
 
 const docsWithCredentials: ApiRowHandler = async (row) => {
   const route = strict('ruta', DOCS_ROUTES, cell(row, 'ruta'));
-  strict('credenciales', CREDENTIALS, cell(row, 'credenciales'));
+  const headers = strict('credenciales', CREDENTIALS, cell(row, 'credenciales'));
+  const kind = strict('respuesta', RESPONSES, cell(row, 'respuesta'));
   const expected = `${route} responde ${cell(row, 'respuesta')}`;
-  // La pila aislada no define DOCS_BASIC_AUTH: no hay credenciales configuradas que probar (no es un fallo del arnés)
-  return notExecutable(expected, DOCS_NOTE);
+  return withAuxApi({ label: `005 E4 ${cell(row, 'credenciales')}`, env: { DOCS_BASIC_AUTH: DOCS_TEST_CREDENTIAL }, expected }, async (aux) => {
+    const prep = await prepareAux(aux);
+    if (prep !== undefined) return preparationFailedWeb(expected, prep);
+    const res = await aux.http('GET', route, { headers });
+    if (kind === 'page') {
+      const marker = res.text.includes(SWAGGER_MARK);
+      return judge(
+        [statusCheck(res, 200), check(marker, 'página de documentación interactiva (contenedor de Swagger UI)', `el HTML ${marker ? 'trae' : 'no trae'} el contenedor #swagger-ui`)],
+        { note: DOCS_TEST_NOTE },
+      );
+    }
+    const challenge = res.headers.get('www-authenticate') ?? '';
+    return judge(
+      [
+        statusCheck(res, 401),
+        check(challenge.includes('Basic') && challenge.includes('realm="SIGPRO API docs"'), 'cabecera WWW-Authenticate con realm «SIGPRO API docs»', `WWW-Authenticate ${show(challenge)}`),
+        check(res.text === 'Authentication required', 'texto «Authentication required»', `texto ${show(res.text)}`),
+      ],
+      { note: DOCS_TEST_NOTE },
+    );
+  });
 };
 
 defineApiRows({
   story: 'US-API-PLATAFORMA-005',
   surface: 'api',
   tenants: [TENANT_A],
+  // Las filas de instancia auxiliar arrancan y paran una API: su plazo es mayor que el de las demás
+  rowTimeoutMs: (row) => (row.esquemaIndex === 4 ? 180_000 : 120_000),
   handlers: new Map<number, ApiRowHandler>([
     [1, publicDocs],
     [2, identifiesApi],

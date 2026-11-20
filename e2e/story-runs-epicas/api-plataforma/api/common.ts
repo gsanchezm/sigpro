@@ -2,6 +2,8 @@ import { API_URL, NO_CHAOS, field, readConfig, setChaos, type ApiResult, type Ch
 import { TENANT_A, resetTenants } from '../../../story-runs/support/prepare';
 import { check, conclude, type Check } from '../../support/checks';
 import type { Outcome } from '../../core/framework';
+import { request as httpRequest, type IncomingHttpHeaders } from 'node:http';
+import { createServer as createNetServer } from 'node:net';
 
 /**
  * Veredicto de una fila: coincide si todas sus comprobaciones se cumplen. Si alguna no se cumple, la nota dice en qué difiere
@@ -28,6 +30,8 @@ export const ORIGIN = new URL(API_URL).origin;
 export interface RawOptions {
   readonly headers?: Readonly<Record<string, string>>;
   readonly body?: unknown;
+  /** Origen de la petición: por defecto la pila principal; las filas de instancia auxiliar lo fijan siempre (vía `AuxClient`). */
+  readonly origin?: string;
 }
 
 /** Respuesta cruda: estado, cuerpo JSON (si lo es), cabeceras y texto tal cual. */
@@ -52,7 +56,7 @@ const parseJson = (text: string): unknown => {
 export const raw = async (method: string, route: string, options: RawOptions = {}): Promise<Raw> => {
   const { headers = {}, body } = options;
   const started = performance.now();
-  const response = await fetch(new URL(route, ORIGIN), {
+  const response = await fetch(new URL(route, options.origin ?? ORIGIN), {
     method,
     redirect: 'manual',
     headers: { ...(body === undefined ? {} : { 'content-type': 'application/json' }), ...headers },
@@ -159,3 +163,67 @@ export const ENV_NOTE = (wanted: string): string =>
 /** Motivo de `notExecutable` cuando la fila exige credenciales de documentación (env.sh no define DOCS_BASIC_AUTH). */
 export const DOCS_NOTE =
   'la pila aislada se lanza sin DOCS_BASIC_AUTH (docs/story-runs/entorno/env.sh) y la fila exige credenciales de documentación configuradas: la configuración de la pila no lo permite';
+
+// --- Peticiones con node:http (sin normalizar cabeceras) --------------------------------------------------------------------
+
+const toHeaders = (incoming: IncomingHttpHeaders): Headers => {
+  const out = new Headers();
+  for (const [name, value] of Object.entries(incoming)) {
+    if (value !== undefined) out.set(name, Array.isArray(value) ? value.join(', ') : value);
+  }
+  return out;
+};
+
+/**
+ * Petición GET con node:http, a diferencia de `fetch`, no normaliza las cabeceras: el valor viaja tal cual lo escribe la fila
+ * (con sus espacios de los extremos). Sin agente reutilizable y con un plazo corto para que un cuelgue no consuma la fila.
+ */
+export const rawHttp = (origin: string, route: string, headers: Readonly<Record<string, string>>): Promise<Raw> => {
+  const url = new URL(route, origin);
+  const started = performance.now();
+  return new Promise((done, fail) => {
+    const req = httpRequest(
+      { protocol: url.protocol, hostname: url.hostname, port: url.port, path: `${url.pathname}${url.search}`, method: 'GET', headers, agent: false, timeout: 15_000 },
+      (res) => {
+        const chunks: Buffer[] = [];
+        res.on('data', (chunk: Buffer) => chunks.push(chunk));
+        res.on('error', fail);
+        res.on('end', () => {
+          const text = Buffer.concat(chunks).toString('utf8');
+          done({ status: res.statusCode ?? 0, body: parseJson(text), ms: Math.round(performance.now() - started), headers: toHeaders(res.headers), text });
+        });
+      },
+    );
+    req.on('timeout', () => req.destroy(new Error('sin respuesta en 15 s')));
+    req.on('error', fail);
+    req.end();
+  });
+};
+
+/**
+ * La línea `x-tenant:` tal como sale por el socket. Se captura con un servidor TCP que solo lee bytes: un servidor HTTP la
+ * recortaría al parsearla y no mostraría lo que se envió.
+ */
+export const sentHeaderLine = (value: string): Promise<string> =>
+  new Promise((done, fail) => {
+    const server = createNetServer((socket) => {
+      socket.on('error', () => undefined);
+      let received = '';
+      socket.on('data', (chunk: Buffer) => {
+        received += chunk.toString('latin1');
+        if (!received.includes('\r\n\r\n')) return;
+        socket.end('HTTP/1.1 200 OK\r\nContent-Length: 0\r\nConnection: close\r\n\r\n');
+        server.close();
+        done(received.split('\r\n').find((entry) => entry.toLowerCase().startsWith('x-tenant:')) ?? '(sin cabecera x-tenant)');
+      });
+    });
+    server.once('error', fail);
+    server.listen(0, 'localhost', () => {
+      const address = server.address();
+      const port = typeof address === 'object' && address !== null ? address.port : 0;
+      const req = httpRequest({ host: 'localhost', port, path: '/', method: 'GET', headers: { 'x-tenant': value }, agent: false, timeout: 10_000 }, (res) => res.resume());
+      req.on('timeout', () => req.destroy(new Error('sin respuesta en 10 s')));
+      req.on('error', fail);
+      req.end();
+    });
+  });
