@@ -24,6 +24,7 @@ import {
   rowTestIdOf,
   seenText,
   signIn,
+  simulatorMs,
   trackRealtime,
   waitRealtime,
   type Realtime,
@@ -74,22 +75,35 @@ const PREFERENCE_RESULT: ReadonlyMap<string, string | undefined> = new Map<strin
   ['no ve ninguna insignia', undefined],
 ]);
 
-const NOTE_TICKS = 'Las pulsaciones se hacen tras la conexión del canal en tiempo real; el número de avisos lo fija la historia.';
+const NOTE_TICKS =
+  'Las pulsaciones se hacen tras la conexión del canal; antes de cualquier ausencia de aviso se comprueba que llegaron los eventos «mission:event». La preferencia se guarda en localStorage (live.tsx:61,67), no en el servidor, aunque la historia diga «su Perfil».';
 
-/** Espera a la insignia con un valor estable (la campana no sube después): el valor leído es el que la historia exige. */
+/** Reglas de la historia sin fila (solo se anotan): el orden de llegada y que lo ya existente antes de iniciar sesión no cuenta. */
+const RULES_NOTE = 'Regla sin fila (no comprobada): los avisos que ya existían antes de iniciar sesión no cuentan, y el orden del panel es el más reciente primero (solo se mira en la fila 2).';
+
+/** Espera a la insignia con un valor estable: se sostiene 2 s (una ausencia necesita ventana suficiente, no 1 s). */
 const settledBadge = async (page: Page, expected: string | undefined): Promise<{ readonly reached: boolean; readonly seen: string | undefined }> => {
   const reached = await waitUntil(async () => (await badgeText(page)) === expected);
-  const stable = await holdsFor(async () => (await badgeText(page)) === expected, 1_000);
+  const stable = await holdsFor(async () => (await badgeText(page)) === expected, 2_000);
   return { reached: reached.reached && stable.held, seen: await badgeText(page) };
 };
 
-/** Pulsaciones del administrador de alumno01 (POST /api/mission/tick) tras esperar el canal conectado. */
+/**
+ * Pulsaciones del administrador de alumno01 (POST /api/mission/tick). Antes: canal conectado y simulador apagado (intervalo 0,
+ * la historia no tiene temporizador). Después: los `count` eventos llegan al navegador (control). Sin ese control, una ausencia
+ * de aviso no significa nada: podría ser que no llegó nada.
+ */
 const provokeAfterConnected = async (link: Realtime, count: number): Promise<{ readonly events: readonly TickEvent[]; readonly failure?: string }> => {
   const connected = await waitRealtime(link);
   if (!connected) return { events: [], failure: 'el canal en tiempo real no se conecta tras iniciar sesión' };
   const token = await adminToken(TENANT_A);
+  const speed = await simulatorMs(token);
+  if (speed !== 0) return { events: [], failure: `el simulador de misión tiene intervalo ${speed === undefined ? '(ilegible)' : String(speed)} ms; la historia exige 0 (sin temporizador)` };
+  const before = link.events();
   const ticks = await emitTicks(token, count);
   if (ticks.failed) return { events: ticks.events, failure: `POST /api/mission/tick responde ${String(ticks.failed.status)}` };
+  const arrived = await waitUntil(async () => link.events() - before >= count, 5_000);
+  if (!arrived.reached) return { events: ticks.events, failure: `solo llegan ${String(link.events() - before)} de ${String(count)} eventos «mission:event» al navegador` };
   return { events: ticks.events };
 };
 
@@ -167,14 +181,15 @@ const readAll: BrowserRowHandler = async (row, { page }) => {
   if (failure) return prepFailed(expected, failure);
   const provoked = await provokeAfterConnected(link, ticks);
   if (provoked.failure) return prepFailed(expected, provoked.failure);
-  await settledBadge(page, String(count));
+  const pre = await settledBadge(page, String(count));
+  if (!pre.reached) return prepFailed(expected, `antes de «Marcar leídas» la insignia no llega a ${String(count)} (lee ${pre.seen ?? 'sin insignia'})`);
   const opened = await clickAction(page, bellButton(page), 'abrir la campana');
   if (opened) return actionFailed(expected, opened);
   await waitUntil(() => isVisible(notificationsPanel(page)));
   const read = await clickAction(page, markReadButton(page), 'pulsar «Marcar leídas»');
   if (read) return actionFailed(expected, read);
   const closed = await waitUntil(async () => !(await isVisible(notificationsPanel(page))));
-  const cleared = await holdsFor(async () => (await badgeText(page)) === undefined, 1_500);
+  const cleared = await holdsFor(async () => (await badgeText(page)) === undefined, 2_000);
   const reopened = await clickAction(page, bellButton(page), 'volver a abrir la campana');
   if (reopened) return actionFailed(expected, reopened);
   await waitUntil(() => isVisible(notificationsPanel(page)));
@@ -232,7 +247,9 @@ const preference: BrowserRowHandler = async (row, { page }) => {
   if (provoked.failure) return prepFailed(expected, provoked.failure);
   const result = await settledBadge(page, shown);
   const seen = result.seen === undefined ? 'no ve ninguna insignia' : `ve la insignia ${result.seen}`;
-  return conclude([check(result.reached, expected, seen)], { note: NOTE_TICKS });
+  // Con «desactivada» la preferencia descarta los avisos a propósito: el control (eventos recibidos) separa «la preferencia lo
+  // respeta» de «no llegó nada»
+  return conclude([check(result.reached, expected, seen)], { note: NOTE_TICKS, evidence: { eventosRecibidos: link.events(), preferencia: cell(row, 'preferencia') } });
 };
 
 // --- Esquema 5: cerrar la sesión vacía los avisos y al volver a entrar la campana empieza de cero -------------------------
@@ -257,7 +274,7 @@ const logout: BrowserRowHandler = async (row, { page }) => {
   if (!loggedOut.reached) return prepFailed(expected, `no se llega a /login tras cerrar sesión (ruta ${pathOf(page)})`);
   const again = await signIn(page, DEMO.gestor, TENANT_A);
   if (again) return prepFailed(expected, `no vuelve a iniciar sesión: ${again}`);
-  const quiet = await holdsFor(async () => (await badgeText(page)) === undefined, 1_500);
+  const quiet = await holdsFor(async () => (await badgeText(page)) === undefined, 2_000);
   const label = await bellName(page);
   return conclude(
     [
@@ -273,10 +290,10 @@ defineBrowserRows({
   surface: 'web',
   tenants: [TENANT_A],
   handlers: new Map<number, BrowserRowHandler>([
-    [1, noted(counts)],
-    [2, noted(panel)],
-    [3, noted(readAll)],
-    [4, noted(preference)],
-    [5, noted(logout)],
+    [1, noted(counts, RULES_NOTE)],
+    [2, noted(panel, RULES_NOTE)],
+    [3, noted(readAll, RULES_NOTE)],
+    [4, noted(preference, RULES_NOTE)],
+    [5, noted(logout, RULES_NOTE)],
   ]),
 });

@@ -14,6 +14,7 @@ import {
   headerSearch,
   isAscending,
   noted,
+  optionIn,
   optionOf,
   prepFailed,
   prepareWeb,
@@ -204,6 +205,9 @@ const keyboard: BrowserRowHandler = async (row, { page }) => {
   if (typing) return actionFailed(expected, { message: typing, note: 'el cuadro no recibe el texto' });
   const summary = await waitUntil(async () => (await statusOf(desktopIds(page))) === SUMMARY_PRG_001);
   if (!summary.reached) return prepFailed(expected, `no llegan los resultados de PRG-001 (aviso ${(await statusOf(desktopIds(page))) ?? '(sin aviso)'})`);
+  // Antes de pulsar, el primer resultado (PRG-001) debe estar activo: así la tecla mide el movimiento y no el estado inicial
+  const first = await waitUntil(async () => ((await activeOption(page)) ?? '').startsWith('PRG-001'));
+  if (!first.reached) return prepFailed(expected, `antes de pulsar, el primer resultado no está activo (activo: ${(await activeOption(page)) ?? '(ninguno)'})`);
   const pressed = await runSteps([[`pulsar ${cell(row, 'tecla')}`, () => press(page)]]);
   if (pressed) return actionFailed(expected, { message: pressed, note: 'la tecla no llega al cuadro' });
   return conclude(await scene(page));
@@ -267,7 +271,9 @@ const waitingAndFailing: BrowserRowHandler = async (row, { page }) => {
   const opened = await runSteps([['abrir /nc', () => page.goto('/nc', { timeout: CEILING_MS })]]);
   if (opened) return actionFailed(expected, { message: opened, note: 'la página /nc no abre' });
   // La intercepción se instala ANTES de escribir: así la respuesta llega (o falla) con el retraso o el error de la fila
+  let intercepted = 0;
   await page.route(SEARCH_ROUTE, async (route) => {
+    intercepted += 1;
     if (mode === 'delay') {
       await sleep(3_000);
       await route.continue();
@@ -281,12 +287,16 @@ const waitingAndFailing: BrowserRowHandler = async (row, { page }) => {
   const notified = await waitUntil(async () => (await statusOf(ids)) === notice, 2_500);
   const checks: Check[] = [check(notified.reached, `ve el aviso «${notice}»`, notified.reached ? `ve el aviso «${notice}»` : `aviso «${(await statusOf(ids)) ?? '(sin aviso)'}»`)];
   if (mode === 'delay') {
+    // El aviso «Buscando…» dura mientras la respuesta tarda: se sostiene ≥ 1,5 s después del retardo de 250 ms
+    const held = await holdsFor(async () => (await statusOf(ids)) === notice, 1_500);
+    checks.push(check(held.held, `«${notice}» dura mientras la respuesta tarda (≥ 1,5 s)`, held.held ? `«${notice}» dura ≥ 1,5 s` : `el aviso cambia a «${(await statusOf(ids)) ?? '(sin aviso)'}» antes de 1,5 s`));
     const answered = await waitUntil(async () => (await textOf(ids.total('program'))) === '1' && (await textOf(ids.total('document'))) === '2');
     checks.push(check(answered.reached, 've los grupos Programas y Documentos', answered.reached ? 've los grupos Programas y Documentos' : `aviso ${(await statusOf(ids)) ?? '(sin aviso)'}`));
   } else {
     const groups = await Promise.all(allKinds.map((kind) => isVisible(ids.group(kind))));
     checks.push(check(groups.every((visible) => !visible), 'ningún grupo', `${String(groups.filter(Boolean).length)} grupos visibles`));
   }
+  checks.push(check(intercepted > 0, 'la intercepción recibe la petición de GET /api/search', `peticiones interceptadas: ${String(intercepted)}`));
   return conclude(checks);
 };
 
@@ -294,6 +304,11 @@ const waitingAndFailing: BrowserRowHandler = async (row, { page }) => {
 
 const SCREEN_ICON = (page: Page): Locator => page.getByRole('button', { name: 'Búsqueda global', exact: true });
 const SCREEN = (page: Page): Locator => page.getByTestId(RESPONSIVE_TESTIDS.LAYOUT_SEARCH_SCREEN);
+/** Resultado dentro de la lista de la pantalla completa (acotado a su lista, no a toda la página). */
+const screenOption = (page: Page, code: string): Locator => optionIn(SCREEN(page).getByTestId(RESPONSIVE_TESTIDS.GLOBAL_SEARCH_LIST), code);
+
+/** Reglas de la historia sin fila (se anotan en cada fila de la superficie, sin cambiar su veredicto). */
+const RULES = 'Reglas sin fila (no comprobadas): texto de ayuda «Buscar código o nombre…», retardo de 250 ms, cierre al salir, Esc y código, título y subtítulo de cada resultado.';
 const SCREEN_FIELD = (page: Page): Locator => page.getByRole('combobox', { name: 'Búsqueda global', exact: true });
 
 const SCREEN_ACTIONS: ReadonlyMap<string, (page: Page) => Promise<Diagnosed | undefined>> = new Map<string, (page: Page) => Promise<Diagnosed | undefined>>([
@@ -305,8 +320,8 @@ const SCREEN_ACTIONS: ReadonlyMap<string, (page: Page) => Promise<Diagnosed | un
       if (opened) return opened;
       const typing = await typeInto('PRG-001', SCREEN_FIELD(page));
       if (typing) return { message: typing, note: 'el campo de la pantalla no recibe el texto' };
-      await waitUntil(() => isVisible(optionOf(page, 'PRG-001')));
-      return clickAction(page, optionOf(page, 'PRG-001'), 'pulsar el resultado PRG-001');
+      await waitUntil(() => isVisible(screenOption(page, 'PRG-001')));
+      return clickAction(page, screenOption(page, 'PRG-001'), 'pulsar el resultado PRG-001');
     },
   ],
   [
@@ -412,11 +427,11 @@ defineBrowserRows({
   surface: 'web',
   tenants: [TENANT_A],
   handlers: new Map<number, BrowserRowHandler>([
-    [1, noted(typed)],
-    [2, noted(keyboard)],
-    [3, noted(picked)],
-    [4, noted(waitingAndFailing)],
-    [5, noted(fullScreen)],
-    [6, noted(programsFilter)],
+    [1, noted(typed, RULES)],
+    [2, noted(keyboard, RULES)],
+    [3, noted(picked, RULES)],
+    [4, noted(waitingAndFailing, RULES)],
+    [5, noted(fullScreen, RULES)],
+    [6, noted(programsFilter, RULES)],
   ]),
 });

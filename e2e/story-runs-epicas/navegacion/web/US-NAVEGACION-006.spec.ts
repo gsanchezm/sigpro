@@ -1,7 +1,7 @@
 import type { Locator, Page } from '@playwright/test';
 import { PROGRAMAS_TESTIDS, RESPONSIVE_DYNAMIC_TESTIDS, RESPONSIVE_TESTIDS } from '../../../../packages/shared/src/testids';
 import { DEMO, TENANT_A, resetTenants } from '../../../story-runs/support/prepare';
-import { CEILING_MS, isFocused, isVisible, pathOf, quoted, runSteps, textOf, waitUntil } from '../../support/browser';
+import { CEILING_MS, attrOf, isFocused, isVisible, pathOf, quoted, runSteps, textOf, waitUntil } from '../../support/browser';
 import { cell, check, conclude, strict, type Check } from '../../support/checks';
 import { defineBrowserRows, type BrowserRowHandler } from '../../core/framework';
 import { ACCOUNTS } from '../api/common';
@@ -12,6 +12,11 @@ import { DRAWER_ASIDE, RESPONSIVE, actionFailed, clickAction, navEntries, noted,
 
 /** Las claves de las entradas de la barra (para comprobar que, cerrado, no queda ninguna en la página). */
 const ALL_KEYS = ['mission', 'programs', 'requirements', 'verification', 'nc', 'documents', 'audit', 'admin', 'lab'] as const;
+
+/** Entradas que el cajón enseña a gestor@sigpro.test, en el orden de la barra (sin Auditoría ni Administración). */
+const GESTOR_DRAWER = ['Panel de misión', 'Programas', 'Requisitos', 'Verificación', 'No conformidades', 'Documentos', 'Lab'] as const;
+
+const sameTitles = (left: readonly string[], right: readonly string[]): boolean => left.length === right.length && left.every((value, index) => value === right[index]);
 
 const menuButton = (page: Page): Locator => page.getByRole('button', { name: 'Menú', exact: true });
 const drawer = (page: Page): Locator => page.getByRole('complementary', { name: 'Navegación principal', exact: true });
@@ -69,6 +74,7 @@ const RESULTS: ReadonlyMap<string, (page: Page) => Promise<readonly Check[]>> = 
       return [
         check(await isVisible(drawer(page)), 've el cajón «Navegación principal»', (await isVisible(drawer(page))) ? 've el cajón «Navegación principal»' : 'no ve el cajón'),
         check(entries.length === 7, '7 entradas', `${String(entries.length)} entradas`),
+        check(sameTitles(entries.map((entry) => entry.title ?? ''), GESTOR_DRAWER), `entradas en orden: ${GESTOR_DRAWER.join(', ')}`, `entradas: ${entries.map((entry) => entry.title ?? '(sin título)').join(', ') || '(ninguna)'}`),
       ];
     },
   ],
@@ -118,7 +124,8 @@ const choose: BrowserRowHandler = async (row, { page }) => {
   if (failure) return prepFailed(expected, failure);
   const opened = await openDrawer(page);
   if (opened) return actionFailed(expected, opened);
-  const link = drawer(page).getByRole('link', { name: label, exact: true });
+  // Las entradas con insignia llevan su número en el nombre («No conformidades 8»): el nombre empieza por la etiqueta
+  const link = drawer(page).getByRole('link', { name: new RegExp(`^${label}`) });
   const chosen = await clickAction(page, link, `elegir «${label}»`);
   if (chosen) return actionFailed(expected, chosen);
   const arrived = await waitUntil(async () => pathOf(page) === route);
@@ -148,6 +155,7 @@ const footer: BrowserRowHandler = async (row, { page }) => {
   const shortcuts = group.getByRole('button', { name: 'Atajos de teclado', exact: true });
   const logout = group.getByRole('button', { name: 'Cerrar sesión', exact: true });
   const tops = await topsOf([profile, shortcuts, logout]);
+  const profileHref = await attrOf(profile, 'href');
   const nameShown = await isVisible(group.getByText(name, { exact: true }));
   const roleShown = await isVisible(group.getByText(role, { exact: true }));
   const roleText = (await textOf(group)) ?? '';
@@ -155,6 +163,7 @@ const footer: BrowserRowHandler = async (row, { page }) => {
     check(nameShown, `ve el nombre ${name}`, nameShown ? `ve el nombre ${name}` : `no ve el nombre ${name}`),
     check(roleShown, `ve el rol ${role}`, roleShown ? `ve el rol ${role}` : `no ve el rol ${role} (texto del pie: ${roleText.split('\n').slice(0, 3).join(' / ')})`),
     check(isAscending(tops), 'opciones «Perfil», «Atajos de teclado» y «Cerrar sesión», en ese orden', tops === undefined ? 'alguna opción no se lee' : `posiciones verticales ${tops.map((top) => String(Math.round(top))).join(' y ')}`),
+    check(profileHref?.endsWith('/profile') ?? false, 'la opción «Perfil» lleva a /profile', `enlace de «Perfil»: ${profileHref ?? '(sin enlace)'}`),
   ]);
 };
 
@@ -163,8 +172,8 @@ defineBrowserRows({
   surface: 'web',
   tenants: [TENANT_A],
   handlers: new Map<number, BrowserRowHandler>([
-    [1, noted(closeWays)],
-    [2, noted(choose)],
-    [3, noted(footer)],
+    [1, noted(closeWays, 'Reglas sin fila (no comprobadas): la cabecera responsive, el foco al abrir el cajón y la insignia de NC dentro del cajón.')],
+    [2, noted(choose, 'Decisión pendiente (no probada): elegir la sección actual no cierra el cajón.')],
+    [3, noted(footer, 'Las opciones del pie no se ejercen desde el cajón: se comprueban su nombre, su rol, su orden y el enlace de «Perfil».')],
   ]),
 });

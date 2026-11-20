@@ -151,7 +151,7 @@ defineBrowserRows({
   surface: 'web',
   tenants: [TENANT_A],
   handlers: new Map<number, BrowserRowHandler>([
-    [1, noted(identity)],
+    [1, noted(identity, 'Regla sin fila (no comprobada): el avatar muestra la inicial del nombre.')],
     [2, noted(option)],
     [3, noted(dismiss)],
   ]),

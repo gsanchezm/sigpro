@@ -74,7 +74,7 @@ defineBrowserRows({
   surface: 'expo-web',
   tenants: [TENANT_A],
   handlers: new Map<number, BrowserRowHandler>([
-    [1, expo(withSession)],
-    [2, expo(anonymous)],
+    [1, expo(withSession, 'Regla sin fila (no comprobada): la app móvil no tiene pantalla propia para las direcciones desconocidas (decisión pendiente).')],
+    [2, expo(anonymous, 'Decisión pendiente (no probada): qué ver ante una dirección que la app no tiene.')],
   ]),
 });

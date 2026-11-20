@@ -1,11 +1,11 @@
 import type { Locator, Page } from '@playwright/test';
 import { MOVIL_TESTIDS, MOVIL_VERIFICATION_TESTIDS, NC_TESTIDS, REQUISITOS_TESTIDS } from '../../../../packages/shared/src/testids';
 import { DEMO, TENANT_A, resetTenants } from '../../../story-runs/support/prepare';
-import { isVisible, pathOf, runSteps, textOf, valueOf, waitUntil } from '../../support/browser';
-import { cell, check, conclude, strict, type Check } from '../../support/checks';
-import { defineBrowserRows, outcome, type BrowserRowHandler } from '../../core/framework';
-import { clickAction, prepareWeb } from '../web/common';
-import { MOBILE, MORE, expo, moreRow, openFromMore, resultLink, searchField, signInMobile, tapTab } from './common';
+import { isVisible, pathOf, runSteps, safe, textOf, valueOf, waitUntil } from '../../support/browser';
+import { cell, check, conclude, preparationFailedWeb, strict, type Check } from '../../support/checks';
+import { defineBrowserRows, type BrowserRowHandler } from '../../core/framework';
+import { actionFailed, clickAction, prepareWeb, type Diagnosed } from '../web/common';
+import { MOBILE, MORE, expo, moreRow, openFromMore, resultLink, resultOf, searchField, searchStatus, signInMobile, tapTab } from './common';
 
 // US-NAVEGACION-013 — Abrir cada resultado de la búsqueda en su pantalla móvil. Preparación de cada fila: reinicio de alumno01,
 // inicio de sesión de gestor@sigpro.test con «alumno01» en «Tenant de trabajo» y «Búsqueda global» abierta desde «Más».
@@ -44,6 +44,17 @@ const DESTINATIONS: ReadonlyMap<string, Destination> = new Map<string, Destinati
   ],
 ]);
 
+/** Tipo de resultado (grupo) de cada código que toca la fila: el prefijo del código. */
+const KIND_OF_CODE: ReadonlyMap<string, string> = new Map<string, string>([
+  ['PRG', 'program'],
+  ['REQ', 'requirement'],
+  ['TC', 'testcase'],
+  ['DOC', 'document'],
+  ['NC', 'nc'],
+]);
+
+const kindOf = (code: string): string => strict('tipo del código', KIND_OF_CODE, code.split('-')[0] ?? '');
+
 /** Abre la búsqueda desde «Más» con una sesión de gestor en la app móvil. */
 const enterSearch = async (page: Page): Promise<string | undefined> => {
   await prepareWeb(page, MOBILE);
@@ -54,6 +65,33 @@ const enterSearch = async (page: Page): Promise<string | undefined> => {
   if (opened) return opened;
   const ready = await waitUntil(() => isVisible(searchField(page)));
   return ready.reached ? undefined : 'no se abre la pantalla «Búsqueda global»';
+};
+
+/** Escribe el texto del resultado y espera a que aparezca UNA sola vez por testid (la búsqueda de la pantalla). */
+const typeAndWaitResult = async (page: Page, text: string, code: string): Promise<{ readonly diagnosis?: Diagnosed }> => {
+  const typed = await runSteps([[`escribir ${text} en «Búsqueda global»`, () => searchField(page).fill(text)]]);
+  if (typed) return { diagnosis: { message: typed, note: 'El campo no recibe el texto.' } };
+  const item = resultOf(page, kindOf(code), code);
+  const listed = await waitUntil(async () => (await item.count()) === 1 && (await isVisible(item)), 10_000);
+  return listed.reached ? {} : { diagnosis: await missingResult(page, code) };
+};
+
+/**
+ * Diagnóstico de un resultado que no aparece con una sola coincidencia. Cero nodos por testid Y por rol (con la búsqueda en
+ * pantalla) es discrepancia; el modo estricto o un nodo presente que no se ve es fallo del localizador o del arnés.
+ */
+const missingResult = async (page: Page, code: string): Promise<Diagnosed> => {
+  const byTestId = await safe(() => resultOf(page, kindOf(code), code).count(), -1);
+  const byRole = await safe(() => resultLink(page, code).count(), -1);
+  const status = (await searchStatus(page)) ?? '(sin aviso)';
+  const value = (await valueOf(searchField(page))) ?? '(no legible)';
+  const kind = byTestId >= 2 || byRole >= 2 ? 'strict' : byTestId === 0 && byRole === 0 ? 'absent' : 'timeout';
+  return {
+    message: `no aparece el resultado ${code} tras escribir el texto`,
+    note: `nodos por testid ${String(byTestId)} y por rol ${String(byRole)}; campo «${value}»; aviso «${status}»`,
+    kind,
+    evidence: { porTestId: byTestId, porRol: byRole, aviso: status, campo: value },
+  };
 };
 
 /** Lo que la fila comprueba en el destino: ruta, marca visible y texto (línea exacta o texto propio). */
@@ -79,13 +117,11 @@ const opens: BrowserRowHandler = async (row, { page }) => {
   const destination = strict('destino', DESTINATIONS, cell(row, 'destino'));
   const expected = `ve ${cell(row, 'destino')}`;
   const entered = await enterSearch(page);
-  if (entered) return outcome(false, expected, entered, { note: 'La preparación de sesión o de la pantalla no se cumplió.' });
-  const typed = await runSteps([[`escribir ${text} en «Búsqueda global»`, () => searchField(page).fill(text)]]);
-  if (typed) return outcome(false, expected, typed, { note: 'El campo no recibe el texto.' });
-  const listed = await waitUntil(() => isVisible(resultLink(page, code)), 10_000);
-  if (!listed.reached) return outcome(false, expected, `no aparece el resultado ${code} tras escribir ${text}`, { note: 'La historia nombra un resultado que la búsqueda no muestra.' });
-  const tapped = await clickAction(page, resultLink(page, code), `tocar el resultado ${code}`);
-  if (tapped) return outcome(false, expected, tapped.message, { note: `La historia nombra un resultado que la app no ofrece: ${tapped.note}` });
+  if (entered) return preparationFailedWeb(expected, entered);
+  const typed = await typeAndWaitResult(page, text, code);
+  if (typed.diagnosis) return actionFailed(expected, typed.diagnosis);
+  const tapped = await clickAction(page, resultOf(page, kindOf(code), code), `tocar el resultado ${code}`);
+  if (tapped) return actionFailed(expected, tapped);
   return conclude(await destinationChecks(page, destination, expected));
 };
 
@@ -96,18 +132,16 @@ const comesBack: BrowserRowHandler = async (row, { page }) => {
   const code = cell(row, 'codigo');
   const expected = `vuelve a «Más» y toca «Búsqueda global»: el campo está vacío y ve «Escribe al menos 2 caracteres»`;
   const entered = await enterSearch(page);
-  if (entered) return outcome(false, expected, entered, { note: 'La preparación de sesión o de la pantalla no se cumplió.' });
-  const typed = await runSteps([[`escribir ${text} en «Búsqueda global»`, () => searchField(page).fill(text)]]);
-  if (typed) return outcome(false, expected, typed, { note: 'El campo no recibe el texto.' });
-  const listed = await waitUntil(() => isVisible(resultLink(page, code)), 10_000);
-  if (!listed.reached) return outcome(false, expected, `no aparece el resultado ${code}`, { note: 'La historia nombra un resultado que la búsqueda no muestra.' });
-  const tapped = await clickAction(page, resultLink(page, code), `tocar el resultado ${code}`);
-  if (tapped) return outcome(false, expected, tapped.message, { note: `La historia nombra un resultado que la app no ofrece: ${tapped.note}` });
+  if (entered) return preparationFailedWeb(expected, entered);
+  const typed = await typeAndWaitResult(page, text, code);
+  if (typed.diagnosis) return actionFailed(expected, typed.diagnosis);
+  const tapped = await clickAction(page, resultOf(page, kindOf(code), code), `tocar el resultado ${code}`);
+  if (tapped) return actionFailed(expected, tapped);
   await waitUntil(async () => pathOf(page) !== '/search');
   const back = await runSteps([tapTab(page, MORE)]);
-  if (back) return outcome(false, expected, back, { note: 'La pestaña «Más» no se toca.' });
-  const reopened = await runSteps([[`tocar «Búsqueda global» en Más`, () => moreRow(page, 'search').click({ timeout: 10_000 })]]);
-  if (reopened) return outcome(false, expected, reopened, { note: 'La fila «Búsqueda global» no se toca.' });
+  if (back) return actionFailed(expected, { message: back, note: 'La pestaña «Más» no se toca.' });
+  const reopened = await clickAction(page, moreRow(page, 'search'), 'tocar «Búsqueda global» en Más');
+  if (reopened) return actionFailed(expected, reopened);
   const arrived = await waitUntil(async () => pathOf(page) === '/search');
   const empty = await waitUntil(async () => (await valueOf(searchField(page))) === '');
   const hint = await waitUntil(async () => (await textOf(page.getByText('Escribe al menos 2 caracteres', { exact: true }))) === 'Escribe al menos 2 caracteres');
@@ -123,7 +157,7 @@ defineBrowserRows({
   surface: 'expo-web',
   tenants: [TENANT_A],
   handlers: new Map<number, BrowserRowHandler>([
-    [1, expo(opens)],
-    [2, expo(comesBack)],
+    [1, expo(opens, 'Regla sin fila (no comprobada): cada resultado abre la pantalla móvil y no la de la web.')],
+    [2, expo(comesBack, 'Regla sin fila (no comprobada): el aviso de mínimo de caracteres se muestra con el campo vacío; la cuenta exacta de la fila es gestor@sigpro.test.')],
   ]),
 });

@@ -1,7 +1,7 @@
 import type { Locator, Page } from '@playwright/test';
 import { BUSQUEDA_DYNAMIC_TESTIDS, BUSQUEDA_TESTIDS, MOVIL_DYNAMIC_TESTIDS, MOVIL_SEARCH_DYNAMIC_TESTIDS, MOVIL_SEARCH_TESTIDS, PROGRAMAS_DYNAMIC_TESTIDS } from '../../../../packages/shared/src/testids';
 import type { Credentials } from '../../../story-runs/support/prepare';
-import { ACTION, CEILING_MS, attrOf, runSteps, safe, textOf, type Step } from '../../support/browser';
+import { ACTION, CEILING_MS, attrOf, isVisible, runSteps, safe, textOf, type Step } from '../../support/browser';
 import type { BrowserRowHandler } from '../../core/framework';
 import { withNote } from '../web/common';
 
@@ -49,13 +49,18 @@ export const TABS: ReadonlyMap<string, TabInfo> = new Map<string, TabInfo>([
 export const tabOf = (page: Page, tab: TabInfo): Locator =>
   page.getByRole('tab', { name: tab.full, exact: true }).or(page.getByTestId(PROGRAMAS_DYNAMIC_TESTIDS.MOBILE_TAB(tab.key)));
 
-/** Pestaña activa: su atributo `aria-selected` (o `aria-current`) vale verdadero. */
+/** Pestaña activa: se VE y su atributo `aria-selected` (o `aria-current`) vale verdadero. Una pestaña en una barra oculta no cuenta. */
 export const tabActive = async (page: Page, tab: TabInfo): Promise<boolean> => {
   const target = tabOf(page, tab);
+  if (!(await isVisible(target))) return false;
   const selected = await attrOf(target, 'aria-selected');
   const current = await attrOf(target, 'aria-current');
   return selected === 'true' || current === 'page';
 };
+
+/** Ítems de «Más» en el orden del DOM (su nombre accesible): la secuencia que se compara con la de la historia. */
+export const moreSequence = (page: Page): Promise<readonly string[]> =>
+  safe(() => page.getByRole('list').getByRole('link').evaluateAll((links) => links.map((link) => link.getAttribute('aria-label') ?? '')), []);
 
 /** Fila de la pantalla «Más» por su clave (su nombre accesible es el de la historia). */
 export const moreRow = (page: Page, key: string): Locator => page.getByTestId(MOVIL_DYNAMIC_TESTIDS.MORE_ITEM(key));
@@ -79,8 +84,9 @@ export const resultOf = (page: Page, kind: string, id: string): Locator => page.
 export const moreInGroup = (page: Page, kind: string): Promise<string | undefined> => textOf(page.getByTestId(MOVIL_SEARCH_DYNAMIC_TESTIDS.GROUP_MORE(kind)));
 export const retryButton = (page: Page): Locator => page.getByTestId(MOVIL_SEARCH_TESTIDS.ERROR_RETRY);
 
-/** Anota la nota de Expo web en el resultado de una fila móvil (sin cambiar su veredicto). */
-export const expo = (handler: BrowserRowHandler): BrowserRowHandler => async (row, fixtures) => withNote(await handler(row, fixtures), EXPO_NOTE);
+/** Anota la nota de Expo web (y la de la historia, si se pasa) en el resultado de una fila móvil, sin cambiar su veredicto. */
+export const expo = (handler: BrowserRowHandler, extra?: string): BrowserRowHandler => async (row, fixtures) =>
+  withNote(await handler(row, fixtures), extra === undefined ? EXPO_NOTE : `${EXPO_NOTE} ${extra}`);
 
 /** Un texto visible en la página (una sola coincidencia exacta). */
 export const shownText = async (page: Page, text: string): Promise<boolean> => {

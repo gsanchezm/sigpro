@@ -2,7 +2,11 @@ import type { ApiResult } from '../../../story-runs/support/api';
 import { DEMO, TENANT_A, resetTenants, startSession } from '../../../story-runs/support/prepare';
 import { cell, check, conclude, errorsOf, preparationFailed, responseCheck, strict, type Check } from '../../support/checks';
 import { defineApiRows, type ApiRowHandler } from '../../core/framework';
-import { emptyGroupsCheck, searchAs, statusCheck, textField } from './common';
+import { emptyGroupsCheck, searchAs, statusCheck, textField, withApiNote } from './common';
+
+// Reglas de la historia sin fila: los espacios sobrantes cuentan como vacío (las filas «(un espacio, a, un espacio)» lo cubren);
+// «no se busca nada» en el 422 no es observable desde la API y no se comprueba.
+const RULES_NOTE = 'Regla sin fila (no observable desde la API): con 422 no se busca nada; no se comprueba.';
 
 // US-NAVEGACION-002 — Mínimo de dos caracteres en la búsqueda. Preparación de cada fila: reinicio de alumno01 y acceso de
 // gestor@sigpro.test con x-tenant alumno01 (la búsqueda exige acceso; la historia 003 lo cubre aparte).
@@ -58,5 +62,5 @@ defineApiRows({
   story: 'US-NAVEGACION-002',
   surface: 'api',
   tenants: [TENANT_A],
-  handlers: new Map<number, ApiRowHandler>([[1, minChars]]),
+  handlers: new Map<number, ApiRowHandler>([[1, withApiNote(minChars, RULES_NOTE)]]),
 });

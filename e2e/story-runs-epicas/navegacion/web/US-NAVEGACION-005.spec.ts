@@ -118,7 +118,7 @@ defineBrowserRows({
   tenants: [TENANT_A],
   handlers: new Map<number, BrowserRowHandler>([
     [1, noted(breakpoint)],
-    [2, noted(crumbs)],
-    [3, noted(foldsAndUnfolds)],
+    [2, noted(crumbs, 'Reglas sin fila (no comprobadas): la barra plegada no muestra la insignia y conserva los nombres como enlace; plegar no cambia la sección; «Inicio» lleva a /.')],
+    [3, noted(foldsAndUnfolds, 'Reglas sin fila (no comprobadas): plegar no cambia la sección ni la dirección.')],
   ]),
 });

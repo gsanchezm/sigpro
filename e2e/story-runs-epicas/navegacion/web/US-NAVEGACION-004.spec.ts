@@ -102,7 +102,7 @@ defineBrowserRows({
   surface: 'web',
   tenants: [TENANT_A],
   handlers: new Map<number, BrowserRowHandler>([
-    [1, noted(sees)],
+    [1, noted(sees, 'Nota: la regla dice que Lab la ven todos los roles y la decisión pendiente de la historia dice lo contrario; la fila sigue la regla. Regla sin fila: cada entrada es un enlace a su dirección (no comprobado).')],
     [2, noted(marked)],
     [3, noted(badgeCount)],
   ]),

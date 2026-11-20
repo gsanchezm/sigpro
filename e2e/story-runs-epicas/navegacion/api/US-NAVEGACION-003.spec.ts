@@ -2,7 +2,11 @@ import { adminToken, type ApiResult, type Session } from '../../../story-runs/su
 import { DEMO, TENANT_A, TENANT_B, resetTenants, startSession } from '../../../story-runs/support/prepare';
 import { cell, check, conclude, parseResponse, preparationFailed, responseCheck, strict, type Check } from '../../support/checks';
 import { defineApiRows, type ApiRowHandler } from '../../core/framework';
-import { ACCOUNTS, createProgram, emptyGroupsCheck, groupsOf, searchAs, stamp, statusCheck, textField } from './common';
+import { ACCOUNTS, createProgram, emptyGroupsCheck, groupsOf, searchAs, stamp, statusCheck, textField, withApiNote } from './common';
+
+// Reglas sin fila: cualquier rol con sesión puede buscar (solo se prueba con gestor y alumnos); un acceso caducado o alterado no se
+// prueba (la historia lo nombra y no tiene fila).
+const RULES_NOTE = 'Reglas sin fila: otros roles y el acceso caducado o alterado no se prueban aquí.';
 
 // US-NAVEGACION-003 — Acceso válido y aislamiento por tenant. Preparación: se reinician alumno01 y alumno02. Las filas de
 // aislamiento crean con alumno01@sigpro.lab un programa «aislamiento-<marca>» (responsable u1, 2027-01-10 a 2027-12-31, 500000);
@@ -81,7 +85,7 @@ defineApiRows({
   surface: 'api',
   tenants: [TENANT_A, TENANT_B],
   handlers: new Map<number, ApiRowHandler>([
-    [1, withoutAccess],
-    [2, isolation],
+    [1, withApiNote(withoutAccess, RULES_NOTE)],
+    [2, withApiNote(isolation, RULES_NOTE)],
   ]),
 });

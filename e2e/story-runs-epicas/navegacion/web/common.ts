@@ -1,10 +1,11 @@
 import type { Locator, Page } from '@playwright/test';
 import { MISION_DYNAMIC_TESTIDS, MISION_TESTIDS, PROGRAMAS_TESTIDS, RESPONSIVE_TESTIDS } from '../../../../packages/shared/src/testids';
+import { MISSION_SOCKET_EVENT } from '../../../../packages/shared/src/mission';
 import { call, field, type ApiResult } from '../../../story-runs/support/api';
 import { TENANT_A, type Credentials } from '../../../story-runs/support/prepare';
 import { ACTION, CEILING_MS, attrOf, runSteps, safe, textOf, waitUntil } from '../../support/browser';
 import { check, type Check } from '../../support/checks';
-import { outcome, type BrowserRowHandler, type Outcome } from '../../core/framework';
+import { notExecutable, outcome, type BrowserRowHandler, type Outcome } from '../../core/framework';
 
 // Piezas comunes de las filas web (escritorio 1440 px) y responsive (390 px) de EP-NAVEGACION. Localizadores de rol y de nombre
 // accesible; los ids de prueba solo donde la pantalla no ofrece otro rastro (la barra por `aside`, la insignia, las migas).
@@ -96,19 +97,37 @@ export const toastsOf = (page: Page): Promise<readonly ToastEntry[]> =>
 export const waitToast = async (page: Page, tone: string, title: string, body: string): Promise<boolean> =>
   (await waitUntil(async () => (await toastsOf(page)).some((entry) => entry.tone === tone && entry.title === title && entry.body === body), TOAST_CEILING_MS)).reached;
 
-/** Seguimiento del canal en tiempo real: Socket.IO responde `40{…}` cuando el cliente ya está dentro del room del tenant. */
+/**
+ * Seguimiento del canal en tiempo real. Socket.IO responde `40{…}` cuando el cliente ya está en el room del tenant; `41` o el
+ * cierre del socket lo dan por perdido (el estado no es pegajoso). Cuenta además los `mission:event` que llegan al navegador:
+ * es el control que hace creíble una ausencia de aviso («no llegó nada» frente a «la preferencia lo descarta»).
+ */
 export interface Realtime {
+  /** Hay un socket abierto y conectado ahora mismo. */
   readonly connected: () => boolean;
+  /** Eventos `mission:event` recibidos desde que se armó el seguimiento. */
+  readonly events: () => number;
+  /** Frames recibidos en total (diagnóstico). */
+  readonly frames: () => number;
 }
 
 export const trackRealtime = (page: Page): Realtime => {
-  let connected = false;
+  let open = false;
+  let received = 0;
+  let frames = 0;
   page.on('websocket', (socket) => {
     socket.on('framereceived', (frame) => {
-      if (typeof frame.payload === 'string' && frame.payload.startsWith('40{')) connected = true;
+      frames += 1;
+      if (typeof frame.payload !== 'string') return;
+      if (frame.payload.startsWith('40{')) open = true;
+      if (frame.payload === '41' || frame.payload.startsWith('44')) open = false;
+      if (frame.payload.startsWith(`42["${MISSION_SOCKET_EVENT}"`)) received += 1;
+    });
+    socket.on('close', () => {
+      open = false;
     });
   });
-  return { connected: () => connected };
+  return { connected: () => open, events: () => received, frames: () => frames };
 };
 
 /** Techo para que el canal se conecte tras iniciar sesión (la red local tarda menos de 1 s; el techo es de la prueba). */
@@ -129,10 +148,22 @@ export const signIn = (page: Page, credentials: Credentials, tenant: string = TE
 
 // --- Acciones con diagnóstico ----------------------------------------------------------------------------------------------
 
+/**
+ * Qué impidió el clic. Solo `absent` (cero nodos por rol Y por testid, con la página renderizada) es una discrepancia: el resto
+ * son fallos del localizador o del arnés y van como `notExecutable` con el diagnóstico en la evidencia.
+ */
+export type DiagnosisKind = 'absent' | 'not-rendered' | 'strict' | 'covered' | 'disabled' | 'timeout';
+
 export interface Diagnosed {
   readonly message: string;
   readonly note: string;
+  /** Sin `kind` (fallos de pasos o de navegación) el resultado es `notExecutable`. */
+  readonly kind?: DiagnosisKind;
+  readonly evidence?: Readonly<Record<string, unknown>>;
 }
+
+/** ¿Hay contenido en la página? Si no, el fallo no puede leerse como «el elemento no existe». */
+const pageRendered = (page: Page): Promise<boolean> => safe(() => page.evaluate(() => document.body.innerText.trim().length > 0), false);
 
 /** Quién recibe el clic en el centro del elemento (la pista de «está tapado»). */
 const coveringOf = (target: Locator): Promise<string | undefined> =>
@@ -152,8 +183,8 @@ const coveringOf = (target: Locator): Promise<string | undefined> =>
     undefined,
   );
 
-/** Clic como una persona. Ante el fallo dice si el elemento no existe, si lo tapa otro, o si está deshabilitado. */
-export const clickAction = async (_page: Page, target: Locator, what: string): Promise<Diagnosed | undefined> => {
+/** Clic como una persona. Clasifica el fallo (ausencia, modo estricto, tapado, deshabilitado, tiempo agotado) con su evidencia. */
+export const clickAction = async (page: Page, target: Locator, what: string): Promise<Diagnosed | undefined> => {
   try {
     await target.click(ACTION);
     return undefined;
@@ -161,25 +192,48 @@ export const clickAction = async (_page: Page, target: Locator, what: string): P
     const text = error instanceof Error ? error.message : String(error);
     const head = text.split('\n').map((line) => line.trim()).filter((line) => line !== '').slice(0, 3).join(' | ');
     const count = await safe(() => target.count(), -1);
+    const rendered = await pageRendered(page);
+    const strictMode = /strict mode violation/.test(text);
     const covered = /intercepts pointer events/.test(text) ? await coveringOf(target) : undefined;
     const disabled = /not enabled|disabled/.test(text);
-    const reason =
-      count === 0
-        ? 'el elemento no existe en la pantalla'
+    const kind: DiagnosisKind = strictMode
+      ? 'strict'
+      : count === 0
+        ? rendered
+          ? 'absent'
+          : 'not-rendered'
         : covered !== undefined
-          ? `existe pero lo tapa ${covered}`
+          ? 'covered'
           : disabled
-            ? 'existe pero está deshabilitado'
-            : count === -1
-              ? 'no se pudo leer el elemento'
-              : 'recibe el clic pero no ocurre la acción esperada';
-    return { message: `no se pudo ${what}`, note: `${reason}. Playwright: ${head}` };
+            ? 'disabled'
+            : 'timeout';
+    const reason =
+      kind === 'absent'
+        ? 'el elemento no existe en la pantalla (cero nodos por rol y por testid)'
+        : kind === 'not-rendered'
+          ? 'la página no ha renderizado contenido'
+          : kind === 'strict'
+            ? `el localizador casa con ${String(count)} elementos (modo estricto del arnés)`
+            : kind === 'covered'
+              ? `existe pero lo tapa ${covered ?? '(desconocido)'}`
+              : kind === 'disabled'
+                ? 'existe pero está deshabilitado'
+                : count === -1
+                  ? 'no se pudo leer el elemento'
+                  : 'el elemento está presente y el clic no completa dentro del plazo';
+    return { message: `no se pudo ${what}`, note: `${reason}. Playwright: ${head}`, kind, evidence: { nodos: count, paginaRenderizada: rendered } };
   }
 };
 
-/** Resultado de una fila que no llegó a su acción: la historia nombra algo que la pantalla no ofrece (discrepancia, no error del arnés). */
+/**
+ * Resultado de una fila cuyo paso no llegó a completarse. Solo la ausencia (cero nodos por rol y testid, página renderizada) es
+ * discrepancia: la historia nombra algo que la pantalla no ofrece. Todo lo demás (modo estricto, tapado, deshabilitado, tiempo
+ * agotado, pantalla no alcanzada, fallo de navegación) es `notExecutable` con el diagnóstico en la evidencia.
+ */
 export const actionFailed = (expected: string, failure: Diagnosed): Outcome =>
-  outcome(false, expected, failure.message, { note: `La historia nombra un elemento o un paso que la pantalla no ofrece: ${failure.note}` });
+  failure.kind === 'absent'
+    ? outcome(false, expected, failure.message, { note: `La historia nombra un elemento que la pantalla no ofrece: ${failure.note}`, evidence: { ...(failure.evidence ?? {}), diagnostico: failure.note } })
+    : { ...notExecutable(expected, `Fallo del arnés o del localizador, no hallazgo sobre la app: ${failure.note}`), evidence: { ...(failure.evidence ?? {}), diagnostico: failure.note, tipo: failure.kind ?? 'paso' } };
 
 /** Fallo de preparación de la fila (el estado que la historia da por hecho no se produjo). */
 export const prepFailed = (expected: string, reason: string): Outcome =>
@@ -188,8 +242,9 @@ export const prepFailed = (expected: string, reason: string): Outcome =>
 /** Anota una nota en el resultado de una fila (sin cambiar su veredicto). */
 export const withNote = (result: Outcome, note: string): Outcome => ({ ...result, note: result.note === undefined ? note : `${result.note} ${note}` });
 
-/** Envuelve el manejador de una fila web para anotar la nota de cookies en todas sus filas. */
-export const noted = (handler: BrowserRowHandler): BrowserRowHandler => async (row, fixtures) => withNote(await handler(row, fixtures), COOKIE_NOTE);
+/** Envuelve el manejador de una fila web: anota la nota de cookies y, si se pasa, la nota de la historia (reglas sin fila, etc.). */
+export const noted = (handler: BrowserRowHandler, extra?: string): BrowserRowHandler => async (row, fixtures) =>
+  withNote(await handler(row, fixtures), extra === undefined ? COOKIE_NOTE : `${COOKIE_NOTE} ${extra}`);
 
 // --- Lecturas de la interfaz -----------------------------------------------------------------------------------------------
 
@@ -204,8 +259,11 @@ export const seenText = async (page: Page, text: string): Promise<boolean> => {
 export const headerSearch = (page: Page): Locator =>
   page.getByRole('combobox', { name: 'Búsqueda global', exact: true }).or(page.getByRole('searchbox', { name: 'Búsqueda global', exact: true }));
 
-/** Opción de la lista de resultados cuyo nombre empieza por el código (el nombre incluye código, título y subtítulo). */
-export const optionOf = (page: Page, code: string): Locator => page.getByRole('option', { name: new RegExp(`^${code}`) });
+/** Opción de una lista de resultados cuyo nombre empieza por el código (el nombre incluye código, título y subtítulo). */
+export const optionIn = (list: Locator, code: string): Locator => list.getByRole('option', { name: new RegExp(`^${code}`) });
+
+/** Opción de la lista de resultados de la cabecera de escritorio: acotada al `listbox`, para no casar con otros «option» de la página. */
+export const optionOf = (page: Page, code: string): Locator => optionIn(page.getByRole('listbox'), code);
 
 // --- Barra lateral, migas y menús ------------------------------------------------------------------------------------------
 
@@ -276,10 +334,14 @@ export const markReadButton = (page: Page): Locator => page.getByRole('button', 
 /** Texto que describe la campana (su nombre accesible), o `undefined` si no se lee. */
 export const bellName = (page: Page): Promise<string | undefined> => attrOf(bellButton(page), 'aria-label');
 
-/** Insignia visible: su número como texto, o `undefined` si no hay insignia. */
+/**
+ * Insignia de la campana: `undefined` solo si NO hay ningún nodo de insignia (sin insignia); si el nodo existe pero no se
+ * lee, devuelve «(ilegible)». Así una lectura fallida nunca cuenta como «sin insignia».
+ */
 export const badgeText = async (page: Page): Promise<string | undefined> => {
-  const text = await textOf(bellBadge(page));
-  return text;
+  const count = await safe(() => bellBadge(page).count(), -1);
+  if (count === 0) return undefined;
+  return (await textOf(bellBadge(page))) ?? '(ilegible)';
 };
 
 /** Filas del panel de avisos, en orden: el id de prueba de cada una y su gravedad. */
@@ -321,6 +383,13 @@ export const emitTicks = async (token: string, count: number): Promise<{ readonl
     events.push({ seq: typeof seq === 'number' ? seq : undefined, severity: typeof severity === 'string' ? severity : undefined });
   }
   return { events };
+};
+
+/** Intervalo del simulador de misión (`simulatorMs` del resumen): 0 = apagado. `undefined` si no se lee. */
+export const simulatorMs = async (token: string): Promise<number | undefined> => {
+  const result = await call('GET', '/mission/summary', { tenant: TENANT_A, token });
+  const value = field(result.body, 'simulatorMs');
+  return typeof value === 'number' ? value : undefined;
 };
 
 /** Avisos de la campana según la historia: gravedad aviso (`warn`) o peligro (`danger`), el más reciente primero. */

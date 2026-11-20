@@ -1,6 +1,13 @@
 import { adminCredentials, call, field, type ApiResult } from '../../../story-runs/support/api';
 import { DEMO, TENANT_A, TENANT_B, type Credentials } from '../../../story-runs/support/prepare';
 import { check, type Check } from '../../support/checks';
+import type { ApiRowHandler } from '../../core/framework';
+
+/** Anota en el resultado de cada fila una nota de la historia (reglas sin fila, lo que no es observable), sin cambiar el veredicto. */
+export const withApiNote = (handler: ApiRowHandler, note: string): ApiRowHandler => async (row) => {
+  const result = await handler(row);
+  return { ...result, note: result.note === undefined ? note : `${result.note} ${note}` };
+};
 
 // Piezas comunes de las filas de API de EP-NAVEGACION: cuentas por nombre (la columna «cuenta» de las historias), la búsqueda
 // global, la lectura de sus grupos y la creación del programa de prueba de US-NAVEGACION-003. Lo esperado sale de la historia;

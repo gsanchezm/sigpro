@@ -87,7 +87,7 @@ defineBrowserRows({
   surface: 'web',
   tenants: [TENANT_A],
   handlers: new Map<number, BrowserRowHandler>([
-    [1, noted(withSession)],
+    [1, noted(withSession, 'Decisión pendiente (no probada): tras iniciar sesión, volver a la dirección privada pedida (hoy siempre va a Programas).')],
     [2, noted(withoutSession)],
     [3, noted(accessPages)],
   ]),
