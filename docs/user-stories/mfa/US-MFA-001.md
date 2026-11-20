@@ -64,8 +64,8 @@ Característica: Canje del segundo factor por la API
     Ejemplos:
       | token |
       | un texto que no es JWT |
-      | el accessToken de gestor@sigpro.test |
-      | el refreshToken de gestor@sigpro.test |
+      | el accessToken de admin@sigpro.test, obtenido al canjear su mfaToken con 123456 |
+      | el refreshToken de admin@sigpro.test, obtenido al canjear su mfaToken con 123456 |
 
   Esquema del escenario: El token temporal no es una sesión y la sesión canjeada sí lo es
     Dado que en el tenant alumno01, recién reiniciado, admin@sigpro.test ha recibido un mfaToken nuevo
