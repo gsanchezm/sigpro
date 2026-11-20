@@ -30,12 +30,12 @@ export const onMobile =
   };
 
 /** Resultado de una fila móvil a partir de sus comprobaciones. */
-export const verdict = (checks: readonly Check[], note?: string): Outcome =>
+export const verdict = (checks: readonly Check[], note?: string, evidence?: Readonly<Record<string, unknown>>): Outcome =>
   outcome(
     checks.every((entry) => entry.ok),
     checks.map((entry) => entry.expected).join('; '),
     checks.map((entry) => entry.observed).join('; '),
-    note === undefined ? {} : { note },
+    { ...(note === undefined ? {} : { note }), ...(evidence === undefined ? {} : { evidence }) },
   );
 
 /** Inicio de sesión en la app móvil: alumno01 en «Tenant de trabajo», el correo y la contraseña de la cuenta, y «Entrar». Termina en «Programas». */
@@ -108,11 +108,29 @@ export const effectivelyDisabled = async (target: Locator): Promise<boolean | un
 };
 
 /** Elige una opción del selector de rol de una tarjeta (la hoja con opciones tipo radio). */
-export const pickRole = async (page: Page, id: string, value: string): Promise<string | undefined> => {
+/** Resultado de elegir una opción en la hoja de rol: el problema (si lo hay) y las opciones que la hoja ofrece, para la evidencia. */
+export interface ChoiceView {
+  readonly problem?: string;
+  readonly offered: string;
+}
+
+/**
+ * Elige el rol de una tarjeta: abre el selector, comprueba que la hoja OFRECE la opción con su texto (aria-label) y su valor (testid
+ * `…-option-<valor>`), y solo entonces la pulsa. Si no, devuelve el problema y las opciones visibles. Nunca lanza.
+ */
+export const pickRole = async (page: Page, id: string, label: string, value: string): Promise<ChoiceView> => {
   const opened = await runSteps([['abrir el selector de rol', () => roleComboOf(page, id).click(ACTION)]]);
-  if (opened !== undefined) return opened;
-  const option = page.getByTestId(`${ADMIN_DYNAMIC_TESTIDS.ADMIN_USER_ROLE(id)}-option-${value}`);
-  return runSteps([[`elegir la opción «${value}»`, () => option.click(ACTION)]]);
+  if (opened !== undefined) return { problem: opened, offered: '(el selector no se abrió)' };
+  const prefix = `${ADMIN_DYNAMIC_TESTIDS.ADMIN_USER_ROLE(id)}-option-`;
+  const views = await safe(
+    () => page.locator(`[data-testid^="${prefix}"]`).evaluateAll((nodes) => nodes.map((node) => ({ testid: node.getAttribute('data-testid') ?? '', label: node.getAttribute('aria-label') ?? '' }))),
+    [],
+  );
+  const offered = views.length === 0 ? '(ninguna opción visible)' : views.map((view) => `«${view.label}» (${view.testid})`).join(', ');
+  const wanted = `${prefix}${value}`;
+  if (!views.some((view) => view.testid === wanted && view.label === label)) return { problem: `la hoja no ofrece «${label}» con el valor ${value}`, offered };
+  const chosen = await runSteps([[`elegir «${label}»`, () => page.getByTestId(wanted).click(ACTION)]]);
+  return chosen === undefined ? { offered } : { problem: chosen, offered };
 };
 
 /** Nombre visible de una tarjeta: el texto del nodo exacto (el avatar no entra en el texto de la tarjeta). */

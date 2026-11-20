@@ -43,11 +43,6 @@ const OWN_REASON = 'No puedes modificar tu propia cuenta';
 /** Usuario por su correo: el id del seed, o `undefined` si no es del seed. */
 const idOf = (email: string): string | undefined => SEED_ID.get(email);
 
-const ROLE_RESTORED: ReadonlyMap<string, string> = new Map<string, string>([
-  ['Consultor', 'Consultor'],
-  ['Admin', 'Admin'],
-]);
-
 /** Lo que vuelve a mostrar la tarjeta tras el rechazo: el rol anterior o el interruptor encendido. */
 type Before = { readonly kind: 'role'; readonly label: string } | { readonly kind: 'switch'; readonly on: boolean };
 
@@ -56,10 +51,10 @@ const BEFORE_CELLS: ReadonlyMap<string, Before> = new Map<string, Before>([
   ['el interruptor encendido', { kind: 'switch', on: true }],
 ]);
 
-type Action = { readonly kind: 'role'; readonly value: string } | { readonly kind: 'switch' };
+type Action = { readonly kind: 'role'; readonly label: string; readonly value: string } | { readonly kind: 'switch' };
 
 const ACTION_CELLS: ReadonlyMap<string, Action> = new Map<string, Action>([
-  ['elige el rol Auditor', { kind: 'role', value: 'auditor' }],
+  ['elige el rol Auditor', { kind: 'role', label: 'Auditor', value: 'auditor' }],
   ['pulsa el interruptor', { kind: 'switch' }],
 ]);
 
@@ -106,14 +101,16 @@ const ensureArmed = async (page: Page): Promise<void> => {
 const roleSaved: BrowserRowHandler = async (row, { page }) => {
   const email = cell(row, 'correo');
   const id = strict('correo', SEED_ID, email);
-  const roleLabel = strict('rol_nuevo', ROLE_OF_LABEL, cell(row, 'rol_nuevo'));
+  // La celda es la ETIQUETA visible de la opción («Auditor»); el valor técnico (auditor) sale del mapa
+  const roleLabel = cell(row, 'rol_nuevo');
+  const roleValue = strict('rol_nuevo', ROLE_OF_LABEL, roleLabel);
   const aviso = quoted(cell(row, 'aviso'));
   const expected = `aviso «${TOAST_UPDATED}» con «${aviso}» y, tras volver a abrir «Usuarios», la tarjeta de ${email} muestra «${roleLabel}»`;
   const preparation = await openUsers(page, 'alumno01@sigpro.lab', expected);
   if (preparation !== undefined) return preparationFailedWeb(expected, preparation);
   await ensureArmed(page);
-  const chosen = await pickRole(page, id, ROLE_OF_LABEL.get(roleLabel) ?? '');
-  if (chosen !== undefined) return preparationFailedWeb(expected, chosen);
+  const picked = await pickRole(page, id, roleLabel, roleValue);
+  if (picked.problem !== undefined) return verdict([check(false, `se puede elegir «${roleLabel}» en la tarjeta de ${email}`, `${picked.problem}; opciones visibles: ${picked.offered}`)], undefined, { opciones: picked.offered });
   const toast = await toastShown(page, 'ok', TOAST_UPDATED, aviso);
   const back = await runSteps([
     ['abrir «Auditoría»', () => tabOf(page, 'audit').click(ACTION)],
@@ -132,13 +129,14 @@ const roleSaved: BrowserRowHandler = async (row, { page }) => {
 const sameRoleNoChange: BrowserRowHandler = async (row, { page }) => {
   const email = cell(row, 'correo');
   const id = strict('correo', SEED_ID, email);
-  const current = strict('rol_actual', ROLE_RESTORED, cell(row, 'rol_actual'));
+  const current = cell(row, 'rol_actual');
+  const currentValue = strict('rol_actual', ROLE_OF_LABEL, current);
   const expected = `ningún aviso «${TOAST_UPDATED}» y la tarjeta de ${email} sigue mostrando «${current}»`;
   const preparation = await openUsers(page, 'alumno01@sigpro.lab', expected);
   if (preparation !== undefined) return preparationFailedWeb(expected, preparation);
   await ensureArmed(page);
-  const chosen = await pickRole(page, id, ROLE_OF_LABEL.get(current) ?? '');
-  if (chosen !== undefined) return preparationFailedWeb(expected, chosen);
+  const picked = await pickRole(page, id, current, currentValue);
+  if (picked.problem !== undefined) return verdict([check(false, `se puede elegir «${current}» en la tarjeta de ${email}`, `${picked.problem}; opciones visibles: ${picked.offered}`)], undefined, { opciones: picked.offered });
   const quiet = await quietOk(page);
   const roleAfter = await rowRole(page, id);
   return verdict([
@@ -162,7 +160,10 @@ const switchSaved: BrowserRowHandler = async (row, { page }) => {
   if (initial !== (before === 'true')) return preparationFailedWeb(expected, `el interruptor de «Activo» de ${email} está ${String(initial)} y no ${before}`);
   await ensureArmed(page);
   const clicked = await runSteps([[`pulsar el interruptor de la tarjeta de ${email}`, () => activeSwitchOf(page, id).click(ACTION)]]);
-  if (clicked !== undefined) return preparationFailedWeb(expected, clicked);
+  if (clicked !== undefined) {
+    const exists = (await safe(() => activeSwitchOf(page, id).count(), 0)) > 0;
+    return verdict([check(false, `se puede pulsar el interruptor de la tarjeta de ${email}`, `${clicked}; el interruptor ${exists ? 'existe' : 'no existe'} en la tarjeta`)]);
+  }
   const toast = await toastShown(page, 'ok', TOAST_UPDATED, aviso);
   const badge = await waitUntil(async () => (await textOf(statusBadgeOf(page, id))) === status);
   const badgeNow = await textOf(statusBadgeOf(page, id));
@@ -196,8 +197,9 @@ const rejectedChange: BrowserRowHandler = async (row, { page }) => {
   const preparation = await openUsers(page, 'alumno01@sigpro.lab', expected);
   if (preparation !== undefined) return preparationFailedWeb(expected, preparation);
   await ensureArmed(page);
-  const acted = action.kind === 'role' ? await pickRole(page, id, action.value) : await runSteps([[`pulsar el interruptor de la tarjeta de ${email}`, () => activeSwitchOf(page, id).click(ACTION)]]);
-  if (acted !== undefined) return preparationFailedWeb(expected, acted);
+  const picked = action.kind === 'role' ? await pickRole(page, id, action.label, action.value) : undefined;
+  const acted = action.kind === 'role' ? picked?.problem : await runSteps([[`pulsar el interruptor de la tarjeta de ${email}`, () => activeSwitchOf(page, id).click(ACTION)]]);
+  if (acted !== undefined) return verdict([check(false, `se puede ejecutar «${cell(row, 'accion')}» en la tarjeta de ${email}`, `${acted}${picked === undefined ? '' : `; opciones visibles: ${picked.offered}`}`)], undefined, picked === undefined ? undefined : { opciones: picked.offered });
   const failed = await toastShown(page, 'danger', TOAST_FAILED, motive.kind === 'text' ? motive.text : undefined);
   const reverted = await waitUntil(async () => (before.kind === 'role' ? (await rowRole(page, id)) === before.label : (await rowSwitchOn(page, id)) === before.on));
   const revertedNow = before.kind === 'role' ? await rowRole(page, id) : await rowSwitchOn(page, id);

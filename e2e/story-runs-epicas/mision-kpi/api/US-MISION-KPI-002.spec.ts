@@ -31,6 +31,8 @@ const STATUS_OF_STATE: ReadonlyMap<string, string> = new Map<string, string>([
 ]);
 
 const SEVERITY_KEYS: readonly string[] = ['minor', 'major', 'critical'];
+/** Los ocho primeros programas activos con hitos del seed (la tabla de la historia, Esquema 1), en orden de código. */
+const SEED_FIRST_EIGHT: readonly string[] = ['PRG-001', 'PRG-002', 'PRG-005', 'PRG-007', 'PRG-009', 'PRG-010', 'PRG-013', 'PRG-015'];
 
 // --- Esquema 1: los ocho primeros programas activos con hitos, en orden de código -------------------------------------------
 
@@ -108,10 +110,14 @@ const notListed: ApiRowHandler = async (row) => {
   const result = await summaryOf(admin.token);
   const bars = listOf(result.body, 'milestonesByProgram');
   const listed = bars?.some((bar) => field(bar, 'programCode') === code) ?? false;
+  // La comprobación de «no aparece» no vale sola: la lista debe ser la del seed (así no es vacía por accidente)
+  const codes = (bars ?? []).map((bar) => String(field(bar, 'programCode')));
+  const seedList = codes.length === SEED_FIRST_EIGHT.length && codes.every((item, index) => item === SEED_FIRST_EIGHT[index]);
   return conclude(
     [
       responseCheck(result, { status: 200 }),
       check(bars !== undefined && !listed, `${code} no aparece en milestonesByProgram`, bars === undefined ? '(sin lista)' : listed ? `${code} aparece en milestonesByProgram` : `${code} no aparece (${bars.length} elementos)`),
+      check(seedList, `la lista es la del seed: ${SEED_FIRST_EIGHT.join(', ')}`, `la lista trae ${codes.join(', ') || '(ninguno)'}`),
     ],
     { evidence: notOkEvidence(result) },
   );

@@ -5,7 +5,9 @@ import {
   ACCOUNTS,
   INVENTED_TOKEN,
   TENANT_A,
+  TENANT_B,
   adminSession,
+  isOk,
   eventOf,
   failedPreparation,
   field,
@@ -44,7 +46,7 @@ const HEADERS: ReadonlyMap<string, string | undefined> = new Map<string, string 
 // --- Esquema 1: solo el administrador del tenant puede emitir un evento -----------------------------------------------------
 
 const onlyAdmin: ApiRowHandler = async (row) => {
-  await resetTenants([TENANT_A]);
+  await resetTenants([TENANT_A, TENANT_B]);
   const answer = strict('respuesta', ANSWERS, cell(row, 'respuesta'));
   const expected = `la respuesta de POST /api/mission/tick es ${cell(row, 'respuesta')}`;
   const email = cell(row, 'cuenta');
@@ -64,6 +66,25 @@ const onlyAdmin: ApiRowHandler = async (row) => {
     const first = listOf(after.body, 'recent')?.[0];
     checks.push(check(event !== undefined && field(first, 'id') === field(event, 'id'), 'el evento emitido es el primero de la actividad reciente', `el primero es ${showValue(field(first, 'id'))}`));
     checks.push(check(JSON.stringify(kpisOf(before.body)) === JSON.stringify(kpisOf(after.body)), 'emitir el evento no cambia las cifras de kpis', JSON.stringify(kpisOf(after.body)) === JSON.stringify(kpisOf(before.body)) ? 'kpis sin cambios' : 'kpis cambian al emitir'));
+    // Regla: el evento no aparece en ningún otro tenant. alumno02 emite el suyo y su actividad debe tener solo el suyo (el instante es único por emisión)
+    const adminB = await adminSession(TENANT_B);
+    if (adminB.token === undefined) {
+      checks.push(check(false, 'alumno02 inicia sesión para comparar tenants', `alumno02 no inicia sesión (${adminB.last.status})`));
+    } else {
+      const ownTick = await tickOf(adminB.token, TENANT_B);
+      const ownEvent = eventOf(ownTick);
+      const other = await summaryOf(adminB.token, TENANT_B);
+      const otherRecent = listOf(other.body, 'recent') ?? [];
+      const emittedInstant = field(event, 'at');
+      const leaked = otherRecent.some((item) => field(item, 'at') === emittedInstant);
+      checks.push(
+        check(
+          isOk(ownTick) && field(ownEvent, 'at') !== undefined && field(listOf(other.body, 'recent')?.[0], 'at') === field(ownEvent, 'at') && !leaked,
+          'el evento no aparece en ningún otro tenant (alumno02 solo tiene su propia emisión)',
+          leaked ? 'la actividad de alumno02 contiene el evento de alumno01' : `alumno02 primero: ${showValue(field(listOf(other.body, 'recent')?.[0], 'id'))}, sin el instante de alumno01`,
+        ),
+      );
+    }
   }
   return conclude(checks, { evidence: notOkEvidence(tick) });
 };
@@ -115,7 +136,7 @@ const nextInSequence: ApiRowHandler = async (row) => {
 defineApiRows({
   story: 'US-MISION-KPI-005',
   surface: 'api',
-  tenants: [TENANT_A],
+  tenants: [TENANT_A, TENANT_B],
   handlers: new Map<number, ApiRowHandler>([
     [1, onlyAdmin],
     [2, noSession],

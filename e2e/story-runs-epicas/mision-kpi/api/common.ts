@@ -9,9 +9,11 @@ import { outcome, type ManifestRow, type Outcome } from '../../core/framework';
  */
 export const conclude = (checks: readonly Check[], extra: Pick<Outcome, 'note' | 'evidence'> = {}): Outcome => {
   const failing = checks.filter((entry) => !entry.ok);
-  const note = extra.note ?? (failing.length === 0 ? undefined : `No se cumple: ${failing.map((entry) => entry.expected).join('; ')}. Observado: ${failing.map((entry) => entry.observed).join('; ')}.`);
+  // La nota del manejador (si la hay) va delante; el resumen de lo que no se cumple se añade siempre que haya algo que no se cumple
+  const summary = failing.length === 0 ? undefined : 'No se cumple: ' + failing.map((entry) => entry.expected).join('; ') + '. Observado: ' + failing.map((entry) => entry.observed).join('; ') + '.';
+  const note = [extra.note, summary].filter((text): text is string => text !== undefined).join(' ');
   return outcome(failing.length === 0, checks.map((entry) => entry.expected).join('; '), checks.map((entry) => entry.observed).join('; '), {
-    ...(note === undefined ? {} : { note }),
+    ...(note === '' ? {} : { note }),
     ...(extra.evidence === undefined ? {} : { evidence: extra.evidence }),
   });
 };

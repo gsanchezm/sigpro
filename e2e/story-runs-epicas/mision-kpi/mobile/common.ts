@@ -62,6 +62,7 @@ const MOBILE_IDS = {
   kpis: MISION_TESTIDS.MISSION_KPIS,
   kpi: 'mission-kpi-',
   value: 'mission-kpi-value-',
+  info: 'mission-kpi-info-',
   kpiIds: ['programs', 'milestones', 'nc', 'verification'] as const,
   figMilestones: MISION_TESTIDS.MISSION_CHART_MILESTONES,
   figNc: MISION_TESTIDS.MISSION_CHART_NC,
@@ -75,8 +76,9 @@ const MOBILE_IDS = {
 } as const;
 
 /**
- * Lee el panel móvil en UNA evaluación, con la misma forma que la web (`PanelView`): tarjetas (nombre accesible, cifra y detalle),
- * gráficas (figura, barras y texto vacío), bloque de carga y aviso de error. Un fallo de lectura devuelve `undefined`.
+ * Lee el panel móvil en UNA evaluación, con la misma forma que la web (`PanelView`): tarjetas (su nombre accesible, sus líneas visibles
+ * sin el icono «i», su cifra y si tiene su icono), orden de las tarjetas, gráficas (figura, barras con su texto, título, texto vacío y
+ * texto completo) y bloque de carga y aviso de error. Un fallo de lectura devuelve `undefined`.
  */
 export const readMobilePanel = (page: Page): Promise<PanelView | undefined> =>
   safe(
@@ -84,35 +86,58 @@ export const readMobilePanel = (page: Page): Promise<PanelView | undefined> =>
       page.evaluate((ids: typeof MOBILE_IDS) => {
         const byTestId = (id: string): HTMLElement | null => document.querySelector<HTMLElement>(`[data-testid="${id}"]`);
         const textOf = (element: Element | null | undefined): string | undefined => (element ? (element.textContent ?? '').replace(/\u00a0/g, ' ').trim() : undefined);
+        // El icono «i» de cada tarjeta es texto visible: no forma parte de la línea de la cifra ni del detalle
+        const linesOf = (element: HTMLElement | null | undefined): string[] =>
+          element
+            ? element.innerText
+                .split('\n')
+                .map((line) => line.replace(/\s+/g, ' ').trim())
+                .filter((line) => line !== '' && line !== 'i')
+            : [];
         const kpis = ids.kpiIds.map((id) => {
           const group = byTestId(`${ids.kpi}${id}`);
-          if (!group) return { id, present: false };
+          if (!group) return { id, present: false, lines: [] as string[], info: false };
           return {
             id,
             present: true,
             label: group.getAttribute('aria-label') ?? undefined,
             value: textOf(byTestId(`${ids.value}${id}`)),
-            sub: textOf(group.lastElementChild),
+            lines: linesOf(group),
+            info: byTestId(`${ids.info}${id}`) !== null,
           };
         });
-        const chart = (figureId: string, barPrefix: string, emptyId: string): { present: boolean; bars: number; empty?: string } => {
+        const order = Array.from(document.querySelectorAll<HTMLElement>('[data-testid]'))
+          .map((element) => element.getAttribute('data-testid') ?? '')
+          .filter((testId) => ids.kpiIds.some((id) => testId === `${ids.kpi}${id}`))
+          .map((testId) => testId.slice(ids.kpi.length));
+        const chart = (figureId: string, barPrefix: string, emptyId: string) => {
           const figure = byTestId(figureId);
-          if (!figure) return { present: false, bars: 0 };
-          return { present: true, bars: figure.querySelectorAll(`[data-testid^="${barPrefix}"]`).length, empty: textOf(figure.querySelector(`[data-testid="${emptyId}"]`)) };
+          if (!figure) return { present: false, bars: 0, barTexts: [] as string[] };
+          // Cada barra móvil es una imagen con su texto de valor en el nombre accesible («PRG-001: 1 de 9 hitos cumplidos»)
+          const bars = Array.from(figure.querySelectorAll<HTMLElement>(`[data-testid^="${barPrefix}"]`));
+          return {
+            present: true,
+            bars: bars.length,
+            barTexts: bars.map((bar) => bar.getAttribute('aria-label') ?? ''),
+            empty: textOf(figure.querySelector(`[data-testid="${emptyId}"]`)),
+            title: figure.getAttribute('aria-label') ?? undefined,
+            text: linesOf(figure).join(' | '),
+          };
         };
         const errorElement = byTestId(ids.error);
-        const lines = (errorElement?.innerText ?? '').split('\n').map((line) => line.trim()).filter((line) => line !== '');
+        const errorLines = linesOf(errorElement);
         const kpiSection = byTestId(ids.kpis);
         return {
           kpis,
+          order,
           kpisBusy: kpiSection?.getAttribute('aria-busy') ?? undefined,
           milestones: chart(ids.figMilestones, ids.barMilestones, ids.emptyMilestones),
           nc: chart(ids.figNc, ids.barNc, ids.emptyNc),
           loadingBlocks: byTestId(ids.loading) === null ? 0 : 1,
           skeletons: 0,
           errorVisible: errorElement !== null,
-          errorTitle: lines[0],
-          errorTrace: lines[1],
+          errorTitle: errorLines[0],
+          errorTrace: errorLines[1],
           retryVisible: byTestId(ids.retry) !== null,
         };
       }, MOBILE_IDS) as Promise<PanelView>,
@@ -142,9 +167,17 @@ export const readLoadingSnapshot = (page: Page): Promise<LoadingSnapshot | undef
     undefined,
   );
 
-/** Espera (con techo) a que las cuatro tarjetas tengan cifra pintada. */
+/**
+ * Espera (con techo) a que las cuatro tarjetas tengan la cifra del resumen: ni «…» (carga) ni ausencia (error). Sin esto, la espera
+ * terminaría en el primer sondeo, porque «…» también es un valor pintado.
+ */
 export const waitMobileKpisShown = async (page: Page, ceilingMs: number = CEILING_MS): Promise<boolean> =>
-  (await waitUntil(async () => (await readMobilePanel(page))?.kpis.every((kpi) => kpi.present && kpi.value !== undefined) ?? false, ceilingMs)).reached;
+  (
+    await waitUntil(async () => {
+      const view = await readMobilePanel(page);
+      return view !== undefined && !view.errorVisible && view.kpis.every((kpi) => kpi.present && kpi.value !== undefined && kpi.value !== '…');
+    }, ceilingMs)
+  ).reached;
 
 // --- Simulador: botón y motivo -----------------------------------------------------------------------------------------------
 
@@ -154,6 +187,8 @@ export interface SimulateReading {
   readonly reasonText: string | undefined;
   /** Motivo debajo del botón: ¿está más abajo que el propio botón? (`undefined` si no se puede medir). */
   readonly reasonBelow: boolean | undefined;
+  /** Atributo `aria-busy` del botón («true» mientras la emisión está en curso). */
+  readonly busy: string | undefined;
 }
 
 export const readSimulate = (page: Page): Promise<SimulateReading | undefined> =>
@@ -167,7 +202,8 @@ export const readSimulate = (page: Page): Promise<SimulateReading | undefined> =
       const buttonBox = await safe(() => button.boundingBox({ timeout: 1_000 }), null);
       const reasonBox = reasonCount === 1 ? await safe(() => reason.boundingBox({ timeout: 1_000 }), null) : null;
       const reasonBelow = buttonBox !== null && reasonBox !== null ? reasonBox.y >= buttonBox.y + buttonBox.height - 1 : undefined;
-      return { enabled: disabled === undefined ? undefined : !disabled, reasonText, reasonBelow };
+      const busy = await safe(() => button.getAttribute('aria-busy', { timeout: 1_000 }), undefined);
+      return { enabled: disabled === undefined ? undefined : !disabled, reasonText, reasonBelow, busy: busy ?? undefined };
     },
     undefined,
   );

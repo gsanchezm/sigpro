@@ -146,8 +146,8 @@ const emptyChart: BrowserRowHandler = onExpoWeb(async (row, { page }) => {
 const loadingCharts: BrowserRowHandler = onExpoWeb(async (row, { page }) => {
   await resetTenants([TENANT_A]);
   const ms = delayMsOf(cell(row, 'retraso'));
-  // El Ejemplo manda: «las gráficas muestran «Cargando…» hasta que llega la respuesta» (la regla «cada gráfica…» se anota abajo)
-  const expected = 'mientras llega el resumen, las gráficas muestran «Cargando…»; cuando llega la respuesta, el texto desaparece y se pintan las dos gráficas';
+  // El Ejemplo manda («las gráficas muestran «Cargando…» hasta que llega la respuesta»); la Regla («cada gráfica muestra…») se mide y se anota
+  const expected = 'mientras llega el resumen, las gráficas muestran «Cargando…» hasta que llega la respuesta';
   const opened = await signInTo(page, DEMO.gestor);
   if (opened) return prepFailed(expected, opened);
   const control = await interceptSummary(page, { kind: 'delay', ms });
@@ -158,33 +158,26 @@ const loadingCharts: BrowserRowHandler = onExpoWeb(async (row, { page }) => {
   // Una sola lectura atómica: el bloque de carga y el texto de cada figura en el mismo instante
   const loading = await readLoadingSnapshot(page);
   const sinceRequestMs = Date.now() - (control.lastReceivedAt() ?? Date.now());
-  const figureTexts: readonly (string | undefined)[] = [loading?.milestonesFigure, loading?.ncFigure];
-  if (figureTexts.some((text) => text !== undefined)) {
-    throw new Error(`las gráficas ya se pintaron ${sinceRequestMs} ms después de la petición, con un retraso de ${ms} ms: el plazo de la prueba no permite observar el texto de carga`);
+  // Solo es un fallo del arnés si la lectura llega cuando la respuesta ya debía haber llegado (no se puede observar la carga)
+  if (sinceRequestMs >= ms) {
+    throw new Error(`la lectura de la carga llegó ${sinceRequestMs} ms después de la petición, con un retraso de ${ms} ms: el plazo de la prueba no permite observar el texto de carga`);
   }
   const sharedText = normalized(loading?.shared);
-  const loadingCheck = check(sharedText === 'Cargando…', 'mientras llega el resumen, las gráficas muestran «Cargando…»', `mientras llega el resumen se muestra «${sharedText ?? '(sin bloque de carga)'}»`);
-  await waitUntil(async () => {
-    const panel = await readMobilePanel(page);
-    const snapshot = await readLoadingSnapshot(page);
-    return panel?.milestones.present === true && panel?.nc.present === true && snapshot?.shared === undefined;
-  }, ms + CEILING_MS);
-  const after = await readMobilePanel(page);
-  const afterSnapshot = await readLoadingSnapshot(page);
-  const settled = check(
-    after?.milestones.present === true && after?.nc.present === true && afterSnapshot?.shared === undefined,
-    'cuando llega la respuesta, el texto desaparece y se pintan las dos gráficas',
-    `tras la respuesta: gráfica de hitos ${after?.milestones.present === true ? 'pintada' : 'no pintada'}, gráfica de NC ${after?.nc.present === true ? 'pintada' : 'no pintada'}, texto de carga ${afterSnapshot?.shared === undefined ? 'retirado' : 'visible'}`,
+  const figureTexts = { hitos: loading?.milestonesFigure, nc: loading?.ncFigure };
+  const figuresWithText = [figureTexts.hitos, figureTexts.nc].filter((text) => text !== undefined && text.includes('Cargando…')).length;
+  const loadingCheck = check(
+    sharedText === 'Cargando…' || figuresWithText > 0,
+    'mientras llega el resumen, las gráficas muestran «Cargando…»',
+    `mientras llega el resumen se muestra «${sharedText ?? '(sin bloque de carga)'}»${figuresWithText > 0 ? ` y ${figuresWithText} de 2 figuras con su texto` : ''}`,
   );
-  // Regla «cada gráfica muestra el texto «Cargando…»»: se mide dentro de cada figura y se anota (el Ejemplo manda)
-  const figuresWithText = figureTexts.filter((text) => text !== undefined && text.includes('Cargando…')).length;
-  return conclude([loadingCheck, settled], {
-    ...(figuresWithText === 2
-      ? {}
-      : {
-          note: `La regla «cada gráfica muestra el texto «Cargando…»» no se cumple tal cual: medido, ${figuresWithText} de 2 figuras tienen su propio texto; mientras llega el resumen hay un único bloque compartido «${sharedText ?? '(sin bloque)'}» y ninguna gráfica en pantalla. Se sigue el Ejemplo, según el encargo.`,
-        }),
-    evidence: { retrasoMs: ms, lecturaTrasUltimaPeticionMs: sinceRequestMs, peticiones: control.log(), figurasConTextoDeCarga: figuresWithText },
+  // «Hasta que llega la respuesta»: el texto de carga desaparece cuando llega
+  await waitUntil(async () => (await readLoadingSnapshot(page))?.shared === undefined, ms + CEILING_MS);
+  const after = await readLoadingSnapshot(page);
+  const goneCheck = check(after?.shared === undefined, 'cuando llega la respuesta, el texto de carga desaparece', after?.shared === undefined ? 'el texto de carga desaparece' : `sigue visible «${normalized(after.shared)}»`);
+  const figureSummary = `hitos: ${figureTexts.hitos === undefined ? 'sin figura' : figureTexts.hitos.includes('Cargando…') ? 'con «Cargando…»' : 'sin «Cargando…»'}; NC: ${figureTexts.nc === undefined ? 'sin figura' : figureTexts.nc.includes('Cargando…') ? 'con «Cargando…»' : 'sin «Cargando…»'}`;
+  return conclude([loadingCheck, goneCheck], {
+    note: `La Regla dice «cada gráfica muestra el texto «Cargando…»»; el Ejemplo, «las gráficas muestran «Cargando…»». Medido figura a figura: ${figuresWithText} de 2 figuras con su texto (${figureSummary}); la app pinta un único estado de carga («${sharedText ?? 'sin bloque'}») para las dos. Se sigue el Ejemplo, según el encargo.`,
+    evidence: { retrasoMs: ms, lecturaTrasUltimaPeticionMs: sinceRequestMs, peticiones: control.log(), figurasConTextoDeCarga: figuresWithText, figurasHitos: figureTexts.hitos ?? null, figurasNc: figureTexts.nc ?? null },
   });
 });
 

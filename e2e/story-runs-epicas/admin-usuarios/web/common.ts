@@ -254,13 +254,53 @@ export const textCheck = (observed: string | undefined, expected: string, what: 
   check(observed === expected, `${what} «${expected}»`, `${what} «${observed ?? '(sin texto)'}»`);
 
 /** Un resultado de fila de navegador a partir de sus comprobaciones. */
-export const verdict = (checks: readonly Check[], note?: string): Outcome =>
+export const verdict = (checks: readonly Check[], note?: string, evidence?: Readonly<Record<string, unknown>>): Outcome =>
   outcome(
     checks.every((entry) => entry.ok),
     checks.map((entry) => entry.expected).join('; '),
     checks.map((entry) => entry.observed).join('; '),
-    note === undefined ? {} : { note },
+    { ...(note === undefined ? {} : { note }), ...(evidence === undefined ? {} : { evidence }) },
   );
+
+/** Una opción de un selector: su valor técnico y el texto que ve la persona. */
+export interface OptionView {
+  readonly value: string;
+  readonly label: string;
+}
+
+/** Resultado de elegir una opción: el problema (si lo hay) y lo que el control ofrece de verdad, para la evidencia. */
+export interface ChoiceView {
+  readonly problem?: string;
+  readonly offered: string;
+}
+
+/** Opciones reales de un `<select>` (valor y texto), o `undefined` si no se pueden leer. */
+export const optionsOfSelect = (select: Locator): Promise<readonly OptionView[] | undefined> =>
+  safe(
+    () => select.evaluate((node) => Array.from((node as HTMLSelectElement).options, (option) => ({ value: option.value, label: (option.textContent ?? '').trim() }))),
+    undefined,
+  );
+
+const describeOptions = (options: readonly OptionView[] | undefined): string => {
+  if (options === undefined) return '(no se pudieron leer las opciones)';
+  if (options.length === 0) return '(sin opciones)';
+  return options.map((option) => `«${option.label}» (valor ${option.value})`).join(', ');
+};
+
+/**
+ * Elige una opción de un selector de rol. Antes de actuar comprueba que el control EXISTE y que OFRECE la opción con ese texto y ese
+ * valor; si no, devuelve el problema y las opciones que sí ofrece. Nunca lanza.
+ */
+export const chooseRoleOption = async (select: Locator, label: string, value: string): Promise<ChoiceView> => {
+  const exists = await safe(() => select.count(), 0);
+  const options = await optionsOfSelect(select);
+  const offered = describeOptions(options);
+  if (exists === 0) return { problem: 'el selector de rol de la fila no existe', offered };
+  if (options === undefined) return { problem: 'no se pudieron leer las opciones del selector', offered };
+  if (!options.some((option) => option.label === label && option.value === value)) return { problem: `el selector no ofrece «${label}» con el valor ${value}`, offered };
+  const failure = await runSteps([[`elegir «${label}»`, () => select.selectOption(value, ACTION)]]);
+  return failure === undefined ? { offered } : { problem: failure, offered };
+};
 
 /** Espera (con techo) a que una condición de la pantalla se cumpla y devuelve si se llegó. */
 export const reached = async (condition: () => Promise<boolean>, ceilingMs: number = CEILING_MS): Promise<boolean> => (await waitUntil(condition, ceilingMs)).reached;

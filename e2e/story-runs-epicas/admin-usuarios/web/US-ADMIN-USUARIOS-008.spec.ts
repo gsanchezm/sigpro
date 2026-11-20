@@ -8,6 +8,7 @@ import {
   ADMIN_PATH,
   activeSwitchOf,
   armToasts,
+  chooseRoleOption,
   corsFor,
   disabledWithTitle,
   errorBody,
@@ -54,10 +55,10 @@ const TOAST_FAILED = 'No se pudo guardar el cambio';
 const OWN_DENIED = 'No puedes modificar tu propia cuenta';
 
 /** Qué se elige en la fila: el selector de rol (con su valor técnico) o el interruptor de «Activo». */
-type Action = { readonly kind: 'role'; readonly value: string } | { readonly kind: 'switch' };
+type Action = { readonly kind: 'role'; readonly label: string; readonly value: string } | { readonly kind: 'switch' };
 
 const ACTION_CELLS: ReadonlyMap<string, Action> = new Map<string, Action>([
-  ['elige el rol «Auditor»', { kind: 'role', value: 'auditor' }],
+  ['elige el rol «Auditor»', { kind: 'role', label: 'Auditor', value: 'auditor' }],
   ['pulsa el interruptor de la columna «Activo»', { kind: 'switch' }],
 ]);
 
@@ -126,15 +127,17 @@ const adminToken = async (): Promise<string | undefined> => sessionOfResult(awai
 const roleSaved: BrowserRowHandler = async (row, { page }) => {
   const email = cell(row, 'correo');
   const id = strict('correo', SEED_ID, email);
-  const roleLabel = strict('rol_nuevo', ROLE_OF_LABEL, cell(row, 'rol_nuevo'));
+  // La celda es la ETIQUETA visible («Auditor»); el valor técnico que ofrece el <select> sale del mapa (auditor)
+  const roleLabel = cell(row, 'rol_nuevo');
+  const roleValue = strict('rol_nuevo', ROLE_OF_LABEL, roleLabel);
   const aviso = quoted(cell(row, 'aviso'));
   const expected = `aviso «${TOAST_UPDATED}» con «${aviso}» y, tras recargar, la fila de ${email} muestra «${roleLabel}»`;
   await resetAlumno();
   const preparation = await openUsersTable(page, expected);
   if (preparation !== undefined) return preparationFailedWeb(expected, preparation);
   if (!(await armToasts(page))) throw new Error('registro de avisos no instalado en la página: fallo del arnés');
-  const changed = await runSteps([[`elegir «${roleLabel}» en la fila de ${email}`, () => roleSelectOf(page, id).selectOption(ROLE_OF_LABEL.get(roleLabel) ?? '', ACTION)]]);
-  if (changed !== undefined) return preparationFailedWeb(expected, changed);
+  const choice = await chooseRoleOption(roleSelectOf(page, id), roleLabel, roleValue);
+  if (choice.problem !== undefined) return verdict([check(false, `se puede elegir «${roleLabel}» en el selector de la fila de ${email}`, `${choice.problem}; opciones del selector: ${choice.offered}`)], undefined, { opciones: choice.offered });
   const toast = await toastShown(page, 'ok', TOAST_UPDATED, aviso);
   const reloaded = await runSteps([['recargar la página', () => page.reload({ timeout: CEILING_MS })]]);
   const ready = await waitTableReady(page);
@@ -168,7 +171,10 @@ const switchSaved: BrowserRowHandler = async (row, { page }) => {
   if (initial !== (before === 'true')) return preparationFailedWeb(expected, `el interruptor de «Activo» de ${email} está ${String(initial)} y no ${before}`);
   if (!(await armToasts(page))) throw new Error('registro de avisos no instalado en la página: fallo del arnés');
   const clicked = await runSteps([[`pulsar el interruptor de «Activo» de ${email}`, () => activeSwitchOf(page, id).click(ACTION)]]);
-  if (clicked !== undefined) return preparationFailedWeb(expected, clicked);
+  if (clicked !== undefined) {
+    const exists = (await safe(() => activeSwitchOf(page, id).count(), 0)) > 0;
+    return verdict([check(false, `se puede pulsar el interruptor de «Activo» de ${email}`, `${clicked}; el interruptor ${exists ? 'existe' : 'no existe'} en la fila`)]);
+  }
   const toast = await toastShown(page, 'ok', TOAST_UPDATED, aviso);
   const badge = await waitUntil(async () => (await textOf(statusBadgeOf(page, id))) === status);
   const badgeNow = await textOf(statusBadgeOf(page, id));
@@ -196,8 +202,8 @@ const optimisticRole: BrowserRowHandler = async (row, { page }) => {
   const preparation = await openUsersTable(page, expected);
   if (preparation !== undefined) return preparationFailedWeb(expected, preparation);
   if (!(await armToasts(page))) throw new Error('registro de avisos no instalado en la página: fallo del arnés');
-  const chosen = await runSteps([['elegir «Auditor» en la fila de consultor@sigpro.test', () => roleSelectOf(page, 'u3').selectOption('auditor', ACTION)]]);
-  if (chosen !== undefined) return preparationFailedWeb(expected, chosen);
+  const choice = await chooseRoleOption(roleSelectOf(page, 'u3'), 'Auditor', 'auditor');
+  if (choice.problem !== undefined) return verdict([check(false, 'se puede elegir «Auditor» en el selector de la fila de consultor@sigpro.test', `${choice.problem}; opciones del selector: ${choice.offered}`)], undefined, { opciones: choice.offered });
   const optimistic = await waitUntil(async () => (await roleValueOf(roleSelectOf(page, 'u3'))) === 'auditor');
   const shownNow = await roleValueOf(roleSelectOf(page, 'u3'));
   const earlyToasts = ((await toastLog(page)) ?? []).filter((entry) => entry.tone === 'ok').length;
@@ -232,10 +238,9 @@ const rejectedChange: BrowserRowHandler = async (row, { page }) => {
   const preparation = await openUsersTable(page, expected);
   if (preparation !== undefined) return preparationFailedWeb(expected, preparation);
   if (!(await armToasts(page))) throw new Error('registro de avisos no instalado en la página: fallo del arnés');
-  const acted = action.kind === 'role'
-    ? await runSteps([[`elegir «Auditor» en la fila de ${email}`, () => roleSelectOf(page, id).selectOption(action.value, ACTION)]])
-    : await runSteps([[`pulsar el interruptor de «Activo» de ${email}`, () => activeSwitchOf(page, id).click(ACTION)]]);
-  if (acted !== undefined) return preparationFailedWeb(expected, acted);
+  const choice = action.kind === 'role' ? await chooseRoleOption(roleSelectOf(page, id), action.label, action.value) : undefined;
+  const acted = action.kind === 'role' ? choice?.problem : await runSteps([[`pulsar el interruptor de «Activo» de ${email}`, () => activeSwitchOf(page, id).click(ACTION)]]);
+  if (acted !== undefined) return verdict([check(false, `se puede ejecutar «${cell(row, 'accion')}» en la fila de ${email}`, `${acted}${choice === undefined ? '' : `; opciones del selector: ${choice.offered}`}`)], undefined, choice === undefined ? undefined : { opciones: choice.offered });
   const failed = await toastShown(page, 'danger', TOAST_FAILED, motive.kind === 'text' ? motive.text : undefined);
   const reverted = await waitUntil(async () => (before.kind === 'role' ? (await rowRole(page, id)) === before.label : (await rowSwitchOn(page, id)) === before.on));
   const revertedNow = before.kind === 'role' ? await rowRole(page, id) : await rowSwitchOn(page, id);
@@ -271,10 +276,9 @@ const deletedAccount: BrowserRowHandler = async (row, { page }) => {
   // El reinicio se hace por la API, sin recargar la página: la fila sigue en pantalla
   await resetTenants([TENANT_A]);
   if (!(await armToasts(page))) throw new Error('registro de avisos no instalado en la página: fallo del arnés');
-  const acted = action.kind === 'role'
-    ? await runSteps([[`elegir «Auditor» en la fila de la cuenta recién solicitada`, () => roleSelectOf(page, id).selectOption('auditor', ACTION)]])
-    : await runSteps([[`pulsar el interruptor de «Activo» de la cuenta recién solicitada`, () => activeSwitchOf(page, id).click(ACTION)]]);
-  if (acted !== undefined) return preparationFailedWeb(expected, acted);
+  const choice = action.kind === 'role' ? await chooseRoleOption(roleSelectOf(page, id), 'Auditor', 'auditor') : undefined;
+  const acted = action.kind === 'role' ? choice?.problem : await runSteps([[`pulsar el interruptor de «Activo» de la cuenta recién solicitada`, () => activeSwitchOf(page, id).click(ACTION)]]);
+  if (acted !== undefined) return verdict([check(false, `se puede ejecutar «${cell(row, 'accion')}» en la cuenta recién solicitada`, `${acted}${choice === undefined ? '' : `; opciones del selector: ${choice.offered}`}`)], undefined, choice === undefined ? undefined : { opciones: choice.offered });
   const failed = await toastShown(page, 'danger', TOAST_FAILED, 'El usuario ya no existe');
   const reverted = await waitUntil(async () => (before.kind === 'role' ? (await rowRole(page, id)) === before.label : (await rowSwitchOn(page, id)) === before.on));
   const revertedNow = before.kind === 'role' ? await rowRole(page, id) : await rowSwitchOn(page, id);

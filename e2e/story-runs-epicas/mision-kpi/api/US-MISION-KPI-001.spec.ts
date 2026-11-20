@@ -1,17 +1,24 @@
 import { defineApiRows, type ApiRowHandler } from '../../core/framework';
-import { conclude } from './common';
 import { cell, check, parseResponse, preparationFailed, responseCheck, strict, type Check } from '../../support/checks';
-import { INVENTED_TOKEN, TENANT_A, adminSession, field, kpisOf, listOf, notOkEvidence, resetTenants, seedPresent, summaryOf, failedPreparation } from './common';
+import { DEMO, type Credentials } from '../../../story-runs/support/prepare';
+import { INVENTED_TOKEN, TENANT_A, TENANT_B, adminSession, call, conclude, failedPreparation, field, isOk, kpisOf, listOf, notOkEvidence, resetTenants, seedPresent, sessionAs, summaryOf } from './common';
 
 // US-MISION-KPI-001 — Forma de la respuesta del resumen de misión y sesión obligatoria (API). Preparación de cada fila: reinicio de
-// alumno01 con el token de su administrador y comprobación de los 24 programas del seed. Lo que la historia espera sale de su texto,
-// nunca de lo que devuelve la API.
+// alumno01 y de alumno02 con sus tokens de administrador, y comprobación de los 24 programas del seed. Además de lo que dice cada
+// Esquema, las filas de lectura comprueban que cualquier rol autenticado recibe la misma forma (Regla de la historia) y que la
+// cabecera `x-tenant` no cambia nada: alumno02 tiene un programa archivado y el token de alumno01 debe seguir viendo sus 12 activos.
 
 /** Las nueve cifras de `kpis`, en el orden de la historia. */
 const KPI_KEYS: readonly string[] = ['activePrograms', 'programsTotal', 'programsProgress', 'milestonesDone', 'milestonesTotal', 'ncOpen', 'ncTotal', 'verificationPass', 'casesWithRuns'];
 /** Los cinco bloques de primer nivel del resumen, sin ningún otro. */
 const TOP_LEVEL: readonly string[] = ['kpis', 'milestonesByProgram', 'ncBySeverity', 'recent', 'simulatorMs'];
 const SEVERITY_KEYS: readonly string[] = ['minor', 'major', 'critical'];
+/** Roles autenticados de la Regla («program_manager, consultant, auditor o admin»): el administrador es alumno01. */
+const OTHER_ROLES: readonly { readonly name: string; readonly credentials: Credentials }[] = [
+  { name: 'gestor (program_manager)', credentials: DEMO.gestor },
+  { name: 'consultor (consultant)', credentials: DEMO.consultor },
+  { name: 'auditor (auditor)', credentials: DEMO.auditor },
+];
 
 /** ¿Trae el objeto exactamente estas claves (ni una más, ni una menos)? */
 const sameKeys = (value: unknown, keys: readonly string[]): boolean => {
@@ -93,7 +100,7 @@ const BLOCKS: ReadonlyMap<string, BlockRule> = new Map<string, BlockRule>([
 // --- Esquema 1: el resumen trae los bloques del panel y ninguno más ----------------------------------------------------------
 
 const blocksOfSummary: ApiRowHandler = async (row) => {
-  await resetTenants([TENANT_A]);
+  await resetTenants([TENANT_A, TENANT_B]);
   const rule = strict('bloque', BLOCKS, cell(row, 'bloque'));
   if (cell(row, 'contenido') !== rule.contenido) throw new Error(`la celda contenido de ${cell(row, 'bloque')} no coincide con la historia`);
   const expected = `la respuesta es 200 y tiene el bloque ${cell(row, 'bloque')} con ${rule.contenido}; el resumen no trae ningún otro bloque de primer nivel`;
@@ -101,9 +108,40 @@ const blocksOfSummary: ApiRowHandler = async (row) => {
   if (admin.token === undefined) return preparationFailed(expected, 'alumno01@sigpro.lab inicia sesión', admin.last);
   const seeded = await seedPresent(admin.token);
   if (seeded !== undefined) return failedPreparation(expected, seeded);
+  // alumno02 con un programa archivado (11 activos): cualquier efecto de la cabecera x-tenant se vería en sus cifras
+  const adminB = await adminSession(TENANT_B);
+  if (adminB.token === undefined) return preparationFailed(expected, 'alumno02@sigpro.lab inicia sesión', adminB.last);
+  const archived = await call('POST', '/programs/PRG-001/archive', { tenant: TENANT_B, token: adminB.token });
+  if (!isOk(archived)) return failedPreparation(expected, { step: 'alumno02@sigpro.lab archiva PRG-001 con POST /api/programs/PRG-001/archive', result: archived });
+
   const result = await summaryOf(admin.token);
-  const topLevel = check(sameKeys(result.body, TOP_LEVEL), 'el resumen no trae ningún otro bloque de primer nivel (solo kpis, milestonesByProgram, ncBySeverity, recent y simulatorMs)', sameKeys(result.body, TOP_LEVEL) ? 'solo esos cinco bloques' : `bloques: ${keysText(result.body)}`);
-  return conclude([responseCheck(result, { status: 200 }), rule.check(result.body), topLevel], { evidence: notOkEvidence(result) });
+  const checks: Check[] = [
+    responseCheck(result, { status: 200 }),
+    rule.check(result.body),
+    check(sameKeys(result.body, TOP_LEVEL), 'el resumen no trae ningún otro bloque de primer nivel (solo kpis, milestonesByProgram, ncBySeverity, recent y simulatorMs)', sameKeys(result.body, TOP_LEVEL) ? 'solo esos cinco bloques' : `bloques: ${keysText(result.body)}`),
+  ];
+  // Regla: cualquier rol autenticado recibe la misma forma y las mismas cifras del tenant del token
+  for (const role of OTHER_ROLES) {
+    const session = await sessionAs(TENANT_A, role.credentials);
+    if (session.token === undefined) {
+      checks.push(check(false, `${role.name} recibe el resumen`, `${role.name} no inicia sesión (estado ${session.last.status})`));
+      continue;
+    }
+    const answer = await summaryOf(session.token);
+    const sameShape = sameKeys(answer.body, TOP_LEVEL) && JSON.stringify(kpisOf(answer.body)) === JSON.stringify(kpisOf(result.body));
+    checks.push(check(answer.status === 200 && sameShape, `${role.name} recibe la misma forma y las mismas cifras (respuesta 200)`, `${role.name}: respuesta ${answer.status}${sameShape ? ', misma forma y cifras' : ', forma o cifras distintas'}`));
+  }
+  // Regla: la cabecera x-tenant no cambia nada en este endpoint
+  const otherHeader = await summaryOf(admin.token, TENANT_B);
+  const activeWithOtherHeader = field(kpisOf(otherHeader.body), 'activePrograms');
+  checks.push(
+    check(
+      otherHeader.status === 200 && JSON.stringify(kpisOf(otherHeader.body)) === JSON.stringify(kpisOf(result.body)) && activeWithOtherHeader === 12,
+      'con la cabecera x-tenant alumno02 y el token de alumno01 el resumen sigue siendo el de alumno01 (12 programas activos)',
+      `con x-tenant alumno02: respuesta ${otherHeader.status}, activePrograms ${String(activeWithOtherHeader)}`,
+    ),
+  );
+  return conclude(checks, { evidence: notOkEvidence(result) });
 };
 
 // --- Esquema 2: sin una sesión válida no hay resumen ------------------------------------------------------------------------
@@ -128,9 +166,10 @@ const requiresSession: ApiRowHandler = async (row) => {
 defineApiRows({
   story: 'US-MISION-KPI-001',
   surface: 'api',
-  tenants: [TENANT_A],
+  tenants: [TENANT_A, TENANT_B],
   handlers: new Map<number, ApiRowHandler>([
     [1, blocksOfSummary],
     [2, requiresSession],
   ]),
 });
+

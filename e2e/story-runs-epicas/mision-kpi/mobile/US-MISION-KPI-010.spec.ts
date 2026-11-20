@@ -86,9 +86,9 @@ const delayedCards: BrowserRowHandler = onExpoWeb(async (row, { page }) => {
   const loadingChecks: Check[] = ['programs', 'milestones', 'nc', 'verification'].map((id) => {
     const kpi = loading?.kpis.find((item) => item.id === id);
     return check(
-      kpi?.present === true && kpi.value === LOADING_VALUE && (kpi.sub ?? '') === '',
+      kpi?.present === true && kpi.value === LOADING_VALUE && kpi.lines.length === 2,
       `la tarjeta ${id} muestra «${LOADING_VALUE}» y no muestra detalle`,
-      kpi?.present === true ? `la tarjeta ${id} muestra «${kpi.value ?? '(sin cifra)'}» y detalle «${kpi.sub ?? '(sin leer)'}»` : `la tarjeta ${id} no aparece`,
+      kpi?.present === true ? `la tarjeta ${id} muestra «${kpi.value ?? '(sin cifra)'}» y lleva ${kpi.lines.length} líneas visibles (${kpi.lines.join(' / ')})` : `la tarjeta ${id} no aparece`,
     );
   });
   await waitMobileKpisShown(page, ms + CEILING_MS);
