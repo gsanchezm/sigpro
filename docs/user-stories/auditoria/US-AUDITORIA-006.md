@@ -5,7 +5,7 @@ epica: EP-AUDITORIA
 titulo: "[Web] Ver el registro de auditoría en /audit: filas, contador, carga al final y avisos por rol"
 etiquetas: [web]
 relacionadas: [US-AUDITORIA-001, US-AUDITORIA-003, US-AUDITORIA-007, US-AUDITORIA-008]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["/audit"]
 permisos: [audit.view]
 ---

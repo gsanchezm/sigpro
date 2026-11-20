@@ -5,7 +5,7 @@ epica: EP-AUDITORIA
 titulo: "[Web] Filtrar, buscar y limpiar el registro de auditoría en /audit"
 etiquetas: [web]
 relacionadas: [US-AUDITORIA-002, US-AUDITORIA-006, US-AUDITORIA-009]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["/audit"]
 ---
 

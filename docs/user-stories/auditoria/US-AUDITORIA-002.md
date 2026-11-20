@@ -5,7 +5,7 @@ epica: EP-AUDITORIA
 titulo: "[API] Filtrar el registro por entidad, por rango de días y por texto"
 etiquetas: [api]
 relacionadas: [US-AUDITORIA-001, US-AUDITORIA-003, US-AUDITORIA-007, US-AUDITORIA-009]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["GET /api/audit"]
 ---
 

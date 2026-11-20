@@ -5,7 +5,7 @@ epica: EP-AUDITORIA
 titulo: "[Móvil] Ver el registro de auditoría en /audit: lista, «Cargar más» y avisos por rol"
 etiquetas: [movil]
 relacionadas: [US-AUDITORIA-001, US-AUDITORIA-003, US-AUDITORIA-006, US-AUDITORIA-009]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["/audit"]
 permisos: [audit.view]
 ---

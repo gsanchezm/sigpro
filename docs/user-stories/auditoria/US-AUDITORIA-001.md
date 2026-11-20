@@ -5,7 +5,7 @@ epica: EP-AUDITORIA
 titulo: "[API] Listar el registro de auditoría del más reciente al más antiguo, en páginas por cursor"
 etiquetas: [api]
 relacionadas: [US-AUDITORIA-002, US-AUDITORIA-003, US-AUDITORIA-006, US-AUDITORIA-008]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["GET /api/audit"]
 ---
 

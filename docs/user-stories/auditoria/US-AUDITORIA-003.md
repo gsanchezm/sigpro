@@ -5,7 +5,7 @@ epica: EP-AUDITORIA
 titulo: "[API] Leer el registro solo con el permiso de auditoría y solo del tenant del token"
 etiquetas: [api]
 relacionadas: [US-AUDITORIA-001, US-AUDITORIA-002, US-AUDITORIA-006, US-AUDITORIA-008]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["GET /api/audit"]
 permisos: [audit.view]
 ---

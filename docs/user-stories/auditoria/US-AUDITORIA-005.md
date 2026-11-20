@@ -69,4 +69,4 @@ Característica: Eventos de no conformidades, hitos, usuarios, modo caos y regis
 - La pantalla del registro: la cubre EP-AUDITORIA en sus pantallas.
 
 ## Decisiones pendientes
-- Un `PATCH` del modo caos que no cambia nada deja hoy su evento, igual que un cambio. No está decidido si debe ser así; ninguna fila de esta historia lo ejercita sin cambio.
+- Un `PATCH` del modo caos que no cambia nada deja hoy su evento, igual que un cambio. No está decidido si debe ser así; la fila que envía latencyMs 0, errorRate 0 y flakyLabels false lo ejercita sin cambio, porque la preparación deja el caos apagado, y su resultado depende de esa decisión.

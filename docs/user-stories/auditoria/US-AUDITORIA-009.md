@@ -5,7 +5,7 @@ epica: EP-AUDITORIA
 titulo: "[Móvil] Filtrar y buscar en /audit con las fechas escritas a mano"
 etiquetas: [movil]
 relacionadas: [US-AUDITORIA-007, US-AUDITORIA-008]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["/audit"]
 ---
 

@@ -5,7 +5,7 @@ epica: EP-AUDITORIA
 titulo: "[API] Qué evento deja cada operación de programas, requisitos, ejecuciones y documentos"
 etiquetas: [api]
 relacionadas: [US-AUDITORIA-001, US-AUDITORIA-005, US-PROG-ALTA-001, US-PROG-GESTION-003, US-REQ-EDICION-001, US-REQ-FLUJO-005, US-REQ-TRAZA-002, US-VER-EJECUCION-002]
-verificacion: codigo
+verificacion: ejecutada
 ---
 
 ## Historia
