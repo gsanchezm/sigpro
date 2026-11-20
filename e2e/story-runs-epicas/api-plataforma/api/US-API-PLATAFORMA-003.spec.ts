@@ -2,7 +2,7 @@ import { field } from '../../../story-runs/support/api';
 import { TENANT_A } from '../../../story-runs/support/prepare';
 import { cell, check, strict } from '../../support/checks';
 import { defineApiRows, notExecutable, type ApiRowHandler } from '../../core/framework';
-import { ENV_NOTE, prepareAlumno, raw, show, statusCheck, judge } from './common';
+import { ENV_NOTE, judge, prepareAlumno, raw, show, statusCheck } from './common';
 
 // US-API-PLATAFORMA-003 — Listar los tenants y los usuarios de prueba. Preparación de cada fila: alumno01 reiniciado y caos apagado.
 // El número de tenants (26) depende del seed por defecto que lanza env.sh (SEED_STUDENT_TENANTS=25): se mide y se compara con la historia.
@@ -23,6 +23,10 @@ const COUNTS: ReadonlyMap<string, number> = new Map<string, number>([
   ['6 cuentas de demostración', 6],
 ]);
 
+/** Regla de la historia: cada elemento de la lista trae solo `id` y `name`. */
+const onlyIdAndName = (item: unknown): boolean =>
+  item !== null && typeof item === 'object' && JSON.stringify(Object.keys(item).sort()) === JSON.stringify(['id', 'name']);
+
 // --- Esquema 1: la lista de tenants va ordenada por identificador ------------------------------------------------------------
 
 /** Posición de la historia (1-based) → índice en la lista de la API. */
@@ -40,14 +44,14 @@ const tenantAtPosition: ApiRowHandler = async (row) => {
   const res = await raw('GET', '/api/config/tenants');
   const list: readonly unknown[] = Array.isArray(res.body) ? res.body : [];
   const item = list[index];
-  const keys = item !== null && typeof item === 'object' ? Object.keys(item).sort() : [];
+  const extra = list.filter((entry) => !onlyIdAndName(entry)).length;
   return judge([
     statusCheck(res, 200),
     check(Array.isArray(res.body), 'una lista (no un objeto)', Array.isArray(res.body) ? 'es una lista' : 'no es una lista'),
     check(list.length === 26, '26 elementos', `${list.length} elementos`),
     check(field(item, 'id') === id && field(item, 'name') === name, `el elemento ${cell(row, 'posicion')} tiene id ${id} y name ${name}`, `el elemento ${cell(row, 'posicion')} tiene id ${show(field(item, 'id'))} y name ${show(field(item, 'name'))}`),
-    // Regla de la historia: cada elemento trae solo id y name
-    check(JSON.stringify(keys) === JSON.stringify(['id', 'name']), 'cada elemento trae solo id y name', `campos ${JSON.stringify(keys)}`),
+    // Regla de la historia: cada elemento trae solo id y name; se comprueba en TODOS los elementos, no solo en el de la fila
+    check(extra === 0, 'cada elemento trae solo id y name (los 26)', `${extra} elementos con otros campos`),
   ]);
 };
 
@@ -61,15 +65,12 @@ const listIgnoresTenant: ApiRowHandler = async (row) => {
   const withHeader = await raw('GET', route, { headers: { 'x-tenant': tenant } });
   const baseline = await raw('GET', route);
   const list: readonly unknown[] = Array.isArray(withHeader.body) ? withHeader.body : [];
+  const same = JSON.stringify(withHeader.body) === JSON.stringify(baseline.body);
   return judge([
     statusCheck(withHeader, 200),
     check(Array.isArray(withHeader.body), 'una lista (no un objeto)', Array.isArray(withHeader.body) ? 'es una lista' : 'no es una lista'),
     check(list.length === count, cell(row, 'cantidad'), `${list.length} en la lista`),
-    check(
-      JSON.stringify(withHeader.body) === JSON.stringify(baseline.body),
-      'la misma respuesta que sin la cabecera x-tenant',
-      `${JSON.stringify(withHeader.body) === JSON.stringify(baseline.body) ? 'idéntica' : 'distinta'} a la respuesta sin cabecera (${withHeader.text.length} y ${baseline.text.length} caracteres)`,
-    ),
+    check(same, 'la misma respuesta que sin la cabecera x-tenant', `${same ? 'idéntica' : 'distinta'} a la respuesta sin cabecera (${withHeader.text.length} y ${baseline.text.length} caracteres)`),
   ]);
 };
 
@@ -94,6 +95,13 @@ const ROLES: ReadonlyMap<string, string> = new Map<string, string>([
 /** Las seis cuentas de la tabla de la historia, en su orden: el mismo orden debe tener la lista de la API. */
 const SIX_EMAILS: readonly string[] = ['admin@sigpro.test', 'gestor@sigpro.test', 'consultor@sigpro.test', 'auditor@sigpro.test', 'bloqueado@sigpro.test', 'pendiente@sigpro.test'];
 
+/**
+ * Regla sin comprobación posible aquí: el `status` de la lista es el de fábrica del seed y no cambia al bloquear o aprobar una cuenta
+ * (historia, regla 3). Comprobarlo exige cambiar una cuenta en el tenant; la lista sale de DEMO_USERS, estático (apps/api/src/seed/data.ts:71).
+ */
+const STATUS_NOTE =
+  'No comprobado: que el status siga siendo el de fábrica tras bloquear o aprobar una cuenta exige cambiar una cuenta del tenant; la lista sale de DEMO_USERS, estático (apps/api/src/seed/data.ts:71).';
+
 const accountById: ApiRowHandler = async (row) => {
   const id = cell(row, 'id');
   const mfa = strict('mfa', BOOLEAN_TEXT, cell(row, 'mfa'));
@@ -104,17 +112,20 @@ const accountById: ApiRowHandler = async (row) => {
   const list: readonly unknown[] = Array.isArray(res.body) ? res.body : [];
   const item = list.find((entry) => field(entry, 'id') === id);
   const position = list.findIndex((entry) => field(entry, 'id') === id);
-  return judge([
-    statusCheck(res, 200),
-    check(field(item, 'name') === cell(row, 'nombre'), `name ${cell(row, 'nombre')}`, `name ${show(field(item, 'name'))}`),
-    check(field(item, 'email') === cell(row, 'correo'), `email ${cell(row, 'correo')}`, `email ${show(field(item, 'email'))}`),
-    check(field(item, 'password') === cell(row, 'contraseña'), `password ${cell(row, 'contraseña')}`, `password ${show(field(item, 'password'))}`),
-    check(field(item, 'role') === rol, `role ${rol}`, `role ${show(field(item, 'role'))}`),
-    check(field(item, 'mfa') === mfa, `mfa ${String(mfa)}`, `mfa ${show(field(item, 'mfa'))}`),
-    check(field(item, 'status') === estado, `status ${estado}`, `status ${show(field(item, 'status'))}`),
-    // Regla de la historia: la lista sigue el orden de la tabla (u1 a u6)
-    check(position === row.rowIndex - 1, `la cuenta ${id} ocupa el puesto ${row.rowIndex}`, position === -1 ? `la cuenta ${id} no aparece` : `la cuenta ${id} ocupa el puesto ${position + 1}`),
-  ]);
+  return judge(
+    [
+      statusCheck(res, 200),
+      check(field(item, 'name') === cell(row, 'nombre'), `name ${cell(row, 'nombre')}`, `name ${show(field(item, 'name'))}`),
+      check(field(item, 'email') === cell(row, 'correo'), `email ${cell(row, 'correo')}`, `email ${show(field(item, 'email'))}`),
+      check(field(item, 'password') === cell(row, 'contraseña'), `password ${cell(row, 'contraseña')}`, `password ${show(field(item, 'password'))}`),
+      check(field(item, 'role') === rol, `role ${rol}`, `role ${show(field(item, 'role'))}`),
+      check(field(item, 'mfa') === mfa, `mfa ${String(mfa)}`, `mfa ${show(field(item, 'mfa'))}`),
+      check(field(item, 'status') === estado, `status ${estado}`, `status ${show(field(item, 'status'))}`),
+      // Regla de la historia: la lista sigue el orden de la tabla (u1 a u6)
+      check(position === row.rowIndex - 1, `la cuenta ${id} ocupa el puesto ${row.rowIndex}`, position === -1 ? `la cuenta ${id} no aparece` : `la cuenta ${id} ocupa el puesto ${position + 1}`),
+    ],
+    { note: STATUS_NOTE },
+  );
 };
 
 // --- Esquema 4: con la API en producción la lista de usuarios de prueba está vacía -------------------------------------------

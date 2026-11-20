@@ -2,7 +2,7 @@ import { NO_CHAOS, setChaos, type ChaosFlags } from '../../../story-runs/support
 import { TENANT_A } from '../../../story-runs/support/prepare';
 import { cell, check, preparationFailed, strict } from '../../support/checks';
 import { defineApiRows, notExecutable, type ApiRowHandler } from '../../core/framework';
-import { ENV_NOTE, bodyOf, describeChaos, prepareAlumno, raw, sameChaos, show, statusCheck, withRestore, judge } from './common';
+import { ENV_NOTE, bodyOf, describeChaos, judge, prepareAlumno, raw, sameChaos, show, statusCheck, withRestore } from './common';
 
 // US-API-PLATAFORMA-002 — Leer la configuración pública del tenant con la cabecera x-tenant. Preparación de cada fila: alumno01
 // reiniciado y caos apagado. Las filas con caos fijan sus valores con PATCH /api/admin/chaos (alumno01@sigpro.lab) y, al terminar,
@@ -10,33 +10,30 @@ import { ENV_NOTE, bodyOf, describeChaos, prepareAlumno, raw, sameChaos, show, s
 
 // --- Esquema 1: la configuración de un tenant sin caos -----------------------------------------------------------------------
 
+const SPACED = '(alumno01 con un espacio delante y otro detrás)';
+/** La fila con espacios no se puede observar por HTTP: el recorte ocurre antes de que la petición salga o llegue a la API. */
+const SPACED_NOTE =
+  'No observable por HTTP: fetch normaliza el valor de la cabecera y quita los espacios de los extremos antes de enviarla (WHATWG Fetch), y el analizador HTTP del servidor los quita también (RFC 7230 §3.2.4). La API recibe lo mismo que con «alumno01», así que el .trim() de config.controller.ts:25 no se distingue.';
+
 const TENANT_HEADERS: ReadonlyMap<string, string | undefined> = new Map<string, string | undefined>([
   ['(sin cabecera)', undefined],
   ['(cabecera vacía)', ''],
   ['alumno01', 'alumno01'],
   ['alumno02', 'alumno02'],
-  ['(alumno01 con un espacio delante y otro detrás)', ' alumno01 '],
+  [SPACED, ' alumno01 '],
   ['noexiste', 'noexiste'],
 ]);
-
-const SPACED = '(alumno01 con un espacio delante y otro detrás)';
 
 const tenantOfHeader: ApiRowHandler = async (row) => {
   const cabecera = cell(row, 'cabecera');
   const header = strict('cabecera', TENANT_HEADERS, cabecera);
   const expectedTenant = cell(row, 'tenant_devuelto');
+  if (cabecera === SPACED) return notExecutable(`200 con tenant ${expectedTenant}`, SPACED_NOTE);
   await prepareAlumno();
   const res = await raw('GET', '/api/config', { headers: header === undefined ? {} : { 'x-tenant': header } });
   const body = bodyOf(res);
-  // Con espacios en los extremos, el cliente HTTP o el servidor pueden quitarlos antes que la API: la fila no distingue el recorte
-  // Con espacios en los extremos, el cliente HTTP o el servidor pueden quitarlos antes que la API: la fila no prueba el recorte de la API.
-  // Con cabecera vacía, la API responde lo mismo que sin cabecera (demo): la fila no distingue las dos.
-  const note =
-    cabecera === SPACED
-      ? 'La cabecera llega con espacios en los extremos; el cliente HTTP o el servidor pueden quitarlos antes que la API, así que esta fila no prueba el recorte de la API (la evidencia guarda la cabecera enviada).'
-      : cabecera === '(cabecera vacía)'
-        ? 'Con cabecera vacía la API responde lo mismo que sin cabecera (demo): esta fila no distingue entre ambas.'
-        : undefined;
+  // Con cabecera vacía, la API responde demo igual que sin cabecera: la fila no distingue entre ambas (sí distingue el valor por defecto de un tenant vacío)
+  const note = cabecera === '(cabecera vacía)' ? 'Con cabecera vacía la API responde demo, igual que sin cabecera: esta fila no distingue la cabecera vacía de la ausente; sí comprueba el valor por defecto frente a un tenant vacío.' : undefined;
   return judge(
     [
       statusCheck(res, 200),
@@ -47,7 +44,7 @@ const tenantOfHeader: ApiRowHandler = async (row) => {
     ],
     {
       ...(note === undefined ? {} : { note }),
-      evidence: { cabeceraEnviada: header === undefined ? '(sin cabecera)' : header },
+      evidence: { celdaCabecera: cabecera, cabeceraEnviada: header === undefined ? '(sin cabecera)' : header },
     },
   );
 };
@@ -69,6 +66,12 @@ const LABELS: ReadonlyMap<string, boolean> = new Map<string, boolean>([
   ['true', true],
 ]);
 
+/** El caos exime /api/config (chaos.ts:5) y errorRate solo afecta a escrituras (chaos.ts:20): «no retrasa ni falla» se mide como «no más lento». */
+const TIMING_NOTE =
+  'El caos exime /api/config y /api/health (chaos/chaos.ts:5) y errorRate solo afecta a escrituras (chaos/chaos.ts:20): «no retrasa ni falla» se mide como «no más lento». Los milisegundos son un dato aparte, sin umbral (README, Tolerancias).';
+/** Con todo a cero, la preparación ya deja el caos así: la fila no prueba que el PATCH surta efecto. */
+const ZERO_NOTE = 'La preparación ya deja el caos a cero: esta fila no prueba que el PATCH surta efecto (sí comprueba que responde 200 y que la configuración sale a cero).';
+
 const chaosShown: ApiRowHandler = async (row) => {
   const flags: ChaosFlags = {
     latencyMs: strict('latencia', LATENCIES, cell(row, 'latencia')),
@@ -76,13 +79,20 @@ const chaosShown: ApiRowHandler = async (row) => {
     flakyLabels: strict('etiquetas', LABELS, cell(row, 'etiquetas')),
   };
   const expected = `200 con chaos latencyMs ${cell(row, 'latencia')}, errorRate ${cell(row, 'tasa')} y flakyLabels ${cell(row, 'etiquetas')}`;
+  const isZero = flags.latencyMs === 0 && flags.errorRate === 0 && flags.flakyLabels === false;
   return withRestore(async () => {
     await prepareAlumno();
+    // Medida de referencia: el mismo GET con el caos apagado
+    const calm = await raw('GET', '/api/config', { headers: { 'x-tenant': TENANT_A } });
     const set = await setChaos(TENANT_A, flags);
     if (set.status !== 200) return preparationFailed(expected, 'PATCH /api/admin/chaos con alumno01@sigpro.lab', set);
-    const res = await raw('GET', '/api/config', { headers: { 'x-tenant': TENANT_A } });
-    const chaos = bodyOf(res).chaos;
-    return judge([statusCheck(res, 200), check(sameChaos(chaos, flags), expected, `200 con chaos ${describeChaos(chaos)}`)]);
+    const under = await raw('GET', '/api/config', { headers: { 'x-tenant': TENANT_A } });
+    const chaos = bodyOf(under).chaos;
+    const note = isZero ? `${ZERO_NOTE} ${TIMING_NOTE}` : TIMING_NOTE;
+    return judge([statusCheck(under, 200), check(sameChaos(chaos, flags), expected, `200 con chaos ${describeChaos(chaos)}`)], {
+      note,
+      evidence: { msCaosApagado: calm.ms, msConCaos: under.ms, diferenciaMs: under.ms - calm.ms },
+    });
   });
 };
 
@@ -131,12 +141,28 @@ const envTestUsers: ApiRowHandler = async (row) => {
 
 // --- Esquema 5: un tenant que no existe tiene el caos apagado ----------------------------------------------------------------
 
+/** Caos fijado en alumno01 mientras se lee el tenant inexistente: si el caos se filtrara entre tenants, `noexiste` lo mostraría. */
+const LEAK_PROBE: ChaosFlags = { latencyMs: 5000, errorRate: 1, flakyLabels: true };
+
 const unknownTenantChaos: ApiRowHandler = async (row) => {
   const tenant = strict('cabecera', new Map<string, string>([['noexiste', 'noexiste']]), cell(row, 'cabecera'));
-  await prepareAlumno();
-  const res = await raw('GET', '/api/config', { headers: { 'x-tenant': tenant } });
-  const chaos = bodyOf(res).chaos;
-  return judge([statusCheck(res, 200), check(sameChaos(chaos, NO_CHAOS), 'chaos latencyMs 0, errorRate 0 y flakyLabels false', `chaos ${describeChaos(chaos)}`)]);
+  return withRestore(async () => {
+    await prepareAlumno();
+    const set = await setChaos(TENANT_A, LEAK_PROBE);
+    if (set.status !== 200) return preparationFailed('chaos de noexiste en cero', 'PATCH /api/admin/chaos con alumno01@sigpro.lab', set);
+    // Control: alumno01 tiene el caos fijado ahora mismo (si no, la lectura de noexiste no probaría nada)
+    const control = await raw('GET', '/api/config', { headers: { 'x-tenant': TENANT_A } });
+    const res = await raw('GET', '/api/config', { headers: { 'x-tenant': tenant } });
+    const chaos = bodyOf(res).chaos;
+    return judge(
+      [
+        statusCheck(res, 200),
+        check(sameChaos(chaos, NO_CHAOS), 'chaos latencyMs 0, errorRate 0 y flakyLabels false', `chaos ${describeChaos(chaos)}`),
+        check(sameChaos(bodyOf(control).chaos, LEAK_PROBE), 'control: alumno01 tiene el caos fijado (5000, 1, true) mientras se lee noexiste', `control alumno01 ${describeChaos(bodyOf(control).chaos)}`),
+      ],
+      { note: 'Se fija el caos máximo en alumno01 durante la lectura de noexiste y se restaura al terminar (withRestore).' },
+    );
+  });
 };
 
 defineApiRows({

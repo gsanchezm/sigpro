@@ -22,15 +22,17 @@ const healthWithHeader: ApiRowHandler = async (row) => {
   const body = bodyOf(first);
   const uptime = body.uptime;
   const uptimeAfter = bodyOf(second).uptime;
-  return judge(
-    [
-      statusCheck(first, 200),
-      check(body.status === 'ok', 'status «ok»', `status ${show(body.status)}`),
-      check(typeof uptime === 'number' && Number.isInteger(uptime) && uptime >= 0, 'uptime entero no negativo', `uptime ${show(uptime)}`),
-    ],
-    // La regla «uptime no baja entre dos peticiones seguidas» no la da por hecha ningún Esquema: se anota como dato, no como veredicto
-    { evidence: { uptimeEntrePeticiones: [uptime, uptimeAfter], cabeceraEnviada: cell(row, 'cabecera') } },
-  );
+  return judge([
+    statusCheck(first, 200),
+    check(body.status === 'ok', 'status «ok»', `status ${show(body.status)}`),
+    check(typeof uptime === 'number' && Number.isInteger(uptime) && uptime >= 0, 'uptime entero no negativo', `uptime ${show(uptime)}`),
+    // Regla de la historia: el uptime no baja entre dos peticiones seguidas (no la da por hecha ningún Esquema, pero es una regla de la ruta)
+    check(
+      typeof uptime === 'number' && typeof uptimeAfter === 'number' && uptimeAfter >= uptime,
+      'el uptime no baja entre dos peticiones seguidas',
+      `uptime ${show(uptime)} y después ${show(uptimeAfter)}`,
+    ),
+  ]);
 };
 
 // --- Esquema 2: sin el prefijo /api la ruta no existe ----------------------------------------------------------------------------

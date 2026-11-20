@@ -18,6 +18,7 @@ import {
   runStepsLogged,
   sessionCheck,
   stillOnLogin,
+  timingData,
   valueText,
   waitHidden,
   waitVisible,
@@ -155,8 +156,12 @@ const tapClearsError: BrowserRowHandler = async (row, { page }) => {
   if (!shown.reached) return preparationFailedWeb(`ve el aviso «${ALERT_LOGIN}» tras pulsar «Entrar»`, 'no aparece el aviso de error tras el envío con la contraseña incorrecta');
   const tapped = await tapOption(page, nombre);
   if (tapped) return actionFailed(expected, tapped);
-  await waitHidden(alertWith(page, ALERT_LOGIN));
-  return judge([presence(await readingOf(alertWith(page, ALERT_LOGIN)), false, `el aviso «${ALERT_LOGIN}»`)], { note: MOBILE_NOTE });
+  // El veredicto es el estado final (no ve el aviso); el tiempo hasta que desaparece es un dato aparte (README, Tolerancias)
+  const gone = await waitHidden(alertWith(page, ALERT_LOGIN));
+  return judge([presence(await readingOf(alertWith(page, ALERT_LOGIN)), false, `el aviso «${ALERT_LOGIN}»`)], {
+    note: MOBILE_NOTE,
+    evidence: timingData(gone.elapsedMs),
+  });
 };
 
 // --- Esquema 4: el panel depende del entorno de la API --------------------------------------------------------------------------
@@ -171,9 +176,14 @@ const panelByEnvironment: BrowserRowHandler = async (row, { page }) => {
   const group = panelGroup(page);
   await waitVisible(group);
   const count = await safe(() => group.getByRole('radio').count(), -1);
+  // La historia dice «ve «Usuarios de prueba»» y la ayuda: se mide el TEXTO visible del encabezado (login.tsx:179), no solo el aria-label del grupo
+  const heading = page.getByText(/Usuarios de prueba/);
+  const help = page.getByText('clic para rellenar', { exact: false });
   return judge(
     [
-      presence(await readingOf(group), true, '«Usuarios de prueba»'),
+      presence(await readingOf(group), true, 'el grupo «Usuarios de prueba»'),
+      presence(await readingOf(heading), true, 'el texto visible «Usuarios de prueba»'),
+      presence(await readingOf(help), true, 'la ayuda «clic para rellenar» junto al encabezado'),
       check(count === 6, 'una opción por cada una de las seis cuentas', `${count} opciones`),
     ],
     { note: MOBILE_NOTE },
@@ -187,6 +197,9 @@ const noPanelInMfa: BrowserRowHandler = async (row, { page }) => {
   const expected = `en la pantalla de ${paso} no ve «Usuarios de prueba»`;
   const opened = await openMobileLogin(page);
   if (opened) return preparationFailedWeb(STEP, opened);
+  // Control positivo: en el paso de credenciales el panel SÍ aparece; sin él, su ausencia en el paso MFA no probaría nada
+  const control = await waitVisible(panelGroup(page));
+  const controlNow = readingText(await readingOf(panelGroup(page)));
   const typed = await runStepsLogged([
     [`escribir ${DEMO.admin.email} en «Correo electrónico»`, () => emailField(page).fill(DEMO.admin.email, ACTION)],
     [`escribir la contraseña de ${DEMO.admin.email}`, () => passwordField(page).fill(DEMO.admin.password, ACTION)],
@@ -199,7 +212,13 @@ const noPanelInMfa: BrowserRowHandler = async (row, { page }) => {
   const absent = await holdsFor(async () => (await readingOf(panelGroup(page))) === 'oculto' && (await readingOf(page.getByText(/Usuarios de prueba/))) === 'oculto', HOLD_MS);
   const group = readingText(await readingOf(panelGroup(page)));
   const text = readingText(await readingOf(page.getByText(/Usuarios de prueba/)));
-  return judge([check(absent.held, expected, `grupo de opciones ${group}; texto «Usuarios de prueba» ${text}`)], { note: MOBILE_NOTE });
+  return judge(
+    [
+      check(control.reached, 'control: en /login el panel «Usuarios de prueba» sí aparece antes de entrar', `grupo de opciones ${controlNow} antes de entrar`),
+      check(absent.held, expected, `grupo de opciones ${group}; texto «Usuarios de prueba» ${text}`),
+    ],
+    { note: MOBILE_NOTE },
+  );
 };
 
 defineBrowserRows({

@@ -20,7 +20,7 @@ export const judge = (checks: readonly Check[], extra: Pick<Outcome, 'note' | 'e
 // Piezas comunes de las filas de API de EP-API-PLATAFORMA. Las rutas de las celdas ya llevan `/api` («GET /api/health»), así que se
 // piden contra el origen y NO con `call()` (que añade `/api` y no envía cabeceras arbitrarias, como `Origin` o `Access-Control-*`).
 // Criterio: lo que la historia dice y la API no cumple es una DISCREPANCIA (la comprobación falla); una configuración de la pila que
-// la fila exige y la pila aislada no tiene (APP_ENV, DOCS_BASIC_AUTH, orígenes) es `notExecutable` con el motivo, nunca un fallo del arnés.
+// la fila exige y la pila aislada no tiene (APP_ENV, DOCS_BASIC_AUTH) es `notExecutable` con el motivo, nunca un fallo del arnés.
 
 /** Origen de la API («http://localhost:3000»): sin el prefijo `/api`, que las celdas ya llevan. */
 export const ORIGIN = new URL(API_URL).origin;
@@ -45,12 +45,16 @@ const parseJson = (text: string): unknown => {
   }
 };
 
-/** Petición HTTP contra el origen. La ruta lleva su `/api` (o no, cuando la historia pide una ruta sin el prefijo). */
+/**
+ * Petición HTTP contra el origen. La ruta lleva su `/api` (o no, cuando la historia pide una ruta sin el prefijo). No sigue
+ * redirecciones: una respuesta 3xx se observa como tal (estado y `location`), no se sustituye por la del destino.
+ */
 export const raw = async (method: string, route: string, options: RawOptions = {}): Promise<Raw> => {
   const { headers = {}, body } = options;
   const started = performance.now();
   const response = await fetch(new URL(route, ORIGIN), {
     method,
+    redirect: 'manual',
     headers: { ...(body === undefined ? {} : { 'content-type': 'application/json' }), ...headers },
     ...(body === undefined ? {} : { body: JSON.stringify(body) }),
   });
@@ -77,14 +81,20 @@ export const traceOk = (body: Readonly<Record<string, unknown>>): boolean => typ
 /** Estado HTTP frente al esperado. */
 export const statusCheck = (result: ApiResult, status: number): Check => check(result.status === status, `respuesta ${status}`, `respuesta ${result.status}`);
 
-/** Formato común de un error: `statusCode`, `error` y `traceId` (la regla de la historia 004). */
+/**
+ * Formato común de un error (historia 004): `statusCode`, `error`, `message` (texto presente) y `traceId`. El campo `errors` solo
+ * aparece en los 422, así que en cualquier otro estado se comprueba que no esté.
+ */
 export const errorChecks = (result: ApiResult, status: number, error: string): Check[] => {
   const body = bodyOf(result);
-  return [
+  const checks: Check[] = [
     check(result.status === status && body.statusCode === status, `respuesta ${status} con statusCode ${status}`, `respuesta ${result.status}, statusCode ${show(body.statusCode)}`),
     check(body.error === error, `error «${error}»`, `error ${show(body.error)}`),
+    check(typeof body.message === 'string' && body.message !== '', 'message presente (texto)', `message ${show(body.message)}`),
     check(traceOk(body), 'traceId de cuatro hexadecimales, un guion y otros cuatro', `traceId ${show(body.traceId)}`),
   ];
+  if (status !== 422) checks.push(check(!('errors' in body), 'sin el campo errors (solo los 422 lo traen)', `errors ${show(body.errors)}`));
+  return checks;
 };
 
 /** Un mapa de errores por campo es exactamente el esperado: mismas claves y mismos valores, sin campos de más. */

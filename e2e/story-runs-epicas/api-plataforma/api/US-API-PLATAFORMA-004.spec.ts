@@ -2,10 +2,11 @@ import { field } from '../../../story-runs/support/api';
 import { TENANT_A } from '../../../story-runs/support/prepare';
 import { cell, check, strict } from '../../support/checks';
 import { defineApiRows, type ApiRowHandler } from '../../core/framework';
-import { bodyOf, errorChecks, prepareAlumno, raw, sameMap, show, judge } from './common';
+import { bodyOf, errorChecks, judge, prepareAlumno, raw, sameMap, show } from './common';
 
 // US-API-PLATAFORMA-004 — Responder los errores con código, mensaje, traza y errores por campo. Preparación de cada fila: alumno01
-// reiniciado y caos apagado. Cada fila comprueba el formato común (statusCode, error, message, traceId) además de lo que su Esquema dice.
+// reiniciado y caos apagado. Cada fila comprueba el formato común (statusCode, error, message, traceId y la ausencia de `errors` salvo
+// en 422) además de lo que su Esquema dice.
 
 // --- Esquema 1: una ruta que no existe responde 404 con el formato común ----------------------------------------------------
 
@@ -49,7 +50,6 @@ const unauthorized: ApiRowHandler = async (row) => {
     ...errorChecks(res, 401, 'Unauthorized'),
     check(body.code === code, `code ${code}`, `code ${show(body.code)}`),
     check(body.message === code, `message ${code}`, `message ${show(body.message)}`),
-    check(!('errors' in body), 'sin el campo errors', `errors ${show(body.errors)}`),
   ]);
 };
 
@@ -86,6 +86,9 @@ const TRACED_ROUTES: ReadonlyMap<string, { readonly status: number; readonly err
   ['/api/auth/me', { status: 401, error: 'Unauthorized' }],
 ]);
 
+/** Regla de la historia sin Esquema: el 500 con `internal_error` no se provoca aquí; no tiene comprobación en esta épica. */
+const NO_500_NOTE = 'Regla sin ejemplo: el 500 con message internal_error y sin code no se provoca en la pila; no se comprueba.';
+
 const ownTrace: ApiRowHandler = async (row) => {
   const expected = strict('ruta', TRACED_ROUTES, cell(row, 'ruta'));
   const route = cell(row, 'ruta');
@@ -94,12 +97,15 @@ const ownTrace: ApiRowHandler = async (row) => {
   const second = await raw('GET', route);
   const firstTrace = field(first.body, 'traceId');
   const secondTrace = field(second.body, 'traceId');
-  return judge([
-    // errorChecks ya comprueba la forma de cada traceId (cuatro hexadecimales, guion, cuatro)
-    ...errorChecks(first, expected.status, expected.error).map((entry) => ({ ...entry, expected: `primera respuesta: ${entry.expected}` })),
-    ...errorChecks(second, expected.status, expected.error).map((entry) => ({ ...entry, expected: `segunda respuesta: ${entry.expected}` })),
-    check(firstTrace !== secondTrace, 'los dos traceId son distintos', `traceId ${show(firstTrace)} y ${show(secondTrace)}`),
-  ]);
+  return judge(
+    [
+      // errorChecks ya comprueba la forma de cada traceId (cuatro hexadecimales, guion, cuatro) y el resto del formato común
+      ...errorChecks(first, expected.status, expected.error).map((entry) => ({ ...entry, expected: `primera respuesta: ${entry.expected}` })),
+      ...errorChecks(second, expected.status, expected.error).map((entry) => ({ ...entry, expected: `segunda respuesta: ${entry.expected}` })),
+      check(firstTrace !== secondTrace, 'los dos traceId son distintos', `traceId ${show(firstTrace)} y ${show(secondTrace)}`),
+    ],
+    { note: NO_500_NOTE },
+  );
 };
 
 defineApiRows({

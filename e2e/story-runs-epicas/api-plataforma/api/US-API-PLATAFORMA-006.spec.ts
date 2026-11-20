@@ -41,7 +41,10 @@ const allowedRead: ApiRowHandler = async (row) => {
     statusCheck(res, 200),
     check(allowOrigin === origin, `Access-Control-Allow-Origin ${origin}`, `Access-Control-Allow-Origin ${show(allowOrigin)}`),
     check(expose === 'Content-Disposition', 'Access-Control-Expose-Headers Content-Disposition', `Access-Control-Expose-Headers ${show(expose)}`),
-  ]);
+  ], {
+    // Regla 15 (orígenes por defecto de CORS_ORIGIN): env.sh fija justo esos dos valores; la variable en sí no se lee, solo sus efectos
+    note: 'Regla de los orígenes por defecto: la pila lanza CORS_ORIGIN con los mismos dos valores (docs/story-runs/entorno/env.sh); la variable no se lee, se comprueban sus efectos.',
+  });
 };
 
 // --- Esquema 2: un origen que no está en la lista no recibe permiso, pero la petición se atiende ---------------------------

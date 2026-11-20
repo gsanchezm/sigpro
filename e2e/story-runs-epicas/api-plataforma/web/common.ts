@@ -69,6 +69,41 @@ export const textContentOf = (target: Locator): Promise<string | undefined> =>
     undefined,
   );
 
+/** Caja de texto medida: el texto completo del elemento y si el CSS lo recorta (overflow + puntos suspensivos). */
+export interface TextBox {
+  readonly text: string;
+  readonly scrollWidth: number;
+  readonly clientWidth: number;
+  readonly clipped: boolean;
+}
+
+/**
+ * Texto completo (solo sin espacios de los extremos) y anchura del elemento. La historia dice «ve el correo y la contraseña en esa
+ * tarjeta»: si la clase `truncate` recorta el texto, la persona no lo ve entero aunque esté en el DOM.
+ */
+export const textBoxOf = async (target: Locator): Promise<TextBox | undefined> => {
+  const measured = await safe(
+    () =>
+      target.first().evaluate(
+        (element) => ({ text: (element.textContent ?? '').trim(), scrollWidth: element.scrollWidth, clientWidth: element.clientWidth }),
+        undefined,
+        { timeout: 2000 },
+      ),
+    undefined,
+  );
+  return measured === undefined ? undefined : { ...measured, clipped: measured.scrollWidth > measured.clientWidth };
+};
+
+/** Referencia de la prueba para una reacción local de la pantalla (README, Tolerancias: 1 s). Es un dato aparte, no un veredicto. */
+export const LOCAL_REFERENCE_MS = 1_000;
+
+/** Tiempo observado hasta que algo desaparece, como dato aparte, con la referencia de la prueba. */
+export const timingData = (elapsedMs: number): { readonly tiempoObservadoMs: number; readonly referenciaLocalMs: number; readonly superaReferencia: boolean } => ({
+  tiempoObservadoMs: elapsedMs,
+  referenciaLocalMs: LOCAL_REFERENCE_MS,
+  superaReferencia: elapsedMs > LOCAL_REFERENCE_MS,
+});
+
 // --- Diagnóstico de acciones ---------------------------------------------------------------------------------------------------
 
 const linesOfError = (error: unknown): string[] =>
