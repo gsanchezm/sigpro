@@ -1,4 +1,4 @@
-import type { Dialog, Locator, Page, Request as PlaywrightRequest } from '@playwright/test';
+import type { Dialog, Locator, Page, Request as PlaywrightRequest, Response as PlaywrightResponse } from '@playwright/test';
 import { programasEs } from '../../../../packages/shared/src/i18n/programas';
 import { PROGRAMAS_DYNAMIC_TESTIDS, PROGRAMAS_TESTIDS } from '../../../../packages/shared/src/testids';
 import { NO_CHAOS, adminToken, call, field, setChaos } from '../../../story-runs/support/api';
@@ -7,11 +7,11 @@ import { ACTION, CEILING_MS, pathOf, runSteps, safe, textOf, waitUntil, type Ste
 import { check, conclude as concludeChecks, sleep, type Check } from '../../support/checks';
 import { notExecutable, outcome, type BrowserRowHandler, type Outcome } from '../../core/framework';
 
-// Piezas comunes de las filas de AVISOS de EP-TOASTS. Criterio: el registro de avisos se instala ANTES de cargar la app y se
-// «arma» justo antes de la acción, así que cada aviso que aparece queda anotado con su marca de tiempo aunque ya no se vea (dura 3 s).
-// Las comprobaciones de «se ve» miran el DOM en el instante indicado por la fila; las de «qué dice» miran el registro.
-// Toda acción pasa por `clickAt`: si falla, distingue «la pantalla correcta no ofrece el elemento» (discrepa) de «error de
-// localizador o de clic del arnés» (no ejecutable, con el error como evidencia).
+// Piezas comunes de las filas de AVISOS de EP-TOASTS (web; la app móvil reutiliza el registro y las comprobaciones).
+// Criterio: el registro de avisos se instala ANTES de cargar la app; cada aparición y cada retirada se anota con la marca de tiempo
+// de la página. «Se ve» se comprueba en el momento (DOM, opacidad y el punto central) y «qué dice» en el registro. Toda acción pasa
+// por `clickAt`: si falla, distingue «la pantalla correcta no ofrece el elemento» (discrepa) de «error de localizador o de clic del
+// arnés» (no ejecutable, con el error como evidencia).
 
 export type ToastTone = 'ok' | 'danger' | 'info' | 'warn';
 export interface Viewport {
@@ -24,9 +24,17 @@ export const NARROW: Viewport = { width: 390, height: 844 };
 export const LOGIN_URL = `/login?tenant=${TENANT_A}`;
 export const TOAST_KEY = '__sigproToasts';
 export const COOKIE_NOTE = 'La prueba fija la preferencia de cookies (sigpro.cookies = accepted) antes de abrir la app, como el piloto; el aviso de cookies no se ejerce aquí.';
-/** Salvedad de las historias transversales: sus filas se miran en la web; la app móvil se mira en la historia móvil de la épica. */
-export const TRANSVERSAL_NOTE = 'Historia transversal: su fila se mira en la web (1440 px); la app móvil no tiene fila propia en esta historia (sus avisos se miran en US-TOASTS-006).';
-/** Métodos que escriben en la API: solo estos cuentan como «escritura» (no los GET, OPTIONS ni HEAD). */
+/** Historia transversal: solo la web la ejecuta; el apilado y el plazo de los avisos móviles no se miran con esta historia. */
+export const TRANSVERSAL_NOTE =
+  'Historia transversal: su fila se mira en la web (1440 px). Con esta historia no se ejecuta la app móvil: su apilado no se mira allí; la historia móvil (US-TOASTS-006) mira posición, tono, rol, retirada a 3 s y que el aviso quede por encima del contenido.';
+/** Plazo de retirada: 3 s desde la aparición, con una tolerancia de la prueba (la historia lo fija como regla de producto). */
+export const LIFETIME_MS = 3_000;
+export const LIFETIME_TOLERANCE_MS = 500;
+export const LIFETIME_NOTE = `Plazo de retirada: 3 s desde que aparece, con ${LIFETIME_TOLERANCE_MS} ms de tolerancia de la prueba; los instantes son los de la marca de la página.`;
+/** Tolerancia de medida de las distancias de la historia (16 px web, 12 px móvil), declarada porque la historia no la fija. */
+export const PLACEMENT_NOTE = 'Tolerancias de medida: ±1 px en las distancias que fija la historia (16 px en la web; 12 px en la app móvil) y 1 px de solape al decir «debajo».';
+/** Reacción local de la pantalla (la entrada del aviso dura 180 ms y lo desplaza 6 px): se espera antes de medir o de leer su estado. */
+const SETTLE_MS = 500;
 const WRITE_METHODS: ReadonlySet<string> = new Set<string>(['POST', 'PUT', 'PATCH', 'DELETE']);
 
 /** Texto de la historia para el tono (celda) → tono del registro (`data-testid="toast-<tono>"`). */
@@ -36,12 +44,12 @@ export const TONE_OF_CELL: ReadonlyMap<string, ToastTone> = new Map<string, Toas
   ['informativo', 'info'],
   ['advertencia', 'warn'],
 ]);
-/** Tono del registro → nombre que usan las historias. */
-const TONE_NAME: ReadonlyMap<string, string> = new Map<string, string>([
-  ['ok', 'éxito'],
-  ['danger', 'error'],
-  ['info', 'informativo'],
-  ['warn', 'advertencia'],
+/** Tono → frase que usan las historias («aviso de éxito», «aviso informativo»…). */
+const PHRASE_OF_TONE: ReadonlyMap<string, string> = new Map<string, string>([
+  ['ok', 'aviso de éxito'],
+  ['danger', 'aviso de error'],
+  ['info', 'aviso informativo'],
+  ['warn', 'aviso de advertencia'],
 ]);
 /** Token del design system de cada tono (la franja del aviso se pinta con él). */
 const TOKEN_OF_TONE: ReadonlyMap<string, string> = new Map<string, string>([
@@ -60,12 +68,12 @@ const ROLE_NAME: ReadonlyMap<string, string> = new Map<string, string>([
   ['alert', 'alerta'],
 ]);
 
-export const nameOfTone = (tone: string): string => TONE_NAME.get(tone) ?? tone;
+export const phraseOfTone = (tone: string): string => PHRASE_OF_TONE.get(tone) ?? `aviso (${tone})`;
 export const nameOfRole = (role: string): string => (role === '' ? '(sin rol)' : (ROLE_NAME.get(role) ?? role));
 
 // --- Registro de avisos (se ejecuta en la página, antes de cargar la app) ----------------------------------------------------
 
-/** Un aviso registrado: tono, título (primera línea), cuerpo (segunda), rol, franja y tamaños de letra, y su marca de tiempo. */
+/** Un aviso registrado: tono, título (primera línea), cuerpo (segunda), rol, franja, tamaños de letra y marcas de tiempo de la página. */
 export interface ToastEntry {
   readonly tone: string;
   readonly title: string;
@@ -76,15 +84,22 @@ export interface ToastEntry {
   readonly titleSize: number;
   /** -1 si el aviso no tiene cuerpo. */
   readonly bodySize: number;
+  /** Instante en que el aviso entra en el DOM. */
   readonly at: number;
+  /** Instante en que sale del DOM (undefined mientras sigue montado). */
+  readonly removedAt?: number;
 }
 
-/** Se ejecuta en el navegador: anota cada aparición de un aviso (`data-testid="toast-<tono>"`), también los que se solapan. Sin variables de fuera. */
+/**
+ * Se ejecuta en el navegador: anota cada aparición (`data-testid="toast-<tono>"`) y cada retirada de un aviso, también los que se solapan.
+ * Sin variables de fuera.
+ */
 export const recordToasts = (key: string): void => {
   const registry = window as unknown as Record<string, unknown>;
   if (Array.isArray(registry[key])) return;
   const log: Record<string, unknown>[] = [];
   registry[key] = log;
+  const live = new Map<Element, Record<string, unknown>>();
   const toneOf = (element: Element): string | undefined => /^toast-(ok|danger|info|warn)$/.exec(element.getAttribute('data-testid') ?? '')?.[1];
   const sizeOf = (element: HTMLElement, text: string): number => {
     const node = Array.from(element.querySelectorAll('div')).find((div) => div.innerText.trim() === text);
@@ -98,7 +113,7 @@ export const recordToasts = (key: string): void => {
       .filter((line) => line !== '' && line !== '×');
     const title = lines[0] ?? '';
     const body = lines[1] ?? '';
-    log.push({
+    const entry: Record<string, unknown> = {
       tone,
       title,
       body,
@@ -107,7 +122,9 @@ export const recordToasts = (key: string): void => {
       titleSize: sizeOf(box, title),
       bodySize: body === '' ? -1 : sizeOf(box, body),
       at: Date.now(),
-    });
+    };
+    log.push(entry);
+    live.set(element, entry);
   };
   const scan = (node: Node): void => {
     if (!(node instanceof Element)) return;
@@ -118,7 +135,21 @@ export const recordToasts = (key: string): void => {
       if (tone !== undefined) record(element, tone);
     });
   };
-  new MutationObserver((mutations) => mutations.forEach((mutation) => mutation.addedNodes.forEach(scan))).observe(document, { childList: true, subtree: true });
+  const forget = (node: Node): void => {
+    if (!(node instanceof Element)) return;
+    const gone = [node, ...Array.from(node.querySelectorAll('[data-testid^="toast-"]'))];
+    gone.forEach((element) => {
+      const entry = live.get(element);
+      if (entry !== undefined) entry.removedAt = Date.now();
+      live.delete(element);
+    });
+  };
+  new MutationObserver((mutations) =>
+    mutations.forEach((mutation) => {
+      mutation.addedNodes.forEach(scan);
+      mutation.removedNodes.forEach(forget);
+    }),
+  ).observe(document, { childList: true, subtree: true });
 };
 
 /** Se ejecuta en el navegador: pone la preferencia de cookies para que el aviso de cookies no tape controles. Sin variables de fuera. */
@@ -130,9 +161,9 @@ export const fixCookiePreference = (): void => {
   }
 };
 
-/** Vacía el registro y marca el instante de la acción que se va a probar. */
-export const armToasts = (page: Page): Promise<number> =>
-  safe(
+/** Vacía el registro y marca el instante de la acción que se va a probar. `undefined` si la página no lo permite. */
+export const armToasts = (page: Page): Promise<number | undefined> =>
+  safe<number | undefined>(
     () =>
       page.evaluate((key: string) => {
         const registry = window as unknown as Record<string, unknown>;
@@ -142,32 +173,48 @@ export const armToasts = (page: Page): Promise<number> =>
         registry.__sigproArmedAt = at;
         return at;
       }, TOAST_KEY),
-    Date.now(),
+    undefined,
   );
 
-/** Registro de avisos desde la última «armada». */
-export const toastLog = (page: Page): Promise<readonly ToastEntry[]> =>
-  safe(() => page.evaluate((key: string) => ((window as unknown as Record<string, unknown>)[key] as ToastEntry[] | undefined) ?? [], TOAST_KEY), []);
+/** Motivo de preparación si no se pudo armar el registro (la fila no empieza); `undefined` si está armado. */
+export const armOrFail = async (page: Page): Promise<string | undefined> => ((await armToasts(page)) === undefined ? 'no se pudo armar el registro de avisos' : undefined);
+
+/** Hora de la página (la marca de los avisos y de las retiradas es la de la página). */
+export const pageNow = (page: Page): Promise<number | undefined> => safe<number | undefined>(() => page.evaluate(() => Date.now()), undefined);
+
+/** Registro de avisos desde la última «armada». `undefined` si la lectura falla (no es un registro vacío). */
+export const toastLog = (page: Page): Promise<readonly ToastEntry[] | undefined> =>
+  safe<readonly ToastEntry[] | undefined>(() => page.evaluate((key: string) => ((window as unknown as Record<string, unknown>)[key] as ToastEntry[] | undefined) ?? [], TOAST_KEY), undefined);
 
 /** Lo que hay en el registro, en una frase derivada del estado leído. */
-export const describeLog = (log: readonly ToastEntry[]): string =>
-  log.length === 0
-    ? '(ningún aviso desde la acción)'
-    : log.map((entry) => `aviso de ${nameOfTone(entry.tone)} «${entry.title}»${entry.body === '' ? '' : ` con «${entry.body}»`}`).join('; ');
+export const describeLog = (log: readonly ToastEntry[] | undefined): string => {
+  if (log === undefined) return '(sin leer)';
+  if (log.length === 0) return '(ningún aviso desde la acción)';
+  return log.map((entry) => `${phraseOfTone(entry.tone)} «${entry.title}»${entry.body === '' ? '' : ` con «${entry.body}»`}`).join('; ');
+};
 
 export interface Seen {
   /** Primer aviso del registro con ese título (cualquier tono), si apareció. */
   readonly entry: ToastEntry | undefined;
   readonly observed: string;
   readonly log: readonly ToastEntry[];
+  /** Milisegundos desde la acción (la «armada») hasta la aparición. */
+  readonly delayMs: number | undefined;
 }
 
-/** Espera (con techo) a que aparezca un aviso con ese título y devuelve el primero con lo que hay en el registro. */
+/** Espera (con techo de 10 s) a que aparezca un aviso con ese título y devuelve el primero, el registro y el tiempo hasta la aparición. */
 export const awaitTitle = async (page: Page, title: string): Promise<Seen> => {
-  await waitUntil(async () => (await toastLog(page)).some((entry) => entry.title === title));
-  const log = await toastLog(page);
-  return { entry: log.find((entry) => entry.title === title), observed: describeLog(log), log };
+  await waitUntil(async () => ((await toastLog(page)) ?? []).some((entry) => entry.title === title));
+  const read = await toastLog(page);
+  const log = read ?? [];
+  const entry = log.find((candidate) => candidate.title === title);
+  const armed = await safe<number | undefined>(() => page.evaluate(() => Number((window as unknown as Record<string, unknown>).__sigproArmedAt ?? 0)), undefined);
+  const delayMs = entry === undefined || armed === undefined ? undefined : entry.at - armed;
+  return { entry, observed: describeLog(read), log, delayMs };
 };
+
+/** Evidencia de tiempos de la fila: cuánto tardó en aparecer el aviso (el techo de espera es de 10 s). */
+export const appearance = (seen: Seen): Record<string, unknown> => ({ msHastaAparicion: seen.delayMs ?? '(no apareció)' });
 
 /** El aviso del tono y título dados que está en el DOM ahora (filtro por texto exacto de su título). */
 export const toastOf = (page: Page, tone: ToastTone, title: string): Locator =>
@@ -180,13 +227,16 @@ export interface Box {
   readonly height: number;
 }
 
+/** Caja de un elemento solo si se ve (un elemento montado pero oculto no tiene caja). */
 export const boxOf = (target: Locator): Promise<Box | undefined> =>
   safe(async () => {
-    const box = await target.first().boundingBox({ timeout: 2_000 });
+    const first = target.first();
+    if (!(await first.isVisible())) return undefined;
+    const box = await first.boundingBox({ timeout: 2_000 });
     return box === null ? undefined : box;
   }, undefined);
 
-/** Tamaño de la zona visible de la ventana (sin barras de desplazamiento): el sitio de los avisos fijos se mide frente a ella. */
+/** Tamaño de la zona visible de la ventana (sin barras de desplazamiento): los avisos fijos se miden frente a ella. */
 export const viewportOf = (page: Page): Promise<Viewport | undefined> =>
   safe(() => page.evaluate(() => ({ width: document.documentElement.clientWidth, height: document.documentElement.clientHeight })), undefined);
 
@@ -205,13 +255,51 @@ export const tokenColor = (page: Page, token: string): Promise<string | undefine
     undefined,
   );
 
+/** Espera la reacción local de la pantalla (500 ms de la prueba): la entrada del aviso dura 180 ms. */
+export const settle = (): Promise<void> => sleep(SETTLE_MS);
+
+/** ¿Se ve ahora el aviso? `false` si no está en el DOM; `undefined` si la lectura falla (una lectura fallida no cuenta como cumplida). */
+export const shownNow = async (target: Locator): Promise<boolean | undefined> => {
+  const count = await safe(() => target.count(), -1);
+  if (count < 0) return undefined;
+  if (count === 0) return false;
+  return safe<boolean | undefined>(() => target.first().isVisible(), undefined);
+};
+
 // --- Comprobaciones del aviso --------------------------------------------------------------------------------------------------
 
-/** Tono y título del aviso (y su cuerpo si la fila lo da: `(sin cuerpo)` es la cadena vacía). */
-export const toastChecks = (seen: Seen, tone: ToastTone, title: string, body?: string): Check[] => {
+/** Se ve en pantalla en este momento: montado, visible, opaco y con el propio aviso en su punto central («por encima del contenido»). */
+export const liveCheck = async (page: Page, tone: ToastTone, title: string): Promise<Check> => {
+  await settle();
+  const read = await safe<{ readonly shown: boolean; readonly why: string } | undefined>(
+    () =>
+      page.evaluate(
+        ({ testid, text }: { testid: string; text: string }) => {
+          const candidates = Array.from(document.querySelectorAll<HTMLElement>(`[data-testid="${testid}"]`)).filter((element) => element.innerText.split('\n').some((line) => line.trim() === text));
+          const element = candidates[0];
+          if (element === undefined) return { shown: false, why: 'no está en el DOM' };
+          const style = getComputedStyle(element);
+          if (style.display === 'none' || style.visibility === 'hidden') return { shown: false, why: `oculto (display ${style.display}, visibility ${style.visibility})` };
+          if (Number(style.opacity) < 0.99) return { shown: false, why: `opacidad ${style.opacity}` };
+          const box = element.getBoundingClientRect();
+          if (box.width <= 0 || box.height <= 0) return { shown: false, why: 'sin tamaño' };
+          const hit = document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2);
+          if (hit === null || !element.contains(hit)) return { shown: false, why: `lo tapa otro elemento: ${hit === null ? '(ninguno)' : hit.tagName.toLowerCase()}` };
+          return { shown: true, why: 'visible, opaco, y su punto central lo recibe el propio aviso' };
+        },
+        { testid: `toast-${tone}`, text: title },
+      ),
+    undefined,
+  );
+  return check(read?.shown === true, `el aviso «${title}» se ve en pantalla`, read === undefined ? '(lectura no disponible)' : read.why);
+};
+
+/** Tono y título del aviso (y su cuerpo si la fila lo da: `(sin cuerpo)` es la cadena vacía), más que se ve en pantalla. */
+export const toastChecks = async (page: Page, seen: Seen, tone: ToastTone, title: string, body?: string): Promise<Check[]> => {
   const entry = seen.entry;
   const checks: Check[] = [
-    check(entry !== undefined && entry.tone === tone, `aviso de ${nameOfTone(tone)} con el título «${title}»`, entry === undefined ? seen.observed : `aviso de ${nameOfTone(entry.tone)} con el título «${entry.title}»`),
+    check(entry !== undefined && entry.tone === tone, `${phraseOfTone(tone)} con el título «${title}»`, entry === undefined ? seen.observed : `${phraseOfTone(entry.tone)} con el título «${entry.title}»`),
+    await liveCheck(page, tone, title),
   ];
   if (body !== undefined) {
     const expected = body === '' ? 'el aviso no tiene cuerpo' : `el aviso tiene el cuerpo «${body}»`;
@@ -227,7 +315,7 @@ export const roleCheck = (seen: Seen, role: string): Check => {
   return check(entry !== undefined && entry.role === role, `se anuncia con el rol de ${nameOfRole(role)}`, entry === undefined ? seen.observed : `se anuncia con el rol de ${nameOfRole(entry.role)}`);
 };
 
-/** La franja izquierda del aviso tiene el color de su tono (regla de la historia transversal de tonos). */
+/** La franja izquierda del aviso tiene el color de su tono (regla de la historia de tonos). */
 export const franjaCheck = async (page: Page, seen: Seen, tone: ToastTone): Promise<Check> => {
   const token = TOKEN_OF_TONE.get(tone) ?? '';
   const color = await tokenColor(page, token);
@@ -236,11 +324,141 @@ export const franjaCheck = async (page: Page, seen: Seen, tone: ToastTone): Prom
   return check(ok, `la franja del borde izquierdo con el color del tono (${token})`, entry === undefined ? '(sin aviso)' : `franja ${entry.border}, color del tono ${color ?? '(no leído)'}`);
 };
 
-/** El cuerpo, si lo hay, va con letra más pequeña que el título (regla de la historia transversal de tonos). */
+/** El cuerpo, si lo hay, va con letra más pequeña que el título (regla de la historia de tonos). */
 export const bodySmallerCheck = (seen: Seen): Check => {
   const entry = seen.entry;
   const ok = entry !== undefined && entry.bodySize > 0 && entry.titleSize > 0 && entry.bodySize < entry.titleSize;
   return check(ok, 'el cuerpo con letra más pequeña que el título', entry === undefined ? '(sin aviso)' : `letra del cuerpo ${entry.bodySize} px y del título ${entry.titleSize} px`);
+};
+
+export interface Lifetime {
+  readonly check: Check;
+  /** Milisegundos desde la aparición hasta la retirada (undefined si no se retiró en 5 s). */
+  readonly ms: number | undefined;
+}
+
+/** El aviso se retira a los 3 s de aparecer, con la tolerancia declarada: espera (con techo de 5 s) a su retirada del DOM. */
+export const lifetimeOf = async (page: Page, entry: ToastEntry | undefined, label: string): Promise<Lifetime> => {
+  if (entry === undefined) return { check: check(false, `el ${label} se retira a los 3 s de aparecer`, `el ${label} no llegó a aparecer`), ms: undefined };
+  const at = entry.at;
+  await waitUntil(async () => ((await toastLog(page)) ?? []).some((candidate) => candidate.at === at && candidate.removedAt !== undefined), 5_000);
+  const removedAt = ((await toastLog(page)) ?? []).find((candidate) => candidate.at === at)?.removedAt;
+  const ms = removedAt === undefined ? undefined : removedAt - at;
+  const ok = ms !== undefined && Math.abs(ms - LIFETIME_MS) <= LIFETIME_TOLERANCE_MS;
+  return {
+    check: check(ok, `el ${label} se retira a los 3 s de aparecer (±${LIFETIME_TOLERANCE_MS} ms)`, ms === undefined ? `el ${label} no se retiró en 5 s` : `el ${label} se retiró a los ${ms} ms de aparecer`),
+    ms,
+  };
+};
+
+// --- Respuestas de la API a las escrituras de la fila ---------------------------------------------------------------------------
+
+export interface WriteReply {
+  readonly method: string;
+  readonly path: string;
+  readonly status: number;
+  readonly body: string;
+}
+
+/** Anota las respuestas de la API a las escrituras (POST, PUT, PATCH, DELETE) desde que se llama. `collect` las espera (con techo). */
+export const watchReplies = (page: Page): { readonly collect: () => Promise<readonly WriteReply[]>; readonly stop: () => void } => {
+  const pending: Promise<WriteReply>[] = [];
+  const listener = (response: PlaywrightResponse): void => {
+    const method = response.request().method();
+    if (!response.url().includes('/api/') || !WRITE_METHODS.has(method)) return;
+    const path = new URL(response.url()).pathname;
+    const status = response.status();
+    pending.push(response.text().then(
+      (body) => ({ method, path, status, body }),
+      () => ({ method, path, status, body: '' }),
+    ));
+  };
+  page.on('response', listener);
+  return {
+    collect: () => Promise.race([Promise.all(pending), sleep(4_000).then((): WriteReply[] => [])]),
+    stop: () => page.off('response', listener),
+  };
+};
+
+/** La respuesta a la escritura de ese método sobre una ruta que contiene `pathPart`. */
+export const replyOf = (replies: readonly WriteReply[], method: string, pathPart: string): WriteReply | undefined => replies.find((reply) => reply.method === method && reply.path.includes(pathPart));
+
+/** El servidor confirma la escritura (2xx). */
+export const confirmedReplyCheck = (reply: WriteReply | undefined, what: string): Check =>
+  check(reply !== undefined && reply.status >= 200 && reply.status < 300, `el servidor confirma ${what} (2xx)`, reply === undefined ? 'no llegó la respuesta de la escritura' : `el servidor responde ${reply.status}`);
+
+/** La escritura falla por el caos: 500 con `chaos_error` en el cuerpo (así el aviso de error se atribuye al caos y no a otra cosa). */
+const isChaosReply = (reply: WriteReply | undefined): boolean => reply !== undefined && reply.status === 500 && reply.body.includes('chaos_error');
+export const chaosReplyCheck = (reply: WriteReply | undefined): Check =>
+  check(isChaosReply(reply), 'el servidor responde 500 chaos_error a la escritura (lo provoca el caos)', reply === undefined ? 'no llegó la respuesta de la escritura' : `el servidor responde ${reply.status}${reply.body.includes('chaos_error') ? ' con chaos_error' : ' sin chaos_error'}`);
+/** Todas las escrituras de archivado de la fila (una o dos) fallan por el caos. */
+export const chaosArchivesCheck = (replies: readonly WriteReply[], count: number): Check => {
+  const archives = replies.filter((reply) => reply.method === 'POST' && reply.path.includes('/archive'));
+  return check(archives.length === count && archives.every(isChaosReply), `las ${count} escrituras de archivado responden 500 chaos_error`, `${archives.length} escritura(s) de archivado: ${archives.map((reply) => `${reply.status}${reply.body.includes('chaos_error') ? ' chaos_error' : ''}`).join(', ') || '(ninguna)'}`);
+};
+
+// --- Datos leídos por API ---------------------------------------------------------------------------------------------------------
+
+export interface ProgramRead {
+  readonly found: boolean;
+  readonly status?: string;
+  readonly name?: string;
+}
+
+/** Un programa tal como lo devuelve la API (`GET /programs/<código>`) con el administrador del tenant. */
+export const programOf = async (code: string): Promise<ProgramRead> => {
+  const token = await adminToken(TENANT_A);
+  const result = await call('GET', `/programs/${code}`, { tenant: TENANT_A, token });
+  if (result.status !== 200) return { found: false };
+  const status = field(result.body, 'status');
+  const name = field(result.body, 'name');
+  return { found: true, ...(typeof status === 'string' ? { status } : {}), ...(typeof name === 'string' ? { name } : {}) };
+};
+
+/** Estado de un programa tal como lo muestra la app (etiqueta del catálogo), a partir del estado de la API. */
+const STATUS_LABEL: ReadonlyMap<string, string> = new Map<string, string>([
+  ['active', programasEs.st_active],
+  ['closed', programasEs.st_closed],
+  ['draft', programasEs.st_draft],
+  ['on_hold', programasEs.st_on_hold],
+  ['cancelled', programasEs.st_cancelled],
+]);
+
+export const programStateLabel = async (code: string): Promise<string | undefined> => {
+  const program = await programOf(code);
+  if (!program.found || program.status === undefined) return undefined;
+  return STATUS_LABEL.get(program.status) ?? `(estado ${program.status})`;
+};
+
+/** Identificadores de los comentarios de una no conformidad, leídos por API. */
+export const ncCommentIds = async (code: string): Promise<readonly string[] | undefined> => {
+  const token = await adminToken(TENANT_A);
+  const result = await call('GET', `/nc/${code}`, { tenant: TENANT_A, token });
+  const comments = field(result.body, 'comments');
+  if (result.status !== 200 || !Array.isArray(comments)) return undefined;
+  return comments.map((comment: unknown) => String(field(comment, 'id')));
+};
+
+/** Comprobaciones de «archivar» (estado en la API y respuesta del servidor): lo que la historia llama «el servidor confirmó el cambio». */
+export const archiveVerify = async (replies: readonly WriteReply[]): Promise<Check[]> => {
+  const state = await programStateLabel('PRG-001');
+  return [
+    check(state === 'Cerrado', 'PRG-001 queda con el estado «Cerrado» en la API', `PRG-001 queda con el estado «${state ?? '(sin leer)'}» en la API`),
+    confirmedReplyCheck(replyOf(replies, 'POST', 'PRG-001/archive'), 'el archivado'),
+  ];
+};
+
+/** Comprobaciones de «duplicar»: la copia PRG-025 existe en la API como borrador, con el nombre del original y «(copia)». */
+export const duplicateVerify = async (replies: readonly WriteReply[]): Promise<Check[]> => {
+  const copy = await programOf('PRG-025');
+  const source = await programOf('PRG-001');
+  const expectedName = `${source.name ?? '(sin leer)'} (copia)`;
+  return [
+    check(copy.found, 'PRG-025 existe en la API', copy.found ? 'PRG-025 existe en la API' : 'PRG-025 no existe en la API'),
+    check(copy.status === 'draft', 'PRG-025 queda como borrador en la API', `PRG-025 queda como ${copy.status ?? '(sin leer)'} en la API`),
+    check(copy.name !== undefined && copy.name === expectedName, `PRG-025 se llama «${expectedName}»`, `PRG-025 se llama «${copy.name ?? '(sin leer)'}»`),
+    confirmedReplyCheck(replyOf(replies, 'POST', 'PRG-001/duplicate'), 'la copia'),
+  ];
 };
 
 // --- Acciones con diagnóstico ----------------------------------------------------------------------------------------------------
@@ -309,13 +527,10 @@ export const inOrder =
 
 /** Una navegación con su llegada: la ruta debe quedar en `path` (si no, la pantalla no se alcanzó). */
 export const goTo = (locate: (page: Page) => Locator, label: string, path: string): Act =>
-  inOrder(
-    clickAt(locate, label, () => true),
-    async (page) => {
-      const arrived = await waitUntil(async () => pathOf(page) === path);
-      return arrived.reached ? undefined : { kind: 'harness', message: `no se llegó a ${path} tras «${label}» (ruta ${pathOf(page)})` };
-    },
-  );
+  inOrder(clickAt(locate, label, () => true), async (page) => {
+    const arrived = await waitUntil(async () => pathOf(page) === path);
+    return arrived.reached ? undefined : { kind: 'harness', message: `no se llegó a ${path} tras «${label}» (ruta ${pathOf(page)})` };
+  });
 
 /** Un fallo de acción convertido en resultado de la fila (discrepa, o no ejecutable con el error como evidencia). */
 export const actionFailed = (expected: string, blocked: Blocked): Outcome => {
@@ -335,27 +550,31 @@ export const conclude = (checks: readonly Check[], extra: Pick<Outcome, 'note' |
 };
 
 /**
- * «Mientras el aviso sigue a la vista» no se dio al pulsar la siguiente acción. Si ya pasaron 3 s desde su aparición, la prueba llegó
- * tarde: no ejecutable, con el tiempo como evidencia (no es un hallazgo sobre la app). Si no, la app lo retiró antes de su plazo.
+ * «Mientras el aviso sigue a la vista» no se dio al pulsar la siguiente acción. Sin aparición, el aviso no llegó a salir. Si no se puede
+ * leer si sigue, la condición no se da por cumplida ni incumplida (no ejecutable). Si ya pasaron 3 s, la prueba llegó tarde (no ejecutable,
+ * con el tiempo como evidencia). Si no, la app lo retiró antes de su plazo (discrepa).
  */
-export const premiseLost = (expected: string, title: string, entry: ToastEntry | undefined, observed: string): Outcome => {
-  const elapsed = entry === undefined ? undefined : Date.now() - entry.at;
-  const evidence = { msDesdeAparicion: elapsed ?? '(sin aparición)' };
-  if (elapsed !== undefined && elapsed >= 3_000)
-    return { ...notExecutable(expected, `el arnés llegó tarde: «${title}» llevaba ${elapsed} ms (más de 3 s) cuando debía seguir a la vista; no es un hallazgo sobre la app`), evidence };
-  return outcome(false, expected, `«${title}» ya no está a la vista (${observed})`, {
+export const premiseLost = async (page: Page, expected: string, title: string, seen: Seen, reading: boolean | undefined): Promise<Outcome> => {
+  const entry = seen.entry;
+  if (entry === undefined)
+    return outcome(false, expected, `no apareció «${title}» tras la acción (${seen.observed})`, { note: 'El aviso no llegó a aparecer tras la acción; la condición «mientras sigue a la vista» no se pudo dar.' });
+  if (reading === undefined) return notExecutable(expected, 'no se pudo leer si el aviso sigue a la vista; la condición no se da por cumplida ni incumplida');
+  const now = (await pageNow(page)) ?? Date.now();
+  const elapsed = now - entry.at;
+  const evidence = { msDesdeAparicion: elapsed };
+  if (elapsed >= LIFETIME_MS) return { ...notExecutable(expected, `el arnés llegó tarde: «${title}» llevaba ${elapsed} ms (más de 3 s) cuando debía seguir a la vista; no es un hallazgo sobre la app`), evidence };
+  return outcome(false, expected, `«${title}» ya no está a la vista a los ${elapsed} ms de aparecer`, {
     note: 'El aviso se retiró antes de su plazo de 3 s, y la condición «mientras sigue a la vista» no se dio.',
     evidence,
   });
 };
 
-/** Enlace de la navegación lateral por su nombre o por su id de prueba (el de «No conformidades» trae además el contador de abiertas). */
-export const sidebarLink = (page: Page, key: 'documents' | 'nc', name: RegExp): Locator =>
-  page.getByRole('link', { name }).or(page.getByTestId(PROGRAMAS_DYNAMIC_TESTIDS.NAV(key)));
-
-/** Estado (insignia) de una fila de programa, tal como lo muestra la tabla de escritorio. */
-export const badgeOf = (page: Page, code: string): Promise<string | undefined> =>
-  textOf(page.getByTestId(PROGRAMAS_DYNAMIC_TESTIDS.PROGRAMS_ROW(code)).getByTestId(PROGRAMAS_TESTIDS.PROGRAMS_STATE_BADGE));
+/** Espera hasta un instante del reloj de la página (el del aviso, medido desde que apareció). */
+export const sleepUntilPage = async (page: Page, at: number): Promise<void> => {
+  const now = (await pageNow(page)) ?? Date.now();
+  const wait = at - now;
+  if (wait > 0) await sleep(wait);
+};
 
 // --- Pantallas y menús (escritorio y ventana estrecha) -------------------------------------------------------------------------
 
@@ -384,13 +603,20 @@ export const rowAction = (code: string, item: string, screen: (page: Page) => bo
     clickAt((page) => (sheet ? sheetItemOf(page, code, item) : menuItemOf(page, code, item)), `pulsar «${item}» en las acciones de ${code}`, screen),
   );
 
-/** Pulsa «Cerrar» del aviso con ese título (el botón con ese nombre dentro del aviso). */
-export const closeToast = (title: string): Act =>
-  clickAt((page) => toastOf(page, 'ok', title).first().getByRole('button', { name: 'Cerrar', exact: true }), `pulsar «Cerrar» del aviso «${title}»`, onPrograms);
+/** Pulsa «Cerrar» del aviso con ese título y tono (el botón con ese nombre dentro del aviso). */
+export const closeToast = (title: string, tone: ToastTone = 'ok'): Act =>
+  clickAt((page) => toastOf(page, tone, title).first().getByRole('button', { name: 'Cerrar', exact: true }), `pulsar «Cerrar» del aviso «${title}»`, onPrograms);
+
+/** Enlace de la navegación lateral por su nombre o por su id de prueba (el de «No conformidades» trae además el contador de abiertas). */
+export const sidebarLink = (page: Page, key: 'documents' | 'nc', name: RegExp): Locator => page.getByRole('link', { name }).or(page.getByTestId(PROGRAMAS_DYNAMIC_TESTIDS.NAV(key)));
+
+/** Estado (insignia) de una fila de programa, tal como lo muestra la tabla de escritorio. */
+export const badgeOf = (page: Page, code: string): Promise<string | undefined> =>
+  textOf(page.getByTestId(PROGRAMAS_DYNAMIC_TESTIDS.PROGRAMS_ROW(code)).getByTestId(PROGRAMAS_TESTIDS.PROGRAMS_STATE_BADGE));
 
 // --- Sesión y preparación ------------------------------------------------------------------------------------------------------
 
-/** Abre /login?tenant=alumno01 con la cuenta y espera a la lista de programas (con el registro de avisos ya instalado). */
+/** Abre /login?tenant=alumno01 con la cuenta y espera a la lista de programas (el registro de avisos se instala antes de cargar). */
 export const signInWeb = (page: Page, viewport: Viewport, email: string, password: string): Promise<string | undefined> => {
   const steps: Step[] = [
     ['fijar la preferencia de cookies', () => page.context().addInitScript(fixCookiePreference)],
@@ -422,20 +648,26 @@ export const openNcBoard = async (page: Page): Promise<string | undefined> =>
     ['ver la tarjeta NC-001', () => menuOf(page, 'NC-001').waitFor({ state: 'visible', timeout: CEILING_MS })],
   ]);
 
-// --- Caos y API -----------------------------------------------------------------------------------------------------------------
+// --- Caos, descargas y escuchas --------------------------------------------------------------------------------------------------
 
 /** Fija la tasa de error de las escrituras del tenant (latencia 0). Devuelve el estado de la respuesta. */
 export const setErrorRate = async (rate: number): Promise<number> => (await setChaos(TENANT_A, { latencyMs: 0, errorRate: rate, flakyLabels: false })).status;
 
-/** Apaga el caos al terminar la fila, también si la fila falla. */
+/**
+ * Apaga el caos al terminar la fila, también si la fila falla. Si el PATCH de apagado no responde 200, es un error del arnés (no una nota):
+ * el caos seguiría activo para la fila siguiente.
+ */
 export const restoringChaos =
   (handler: BrowserRowHandler): BrowserRowHandler =>
   async (row, fixtures) => {
-    try {
-      return await handler(row, fixtures);
-    } finally {
-      await setChaos(TENANT_A, NO_CHAOS);
-    }
+    const result = await handler(row, fixtures).then(
+      (value) => ({ value }),
+      (error: unknown) => ({ error }),
+    );
+    const restored = await setChaos(TENANT_A, NO_CHAOS);
+    if (restored.status !== 200) throw new Error(`no se pudo apagar el caos al terminar la fila (PATCH /api/admin/chaos respondió ${restored.status})`);
+    if ('error' in result) throw result.error;
+    return result.value;
   };
 
 /** Añade una salvedad a la nota de la fila. */
@@ -446,51 +678,17 @@ export const withNote =
     return { ...result, note: result.note === undefined ? note : `${result.note} ${note}` };
   };
 
-const STATUS_LABEL: ReadonlyMap<string, string> = new Map<string, string>([
-  ['active', programasEs.st_active],
-  ['closed', programasEs.st_closed],
-  ['draft', programasEs.st_draft],
-  ['on_hold', programasEs.st_on_hold],
-  ['cancelled', programasEs.st_cancelled],
-]);
+/**
+ * Escucha la descarga que dispara la acción (se arma antes del clic). Devuelve el nombre sugerido por el navegador, o `undefined` si no
+ * llegó ninguna descarga en 5 s.
+ */
+export const watchDownload = (page: Page): Promise<string | undefined> =>
+  page.waitForEvent('download', { timeout: 5_000 }).then(
+    (download) => download.suggestedFilename(),
+    () => undefined,
+  );
 
-/** Estado de un programa tal como lo muestra la app (etiqueta del catálogo), leído por API con el administrador del tenant. */
-export const programStateLabel = async (code: string): Promise<string | undefined> => {
-  const token = await adminToken(TENANT_A);
-  const result = await call('GET', `/programs/${code}`, { tenant: TENANT_A, token });
-  const status = field(result.body, 'status');
-  if (result.status !== 200 || typeof status !== 'string') return undefined;
-  return STATUS_LABEL.get(status) ?? `(estado ${status})`;
-};
-
-/** Identificadores de los comentarios de una no conformidad, leídos por API. */
-export const ncCommentIds = async (code: string): Promise<readonly string[] | undefined> => {
-  const token = await adminToken(TENANT_A);
-  const result = await call('GET', `/nc/${code}`, { tenant: TENANT_A, token });
-  const comments = field(result.body, 'comments');
-  if (result.status !== 200 || !Array.isArray(comments)) return undefined;
-  return comments.map((comment: unknown) => String(field(comment, 'id')));
-};
-
-/** Reacción local de la pantalla (1 s de referencia): la animación de entrada del aviso dura 180 ms y mueve el aviso 6 px. */
-export const SETTLE_MS = 500;
-export const settle = (): Promise<void> => sleep(SETTLE_MS);
-
-/** ¿Se ve ahora el aviso? `false` si no está en el DOM; `undefined` si la lectura falla (una lectura fallida no cuenta como cumplida). */
-export const shownNow = async (target: Locator): Promise<boolean | undefined> => {
-  const count = await safe(() => target.count(), -1);
-  if (count < 0) return undefined;
-  if (count === 0) return false;
-  return safe<boolean | undefined>(() => target.first().isVisible(), undefined);
-};
-
-/** Espera un tiempo de la prueba hasta un instante del reloj (el del aviso, medido desde que apareció). */
-export const sleepUntil = async (at: number): Promise<void> => {
-  const wait = at - Date.now();
-  if (wait > 0) await sleep(wait);
-};
-
-/** Peticiones de escritura (no GET) que el navegador hace a la API desde que se instala el escucha. */
+/** Peticiones de escritura (POST, PUT, PATCH, DELETE) a la API desde que se instala el escucha. */
 export const writesTo = (page: Page): { readonly writes: string[]; readonly stop: () => void } => {
   const writes: string[] = [];
   const listener = (request: PlaywrightRequest): void => {

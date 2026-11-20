@@ -7,8 +7,15 @@ import { defineBrowserRows, notExecutable, type BrowserRowHandler, type Manifest
 
 const MOTIVO = 'capacidad futura, no se prueba contra la app: los avisos de la app móvil no tienen botón «Cerrar» y se retiran solos a los 3 s (la historia lo deja en «Decisiones pendientes»).';
 
-/** Los pasos «Entonces» y «Y» de la fila, tal como los resuelve el manifiesto. */
-const thenOf = (row: ManifestRow): string => row.resolvedSteps.filter((step) => /^(Entonces|Y) /.test(step)).join('; ');
+/** Los pasos «Entonces» y «Y» que vienen después de «Cuando», tal como los resuelve el manifiesto (los «Y» de la preparación no cuentan). */
+const thenOf = (row: ManifestRow): string => {
+  const steps = row.resolvedSteps;
+  const start = steps.findIndex((step) => step.startsWith('Cuando '));
+  return steps
+    .slice(start < 0 ? 0 : start)
+    .filter((step) => /^(Entonces|Y) /.test(step))
+    .join('; ');
+};
 
 const futureCapability: BrowserRowHandler = async (row) => notExecutable(thenOf(row), MOTIVO);
 

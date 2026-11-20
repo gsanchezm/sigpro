@@ -1,17 +1,51 @@
 import { DEMO, TENANT_A, resetTenants } from '../../../story-runs/support/prepare';
 import { quoted } from '../../support/browser';
-import { cell, preparationFailedWeb, strict } from '../../support/checks';
+import { cell, check, preparationFailedWeb, strict, type Check } from '../../support/checks';
 import { defineBrowserRows, type BrowserRowHandler } from '../../core/framework';
-import { COOKIE_NOTE, DESKTOP, TRANSVERSAL_NOTE, actionFailed, armToasts, awaitTitle, bodySmallerCheck, conclude, franjaCheck, onDocuments, onPrograms, openDocumentsList, rowAction, signInWeb, toastChecks, withNote, type Act } from './common';
+import {
+  COOKIE_NOTE,
+  DESKTOP,
+  TRANSVERSAL_NOTE,
+  actionFailed,
+  appearance,
+  archiveVerify,
+  armOrFail,
+  awaitTitle,
+  bodySmallerCheck,
+  conclude,
+  duplicateVerify,
+  franjaCheck,
+  onDocuments,
+  onPrograms,
+  openDocumentsList,
+  rowAction,
+  signInWeb,
+  toastChecks,
+  watchDownload,
+  watchReplies,
+  withNote,
+  type Act,
+  type WriteReply,
+} from './common';
 
 // US-TOASTS-001 — Cuatro tonos de aviso (transversal; sus filas se miran en la web, 1440 px). Preparación de cada fila: reinicio de
-// alumno01, inicio de sesión de gestor@sigpro.test y llegada a /programs (Esquema 1) o a /documents (Esquema 2). Además de la línea
-// de cada Esquema, la regla de la franja (color del tono) y la del cuerpo (letra más pequeña, solo si lo hay) se comprueban en las filas.
-// La línea de detalle técnico no se mira. El tono se lee del aviso que aparece (su `data-testid`).
+// alumno01, inicio de sesión de gestor@sigpro.test y llegada a /programs (Esquema 1) o a /documents (Esquema 2). Cada aviso de éxito se
+// comprueba además contra la API: archivar deja PRG-001 «Cerrado» y duplicar deja la copia PRG-025 como borrador; el servidor confirma
+// la escritura con 2xx. La franja (color del tono) y el cuerpo (letra más pequeña, solo si lo hay) se miran en las dos filas. La
+// descarga de la fila informativa se escucha como evento de descarga y su nombre debe ser el del aviso. La línea de detalle técnico no
+// se mira. El aviso no bloquea la pantalla: esta fila no lo mira (lo cubre US-TOASTS-003 E1).
 
-const PROGRAM_ACTIONS: ReadonlyMap<string, Act> = new Map<string, Act>([
-  ['abre las acciones de PRG-001 y pulsa «Archivar»', rowAction('PRG-001', 'Archivar', onPrograms)],
-  ['abre las acciones de PRG-001 y pulsa «Duplicar»', rowAction('PRG-001', 'Duplicar', onPrograms)],
+const NO_BLOCK_NOTE = 'El aviso no bloquea la pantalla: esta fila no lo mira; lo cubre US-TOASTS-003 E1 (la segunda acción se hace con el primer aviso a la vista).';
+
+interface ProgramCase {
+  readonly act: Act;
+  /** Lo que el servidor y la API confirman para esa acción. */
+  readonly verify: (replies: readonly WriteReply[]) => Promise<Check[]>;
+}
+
+const PROGRAM_ACTIONS: ReadonlyMap<string, ProgramCase> = new Map<string, ProgramCase>([
+  ['abre las acciones de PRG-001 y pulsa «Archivar»', { act: rowAction('PRG-001', 'Archivar', onPrograms), verify: archiveVerify }],
+  ['abre las acciones de PRG-001 y pulsa «Duplicar»', { act: rowAction('PRG-001', 'Duplicar', onPrograms), verify: duplicateVerify }],
 ]);
 
 const DOCUMENT_ACTIONS: ReadonlyMap<string, Act> = new Map<string, Act>([
@@ -36,20 +70,31 @@ const expectedToast = (tone: string, title: string, body: string): string => `av
 const successToast: BrowserRowHandler = async (row, { page }) => {
   await resetTenants([TENANT_A]);
   const expected = expectedToast('éxito', cell(row, 'titulo'), cell(row, 'cuerpo'));
-  const prepared = await signInWeb(page, DESKTOP, DEMO.gestor.email, DEMO.gestor.password);
-  if (prepared !== undefined) return preparationFailedWeb(expected, prepared);
-  const act = strict('accion', PROGRAM_ACTIONS, cell(row, 'accion'));
+  const testCase = strict('accion', PROGRAM_ACTIONS, cell(row, 'accion'));
   const title = quoted(cell(row, 'titulo'));
   const body = bodyOf(cell(row, 'cuerpo'));
-  await armToasts(page);
-  const blocked = await act(page);
-  if (blocked !== undefined) return actionFailed(expected, blocked);
+  const prepared = await signInWeb(page, DESKTOP, DEMO.gestor.email, DEMO.gestor.password);
+  if (prepared !== undefined) return preparationFailedWeb(expected, prepared);
+  const armed = await armOrFail(page);
+  if (armed !== undefined) return preparationFailedWeb(expected, armed);
+  const replies = watchReplies(page);
+  const blocked = await testCase.act(page);
+  if (blocked !== undefined) {
+    replies.stop();
+    return actionFailed(expected, blocked);
+  }
   const seen = await awaitTitle(page, title);
-  return conclude([
-    ...toastChecks(seen, 'ok', title, body),
-    await franjaCheck(page, seen, 'ok'),
-    ...(body === '' ? [] : [bodySmallerCheck(seen)]),
-  ]);
+  const collected = await replies.collect();
+  replies.stop();
+  return conclude(
+    [
+      ...(await toastChecks(page, seen, 'ok', title, body)),
+      await franjaCheck(page, seen, 'ok'),
+      ...(body === '' ? [] : [bodySmallerCheck(seen)]),
+      ...(await testCase.verify(collected)),
+    ],
+    { note: NO_BLOCK_NOTE, evidence: appearance(seen) },
+  );
 };
 
 // --- Esquema 2: una descarga muestra un aviso informativo con el nombre del archivo ----------------------------------------
@@ -63,11 +108,22 @@ const infoToast: BrowserRowHandler = async (row, { page }) => {
   const act = strict('accion', DOCUMENT_ACTIONS, cell(row, 'accion'));
   const title = quoted(cell(row, 'titulo'));
   const file = strict('cuerpo', FILE_NAMES, cell(row, 'cuerpo'));
-  await armToasts(page);
+  const armed = await armOrFail(page);
+  if (armed !== undefined) return preparationFailedWeb(expected, armed);
+  const downloaded = watchDownload(page);
   const blocked = await act(page);
   if (blocked !== undefined) return actionFailed(expected, blocked);
   const seen = await awaitTitle(page, title);
-  return conclude([...toastChecks(seen, 'info', title, file), await franjaCheck(page, seen, 'info'), bodySmallerCheck(seen)]);
+  const fileName = await downloaded;
+  return conclude(
+    [
+      ...(await toastChecks(page, seen, 'info', title, file)),
+      await franjaCheck(page, seen, 'info'),
+      bodySmallerCheck(seen),
+      check(fileName === file, `se descarga el archivo ${file}`, fileName === undefined ? 'no llegó ningún evento de descarga' : `se descarga el archivo ${fileName}`),
+    ],
+    { note: NO_BLOCK_NOTE, evidence: appearance(seen) },
+  );
 };
 
 defineBrowserRows({

@@ -1,42 +1,56 @@
 import { DEMO, TENANT_A, resetTenants } from '../../../story-runs/support/prepare';
 import { quoted } from '../../support/browser';
-import { cell, preparationFailedWeb, strict } from '../../support/checks';
+import { cell, preparationFailedWeb, strict, type Check } from '../../support/checks';
 import { defineBrowserRows, type BrowserRowHandler } from '../../core/framework';
 import {
+  PLACEMENT_NOTE,
   ROLE_OF_CELL,
   TONE_OF_CELL,
   actionFailed,
-  armToasts,
+  appearance,
+  archiveVerify,
+  armOrFail,
   awaitTitle,
   boxOf,
   bodySmallerCheck,
+  chaosReplyCheck,
   conclude,
+  duplicateVerify,
+  lifetimeOf,
   onDocuments,
   onPrograms,
   restoringChaos,
   roleCheck,
   rowAction,
   setErrorRate,
-  settle,
   toastChecks,
   toastOf,
   viewportOf,
+  watchDownload,
+  watchReplies,
   withNote,
   type Act,
+  type WriteReply,
 } from '../web/common';
 import { EXPO_NOTE, FRANJA_NOTE, openMobileDocuments, signInMobile, topPlacement } from './common';
 
-/** En Expo web la descarga es la del navegador (`saveFile` usa `<a download>`, no la hoja de compartir): la fila mira el aviso, no el archivo guardado. */
-const DOWNLOAD_NOTE = 'En Expo web la descarga es la del navegador (`<a download>` de deliver-file.ts, no la hoja de compartir del sistema): la fila mira el aviso, no el archivo guardado.';
+// US-TOASTS-006 — Avisos arriba de la pantalla en la app móvil (Expo web a 390 × 844; NO es nativo). Preparación de cada fila: reinicio de
+// alumno01, inicio de sesión de gestor@sigpro.test en la app (Esquemas 1 y 3: /programs; Esquema 2: /documents, por «Más»). El Esquema 3
+// fija la tasa de error de las escrituras con PATCH /api/admin/chaos y el caos se apaga al terminar. Cada aviso se mira en el momento
+// (se ve, por encima del contenido: su punto central lo recibe el aviso), posicionado arriba a 12 px del borde y de cada lado, con rol
+// y se retira a los 3 s de aparecer (tolerancia de 500 ms). El éxito se confirma en la API y el error se atribuye al caos (500
+// chaos_error). La línea de detalle técnico no se mira. La franja del color no se compara (tokens de React Native). La descarga de Expo
+// web es la del navegador: se anota si llega el evento, sin hacerlo condición.
 
-// US-TOASTS-006 — Avisos arriba de la pantalla en la app móvil (Expo web a 390 × 844; NO es nativo). Preparación de cada fila: reinicio
-// de alumno01, inicio de sesión de gestor@sigpro.test en la app (Esquemas 1 y 3: /programs; Esquema 2: /documents, por «Más»). El
-// Esquema 3 fija la tasa de error de las escrituras con PATCH /api/admin/chaos y el caos se apaga al terminar. La línea de detalle
-// técnico no se compara. La franja del color del tono no se compara en la app móvil: sus colores son tokens de React Native.
+/** Lo que la fila pide comprobar de la API tras la acción (éxito: archivado o copia). */
+interface ProgramCase {
+  readonly act: Act;
+  readonly verify: (replies: readonly WriteReply[]) => Promise<Check[]>;
+}
 
-const PROGRAM_ACTIONS: ReadonlyMap<string, Act> = new Map<string, Act>([
-  ['abre las acciones de PRG-001 y pulsa «Archivar»', rowAction('PRG-001', 'Archivar', onPrograms, true)],
-  ['abre las acciones de PRG-001 y pulsa «Duplicar»', rowAction('PRG-001', 'Duplicar', onPrograms, true)],
+const PROGRAM_ACTIONS: ReadonlyMap<string, ProgramCase> = new Map<string, ProgramCase>([
+  ['abre las acciones de PRG-001 y pulsa «Archivar»', { act: rowAction('PRG-001', 'Archivar', onPrograms, true), verify: archiveVerify }],
+  ['abre las acciones de PRG-001 y pulsa «Duplicar»', { act: rowAction('PRG-001', 'Duplicar', onPrograms, true), verify: duplicateVerify }],
 ]);
 
 const DOCUMENTS: ReadonlyMap<string, string> = new Map<string, string>([
@@ -56,6 +70,9 @@ const RATES: ReadonlyMap<string, number> = new Map<string, number>([
 
 const DOWNLOAD_TITLE = 'Descarga iniciada';
 
+/** En Expo web la descarga es la del navegador (`saveFile` usa `<a download>`, no la hoja de compartir del sistema). */
+const DOWNLOAD_NOTE = 'En Expo web la descarga es la del navegador (`<a download>` de deliver-file.ts, no la hoja de compartir del sistema): el evento de descarga se anota como evidencia y no decide el veredicto.';
+
 /** `(sin cuerpo)` es la cadena vacía; cualquier otro cuerpo va entre «…». */
 const bodyOf = (text: string): string => (text === '(sin cuerpo)' ? '' : quoted(text));
 
@@ -64,24 +81,30 @@ const bodyOf = (text: string): string => (text === '(sin cuerpo)' ? '' : quoted(
 const successMobile: BrowserRowHandler = async (row, { page }) => {
   await resetTenants([TENANT_A]);
   const expected = `arriba de la pantalla, aviso de éxito con el título ${cell(row, 'titulo')}; se anuncia con el rol de estado; el aviso tiene el cuerpo ${cell(row, 'cuerpo')}`;
-  const act = strict('accion', PROGRAM_ACTIONS, cell(row, 'accion'));
+  const testCase = strict('accion', PROGRAM_ACTIONS, cell(row, 'accion'));
   const title = quoted(cell(row, 'titulo'));
   const body = bodyOf(cell(row, 'cuerpo'));
   const prepared = await signInMobile(page, DEMO.gestor.email, DEMO.gestor.password);
   if (prepared !== undefined) return preparationFailedWeb(expected, prepared);
-  await armToasts(page);
-  const blocked = await act(page);
-  if (blocked !== undefined) return actionFailed(expected, blocked);
+  const armed = await armOrFail(page);
+  if (armed !== undefined) return preparationFailedWeb(expected, armed);
+  const replies = watchReplies(page);
+  const blocked = await testCase.act(page);
+  if (blocked !== undefined) {
+    replies.stop();
+    return actionFailed(expected, blocked);
+  }
   const seen = await awaitTitle(page, title);
-  await settle();
+  const live = await toastChecks(page, seen, 'ok', title, body);
+  const collected = await replies.collect();
+  replies.stop();
   const box = await boxOf(toastOf(page, 'ok', title));
   const viewport = await viewportOf(page);
-  return conclude([
-    ...toastChecks(seen, 'ok', title, body),
-    roleCheck(seen, 'status'),
-    topPlacement(box, viewport),
-    ...(body === '' ? [] : [bodySmallerCheck(seen)]),
-  ]);
+  const life = await lifetimeOf(page, seen.entry, 'aviso');
+  return conclude(
+    [...live, roleCheck(seen, 'status'), topPlacement(box, viewport), ...(body === '' ? [] : [bodySmallerCheck(seen)]), life.check, ...(await testCase.verify(collected))],
+    { note: `${PLACEMENT_NOTE} ${FRANJA_NOTE}`, evidence: { ...appearance(seen), msDeVida: life.ms ?? '(sin retirada)' } },
+  );
 };
 
 // --- Esquema 2: una descarga muestra arriba de la pantalla un aviso informativo con el nombre del archivo -------------------
@@ -95,19 +118,21 @@ const downloadMobile: BrowserRowHandler = async (row, { page }) => {
   if (prepared !== undefined) return preparationFailedWeb(expected, prepared);
   const listed = await openMobileDocuments(page);
   if (listed !== undefined) return preparationFailedWeb(expected, listed.message);
-  await armToasts(page);
+  const armed = await armOrFail(page);
+  if (armed !== undefined) return preparationFailedWeb(expected, armed);
+  const downloaded = watchDownload(page);
   const blocked = await rowAction(documento, 'Descargar PDF', onDocuments, true)(page);
   if (blocked !== undefined) return actionFailed(expected, blocked);
   const seen = await awaitTitle(page, DOWNLOAD_TITLE);
-  await settle();
+  const live = await toastChecks(page, seen, 'info', DOWNLOAD_TITLE, file);
   const box = await boxOf(toastOf(page, 'info', DOWNLOAD_TITLE));
   const viewport = await viewportOf(page);
-  return conclude([
-    ...toastChecks(seen, 'info', DOWNLOAD_TITLE, file),
-    roleCheck(seen, 'status'),
-    topPlacement(box, viewport),
-    bodySmallerCheck(seen),
-  ]);
+  const fileName = await downloaded;
+  const life = await lifetimeOf(page, seen.entry, 'aviso');
+  return conclude([...live, roleCheck(seen, 'status'), topPlacement(box, viewport), bodySmallerCheck(seen), life.check], {
+    note: `${PLACEMENT_NOTE} ${FRANJA_NOTE} ${DOWNLOAD_NOTE}`,
+    evidence: { ...appearance(seen), descargaObservada: fileName ?? '(no observada)', msDeVida: life.ms ?? '(sin retirada)' },
+  });
 };
 
 // --- Esquema 3: un fallo del servidor muestra un aviso de error que se anuncia con rol de alerta -----------------------------
@@ -123,14 +148,26 @@ const errorMobile: BrowserRowHandler = restoringChaos(async (row, { page }) => {
   if (prepared !== undefined) return preparationFailedWeb(expected, prepared);
   const rateStatus = await setErrorRate(rate);
   if (rateStatus !== 200) return preparationFailedWeb(expected, `PATCH /api/admin/chaos respondió ${rateStatus}`);
-  await armToasts(page);
+  const armed = await armOrFail(page);
+  if (armed !== undefined) return preparationFailedWeb(expected, armed);
+  const replies = watchReplies(page);
   const blocked = await rowAction('PRG-001', 'Archivar', onPrograms, true)(page);
-  if (blocked !== undefined) return actionFailed(expected, blocked);
+  if (blocked !== undefined) {
+    replies.stop();
+    return actionFailed(expected, blocked);
+  }
   const seen = await awaitTitle(page, title);
-  await settle();
+  const live = await toastChecks(page, seen, tone, title);
+  const collected = await replies.collect();
+  replies.stop();
   const box = await boxOf(toastOf(page, tone, title));
   const viewport = await viewportOf(page);
-  return conclude([...toastChecks(seen, tone, title), roleCheck(seen, role), topPlacement(box, viewport)]);
+  const life = await lifetimeOf(page, seen.entry, 'aviso');
+  const archive = collected.find((reply) => reply.method === 'POST' && reply.path.includes('PRG-001/archive'));
+  return conclude([...live, roleCheck(seen, role), topPlacement(box, viewport), life.check, chaosReplyCheck(archive)], {
+    note: `${PLACEMENT_NOTE} ${FRANJA_NOTE}`,
+    evidence: { ...appearance(seen), msDeVida: life.ms ?? '(sin retirada)' },
+  });
 });
 
 defineBrowserRows({
@@ -138,8 +175,8 @@ defineBrowserRows({
   surface: 'expo-web',
   tenants: [TENANT_A],
   handlers: new Map<number, BrowserRowHandler>([
-    [1, withNote(withNote(successMobile, EXPO_NOTE), FRANJA_NOTE)],
-    [2, withNote(withNote(withNote(downloadMobile, EXPO_NOTE), FRANJA_NOTE), DOWNLOAD_NOTE)],
-    [3, withNote(withNote(errorMobile, EXPO_NOTE), FRANJA_NOTE)],
+    [1, withNote(successMobile, EXPO_NOTE)],
+    [2, withNote(downloadMobile, EXPO_NOTE)],
+    [3, withNote(errorMobile, EXPO_NOTE)],
   ]),
 });

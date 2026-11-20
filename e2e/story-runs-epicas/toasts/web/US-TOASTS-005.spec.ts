@@ -7,10 +7,12 @@ import {
   DESKTOP,
   actionFailed,
   answerPrompt,
-  armToasts,
+  appearance,
+  armOrFail,
   awaitTitle,
   clickAt,
   conclude,
+  franjaCheck,
   goTo,
   inOrder,
   ncCommentIds,
@@ -18,10 +20,13 @@ import {
   onNc,
   onPrograms,
   openNcBoard,
+  roleCheck,
   rowAction,
   sidebarLink,
   signInWeb,
+  sleepUntilPage,
   toastChecks,
+  watchDownload,
   withNote,
   writesTo,
   type Act,
@@ -29,12 +34,15 @@ import {
 
 // US-TOASTS-005 — Avisos informativos y de advertencia en la web (escritorio 1440 px). Preparación de cada fila: reinicio de alumno01 e
 // inicio de sesión de gestor@sigpro.test; el Esquema 2 sigue hasta /nc. El cuadro del navegador (`prompt()`) se responde con el texto de
-// la fila (`(vacío)` es la cadena vacía, `(tres espacios)` tres espacios). Además de los textos, se comprueba que el informativo no
-// escribe en la API y que el aviso de advertencia no envía ninguna escritura y deja los comentarios de NC-001 como estaban.
+// la fila (`(vacío)` es la cadena vacía, `(tres espacios)` tres espacios). Cada aviso se anuncia con el rol de estado y tiene la franja de
+// su tono. Las escrituras a la API se vigilan durante toda la vida del aviso (3,5 s desde que aparece): el informativo no escribe, el de
+// advertencia no envía ninguna escritura y deja los comentarios de NC-001 como estaban. La descarga del informativo se escucha como evento.
 
 const WARN_TITLE = 'El comentario rápido no puede estar vacío';
 /** Cuerpo del aviso «Atajos de teclado», tal como lo escribe la historia (con sus guiones largos). */
 const SHORTCUTS_BODY = 'N · nuevo programa — / · buscar — Esc · cerrar';
+/** Ventana de observación de las escrituras: más que la vida del aviso (3 s) para cubrir cualquier petición tardía. */
+const WATCH_MS = 3_500;
 
 /** Cuerpos que la historia escribe en el Esquema 1: el de los atajos (entre «…») y el nombre de archivo de la descarga. */
 const INFO_BODIES: ReadonlyMap<string, string> = new Map<string, string>([
@@ -75,21 +83,34 @@ const informative: BrowserRowHandler = async (row, { page }) => {
   const act = strict('accion', INFO_ACTIONS, cell(row, 'accion'));
   const title = quoted(cell(row, 'titulo'));
   const body = strict('cuerpo', INFO_BODIES, cell(row, 'cuerpo'));
+  const isDownload = body.endsWith('.pdf');
   const prepared = await signInWeb(page, DESKTOP, DEMO.gestor.email, DEMO.gestor.password);
   if (prepared !== undefined) return preparationFailedWeb(expected, prepared);
-  await armToasts(page);
+  const armed = await armOrFail(page);
+  if (armed !== undefined) return preparationFailedWeb(expected, armed);
   const writes = writesTo(page);
+  const downloaded = isDownload ? watchDownload(page) : Promise.resolve(undefined);
   const blocked = await act(page);
   if (blocked !== undefined) {
     writes.stop();
     return actionFailed(expected, blocked);
   }
   const seen = await awaitTitle(page, title);
+  // Ventana de escrituras: la vida entera del aviso (no solo hasta que aparece)
+  if (seen.entry !== undefined) await sleepUntilPage(page, seen.entry.at + WATCH_MS);
   writes.stop();
-  return conclude([
-    ...toastChecks(seen, 'info', title, body),
-    check(writes.writes.length === 0, 'el aviso informativo no cambia ningún dato (ninguna escritura a la API)', writes.writes.length === 0 ? 'ninguna escritura a la API' : `escrituras: ${writes.writes.join(', ')}`),
-  ]);
+  const fileName = await downloaded;
+  const downloadCheck = isDownload ? [check(fileName === body, `se descarga el archivo ${body}`, fileName === undefined ? 'no llegó ningún evento de descarga' : `se descarga el archivo ${fileName}`)] : [];
+  return conclude(
+    [
+      ...(await toastChecks(page, seen, 'info', title, body)),
+      roleCheck(seen, 'status'),
+      await franjaCheck(page, seen, 'info'),
+      check(writes.writes.length === 0, 'el aviso informativo no cambia ningún dato (ninguna escritura a la API en la vida del aviso)', writes.writes.length === 0 ? 'ninguna escritura a la API' : `escrituras: ${writes.writes.join(', ')}`),
+      ...downloadCheck,
+    ],
+    { evidence: appearance(seen) },
+  );
 };
 
 // --- Esquema 2: un comentario rápido sin texto muestra un aviso de advertencia y no se guarda -----------------------------
@@ -103,9 +124,10 @@ const emptyComment: BrowserRowHandler = async (row, { page }) => {
   if (prepared !== undefined) return preparationFailedWeb(expected, prepared);
   const before = await ncCommentIds('NC-001');
   if (before === undefined) return preparationFailedWeb(expected, 'no se pudieron leer los comentarios de NC-001 por API');
+  const armed = await armOrFail(page);
+  if (armed !== undefined) return preparationFailedWeb(expected, armed);
   const prompt = answerPrompt(page, typed);
   const writes = writesTo(page);
-  await armToasts(page);
   const blocked = await rowAction('NC-001', 'Comentario rápido…', onNc)(page);
   if (blocked !== undefined) {
     prompt.stop();
@@ -113,8 +135,9 @@ const emptyComment: BrowserRowHandler = async (row, { page }) => {
     return actionFailed(expected, blocked);
   }
   const seen = await awaitTitle(page, WARN_TITLE);
-  // Reacción local de la pantalla (1 s): tiempo para que una petición tardía, si la hubiera, aparezca
-  await sleep(1_000);
+  // Vigila las escrituras durante la vida entera del aviso (3,5 s desde que aparece)
+  if (seen.entry !== undefined) await sleepUntilPage(page, seen.entry.at + WATCH_MS);
+  else await sleep(1_000);
   prompt.stop();
   writes.stop();
   const after = await ncCommentIds('NC-001');
@@ -123,11 +146,16 @@ const emptyComment: BrowserRowHandler = async (row, { page }) => {
   return conclude(
     [
       check(prompt.kinds.includes('prompt'), 'llega el cuadro del navegador para escribir el comentario', prompt.kinds.length === 0 ? 'no llega ningún cuadro del navegador' : `llega un cuadro de tipo ${prompt.kinds.join(', ')}`),
-      ...toastChecks(seen, 'warn', WARN_TITLE),
+      ...(await toastChecks(page, seen, 'warn', WARN_TITLE)),
+      roleCheck(seen, 'status'),
+      await franjaCheck(page, seen, 'warn'),
       check(writes.writes.length === 0, 'no llega ninguna petición de escritura al servidor', writes.writes.length === 0 ? 'ninguna petición de escritura al servidor' : `escrituras: ${writes.writes.join(', ')}`),
       check(sameComments, 'NC-001 no tiene ningún comentario nuevo', after === undefined ? '(no se pudo leer NC-001)' : sameComments ? `NC-001 tiene ${after.length} comentarios, los mismos que antes` : `NC-001 pasó de ${before.length} a ${after.length} comentarios (nuevos: ${added.join(', ') || 'ninguno identificable'})`),
     ],
-    { note: 'La comprobación de peticiones cuenta solo las de escritura (POST, PUT, PATCH, DELETE) a la API; las lecturas no cuentan.' },
+    {
+      note: 'La comprobación de peticiones cuenta solo las de escritura (POST, PUT, PATCH, DELETE) a la API, durante 3,5 s desde que aparece el aviso; las lecturas no cuentan.',
+      evidence: appearance(seen),
+    },
   );
 };
 
