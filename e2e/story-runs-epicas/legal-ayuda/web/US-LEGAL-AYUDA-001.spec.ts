@@ -1,24 +1,32 @@
 import type { Page } from '@playwright/test';
 import { TENANT_A } from '../../../story-runs/support/prepare';
 import { ACTION, isVisible, pathOf, quoted, waitUntil } from '../../support/browser';
-import { cell, check, conclude, strict } from '../../support/checks';
-import { defineBrowserRows, type BrowserRowHandler } from '../../core/framework';
+import { cell, check, conclude, strict, type Check } from '../../support/checks';
+import { defineBrowserRows, outcome, type BrowserRowHandler } from '../../core/framework';
 import {
+  type Arrival,
+  GOTO_NOTE,
   HELP_TITLE,
   LAB_LINK,
+  PAGE_TITLES,
   PERSONAS,
   ROUTES,
   UPDATED_LINE,
   actionFailed,
+  arrivedAt,
+  backLabelCheck,
+  backLabelFor,
   backLinkOutcome,
   describedNote,
   enterAnonymous,
   footerClick,
   interact,
   introChecks,
+  labBelowSectionsCheck,
   labLink,
   labLinkCheck,
   openRoute,
+  pathCheck,
   prepare,
   prepFailed,
   reachedRoute,
@@ -30,7 +38,7 @@ import {
   titleHeading,
   titleIs,
   withAlumno,
-  type Blocked,
+  withNote,
 } from './common';
 
 // US-LEGAL-AYUDA-001 — Leer las páginas legales y la ayuda, con su contenido y su enlace de retorno (web, 1440 px).
@@ -55,7 +63,8 @@ const readsWithoutRedirect: BrowserRowHandler = withAlumno(async (row, { page })
   const opened = await openRoute(page, route);
   if (opened) return actionFailed(expected, opened);
   await waitUntil(() => titleIs(page, title));
-  return conclude([await titleCheck(page, title), await stayCheck(page, route)]);
+  // Con sesión, el enlace de retorno dice «Volver» (la regla exige sesión): así la fila no pasa con una página pública sin sesión
+  return conclude([await titleCheck(page, title), await stayCheck(page, route), await backLabelCheck(page, backLabelFor(persona))]);
 });
 
 // --- Esquema 2: cada página muestra su título y su introducción ------------------------------------------------------------
@@ -93,14 +102,18 @@ const sectionText: BrowserRowHandler = withAlumno(async (row, { page }) => {
 const labLinkByPage: BrowserRowHandler = withAlumno(async (row, { page }) => {
   const route = strict('ruta', ROUTES, cell(row, 'ruta'));
   const appears = strict('aparece', APPEARANCE, cell(row, 'aparece'));
+  const title = strict('ruta', PAGE_TITLES, route);
   const expected = `${appears ? 'aparece' : 'no aparece'} el enlace «${LAB_LINK}» en ${route}`;
   const prepared = await enterAnonymous(page);
   if (prepared) return prepFailed(expected, prepared);
   const opened = await openRoute(page, route);
   if (opened) return actionFailed(expected, opened);
-  const rendered = await waitUntil(() => isVisible(titleHeading(page)));
-  if (!rendered.reached) return actionFailed(expected, screenNotReached(`la página ${route}`));
-  return conclude([await labLinkCheck(page, appears)]);
+  const rendered = await waitUntil(() => titleIs(page, title));
+  // Si la página no muestra su título y sigue en la ruta, la pantalla no se ha renderizado; si cambió de ruta, es una redirección
+  if (!rendered.reached && pathOf(page) === route) return actionFailed(expected, screenNotReached(`la página ${route}`));
+  const checks: Check[] = [pathCheck(page, route), await titleCheck(page, title), await labLinkCheck(page, appears)];
+  if (appears) checks.push(await labBelowSectionsCheck(page));
+  return conclude(checks);
 });
 
 // --- Esquema 5: pulsar «Ir a /lab» lleva a la página del laboratorio -------------------------------------------------------
@@ -122,26 +135,56 @@ const labNavigates: BrowserRowHandler = withAlumno(async (row, { page }) => {
 
 // --- Esquema 6: el enlace de retorno lleva a la pantalla de acceso o a Programas -------------------------------------------
 
-/** Cómo llega la persona a la página de la fila. Cada llegada termina con la página legal o la ayuda cargada. */
-const ARRIVALS: ReadonlyMap<string, (page: Page) => Promise<Blocked | undefined>> = new Map<string, (page: Page) => Promise<Blocked | undefined>>([
-  ['abre /legal/terms directamente en el navegador', (page) => openRoute(page, '/legal/terms')],
-  ['abre /help directamente en el navegador', (page) => openRoute(page, '/help')],
-  ['pulsa «Condiciones» en el pie de /forgot', async (page) => (await openRoute(page, '/forgot')) ?? (await footerClick(page, 'Condiciones')) ?? (await reachedRoute(page, '/legal/terms'))],
-  ['pulsa «Privacidad» en el pie de /register', async (page) => (await openRoute(page, '/register')) ?? (await footerClick(page, 'Privacidad')) ?? (await reachedRoute(page, '/legal/privacy'))],
-  ['abre /legal/privacy directamente en el navegador', (page) => openRoute(page, '/legal/privacy')],
+/**
+ * Cómo llega la persona a la página de la fila. `lands` es la página legal o la ayuda donde debe quedar antes de pulsar el enlace.
+ * Las llegadas por el pie empiezan en la pantalla de acceso abierta con una carga directa: se anota en la nota de la fila.
+ */
+interface Way {
+  readonly run: (page: Page) => Promise<Arrival>;
+  readonly lands: string;
+  readonly note?: string;
+}
+
+const WAYS: ReadonlyMap<string, Way> = new Map<string, Way>([
+  ['abre /legal/terms directamente en el navegador', { run: async (page) => arrivedAt(page, await openRoute(page, '/legal/terms')), lands: '/legal/terms' }],
+  ['abre /help directamente en el navegador', { run: async (page) => arrivedAt(page, await openRoute(page, '/help')), lands: '/help' }],
+  [
+    'pulsa «Condiciones» en el pie de /forgot',
+    {
+      run: async (page) => arrivedAt(page, (await openRoute(page, '/forgot')) ?? (await footerClick(page, 'Condiciones')) ?? (await reachedRoute(page, '/legal/terms'))),
+      lands: '/legal/terms',
+      note: GOTO_NOTE,
+    },
+  ],
+  [
+    'pulsa «Privacidad» en el pie de /register',
+    {
+      run: async (page) => arrivedAt(page, (await openRoute(page, '/register')) ?? (await footerClick(page, 'Privacidad')) ?? (await reachedRoute(page, '/legal/privacy'))),
+      lands: '/legal/privacy',
+      note: GOTO_NOTE,
+    },
+  ],
+  ['abre /legal/privacy directamente en el navegador', { run: async (page) => arrivedAt(page, await openRoute(page, '/legal/privacy')), lands: '/legal/privacy' }],
 ]);
 
 const backLink: BrowserRowHandler = withAlumno(async (row, { page }) => {
   const persona = strict('persona', PERSONAS, cell(row, 'persona'));
-  const arrival = strict('llegada', ARRIVALS, cell(row, 'llegada'));
+  const way = strict('llegada', WAYS, cell(row, 'llegada'));
   const label = quoted(cell(row, 'enlace'));
   const destination = strict('destino', ROUTES, cell(row, 'destino'));
   const expected = `pulsa «${label}» y llega a ${destination}`;
   const prepared = await prepare(page, persona);
   if (prepared) return prepFailed(expected, prepared);
-  const arrived = await arrival(page);
-  if (arrived) return actionFailed(expected, arrived);
-  return backLinkOutcome(page, expected, label, destination);
+  const arrived = await way.run(page);
+  if (arrived.blocked) return actionFailed(expected, arrived.blocked);
+  const onWay = await waitUntil(async () => pathOf(arrived.page) === way.lands);
+  if (!onWay.reached) {
+    return outcome(false, expected, `la página abierta está en ${pathOf(arrived.page)}, no en ${way.lands}`, {
+      note: 'La página de partida de la fila no se abre como la historia la da por hecha.',
+    });
+  }
+  const result = await backLinkOutcome(arrived.page, expected, label, destination, { webLink: true });
+  return way.note === undefined ? result : withNote(result, way.note);
 });
 
 defineBrowserRows({

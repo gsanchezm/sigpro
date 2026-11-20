@@ -4,15 +4,21 @@ import { holdsFor, isVisible, pathOf, quoted, waitUntil } from '../../support/br
 import { cell, check, conclude, strict } from '../../support/checks';
 import { defineBrowserRows, type BrowserRowHandler } from '../../core/framework';
 import {
+  ACCESS_PAGES,
   FOOTER_TEXT,
+  GOTO_NOTE,
   HOLD_MS,
   ROUTES,
+  accessTitleCheck,
+  accessTitleIs,
   actionFailed,
   enterAnonymous,
   footerCheck,
   footerClick,
+  footerHrefCheck,
   footerOf,
   openRoute,
+  pathCheck,
   prepFailed,
   screenNotReached,
   titleCheck,
@@ -45,28 +51,39 @@ const footerNavigates: BrowserRowHandler = withAlumno(async (row, { page, contex
     const landed = await waitUntil(async () => pathOf(page) === route);
     await waitUntil(() => titleIs(page, title));
     const tabs = await holdsFor(async () => opened.length === 0 && context.pages().length === pagesBefore, HOLD_MS);
-    return conclude([
-      check(landed.reached, `llega a ${route}`, `llega a ${pathOf(page)}`),
-      await titleCheck(page, title),
-      check(tabs.held, 'sin abrir ninguna pestaña nueva', tabs.held ? 'sin pestañas nuevas' : 'se abre una pestaña nueva'),
-    ]);
+    const tabsNow = context.pages().length;
+    return conclude(
+      [
+        check(landed.reached, `llega a ${route}`, `llega a ${pathOf(page)}`),
+        await titleCheck(page, title),
+        check(tabs.held, 'sin abrir ninguna pestaña nueva', `pestañas: ${tabsNow} (antes: ${pagesBefore}), pestañas nuevas abiertas: ${opened.length}`),
+      ],
+      { note: GOTO_NOTE },
+    );
   } finally {
     context.off('page', onNewPage);
   }
 });
 
-// --- Esquema 2: el pie aparece en cada pantalla de acceso sin sesión -----------------------------------------------------------
+// --- Esquema 2: el pie aparece en cada pantalla de acceso sin sesión iniciada -----------------------------------------------
 
 const footerOnScreen: BrowserRowHandler = withAlumno(async (row, { page }) => {
-  const pantalla = strict('pantalla', ROUTES, cell(row, 'pantalla'));
-  const expected = `ve el pie de ${pantalla} con el texto «${FOOTER_TEXT}» seguido de los enlaces «Privacidad», «Condiciones» y «Ayuda», en ese orden`;
+  const cellText = cell(row, 'pantalla');
+  const access = strict('pantalla', ACCESS_PAGES, cellText);
+  const route = strict('pantalla', ROUTES, cellText);
+  const expected = `ve la pantalla ${access.path} con el encabezado «${access.title}» y el pie con el texto «${FOOTER_TEXT}» seguido de los enlaces «Privacidad», «Condiciones» y «Ayuda», en ese orden, cada uno a su página`;
   const prepared = await enterAnonymous(page);
   if (prepared) return prepFailed(expected, prepared);
-  const opened = await openRoute(page, pantalla);
+  const opened = await openRoute(page, route);
   if (opened) return actionFailed(expected, opened);
-  const shown = await waitUntil(() => isVisible(footerOf(page)));
-  if (!shown.reached) return actionFailed(expected, screenNotReached(`el pie de ${pantalla}`));
-  return conclude([await footerCheck(page)]);
+  const shown = await waitUntil(() => accessTitleIs(page, access.title));
+  if (!shown.reached && pathOf(page) === access.path) return actionFailed(expected, screenNotReached(`la pantalla ${access.path}`));
+  const footer = await waitUntil(() => isVisible(footerOf(page)));
+  if (!footer.reached) return actionFailed(expected, screenNotReached(`el pie de ${access.path}`));
+  return conclude(
+    [pathCheck(page, access.path), await accessTitleCheck(page, access.title), await footerCheck(page), await footerHrefCheck(page)],
+    { note: GOTO_NOTE },
+  );
 });
 
 defineBrowserRows({

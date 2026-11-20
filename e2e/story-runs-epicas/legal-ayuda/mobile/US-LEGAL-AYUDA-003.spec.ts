@@ -1,15 +1,20 @@
 import type { Page } from '@playwright/test';
 import { TENANT_A } from '../../../story-runs/support/prepare';
-import { isVisible, quoted, waitUntil } from '../../support/browser';
+import { isVisible, pathOf, quoted, waitUntil } from '../../support/browser';
 import { cell, conclude, strict } from '../../support/checks';
-import { defineBrowserRows, pending, type BrowserRowHandler } from '../../core/framework';
+import { defineBrowserRows, outcome, type BrowserRowHandler } from '../../core/framework';
 import {
-  type Blocked,
+  ATAJOS,
   HELP_TITLE,
   PERSONAS,
   ROUTES,
+  type Arrival,
   actionFailed,
+  arrivedAt,
+  backLabelCheck,
+  backLabelFor,
   backLinkOutcome,
+  decided,
   describedNote,
   footerClick,
   introChecks,
@@ -23,16 +28,9 @@ import {
   titleCheck,
   titleIs,
   withAlumno,
+  withNote,
 } from '../web/common';
-import {
-  DECISION_REGISTER,
-  DECISION_SHORTCUTS,
-  onExpoWeb,
-  openMore,
-  moreItemClick,
-  prepareMobile,
-  registerTermsTap,
-} from './common';
+import { DECISION_REGISTER, DECISION_SHORTCUTS, NOT_DISTINGUISHED, directFirst, moreItemClick, onExpoWeb, openMore, prepareMobile, registerTermsTap } from './common';
 
 // US-LEGAL-AYUDA-003 — Leer las páginas legales y la ayuda, con su contenido y su enlace de retorno (app móvil, Expo web a 390 px).
 // Preparación de cada fila: reinicio de alumno01; sin sesión, /login con alumno01 en «Tenant de trabajo»; con sesión, inicio de sesión
@@ -56,7 +54,7 @@ const readsWithoutRedirect: BrowserRowHandler = onExpoWeb(
     const opened = await openRoute(page, route);
     if (opened) return actionFailed(expected, opened);
     await waitUntil(() => titleIs(page, title));
-    return conclude([await titleCheck(page, title), await stayCheck(page, route)]);
+    return conclude([await titleCheck(page, title), await stayCheck(page, route), await backLabelCheck(page, backLabelFor(persona))]);
   }),
 );
 
@@ -91,10 +89,9 @@ const sectionText: BrowserRowHandler = onExpoWeb(
     const opened = await openRoute(page, route);
     if (opened) return actionFailed(expected, opened);
     await waitUntil(() => isVisible(sectionHeading(page, section)));
-    const result = conclude(await sectionChecks(page, route, section, bodyCell), describedNote([bodyCell]));
-    const decision = DECISION_SECTIONS.get(sectionCell);
-    if (decision === undefined) return result;
-    return pending(result.expected, result.observed, result.note === undefined ? decision : `${decision} ${result.note}`);
+    // «Atajos de teclado» no entra en el orden de las secciones (su presencia es decisión pendiente): se comprueba aparte, en su fila
+    const result = conclude(await sectionChecks(page, route, section, bodyCell, ATAJOS), describedNote([bodyCell]));
+    return decided(result, DECISION_SECTIONS.get(sectionCell));
   }),
 );
 
@@ -109,35 +106,65 @@ const noLabLink: BrowserRowHandler = onExpoWeb(
     const opened = await openRoute(page, '/help');
     if (opened) return actionFailed(expected, opened);
     await waitUntil(() => titleIs(page, HELP_TITLE));
-    return conclude([await labLinkCheck(page, false)]);
+    // El encabezado va antes que la ausencia de enlaces: una redirección a otra pantalla no puede dar «no aparece»
+    return conclude([await titleCheck(page, HELP_TITLE), await labLinkCheck(page, false), await backLabelCheck(page, backLabelFor(persona))]);
   }),
 );
 
 // --- Esquema 5: el enlace de retorno vuelve a la pantalla anterior o, sin ella, a la de acceso o a Programas -------------
 
-/** Cómo llega la persona a la página de la fila. Cada llegada termina con la página legal o la ayuda cargada (o con el destino). */
-const ARRIVALS: ReadonlyMap<string, (page: Page) => Promise<Blocked | undefined>> = new Map<string, (page: Page) => Promise<Blocked | undefined>>([
-  ['abre /legal/terms directamente, sin pantalla anterior en la app', async (page) => (await openRoute(page, '/legal/terms')) ?? (await reachedRoute(page, '/legal/terms'))],
-  ['abre /help directamente, sin pantalla anterior en la app', async (page) => (await openRoute(page, '/help')) ?? (await reachedRoute(page, '/help'))],
-  ['pulsa «Condiciones» en el pie de /login', async (page) => (await footerClick(page, 'Condiciones')) ?? (await reachedRoute(page, '/legal/terms'))],
-  ['pulsa «condiciones de uso» en el formulario de /register', registerTermsTap],
-  ['abre /legal/privacy directamente, sin pantalla anterior en la app', async (page) => (await openRoute(page, '/legal/privacy')) ?? (await reachedRoute(page, '/legal/privacy'))],
-  ['abre «Más» y pulsa «Privacidad»', async (page) => (await openMore(page)) ?? (await moreItemClick(page, 'Privacidad')) ?? (await reachedRoute(page, '/legal/privacy'))],
+/**
+ * Cómo llega la persona a la página de la fila. `run` devuelve la pestaña donde queda la persona; `lands` es la página legal o la
+ * ayuda donde debe quedar antes de pulsar. Las llegadas «directamente» abren una pestaña nueva como primera navegación.
+ */
+interface Way {
+  readonly run: (page: Page) => Promise<Arrival>;
+  readonly lands: string;
+  readonly note?: string;
+}
+
+const WAYS: ReadonlyMap<string, Way> = new Map<string, Way>([
+  ['abre /legal/terms directamente, sin pantalla anterior en la app', { run: (page) => directFirst(page, '/legal/terms'), lands: '/legal/terms' }],
+  ['abre /help directamente, sin pantalla anterior en la app', { run: (page) => directFirst(page, '/help'), lands: '/help' }],
+  [
+    'pulsa «Condiciones» en el pie de /login',
+    {
+      run: async (page) => arrivedAt(page, (await footerClick(page, 'Condiciones')) ?? (await reachedRoute(page, '/legal/terms'))),
+      lands: '/legal/terms',
+      note: NOT_DISTINGUISHED,
+    },
+  ],
+  ['pulsa «condiciones de uso» en el formulario de /register', { run: async (page) => arrivedAt(page, await registerTermsTap(page)), lands: '/legal/terms' }],
+  ['abre /legal/privacy directamente, sin pantalla anterior en la app', { run: (page) => directFirst(page, '/legal/privacy'), lands: '/legal/privacy' }],
+  [
+    'abre «Más» y pulsa «Privacidad»',
+    {
+      run: async (page) => arrivedAt(page, (await openMore(page)) ?? (await moreItemClick(page, 'Privacidad')) ?? (await reachedRoute(page, '/legal/privacy'))),
+      lands: '/legal/privacy',
+    },
+  ],
 ]);
 
 const backLink: BrowserRowHandler = onExpoWeb(
   withAlumno(async (row, { page }) => {
     const persona = strict('persona', PERSONAS, cell(row, 'persona'));
     const llegada = cell(row, 'llegada');
-    const arrival = strict('llegada', ARRIVALS, llegada);
+    const way = strict('llegada', WAYS, llegada);
     const label = quoted(cell(row, 'enlace'));
     const destination = strict('destino', ROUTES, cell(row, 'destino'));
     const expected = `pulsa «${label}» y llega a ${destination}`;
     const prepared = await prepareMobile(page, persona);
     if (prepared) return prepFailed(expected, prepared);
-    const arrived = await arrival(page);
-    if (arrived) return actionFailed(expected, arrived);
-    return backLinkOutcome(page, expected, label, destination, DECISION_ARRIVALS.get(llegada));
+    const arrived = await way.run(page);
+    if (arrived.blocked) return actionFailed(expected, arrived.blocked);
+    const onWay = await waitUntil(async () => pathOf(arrived.page) === way.lands);
+    if (!onWay.reached) {
+      return outcome(false, expected, `la página abierta está en ${pathOf(arrived.page)}, no en ${way.lands}`, {
+        note: 'La página de partida de la fila no se abre como la historia la da por hecha.',
+      });
+    }
+    const result = await backLinkOutcome(arrived.page, expected, label, destination, { webLink: false, decision: DECISION_ARRIVALS.get(llegada) });
+    return way.note === undefined ? result : withNote(result, way.note);
   }),
 );
 

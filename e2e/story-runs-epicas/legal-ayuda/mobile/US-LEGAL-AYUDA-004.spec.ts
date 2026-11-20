@@ -3,14 +3,20 @@ import { isVisible, pathOf, quoted, waitUntil } from '../../support/browser';
 import { cell, check, conclude, strict } from '../../support/checks';
 import { defineBrowserRows, type BrowserRowHandler } from '../../core/framework';
 import {
+  ACCESS_PAGES,
+  BACK_PROGRAMS,
   FOOTER_TEXT,
   PERSONAS,
   ROUTES,
+  accessTitleCheck,
+  accessTitleIs,
   actionFailed,
+  backLabelCheck,
   footerCheck,
   footerClick,
   footerOf,
   openRoute,
+  pathCheck,
   prepFailed,
   sameList,
   screenNotReached,
@@ -18,11 +24,11 @@ import {
   titleIs,
   withAlumno,
 } from '../web/common';
-import { moreItemClick, moreItem, moreNames, onExpoWeb, openMore, prepareLogin, prepareMobile, signInMobile } from './common';
+import { moreItem, moreItemClick, moreNames, onExpoWeb, openMore, prepareLogin, prepareMobile, signInMobile } from './common';
 
 // US-LEGAL-AYUDA-004 — Llegar a las páginas legales y a la ayuda desde el pie de Acceso y desde «Más» (app móvil, Expo web a 390 px).
 // Preparación de cada fila: reinicio de alumno01; sin sesión, /login con alumno01 en «Tenant de trabajo»; con sesión, inicio de sesión
-// de la cuenta de la fila en /login. Las filas con sesión abren «Más» desde la pestaña de la barra inferior.
+// de la cuenta de la fila en /login (el tenant de la sesión se comprueba). Las filas con sesión abren «Más» desde la pestaña inferior.
 
 /** Los tres elementos finales de «Más», en orden (Regla de la historia: para cualquier rol, al final de la lista). */
 const MORE_TAIL: readonly string[] = ['Ayuda', 'Condiciones', 'Privacidad'];
@@ -49,17 +55,21 @@ const footerLinks: BrowserRowHandler = onExpoWeb(
 
 const footerOnScreen: BrowserRowHandler = onExpoWeb(
   withAlumno(async (row, { page }) => {
-    const pantalla = strict('pantalla', ROUTES, cell(row, 'pantalla'));
-    const expected = `ve el pie de ${pantalla} con el texto «${FOOTER_TEXT}» seguido de los enlaces «Privacidad», «Condiciones» y «Ayuda», en ese orden`;
+    const pantalla = cell(row, 'pantalla');
+    const access = strict('pantalla', ACCESS_PAGES, pantalla);
+    const route = strict('pantalla', ROUTES, pantalla);
+    const expected = `ve la pantalla ${access.path} con el encabezado «${access.title}» y el pie con el texto «${FOOTER_TEXT}» seguido de los enlaces «Privacidad», «Condiciones» y «Ayuda», en ese orden`;
     const prepared = await prepareLogin(page);
     if (prepared) return prepFailed(expected, prepared);
-    if (pantalla !== '/login') {
-      const opened = await openRoute(page, pantalla);
+    if (route !== '/login') {
+      const opened = await openRoute(page, route);
       if (opened) return actionFailed(expected, opened);
     }
-    const shown = await waitUntil(() => isVisible(footerOf(page)));
-    if (!shown.reached) return actionFailed(expected, screenNotReached(`el pie de ${pantalla}`));
-    return conclude([await footerCheck(page)]);
+    const shown = await waitUntil(() => accessTitleIs(page, access.title));
+    if (!shown.reached && pathOf(page) === access.path) return actionFailed(expected, screenNotReached(`la pantalla ${access.path}`));
+    const footer = await waitUntil(() => isVisible(footerOf(page)));
+    if (!footer.reached) return actionFailed(expected, screenNotReached(`el pie de ${access.path}`));
+    return conclude([pathCheck(page, access.path), await accessTitleCheck(page, access.title), await footerCheck(page)]);
   }),
 );
 
@@ -97,7 +107,8 @@ const moreClick: BrowserRowHandler = onExpoWeb(
     if (clicked) return actionFailed(expected, clicked);
     const landed = await waitUntil(async () => pathOf(page) === route);
     await waitUntil(() => titleIs(page, title));
-    return conclude([check(landed.reached, `llega a ${route}`, `llega a ${pathOf(page)}`), await titleCheck(page, title)]);
+    // Con sesión, la página de destino ofrece el enlace de retorno «Volver» (la regla exige sesión)
+    return conclude([check(landed.reached, `llega a ${route}`, `llega a ${pathOf(page)}`), await titleCheck(page, title), await backLabelCheck(page, BACK_PROGRAMS)]);
   }),
 );
 
