@@ -31,7 +31,7 @@ Característica: Escrituras dentro del tenant del token
 
     Ejemplos:
       | operacion | respuesta | comprobacion |
-      | PATCH /api/programs/PRG-025 con {"description": "Descripción de otro tenant"} | 404 program_not_found | el programa PRG-025 de alumno02 sigue con el nombre «Programa de aislamiento nuevo» y la descripción del seed |
+      | PATCH /api/programs/PRG-025 con {"description": "Descripción de otro tenant"} | 404 program_not_found | el programa PRG-025 de alumno02 sigue con el nombre «Programa de aislamiento nuevo» y la descripción que tenía antes del intento |
       | DELETE /api/programs/PRG-025 | 404 program_not_found | el programa PRG-025 sigue existiendo en alumno02 |
       | POST /api/programs/PRG-025/archive | 404 program_not_found | el programa PRG-025 de alumno02 sigue en estado borrador |
       | PATCH /api/requirements/REQ-041 con {"priority": "high"} | 404 requirement_not_found | el requisito REQ-041 de alumno02 sigue con priority medium |

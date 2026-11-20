@@ -25,7 +25,7 @@ para que ninguna cuenta pueda hacer con su rol lo que su rol no tiene, y para qu
   - eliminar programa: `DELETE /api/programs/PRG-024`, sin cuerpo (el programa no tiene requisitos, casos, documentos, no conformidades ni contratos).
   - exportar programas: `GET /api/programs/export`.
   - crear requisito: `POST /api/requirements` con {"programCode": "PRG-001", "title": "Requisito de permisos"}.
-  - editar requisito: `PATCH /api/requirements/REQ-001` con {"priority": "high"}.
+  - editar requisito: `PATCH /api/requirements/REQ-001` con {"priority": "low"}.
   - eliminar requisito: `DELETE /api/requirements/REQ-040` (hoja sin hijos).
   - aprobar requisito: `POST /api/requirements/REQ-017/transition` con {"to": "approved"} (`REQ-017` está en borrador).
   - verificar requisito: `POST /api/requirements/REQ-001/transition` con {"to": "verified"} (`REQ-001` está aprobado).
