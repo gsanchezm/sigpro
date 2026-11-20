@@ -5,7 +5,7 @@ epica: EP-TEMA
 titulo: "[Transversal] Textos con contraste de al menos 4,5:1 sobre su fondo en los dos temas"
 etiquetas: [transversal]
 relacionadas: [US-TEMA-001, US-TEMA-004]
-verificacion: codigo
+verificacion: ejecutada
 ---
 
 ## Historia
