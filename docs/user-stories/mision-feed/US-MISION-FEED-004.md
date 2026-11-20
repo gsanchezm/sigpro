@@ -5,7 +5,7 @@ epica: EP-MISION-FEED
 titulo: "[API] Simulador de misión: apagado, encendido solo con conexiones abiertas y secuencia fija"
 etiquetas: [api]
 relacionadas: [US-MISION-FEED-002, US-MISION-FEED-003, US-MISION-FEED-005]
-verificacion: codigo
+verificacion: ejecutada
 ---
 
 ## Historia
