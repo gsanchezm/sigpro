@@ -150,26 +150,26 @@ export const waitCount = async (page: Page, text: string): Promise<boolean> => (
 export const waitSettled = async (page: Page): Promise<boolean> => (await waitUntil(async () => (await countNow(page))?.startsWith('Mostrando') === true)).reached;
 
 /**
- * Lee una fila como texto de sus hojas, sin los avatares (`[role="img"]`): fecha, actor, acción, código de la acción, entidad,
- * código de la entidad y resumen. Un elemento sin hijos es una hoja; si la fila no se puede leer, devuelve `undefined`.
+ * Lee una fila como texto VISIBLE de sus hojas (`innerText` del DOM vivo), sin los avatares (`[role="img"]`): fecha, actor, acción,
+ * código de la acción, entidad, código de la entidad y resumen. Un elemento sin hijos es una hoja. Si la fila no se puede leer,
+ * devuelve `undefined`. No se clona el nodo: un clon desconectado no tiene texto visible.
  */
 export const leavesOf = (row: Locator): Promise<readonly string[] | undefined> =>
   safe(
     () =>
       row.first().evaluate(
         (node) => {
-          const clone = node.cloneNode(true) as Element;
-          clone.querySelectorAll('[role="img"]').forEach((element) => element.remove());
           const leaves: string[] = [];
           const walk = (element: Element): void => {
+            if (element.getAttribute('role') === 'img') return;
             if (element.children.length === 0) {
-              const text = (element.textContent ?? '').trim();
+              const text = ('innerText' in element ? (element as HTMLElement).innerText : (element.textContent ?? '')).trim();
               if (text !== '') leaves.push(text);
               return;
             }
             Array.from(element.children).forEach(walk);
           };
-          walk(clone);
+          walk(node);
           return leaves;
         },
         undefined,
@@ -177,6 +177,20 @@ export const leavesOf = (row: Locator): Promise<readonly string[] | undefined> =
       ),
     undefined,
   );
+
+/** Clave de una fila para comprobar que no se repite: acción, entityId y hora (la hora sale del texto visible de la fila). */
+export const rowKeysOf = async (page: Page): Promise<{ readonly rows: number; readonly distinct: number } | undefined> => {
+  const rows = await countOfLocator(rowsOf(page));
+  if (rows === undefined) return undefined;
+  const keys = new Set<string>();
+  for (let index = 0; index < rows; index += 1) {
+    const fields = await leavesOf(rowsOf(page).nth(index));
+    if (fields === undefined) return undefined;
+    const parsed = fieldsOf(fields);
+    keys.add(`${parsed.time ?? ''}|${parsed.code ?? ''}|${parsed.entityId ?? ''}`);
+  }
+  return { rows, distinct: keys.size };
+};
 
 /** Campos de una fila de la lista, en el orden en que la pantalla los pinta. */
 export interface RowFields {
@@ -211,14 +225,22 @@ export const firstRow = async (page: Page): Promise<RowFields | undefined> => {
 export const linesIn = async (target: Locator): Promise<readonly string[]> => linesOf(await textOf(target));
 
 /** Estado de un localizador. Una lectura fallida es `unknown`, nunca «oculto». */
-export type Presence = 'visible' | 'hidden' | 'unknown';
+/**
+ * Estado de un localizador: `visible`; `hidden` (existe en el DOM pero no se ve); `absent` (no existe: no hay ningún nodo, así que
+ * «no aparece» no se distingue de «no está montado» sin un control positivo de la pantalla); `unknown` (la lectura falló).
+ */
+export type Presence = 'visible' | 'hidden' | 'absent' | 'unknown';
 export const presenceOf = async (target: Locator): Promise<Presence> => {
   try {
+    if ((await target.count()) === 0) return 'absent';
     return (await target.first().isVisible({ timeout: 1_000 })) ? 'visible' : 'hidden';
   } catch {
     return 'unknown';
   }
 };
+
+/** «No se ve» (oculto o ausente). Solo vale como comprobación de «no aparece» junto a un control positivo de la misma pantalla. */
+export const notShown = (presence: Presence): boolean => presence === 'hidden' || presence === 'absent';
 
 /** Cuántos localizadores hay (`undefined` si la lectura falló). */
 export const countOfLocator = (target: Locator): Promise<number | undefined> => safe(() => target.count(), undefined);
@@ -328,4 +350,4 @@ export const failureEvidence = (failure: Failure, requests: AuditRequests): Read
 export const traceEvidence = async (target: Locator): Promise<string> => (await linesIn(target)).join(' | ');
 
 /** Presencia observada en una frase («visible», «no visible», «sin leer»), para que el observado no sea un texto fijo. */
-export const presenceText = (presence: Presence): string => (presence === 'visible' ? 'visible' : presence === 'hidden' ? 'no visible' : 'sin leer');
+export const presenceText = (presence: Presence): string => (presence === 'visible' ? 'visible' : presence === 'hidden' ? 'no visible' : presence === 'absent' ? 'ausente del DOM' : 'sin leer');

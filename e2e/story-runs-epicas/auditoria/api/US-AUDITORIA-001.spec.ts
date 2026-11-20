@@ -10,6 +10,11 @@ import { verdictOf, shownTotal } from '../verdict';
 
 const RECENT_FIRST = 'AL-001';
 const SEED_TOTAL = 130;
+/** Nota de la fila que ordena: con el seed no se puede verificar el desempate por id (todos los instantes son distintos). */
+const TIE_NOTE = 'El desempate por id (orden descendente por at y luego por id) no es verificable con la semilla: sus 130 instantes son distintos.';
+
+/** `at` no crece de un evento al siguiente (la lista va del más reciente al más antiguo). */
+const inDescendingOrder = (items: readonly AuditEvent[]): boolean => items.every((event, index) => index === 0 || Date.parse(items[index - 1]?.at ?? '') >= Date.parse(event.at));
 
 /** Consultas de los Esquemas 1 y 2 (texto de la celda → parámetros de la petición; `''` = sin parámetros). */
 const QUERIES: ReadonlyMap<string, string> = new Map<string, string>([
@@ -46,7 +51,8 @@ const firstPage: ApiRowHandler = async (row) => {
     check(last?.id === ultimo, `el último evento de items es ${ultimo}`, `el último evento de items es ${last?.id ?? '(ninguno)'}`),
     check(totalOf(result) === SEED_TOTAL, 'total vale 130', `total vale ${shownTotal(totalOf(result))}`),
     check(cursorIsText(cursor), 'nextCursor es un texto no vacío', cursor === null ? 'nextCursor es null' : `nextCursor vale «${String(cursor)}»`),
-  ]);
+    check(inDescendingOrder(items), 'el instante (at) decrece de un evento al siguiente, del más reciente al más antiguo', `instantes de items ${inDescendingOrder(items) ? 'en orden' : 'fuera de orden'}`),
+  ], { note: TIE_NOTE });
 };
 
 /** Esquema 2: recorrer las páginas con el cursor entrega cada evento una sola vez. */
@@ -119,7 +125,13 @@ const firstEvent: ApiRowHandler = async (row) => {
   if (first === undefined) return verdictOf([check(false, expected, 'sin primer evento en la respuesta')]);
   const read = strict('campo', FIELDS, campo)(first);
   const observed = read === null ? 'null' : read === undefined ? '(sin valor)' : String(read);
-  return verdictOf([check(read !== undefined && read !== null && String(read) === valor, `${campo} igual a ${valor}`, `${campo} ${observed}`)]);
+  // La Regla de la historia fija el primer evento de un tenant recién reiniciado: se comprueba entero, no solo el campo de la fila
+  const rule = [
+    check(first.id === 'AL-130', 'la Regla: el primer evento de la semilla es AL-130', `primer evento ${first.id}`),
+    check(first.at === '2026-01-19T22:00:00.000Z', 'la Regla: su at es 2026-01-19T22:00:00.000Z', `at ${first.at}`),
+    check(first.diff?.title === 'Cifrado del subsistema 011', 'la Regla: diff.title es «Cifrado del subsistema 011»', `diff.title ${String(first.diff?.title)}`),
+  ];
+  return verdictOf([check(read !== undefined && read !== null && String(read) === valor, `${campo} igual a ${valor}`, `${campo} ${observed}`), ...rule]);
 };
 
 defineApiRows({

@@ -1,13 +1,12 @@
 import { TENANT_A } from '../../../story-runs/support/prepare';
 import { ACTION, HOLD_MS, quoted, waitUntil } from '../../support/browser';
 import { cell, check, preparationFailedWeb, sleep, strict, type Check } from '../../support/checks';
-import { defineBrowserRows, type BrowserRowHandler } from '../../core/framework';
-import { unreadableOf, verdictOf } from '../verdict';
+import { defineBrowserRows, notExecutable, type BrowserRowHandler } from '../../core/framework';
+import { STRICTMODE_NOTE, TRACE_NOTE, verdictOf } from '../verdict';
 import {
   act,
   actionFailed,
   countNow,
-  countOfLocator,
   countText,
   cursorRequestsIn,
   endOf,
@@ -20,10 +19,13 @@ import {
   linesIn,
   loadMoreOf,
   moreErrorAfterRows,
+  noExtraCursorRequest,
+  notShown,
   presenceOf,
   presenceText,
   resetAlumno,
   retryOf,
+  rowKeysOf,
   rowsOf,
   waitCount,
   waitSettled,
@@ -39,6 +41,8 @@ import { ADMIN_AUDIT_PATH, AUDIT_PATH, adminTitle, moreErrorBox, onExpoWeb, open
 
 const FIRST_PAGE = countText(20, 130);
 const SEED_FIRST = { action: 'Requisito creado', code: 'requirement.created' } as const;
+/** Nota de las filas de fallo provocado: traza solo por presencia y fallo de todas las peticiones coincidentes. */
+const FAILURE_NOTE = `${TRACE_NOTE} ${STRICTMODE_NOTE}`;
 
 /** Columna «resultado» del Esquema 1. */
 const RESULTADO: ReadonlyMap<string, 'lista' | 'aviso'> = new Map<string, 'lista' | 'aviso'>([
@@ -63,7 +67,7 @@ const roleGate: BrowserRowHandler = onExpoWeb(async (row, { page }) => {
     await waitSettled(page);
     const title = await presenceOf(titleHeading(page));
     const feed = await presenceOf(feedOf(page));
-    const rows = await countOfLocator(rowsOf(page));
+    const rows = await rowsOf(page).count().catch(() => undefined);
     checks.push(check(title === 'visible', 'título «Auditoría» (encabezado de nivel 1)', `título ${presenceText(title)}`));
     checks.push(check(feed === 'visible' && (rows ?? 0) > 0, 'la lista de eventos muestra filas', `lista ${presenceText(feed)} con ${rows ?? '(sin leer)'} filas`));
   } else {
@@ -71,10 +75,11 @@ const roleGate: BrowserRowHandler = onExpoWeb(async (row, { page }) => {
     const notice = await presenceOf(forbiddenOf(page));
     const lines = await linesIn(forbiddenOf(page));
     const feed = await presenceOf(feedOf(page));
-    const rows = await countOfLocator(rowsOf(page));
+    const rows = await rowsOf(page).count().catch(() => undefined);
     checks.push(check(notice === 'visible' && lines.includes('Tu rol no permite ver la auditoría'), 'aviso «Tu rol no permite ver la auditoría»', notice === 'visible' ? `aviso con «${lines[0] ?? '(vacío)'}»` : `aviso ${presenceText(notice)}`));
     checks.push(check(lines.includes('Solo admin y auditor pueden consultar el registro.'), 'explicación «Solo admin y auditor pueden consultar el registro.»', `explicación ${lines.includes('Solo admin y auditor pueden consultar el registro.') ? 'presente' : 'ausente'}`));
-    checks.push(check(notice === 'visible' && feed === 'hidden' && rows === 0, 'ningún evento en la pantalla', `lista ${presenceText(feed)}; filas ${rows ?? '(sin leer)'}`));
+    // Con el aviso visible (control), la ausencia de la lista y de filas es real
+    checks.push(check(notice === 'visible' && notShown(feed) && rows === 0, 'ningún evento en la pantalla', `lista ${presenceText(feed)}; filas ${rows ?? '(sin leer)'}`));
   }
   return verdictOf(checks);
 });
@@ -90,7 +95,11 @@ const FIN: ReadonlyMap<string, { readonly end: boolean; readonly loadMore: boole
   ['aparece «No hay más eventos» y no hay «Cargar más»', { end: true, loadMore: false }],
 ]);
 
-/** Esquema 2: la lista carga la página siguiente con «Cargar más» o al llegar al final; cada paso se espera y se mide. */
+/**
+ * Esquema 2: la lista carga la página siguiente con «Cargar más» o al llegar al final. El procedimiento literal exige que cada paso sea
+ * una pulsación (o un desplazamiento) y que la única carga con cursor sea la de ese paso: si la lista se agota o carga sola, la fila no
+ * es ejecutable tal como está escrita y no se da por coincidente.
+ */
 const loadMore: BrowserRowHandler = onExpoWeb(async (row, { page }) => {
   const accion = strict('accion', ACCION, cell(row, 'accion'));
   const veces = Number(cell(row, 'veces'));
@@ -108,12 +117,22 @@ const loadMore: BrowserRowHandler = onExpoWeb(async (row, { page }) => {
   if (!control) return preparationFailedWeb(expected, `el contador no llega a «${FIRST_PAGE}» antes de cargar (control)`);
   let clicks = 0;
   let scrolls = 0;
+  let stopped: string | undefined;
+  // Peticiones con cursor que trajo cada paso: cada clic (o desplazamiento) debe traer exactamente una
+  const perStep: number[] = [];
   for (let step = 0; step < veces; step += 1) {
     // Antes de cada paso la lista debe asentar: «Cargar más» o «No hay más eventos» visibles (no «cargando», que oculta el botón)
     const settled = await waitUntil(async () => (await presenceOf(loadMoreOf(page))) === 'visible' || (await presenceOf(endOf(page))) === 'visible');
-    if (!settled.reached) break;
-    if ((await presenceOf(loadMoreOf(page))) !== 'visible') break;
+    if (!settled.reached) {
+      stopped = `en el paso ${step + 1} la lista no muestra «Cargar más» ni «No hay más eventos» en ${settled.elapsedMs} ms`;
+      break;
+    }
+    if ((await presenceOf(loadMoreOf(page))) !== 'visible') {
+      stopped = `en el paso ${step + 1} ya no hay «Cargar más» (la lista se agotó antes de los ${veces} pasos)`;
+      break;
+    }
     const before = await countNow(page);
+    const cursorBefore = cursorRequestsIn(requests);
     if (accion === 'boton') {
       clicks += 1;
       const blocked = await act(loadMoreOf(page), 'pulsar «Cargar más»', (element) => element.click(ACTION));
@@ -121,25 +140,40 @@ const loadMore: BrowserRowHandler = onExpoWeb(async (row, { page }) => {
     } else {
       scrolls += 1;
       const scrolled = await scrollListToEnd(page);
-      if (!scrolled) return unreadableOf(expected, 'no hay contenedor con scroll en la pantalla', 'La lectura no es posible: no se encontró el contenedor desplazable de la lista. No es un hallazgo sobre la app.');
+      if (!scrolled) {
+        // Sin contenedor desplazable: si la pantalla correcta se ve, es un hallazgo; si no, la fila no se puede ejecutar
+        const feedVisible = (await presenceOf(feedOf(page))) === 'visible';
+        return feedVisible
+          ? verdictOf([check(false, expected, 'la lista se ve, pero no hay contenedor desplazable para llevar el scroll al final')], {
+              note: 'La pantalla correcta está visible, pero no se encontró el contenedor con scroll: el desplazamiento no se puede hacer en esta pantalla.',
+            })
+          : notExecutable(expected, 'No se pudo comprobar la lista (no se ve el feed) y no hay contenedor desplazable: la fila no se ejecuta.');
+      }
     }
     await waitUntil(async () => (await countNow(page)) !== before);
+    perStep.push(cursorRequestsIn(requests) - cursorBefore);
+  }
+  const cursor = cursorRequestsIn(requests);
+  const steps = accion === 'boton' ? clicks : scrolls;
+  if (steps !== veces || cursor !== steps || !perStep.every((delta) => delta === 1)) {
+    const motivo = stopped ?? `se hicieron ${clicks} clic(s) y ${scrolls} desplazamiento(s) de ${veces}`;
+    return notExecutable(expected, `El procedimiento literal no se puede hacer tal como está escrito: ${motivo}; peticiones con cursor: ${cursor}, por paso: [${perStep.join(', ')}] (cargas automáticas: ${Math.max(0, cursor - steps)}). No se da por coincidente.`);
   }
   const count = await settleCount(() => countNow(page));
   const end = await presenceOf(endOf(page));
   const more = await presenceOf(loadMoreOf(page));
-  const cursor = cursorRequestsIn(requests);
-  const extra = cursor > clicks + scrolls ? `Hubo ${cursor - clicks - scrolls} carga(s) sin clic ni desplazamiento (carga automática al llegar al final de la lista).` : undefined;
+  const keys = await rowKeysOf(page);
+  const shown = Number((count ?? '').match(/Mostrando (\d+) de/)?.[1] ?? Number.NaN);
   const evidence = { peticionesConCursor: cursor, clics: clicks, desplazamientos: scrolls };
-  const verdict = verdictOf(
+  return verdictOf(
     [
       check(count === contador, `contador «${contador}»`, `contador «${count ?? '(sin leer)'}»`),
-      check((end === 'visible') === fin.end, fin.end ? '«No hay más eventos» aparece' : '«No hay más eventos» no aparece', `«No hay más eventos» ${presenceText(end)}`),
-      check((more === 'visible') === fin.loadMore, fin.loadMore ? '«Cargar más» sigue visible' : '«Cargar más» no aparece', `«Cargar más» ${presenceText(more)}`),
+      check(fin.end ? end === 'visible' : notShown(end) && count === contador, cell(row, 'fin'), `«No hay más eventos» ${presenceText(end)}; contador «${count ?? '(sin leer)'}»`),
+      check(fin.loadMore ? more === 'visible' : notShown(more) && count === contador, fin.loadMore ? '«Cargar más» sigue visible' : '«Cargar más» no aparece', `«Cargar más» ${presenceText(more)}`),
+      check(keys !== undefined && keys.rows === shown && keys.distinct === shown, 'las filas cargadas son todas distintas (acción, entityId y hora), sin repetir ninguna', keys === undefined ? '(sin leer)' : `${keys.rows} filas, ${keys.distinct} distintas`),
     ],
     { evidence },
   );
-  return extra === undefined ? verdict : { ...verdict, evidence: { ...evidence, cargasAutomaticas: extra } };
 });
 
 /** Esquema 3, columnas «pagina_fallida» y «accion»: qué petición falla y qué hace la persona. */
@@ -159,8 +193,7 @@ const AVISO: ReadonlyMap<string, 'titulo' | 'traza'> = new Map<string, 'titulo' 
 /** Esquema 3: un fallo al pedir una página muestra su aviso, y el botón lo vuelve a pedir con la API disponible. */
 const pageFailure: BrowserRowHandler = onExpoWeb(async (row, { page }) => {
   const pagina = strict('pagina_fallida', FAILED_PAGE, cell(row, 'pagina_fallida'));
-  const accion = strict('accion', ACCION_FALLO, cell(row, 'accion'));
-  if (pagina !== accion) throw new Error(`celda sin interpretación: la acción «${cell(row, 'accion')}» no corresponde a «${cell(row, 'pagina_fallida')}»`);
+  strict('accion', ACCION_FALLO, cell(row, 'accion'));
   strict('aviso', AVISO, cell(row, 'aviso'));
   const boton = quoted(cell(row, 'boton'));
   const contadorTras = cell(row, 'contador_tras_reintentar');
@@ -187,10 +220,10 @@ const pageFailure: BrowserRowHandler = onExpoWeb(async (row, { page }) => {
       [
         check(lines[0] === 'No se pudo cargar la auditoría', 'aviso «No se pudo cargar la auditoría»', `aviso «${lines[0] ?? '(vacío)'}»`),
         check(trace.length > 0, 'el aviso lleva la traza del error', `traza: ${trace || '(vacía)'}`),
-        check(retry === 'visible' && boton === 'Reintentar', `botón «${boton}»`, `botón «Reintentar» ${presenceText(retry)}`),
+        check(retry === 'visible', 'botón «Reintentar» visible', `botón «Reintentar» ${presenceText(retry)}`),
         check(back && count === contadorTras, `contador «${contadorTras}» tras «Reintentar»`, `contador «${count ?? '(sin leer)'}»`),
       ],
-      { evidence: { traza: trace, ...failureEvidence(failure, requests) } },
+      { note: FAILURE_NOTE, evidence: { traza: trace, ...failureEvidence(failure, requests) } },
     );
   }
   await waitCount(page, FIRST_PAGE);
@@ -201,6 +234,8 @@ const pageFailure: BrowserRowHandler = onExpoWeb(async (row, { page }) => {
   const afterRows = await moreErrorAfterRows(page);
   const count = await countNow(page);
   const more = await presenceOf(loadMoreOf(page));
+  // Tras el fallo la lista no vuelve a pedir la página por su cuenta (el botón «Cargar más» es el único camino)
+  const quiet = await noExtraCursorRequest(requests, cursorRequestsIn(requests), HOLD_MS);
   failure.on = false;
   const retried = await act(loadMoreOf(page), 'pulsar «Cargar más» con la API disponible', (element) => element.click(ACTION));
   if (retried !== undefined) return actionFailed(expected, retried);
@@ -212,9 +247,10 @@ const pageFailure: BrowserRowHandler = onExpoWeb(async (row, { page }) => {
       check(shown.reached && trace.length > 0, `aviso con la traza del error (${cell(row, 'aviso')})`, shown.reached ? `aviso con traza de ${trace.length} caracteres` : 'no aparece el aviso'),
       check(afterRows === true, 'el aviso va debajo de los eventos cargados', afterRows === true ? 'va debajo del último evento' : afterRows === false ? 'no va debajo' : 'sin leer'),
       check(count === FIRST_PAGE && more === 'visible', `sigue «${FIRST_PAGE}» y «Cargar más» visible`, `contador «${count ?? '(sin leer)'}»; «Cargar más» ${presenceText(more)}`),
+      quiet,
       check(back && after === contadorTras, `contador «${contadorTras}» tras «Cargar más»`, `contador «${after ?? '(sin leer)'}»`),
     ],
-    { evidence: { traza: trace, ...failureEvidence(failure, requests) } },
+    { note: FAILURE_NOTE, evidence: { traza: trace, ...failureEvidence(failure, requests) } },
   );
 });
 

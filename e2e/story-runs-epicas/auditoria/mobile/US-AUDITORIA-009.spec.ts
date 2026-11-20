@@ -4,30 +4,53 @@ import { ACTION, HOLD_MS, valueOf, waitUntil } from '../../support/browser';
 import { cell, check, preparationFailedWeb, sleep, strict, type Check } from '../../support/checks';
 import { defineBrowserRows, type BrowserRowHandler } from '../../core/framework';
 import { verdictOf } from '../verdict';
-import { act, actionFailed, countNow, countText, presenceOf, linesIn, resetAlumno, waitCount, watchAuditRequests, type AuditRequests } from '../web/common';
-import { clearFilters, clearField, entityValue, fromError, fromField, onExpoWeb, openPath, pickEntity, searchField, signIn, toError, toField, typeInto, type Typed } from './common';
+import { act, actionFailed, countNow, countText, linesIn, notShown, presenceOf, resetAlumno, waitCount, watchAuditRequests, type AuditRequests } from '../web/common';
+import {
+  clearField,
+  clearFilters,
+  entityValue,
+  focusedElementOf,
+  fromError,
+  fromField,
+  onExpoWeb,
+  openPath,
+  pickEntity,
+  searchField,
+  signIn,
+  toError,
+  toField,
+  typeInto,
+  waitEntitySheetGone,
+  type Typed,
+} from './common';
 
 // US-AUDITORIA-009 — Filtrar y buscar en /audit con las fechas escritas a mano (app móvil, Expo web a 390 px). Preparación de cada fila:
 // alumno01 reiniciado con el token de su administrador; la app en /login sin sesión, con alumno01 en «Tenant de trabajo», y
 // auditor@sigpro.test entra y abre /audit. Las fechas se escriben tecla a tecla con retardo y se relee el valor: si las teclas se
 // pierden, la fila lo registra como hallazgo con evidencia. Cada filtro se comprueba por el recuento, por el aviso bajo su campo y por
-// la última petición que hizo la pantalla (lo que la API recibió), no solo por la lista.
+// TODAS las peticiones que hizo la pantalla (lo que la API recibió), no solo por la lista.
 
 const UNFILTERED = countText(20, 130);
 const INVALID_DATE = 'Indica una fecha válida';
 const REVERSED = 'La fecha «Hasta» no puede ser anterior a «Desde»';
+/** Nota de las filas con «Desde 19 y Hasta 19»: esa combinación no distingue «Hasta». */
+const DAY_19_NOTE = 'La fila no prueba «Hasta»: con solo «Desde 19» saldrían los mismos 9 eventos, porque no hay eventos posteriores al día 19.';
+/** Nota de la fila de entidad y texto: con todos los state_changed de requisito, el recuento 13 no distingue la entidad. */
+const COMBINE_NOTE = 'Con todos los eventos state_changed de requisito, el recuento 13 no distingue la entidad: por eso se comprueba además la última petición (entity=requirement y q=state_changed).';
 
-/** Última consulta `GET /api/audit` que hizo la pantalla: la que decide la lista. */
-const lastQuery = (requests: AuditRequests): URL | undefined => {
-  const last = requests.urls[requests.urls.length - 1];
-  return last === undefined ? undefined : new URL(last);
-};
+/** Entidad de la celda → clave del parámetro `entity` de la API. */
+const ENTITY: ReadonlyMap<string, string> = new Map<string, string>([['Requisito', 'requirement']]);
+
+/** Consultas `GET /api/audit` de la pantalla, como URL, en orden. */
+const queriesOf = (requests: AuditRequests): URL[] => requests.urls.map((url) => new URL(url));
+const carriesFrom = (query: URL): boolean => query.searchParams.has('from');
+const carriesTo = (query: URL): boolean => query.searchParams.has('to');
 
 /** Texto del aviso de un campo de fecha: vacío si no se ve, el texto si se ve, `undefined` si no se puede leer. */
 const errorText = async (target: Locator): Promise<string | undefined> => {
   const state = await presenceOf(target);
   if (state === 'unknown') return undefined;
-  if (state === 'hidden') return '';
+  if (notShown(state)) return '';
   return (await linesIn(target)).join(' ');
 };
 
@@ -96,7 +119,8 @@ const validDates: BrowserRowHandler = onExpoWeb(async (row, { page }) => {
   const toAlert = await errorText(toError(page));
   checks.push(check(reached && count === contador, `contador «${contador}»`, `contador «${count ?? '(sin leer)'}»`));
   checks.push(check(fromAlert === '' && toAlert === '', 'no aparece ningún aviso bajo los campos de fecha', `avisos: «${fromAlert ?? '(sin leer)'}» / «${toAlert ?? '(sin leer)'}»`));
-  return verdictOf(checks, notes.length === 0 ? {} : { note: notes.join(' ') });
+  const note = [desde === '2026-01-19' && hasta === '2026-01-19' ? DAY_19_NOTE : undefined, ...notes].filter((part): part is string => part !== undefined).join(' ');
+  return verdictOf(checks, note === '' ? {} : { note });
 });
 
 /** Esquema 2: una fecha que no existe no se aplica y lo indica bajo su campo (la lista sigue con los 130 eventos). */
@@ -110,14 +134,15 @@ const invalidDate: BrowserRowHandler = onExpoWeb(async (row, { page }) => {
   if (write.blocked !== undefined) return actionFailed(expected, write.blocked);
   const alert = await waitUntil(async () => (await errorText(fromError(page))) === INVALID_DATE);
   const shown = await errorText(fromError(page));
-  await sleep(HOLD_MS); // pausa de la búsqueda (250 ms) y una holgura: la última petición debe haberse hecho
-  const last = lastQuery(requests);
+  await sleep(HOLD_MS); // pausa de la búsqueda (250 ms) y una holgura: todas las peticiones deben haberse hecho
+  const all = queriesOf(requests);
+  const withDate = all.filter((query) => carriesFrom(query) || carriesTo(query));
   const count = await countNow(page);
   const verdict = verdictOf(
     [
       check(write.value === fecha, `«Desde» guarda ${fecha}`, `«Desde» guarda «${write.value ?? '(sin leer)'}»`),
       check(alert.reached && shown === INVALID_DATE, `aviso «${INVALID_DATE}» bajo «Desde»`, `aviso bajo «Desde»: «${shown ?? '(sin leer)'}»`),
-      check(last !== undefined && !last.searchParams.has('from') && !last.searchParams.has('to'), 'ninguna petición lleva la fecha no válida', last === undefined ? 'sin peticiones' : `última consulta: ${last.search || '(sin parámetros)'}`),
+      check(all.length > 0 && withDate.length === 0, 'ninguna petición (todas, no solo la última) lleva la fecha no válida', `${all.length} peticiones; ${withDate.length} con from o to`),
       check(count === UNFILTERED, `contador «${UNFILTERED}»`, `contador «${count ?? '(sin leer)'}»`),
     ],
     write.note === undefined ? {} : { note: write.note },
@@ -126,7 +151,7 @@ const invalidDate: BrowserRowHandler = onExpoWeb(async (row, { page }) => {
   const cleared = await clearField(fromField(page));
   const control = cleared === undefined ? await writeDate(fromField(page), '2026-01-19', 'Desde (control)') : undefined;
   const controlFiltered = await waitCount(page, countText(9, 9));
-  return { ...verdict, evidence: { ...(verdict.evidence ?? {}), controlFecha: control?.value ?? null, controlAplicado: controlFiltered } };
+  return { ...verdict, evidence: { ...(verdict.evidence ?? {}), peticiones: all.length, controlFecha: control?.value ?? null, controlAplicado: controlFiltered } };
 });
 
 /** Esquema 3: «Hasta» anterior a «Desde» no aplica ninguna de las dos fechas y lo indica bajo «Hasta». */
@@ -144,14 +169,17 @@ const reversedRange: BrowserRowHandler = onExpoWeb(async (row, { page }) => {
   const alert = await waitUntil(async () => (await errorText(toError(page))) === REVERSED);
   const shown = await errorText(toError(page));
   await sleep(HOLD_MS);
-  const last = lastQuery(requests);
+  const all = queriesOf(requests);
+  const both = all.filter((query) => carriesFrom(query) && carriesTo(query));
+  const last = all[all.length - 1];
   const count = await countNow(page);
   const notes = [from.note, to.note].filter((note): note is string => note !== undefined);
   const verdict = verdictOf(
     [
       check(from.ok && from.value === desde && to.ok && to.value === hasta, `«Desde» ${desde} y «Hasta» ${hasta} quedan escritos`, `«Desde» «${from.value ?? '(sin leer)'}» y «Hasta» «${to.value ?? '(sin leer)'}»`),
       check(alert.reached && shown === REVERSED, `aviso «${REVERSED}» bajo «Hasta»`, `aviso bajo «Hasta»: «${shown ?? '(sin leer)'}»`),
-      check(last !== undefined && !last.searchParams.has('from') && !last.searchParams.has('to'), 'ninguna de las dos fechas se aplica', last === undefined ? 'sin peticiones' : `última consulta: ${last.search || '(sin parámetros)'}`),
+      check(both.length === 0, 'ninguna petición aplica las dos fechas a la vez (rango invertido)', `${both.length} petición(es) con from y to a la vez de ${all.length}`),
+      check(last !== undefined && !carriesFrom(last) && !carriesTo(last), 'la última petición no lleva ninguna de las dos fechas', last === undefined ? 'sin peticiones' : `última consulta: ${last.search || '(sin parámetros)'}`),
       check(count === UNFILTERED, `contador «${UNFILTERED}»`, `contador «${count ?? '(sin leer)'}»`),
     ],
     notes.length === 0 ? {} : { note: notes.join(' ') },
@@ -160,7 +188,8 @@ const reversedRange: BrowserRowHandler = onExpoWeb(async (row, { page }) => {
   const cleared = await clearField(toField(page));
   const controlWrite = cleared === undefined ? await writeDate(toField(page), '2026-01-19', 'Hasta (control)') : undefined;
   const controlApplied = await waitCount(page, countText(9, 9));
-  return { ...verdict, evidence: { ...(verdict.evidence ?? {}), controlHasta: controlWrite?.value ?? null, controlAplicado: controlApplied } };
+  const transitoriasSoloDesde = all.filter((query) => carriesFrom(query) && !carriesTo(query)).length;
+  return { ...verdict, evidence: { ...(verdict.evidence ?? {}), peticiones: all.length, peticionesSoloDesde: transitoriasSoloDesde, controlHasta: controlWrite?.value ?? null, controlAplicado: controlApplied } };
 });
 
 /** Esquema 4: entidad y texto se combinan, y «Limpiar filtros» vuelve a la lista completa. */
@@ -170,28 +199,45 @@ const combineAndClear: BrowserRowHandler = onExpoWeb(async (row, { page }) => {
   const contador = cell(row, 'contador');
   const expected = `entidad ${entidad} y texto ${texto} → «${contador}»; «Limpiar filtros» → «${UNFILTERED}»`;
   const opened = await openAsAuditor(page, expected);
-  if (opened.failure !== undefined) return preparationFailedWeb(expected, opened.failure);
+  if (opened.failure !== undefined || opened.requests === undefined) return preparationFailedWeb(expected, opened.failure ?? 'sin registro de peticiones');
+  const requests = opened.requests;
+  const entidadParam = strict('entidad', ENTITY, entidad);
   const picked = await pickEntity(page, entidad);
   if (picked !== undefined) return actionFailed(expected, picked);
-  const entityOk = (await entityValue(page))?.includes(entidad) === true;
+  // La hoja «Entidad» tarda en desmontarse y devuelve el foco al desplegable: no se teclea hasta que se haya ido
+  const sheetGone = await waitEntitySheetGone(page);
+  const focusAfterPick = await focusedElementOf(page);
+  // Lo que muestra «Entidad» se lee ANTES de tocar los demás controles (y de limpiar)
+  const entityBefore = await entityValue(page);
   const typed = await typeInto(searchField(page), texto);
   if (typed.blocked !== undefined) return actionFailed(expected, typed.blocked);
   const combined = await waitCount(page, contador);
   const countCombined = await countNow(page);
+  const all = queriesOf(requests);
+  const last = all[all.length - 1];
+  const lastFilters = last !== undefined && last.searchParams.get('entity') === entidadParam && last.searchParams.get('q') === texto;
   const clearWas = await presenceOf(clearFilters(page));
   const cleared = await act(clearFilters(page), 'pulsar «Limpiar filtros»', (element) => element.click(ACTION));
   if (cleared !== undefined) return actionFailed(expected, cleared);
   const back = await waitCount(page, UNFILTERED);
   const countCleared = await countNow(page);
-  const clearGone = await waitUntil(async () => (await presenceOf(clearFilters(page))) === 'hidden');
+  const clearGone = await waitUntil(async () => notShown(await presenceOf(clearFilters(page))));
   const searchAfter = await valueOf(searchField(page));
-  return verdictOf([
-    check(entityOk, `«Entidad» muestra ${entidad}`, `«Entidad» vale «${(await entityValue(page)) ?? '(sin leer)'}»`),
-    check(!typed.lost && typed.value === texto, `«Buscar en la auditoría» guarda ${texto}`, typed.lost ? `se perdieron teclas: «${typed.value ?? '(sin leer)'}»` : `guarda «${typed.value ?? '(sin leer)'}»`),
-    check(combined && countCombined === contador, `combinados: «${contador}»`, `combinados: «${countCombined ?? '(sin leer)'}»`),
-    check(clearWas === 'visible', '«Limpiar filtros» aparece con filtros escritos', `«Limpiar filtros» ${clearWas === 'visible' ? 'visible' : clearWas === 'hidden' ? 'no visible' : 'sin leer'}`),
-    check(back && countCleared === UNFILTERED && clearGone.reached && searchAfter === '', `tras «Limpiar filtros»: «${UNFILTERED}», sin «Limpiar filtros» y búsqueda vacía`, `tras «Limpiar filtros»: «${countCleared ?? '(sin leer)'}», búsqueda «${searchAfter ?? '(sin leer)'}»`),
-  ]);
+  const entityAfter = await entityValue(page);
+  return verdictOf(
+    [
+      check(entityBefore?.includes(entidad) === true, `«Entidad» muestra ${entidad}`, `«Entidad» vale «${entityBefore ?? '(sin leer)'}»`),
+      check(!typed.lost && typed.value === texto, `«Buscar en la auditoría» guarda ${texto}`, typed.lost ? `se perdieron teclas: «${typed.value ?? '(sin leer)'}»` : `guarda «${typed.value ?? '(sin leer)'}»`),
+      check(combined && countCombined === contador, `combinados: «${contador}»`, `combinados: «${countCombined ?? '(sin leer)'}»`),
+      check(lastFilters, `la última petición filtra por entity=${entidadParam} y q=${texto}`, `última consulta: ${last?.search || '(sin parámetros)'}`),
+      check(clearWas === 'visible', '«Limpiar filtros» aparece con filtros escritos', `«Limpiar filtros» ${clearWas === 'visible' ? 'visible' : clearWas === 'hidden' ? 'no visible' : 'sin leer'}`),
+      check(back && countCleared === UNFILTERED && clearGone.reached && searchAfter === '', `tras «Limpiar filtros»: «${UNFILTERED}», sin «Limpiar filtros» y búsqueda vacía`, `tras «Limpiar filtros»: «${countCleared ?? '(sin leer)'}», búsqueda «${searchAfter ?? '(sin leer)'}»`),
+    ],
+    {
+      note: COMBINE_NOTE,
+      evidence: { hojaDesmontada: sheetGone, foco: focusAfterPick ?? null, entidadAntesDeLimpiar: entityBefore ?? null, entidadTrasLimpiar: entityAfter ?? null, peticiones: all.length },
+    },
+  );
 });
 
 defineBrowserRows({

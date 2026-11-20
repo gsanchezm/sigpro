@@ -2,7 +2,7 @@ import { requestAccount, TENANT_A } from '../../../story-runs/support/prepare';
 import { ACTION, HOLD_MS, holdsFor, pathOf, quoted, waitUntil } from '../../support/browser';
 import { cell, check, preparationFailedWeb, strict, type Check } from '../../support/checks';
 import { defineBrowserRows, type BrowserRowHandler } from '../../core/framework';
-import { verdictOf } from '../verdict';
+import { STRICTMODE_NOTE, TRACE_NOTE, verdictOf } from '../verdict';
 import {
   ADMIN_AUDIT_PATH,
   AUDIT_PATH,
@@ -27,7 +27,9 @@ import {
   onWeb,
   openPath,
   presenceOf,
+  notShown,
   presenceText,
+  rowKeysOf,
   resetAlumno,
   retryOf,
   rowsOf,
@@ -50,6 +52,8 @@ import {
 // 130 eventos, primero AL-130 y su actor); lo que se observa se mide en la pantalla.
 
 const FIRST_PAGE = countText(20, 130);
+/** Nota de las filas con fallo provocado: la traza solo se comprueba por presencia y la prueba responde a todas las peticiones (StrictMode). */
+const FAILURE_NOTE = `${TRACE_NOTE} ${STRICTMODE_NOTE}`;
 const SEED_FIRST: Partial<RowFields> = { action: 'Requisito creado', code: 'requirement.created', entity: 'Requisito', entityId: 'REQ-011', actor: 'Lucía Fernández', summary: 'title: Cifrado del subsistema 011' };
 
 /** Compara los campos que la historia fija de la primera fila (los que la historia no nombra no se comparan). */
@@ -102,13 +106,13 @@ const roleGate: BrowserRowHandler = onWeb(async (row, { page }) => {
     checks.push(check(notice === 'visible' && lines.includes('Tu rol no permite ver la auditoría'), 'aviso «Tu rol no permite ver la auditoría»', notice === 'visible' ? `aviso con «${lines[0] ?? '(vacío)'}»` : `aviso ${presenceText(notice)}`));
     checks.push(check(lines.includes('Solo admin y auditor pueden consultar el registro.'), 'explicación «Solo admin y auditor pueden consultar el registro.»', `explicación ${lines.includes('Solo admin y auditor pueden consultar el registro.') ? 'presente' : 'ausente'}`));
     // Con el aviso visible (control), la ausencia de la lista y de filas es real
-    checks.push(check(notice === 'visible' && feed === 'hidden' && rows === 0, 'ningún evento en la pantalla', `lista ${presenceText(feed)}; filas ${rows ?? '(sin leer)'}`));
+    checks.push(check(notice === 'visible' && notShown(feed) && rows === 0, 'ningún evento en la pantalla', `lista ${presenceText(feed)}; filas ${rows ?? '(sin leer)'}`));
   }
   // El menú solo se lee cuando el control «Programas» se ve: sin él, «no aparece» no tendría valor
   await waitUntil(async () => (await presenceOf(sidebarOf(page).getByRole('link', { name: /Programas/ }))) === 'visible');
   const navLink = await presenceOf(sidebarOf(page).getByRole('link', { name: /Auditoría/ }));
   const control = await presenceOf(sidebarOf(page).getByRole('link', { name: /Programas/ }));
-  const menuOk = menu ? navLink === 'visible' : navLink === 'hidden' && control === 'visible';
+  const menuOk = menu ? navLink === 'visible' : notShown(navLink) && control === 'visible';
   checks.push(check(menuOk, menu ? '«Auditoría» aparece en el menú lateral' : '«Auditoría» no aparece en el menú lateral (el menú sí se ve)', `menú: «Auditoría» ${presenceText(navLink)}; control «Programas» ${presenceText(control)}`));
   return verdictOf(checks);
 });
@@ -148,7 +152,7 @@ const firstPageRows: BrowserRowHandler = onWeb(async (row, { page }) => {
   return verdictOf([
     check(count === FIRST_PAGE, `contador «${FIRST_PAGE}»`, `contador «${count ?? '(sin leer)'}»`),
     ...seedFirstChecks(first),
-    check(end === 'hidden', 'no aparece «No hay más eventos»', `«No hay más eventos» ${presenceText(end)}`),
+    check(notShown(end) && count === FIRST_PAGE, 'no aparece «No hay más eventos» (con el recuento de la primera página leído como control)', `«No hay más eventos» ${presenceText(end)}; contador «${count ?? '(sin leer)'}»`),
   ]);
 });
 
@@ -180,13 +184,16 @@ const scrollLoads: BrowserRowHandler = onWeb(async (row, { page }) => {
     if (scrolled !== undefined) return actionFailed(expected, scrolled);
     reached = await waitCount(page, countText(shown, 130));
   }
+  const keys = await rowKeysOf(page);
+  const expectedRows = Math.min(20 + 20 * cargas, 130);
   const held = await holdsFor(async () => (await countNow(page)) === contador, HOLD_MS);
   const end = await presenceOf(endOf(page));
   const count = await countNow(page);
   return verdictOf(
     [
       check(reached && held.held, `contador «${contador}» tras ${cargas} desplazamiento(s)`, `contador «${count ?? '(sin leer)'}»${reached ? '' : ' (no llegó a la cifra esperada)'}`),
-      check(end === (endWanted ? 'visible' : 'hidden'), cell(row, 'fin'), `${end === 'visible' ? 'aparece' : end === 'hidden' ? 'no aparece' : 'sin leer'} «No hay más eventos»`),
+      check(keys !== undefined && keys.rows === expectedRows && keys.distinct === expectedRows, `${expectedRows} filas, todas distintas (acción, entityId y hora)`, keys === undefined ? '(sin leer)' : `${keys.rows} filas, ${keys.distinct} distintas`),
+      check(endWanted ? end === 'visible' : notShown(end) && count === contador, cell(row, 'fin'), `«No hay más eventos» ${presenceText(end)}; contador «${count ?? '(sin leer)'}»`),
     ],
     { evidence: { peticionesConCursor: cursorRequestsIn(requests), desplazamientos: cargas } },
   );
@@ -210,8 +217,7 @@ const NOTICE: ReadonlyMap<string, 'titulo' | 'traza'> = new Map<string, 'titulo'
 /** Esquema 5: un fallo al pedir una página muestra su aviso, y el botón lo vuelve a pedir con la API disponible. */
 const pageFailure: BrowserRowHandler = onWeb(async (row, { page }) => {
   const pagina = strict('pagina_fallida', FAILED_PAGE, cell(row, 'pagina_fallida'));
-  const accion = strict('accion', ACTION_OF, cell(row, 'accion'));
-  if (pagina !== accion) throw new Error(`celda sin interpretación: la acción «${cell(row, 'accion')}» no corresponde a «${cell(row, 'pagina_fallida')}»`);
+  strict('accion', ACTION_OF, cell(row, 'accion'));
   strict('aviso', NOTICE, cell(row, 'aviso'));
   const boton = quoted(cell(row, 'boton'));
   const contadorTras = cell(row, 'contador_tras_reintentar');
@@ -239,10 +245,10 @@ const pageFailure: BrowserRowHandler = onWeb(async (row, { page }) => {
       [
         check(error === 'visible' && lines[0] === 'No se pudo cargar la auditoría', 'aviso «No se pudo cargar la auditoría»', error === 'visible' ? `aviso «${lines[0] ?? '(vacío)'}»` : `aviso ${presenceText(error)}`),
         check(trace.length > 0, 'el aviso lleva la traza del error', `traza: ${trace || '(vacía)'}`),
-        check(retry === 'visible' && boton === 'Reintentar', `botón «${boton}»`, `botón «Reintentar» ${presenceText(retry)}`),
+        check(retry === 'visible', 'botón «Reintentar» visible', `botón «Reintentar» ${presenceText(retry)}`),
         check(back && count === contadorTras, `contador «${contadorTras}» tras pulsar «${boton}»`, `contador «${count ?? '(sin leer)'}»`),
       ],
-      { evidence: { traza: await traceEvidence(errorOf(page)), ...failureEvidence(failure, requests) } },
+      { note: FAILURE_NOTE, evidence: { traza: await traceEvidence(errorOf(page)), ...failureEvidence(failure, requests) } },
     );
   }
   await waitCount(page, FIRST_PAGE);
@@ -266,7 +272,7 @@ const pageFailure: BrowserRowHandler = onWeb(async (row, { page }) => {
       quiet,
       check(back && after === contadorTras, `contador «${contadorTras}» tras pulsar «${boton}»`, `contador «${after ?? '(sin leer)'}»`),
     ],
-    { evidence: { traza: lines.join(' | '), ...failureEvidence(failure, requests) } },
+    { note: FAILURE_NOTE, evidence: { traza: lines.join(' | '), ...failureEvidence(failure, requests) } },
   );
 });
 

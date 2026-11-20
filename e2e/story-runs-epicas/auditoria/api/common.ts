@@ -2,7 +2,7 @@ import { adminCredentials, call, field, type ApiResult } from '../../../story-ru
 import { DEMO, TENANT_A, TENANT_B, resetTenants, startSession, type Credentials } from '../../../story-runs/support/prepare';
 import { check, preparationFailedWeb, type Check } from '../../support/checks';
 import { pending, type Outcome } from '../../core/framework';
-import { verdictOf } from '../verdict';
+import { CLOCK_NOTE, verdictOf } from '../verdict';
 
 // Piezas comunes de las filas de API de EP-AUDITORIA: cuentas por su correo en la celda, lectura del registro por páginas,
 // instantánea antes y después de una operación (total, primer evento y ventana de tiempo) y el envío de formularios multipart.
@@ -198,6 +198,8 @@ export interface WriteSpec {
   readonly eventChecks: (event: AuditEvent | undefined, result: ApiResult) => readonly Check[];
   /** Si la fila depende de una «Decisión pendiente» de la historia: su veredicto queda en “pendiente” con esta nota (las medidas se anotan). */
   readonly pendingNote?: string;
+  /** Nota propia de la fila (p. ej. de dónde sale un rechazo); se conserva delante de la lista de diferencias si la hay. */
+  readonly note?: string;
 }
 
 /**
@@ -226,6 +228,10 @@ export const runWrite = async (spec: WriteSpec): Promise<Outcome> => {
   const eventChecks = spec.accepted ? spec.eventChecks(written.event, result) : [];
   const verdict = verdictOf([...spec.responseChecks(result), ...written.checks, ...eventChecks], {
     evidence: { respuesta: result.status, primero: written.event?.id ?? null, total: { antes: before.total ?? null, despues: after.total ?? null } },
+    ...(spec.note === undefined && !spec.accepted ? {} : { note: [spec.note, spec.accepted ? CLOCK_NOTE : undefined].filter((part): part is string => part !== undefined).join(' ') }),
   });
-  return spec.pendingNote === undefined ? verdict : pending(verdict.expected, verdict.observed, spec.pendingNote, verdict.evidence);
+  // Una fila con «Decisión pendiente» solo queda pendiente si TODAS sus comprobaciones se cumplen (lo medido es lo que la historia
+  // deja abierto). Si alguna falla, es un hallazgo con su nota; un 500 nunca sale pendiente.
+  if (spec.pendingNote === undefined || verdict.verdict !== 'coincide') return verdict;
+  return pending(verdict.expected, verdict.observed, spec.pendingNote, verdict.evidence);
 };

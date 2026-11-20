@@ -3,7 +3,7 @@ import { TENANT_A } from '../../../story-runs/support/prepare';
 import { ACTION, HOLD_MS, holdsFor, valueOf, waitUntil } from '../../support/browser';
 import { cell, check, preparationFailedWeb, strict, type Check } from '../../support/checks';
 import { defineBrowserRows, type BrowserRowHandler } from '../../core/framework';
-import { verdictOf } from '../verdict';
+import { STRICTMODE_NOTE, verdictOf } from '../verdict';
 import {
   AUDIT_PATH,
   act,
@@ -21,6 +21,7 @@ import {
   onWeb,
   openPath,
   presenceOf,
+  notShown,
   presenceText,
   resetAlumno,
   retryOf,
@@ -90,7 +91,7 @@ const entityFilter: BrowserRowHandler = onWeb(async (row, { page }) => {
   const count = await countNow(page);
   const empty = await presenceOf(emptyOf(page));
   const emptyLines = await linesIn(emptyOf(page));
-  const emptyOk = vacio ? empty === 'visible' && emptyLines.includes(EMPTY_TITLE) && emptyLines.includes(EMPTY_HINT) : empty === 'hidden';
+  const emptyOk = vacio ? empty === 'visible' && emptyLines.includes(EMPTY_TITLE) && emptyLines.includes(EMPTY_HINT) : notShown(empty);
   return verdictOf([
     check(reached && count === contador, `contador «${contador}»`, `contador «${count ?? '(sin leer)'}»`),
     check(select === valor, `«Entidad» muestra ${entidad}`, `«Entidad» vale ${select ?? '(sin leer)'}`),
@@ -104,6 +105,8 @@ const dateRange: BrowserRowHandler = onWeb(async (row, { page }) => {
   const hasta = strict('hasta', DATE, cell(row, 'hasta'));
   const contador = cell(row, 'contador');
   const expected = `Desde ${cell(row, 'desde')} y Hasta ${cell(row, 'hasta')} → «${contador}»`;
+  // «Desde 19 y Hasta 19» no prueba «Hasta»: con solo «Desde 19» también salen los 9 eventos del día 19 (no hay eventos posteriores)
+  const dateNote = cell(row, 'desde') === '2026-01-19' && cell(row, 'hasta') === '2026-01-19' ? 'La fila no prueba «Hasta»: con solo «Desde 19» saldrían los mismos 9 eventos, porque no hay eventos posteriores al día 19.' : undefined;
   const opened = await openAsAuditor(page, expected);
   if (opened !== undefined) return preparationFailedWeb(expected, opened);
   if (desde !== '') {
@@ -119,7 +122,7 @@ const dateRange: BrowserRowHandler = onWeb(async (row, { page }) => {
   return verdictOf([
     check(reached && count === contador, `contador «${contador}»`, `contador «${count ?? '(sin leer)'}»`),
     check(fromValue === desde && toValue === hasta, `los campos guardan ${desde || '(vacío)'} y ${hasta}`, `«Desde» vale «${fromValue ?? '(sin leer)'}», «Hasta» vale «${toValue ?? '(sin leer)'}»`),
-  ]);
+  ], dateNote === undefined ? {} : { note: dateNote });
 });
 
 /** Esquema 3: el texto busca en la acción y en el código de la entidad (el campo guarda lo escrito). */
@@ -137,7 +140,7 @@ const searchText: BrowserRowHandler = onWeb(async (row, { page }) => {
   const count = await countNow(page);
   const empty = await presenceOf(emptyOf(page));
   const emptyLines = await linesIn(emptyOf(page));
-  const emptyOk = vacio ? empty === 'visible' && emptyLines.includes(EMPTY_TITLE) && emptyLines.includes(EMPTY_HINT) : empty === 'hidden';
+  const emptyOk = vacio ? empty === 'visible' && emptyLines.includes(EMPTY_TITLE) && emptyLines.includes(EMPTY_HINT) : notShown(empty);
   return verdictOf([
     check(reached && count === contador, `contador «${contador}»`, `contador «${count ?? '(sin leer)'}»`),
     check(value === texto, `el campo guarda «${texto}»`, `el campo guarda «${value ?? '(sin leer)'}»`),
@@ -165,7 +168,7 @@ const combineAndClear: BrowserRowHandler = onWeb(async (row, { page }) => {
   if (cleared1 !== undefined) return actionFailed(expected, cleared1);
   const cleared = await waitCount(page, UNFILTERED);
   const countCleared = await countNow(page);
-  const clearAfter = await holdsFor(async () => (await presenceOf(clearButton(page))) === 'hidden', HOLD_MS);
+  const clearAfter = await holdsFor(async () => notShown(await presenceOf(clearButton(page))), HOLD_MS);
   const entityAfter = await valueOf(entitySelect(page));
   return verdictOf([
     check(combined && countCombined === countText(5, 5), `combinados: «${countText(5, 5)}»`, `combinados: «${countCombined ?? '(sin leer)'}»`),
@@ -199,7 +202,7 @@ const filterFailure: BrowserRowHandler = onWeb(async (row, { page }) => {
     check(retry === 'visible', 'botón «Reintentar»', `botón «Reintentar» ${presenceText(retry)}`),
     check(back && count === contador, `contador «${contador}» tras «Reintentar»`, `contador «${count ?? '(sin leer)'}»`),
   ];
-  return verdictOf(verdictChecks, { evidence: failureEvidence(failure, requests) });
+  return verdictOf(verdictChecks, { note: STRICTMODE_NOTE, evidence: failureEvidence(failure, requests) });
 });
 
 defineBrowserRows({

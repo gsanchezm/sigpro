@@ -4,14 +4,14 @@ import { TENANT_A } from '../../../story-runs/support/prepare';
 import { ACTION, CEILING_MS, pathOf, runSteps, safe, valueOf, waitUntil, type Step } from '../../support/browser';
 import { sleep } from '../../support/checks';
 import type { BrowserRowHandler } from '../../core/framework';
-import { act, feedOf, rowsOf, type Blocked } from '../web/common';
+import { act, feedOf, presenceOf, rowsOf, type Blocked } from '../web/common';
 
 // Piezas comunes de las filas de la app móvil de EP-AUDITORIA, servida como web de Expo (390 × 844). NO es iOS ni Android nativo.
 // Las lecturas, los recuentos y las peticiones son los de la web (misma pantalla y mismos ids); aquí están la entrada por «Tenant de
 // trabajo», la apertura de rutas con comprobación de llegada, el control «Entidad» (hoja con opciones como `radio`), la escritura de
 // fechas con retardo por tecla y relectura del valor, el desplazamiento del contenedor real y la espera a que el recuento asiente.
 
-export const EXPO_NOTE = 'El veredicto vale para Expo web (390 × 844): no se ha comprobado en iOS ni en Android nativo.';
+export const EXPO_NOTE = 'El veredicto vale para Expo web (390 × 844): no se ha comprobado en iOS ni en Android nativo. La prueba fija la preferencia de cookies (sigpro.cookies = accepted) antes de abrir la app, como en la web; el aviso de cookies no se ejerce aquí.';
 export const LOGIN_PATH = '/login';
 export const AUDIT_PATH = '/audit';
 export const ADMIN_AUDIT_PATH = '/admin?tab=audit';
@@ -112,6 +112,28 @@ export const pickEntity = async (page: Page, label: string): Promise<Blocked | u
 
 /** Texto visible del campo «Entidad» (su valor actual), o `undefined` si no se puede leer. */
 export const entityValue = (page: Page): Promise<string | undefined> => safe(async () => (await entityCombo(page).innerText({ timeout: 1_000 })).trim(), undefined);
+
+/** La hoja «Entidad» (el diálogo con las opciones). */
+export const entitySheet = (page: Page): Locator => page.getByRole('dialog', { name: 'Entidad', exact: true });
+
+/**
+ * Espera (con techo) a que la hoja «Entidad» se desmonte. React Native Web mantiene el modal ~250 ms y devuelve el foco al desplegable al
+ * desmontarlo: teclear antes de ese momento pierde teclas. Devuelve `true` si la hoja ya no está en el DOM.
+ */
+export const waitEntitySheetGone = async (page: Page): Promise<boolean> => (await waitUntil(async () => (await presenceOf(entitySheet(page))) === 'absent')).reached;
+
+/** Elemento que tiene el foco en este instante (para la evidencia de una fila de escritura de texto). */
+export const focusedElementOf = (page: Page): Promise<string | undefined> =>
+  safe(
+    () =>
+      page.evaluate(() => {
+        const element = document.activeElement;
+        if (element === null) return '(ninguno)';
+        const label = element.getAttribute('aria-label');
+        return `${element.tagName.toLowerCase()}${label === null ? '' : `[aria-label="${label}"]`}`;
+      }),
+    undefined,
+  );
 
 /**
  * Desplaza el contenedor con scroll que contiene el feed hasta su final (la pantalla de Expo web scrollea el ScrollView, no el feed).

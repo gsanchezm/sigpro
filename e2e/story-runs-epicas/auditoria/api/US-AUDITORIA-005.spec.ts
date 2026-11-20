@@ -170,6 +170,10 @@ const rejectedOperation: ApiRowHandler = async (row) => {
     responseChecks: (result) => [responseCheck(result, respuesta)],
     accepted: false,
     eventChecks: () => [],
+    // El 422 de «Programa duplicado» sale de la regla por nombre (contiene «duplicado»), no de un programa existente
+    ...(cell(row, 'operacion').includes('Programa duplicado')
+      ? { note: 'El 422 duplicate_name sale de la regla por nombre (el nombre contiene «duplicado», programs.service.ts:83), no de un programa que ya exista: la fila no necesita preparación.' }
+      : {}),
   };
   return runWrite(spec);
 };

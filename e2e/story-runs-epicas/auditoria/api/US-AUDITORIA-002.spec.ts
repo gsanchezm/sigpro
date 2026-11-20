@@ -100,13 +100,16 @@ const ignoredDate: ApiRowHandler = async (row) => {
   if (login.token === undefined) return preparationFailed(expected, 'auditor@sigpro.test inicia sesión y recibe accessToken', login.result);
   const result = await readAudit(login.token, query);
   const total = totalOf(result);
-  const outcomeChecks = [responseCheck(result, { status: 200 }), check(total === 130, 'total vale 130', `total vale ${String(total)}`)];
+  const outcomeChecks = [responseCheck(result, { status: 200 }), check(total === 130, 'total vale 130', `total vale ${shownTotal(total)}`)];
+  // Mecanismo (apps/api/src/audit/audit-cursor.ts:27-28): dayRange solo comprueba la forma AAAA-MM-DD; la fecha inexistente no se
+  // descarta, así que la lectura cambia. La nota cita lo medido en esta fila (estado y total), no un valor fijo.
+  const measured = `la API responde ${result.status}${result.status === 200 ? ` con total ${shownTotal(total)}` : ''} (medido)`;
+  const mechanism = `Mecanismo en apps/api/src/audit/audit-cursor.ts:27-28: dayRange solo comprueba la forma AAAA-MM-DD; una fecha inexistente llega a Date (Invalid Date o un día distinto) y el filtro no se ignora; ${measured}. ${FILTER_NOTE_DATES}`;
+  // La fila «from=2026-1-5» no distingue: todos los eventos son posteriores al 5 de enero, así que aunque se aplicara daría 130
+  const note = query === 'from=2026-1-5' ? 'Esta fila no distingue si la fecha se ignora: todos los eventos de la semilla son posteriores al 5 de enero, así que aplicarla también daría 130.' : undefined;
   const verdict = verdictOf(outcomeChecks);
-  // Hipótesis de lectura del código (no medida): dayRange (audit-cursor.ts) solo mira la forma; una fecha inexistente llega a
-  // `new Date` y el filtro no se ignora. La nota lo señala solo cuando la medición discrepa.
-  return verdict.verdict === 'discrepa'
-    ? { ...verdict, note: `Hipótesis por lectura del código, no medida: apps/api/src/audit/audit-cursor.ts (dayRange) solo comprueba la forma AAAA-MM-DD; una fecha inexistente no se descarta. ${FILTER_NOTE_DATES}` }
-    : verdict;
+  if (verdict.verdict !== 'discrepa') return note === undefined ? verdict : { ...verdict, note };
+  return { ...verdict, note: [note, mechanism, verdict.note].filter((part): part is string => part !== undefined).join(' ') };
 };
 
 /** Esquema 5: el texto busca en la acción y en el código de la entidad, sin distinguir mayúsculas. */
@@ -123,7 +126,15 @@ const textSearch: ApiRowHandler = async (row) => {
   const login = await freshAuditor();
   if (login.token === undefined) return preparationFailed(expected, 'auditor@sigpro.test inicia sesión y recibe accessToken', login.result);
   const result = await readAudit(login.token, query);
-  return verdictOf([responseCheck(result, { status: 200 }), check(totalOf(result) === total, `total vale ${total}`, `total vale ${shownTotal(totalOf(result))}`)]);
+  // El texto va en la acción o en el código de la entidad, sin distinguir mayúsculas: cada evento devuelto debe cumplirlo
+  const term = query.slice('q='.length).toLowerCase();
+  const items = itemsOf(result) ?? [];
+  const everyMatches = items.every((event) => event.action.toLowerCase().includes(term) || event.entityId.toLowerCase().includes(term));
+  return verdictOf([
+    responseCheck(result, { status: 200 }),
+    check(totalOf(result) === total, `total vale ${total}`, `total vale ${shownTotal(totalOf(result))}`),
+    check(everyMatches, `todos los eventos contienen «${term}» en la acción o en el código`, `${items.filter((event) => !(event.action.toLowerCase().includes(term) || event.entityId.toLowerCase().includes(term))).length} eventos sin el texto`),
+  ]);
 };
 
 /** Esquema 6: los filtros se combinan (entidad y rango de un mismo día). */

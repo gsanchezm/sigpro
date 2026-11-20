@@ -13,8 +13,16 @@ const resetBoth = (): Promise<void> => resetTenants([TENANT_A, TENANT_B]);
 
 /** Esquema 1, columna «respuesta»: lo que se comprueba de cada respuesta de lectura del registro. */
 const READ_RESPONSES: ReadonlyMap<string, (result: ApiResult) => readonly Check[]> = new Map<string, (result: ApiResult) => readonly Check[]>([
-  ['200 con items', (result) => [responseCheck(result, { status: 200 }), check(itemsOf(result) !== undefined, 'trae items', itemsOf(result) === undefined ? 'sin items' : 'trae items')]],
-  ['403 forbidden', (result) => [responseCheck(result, parseResponse('403 forbidden'))]],
+  [
+    '200 con items',
+    (result) => [
+      responseCheck(result, { status: 200 }),
+      check((itemsOf(result)?.length ?? 0) > 0, 'items trae eventos (no lista vacía)', `items trae ${itemsOf(result)?.length ?? 0} eventos`),
+      check(totalOf(result) === 130, 'total vale 130 (tenant recién reiniciado)', `total vale ${shownTotal(totalOf(result))}`),
+    ],
+  ],
+  // Un rechazo por permiso no trae eventos: el cuerpo no tiene `items`, ni siquiera vacíos
+  ['403 forbidden', (result) => [responseCheck(result, parseResponse('403 forbidden')), check(itemsOf(result) === undefined, 'el 403 no trae eventos (sin items)', `el 403 trae items: ${itemsOf(result) === undefined ? 'no' : 'sí'}`)]],
 ]);
 
 /** Esquema 1: solo admin y auditor leen el registro. */
