@@ -1,6 +1,7 @@
-import { defineApiRows, type ApiRowHandler } from '../../core/framework';
+import { defineApiRows, type ApiRowHandler, type Outcome } from '../../core/framework';
 import { quoted } from '../../support/browser';
 import { cell, check, sleep, strict, type Check } from '../../support/checks';
+import { DEMO } from '../../../story-runs/support/prepare';
 import {
   TENANT_A,
   adminAccess,
@@ -10,6 +11,7 @@ import {
   eventFieldCheck,
   gestorSession,
   intOf,
+  isOk,
   ncOpenOf,
   openRealtime,
   prepFailure,
@@ -21,16 +23,20 @@ import {
   simulatorMsOutcome,
   summaryOf,
   tickMany,
+  type ApiResult,
   type RealtimeClient,
 } from './common';
+import { resetAt, sessionAt, summaryAt, withAuxApi, type AuxApi } from './aux-api';
 
 // US-MISION-FEED-004 — Simulador de misión: apagado, encendido solo con conexiones abiertas y secuencia fija (API).
-// Cada Esquema dice con qué SIMULATOR_MS arranca la API. El arnés no cambia esa configuración: se LEE del resumen (`simulatorMs`)
-// y, si no es la que dice la historia, la fila no se prepara (preparationFailed). Por eso el Esquema 2 necesita una pila distinta.
+// Cada Esquema dice con qué SIMULATOR_MS arranca la API. La pila principal tiene SIMULATOR_MS=0: los Esquemas 1 y 3 se ejecutan ahí.
+// El Esquema 2 necesita SIMULATOR_MS=4000: su manejador arranca una SEGUNDA instancia de la API (api/aux-api.ts) con ese valor y toda la
+// fila va contra ella (misma base aislada). Si esa instancia no arranca o no tiene el valor, la fila es no ejecutable, no discrepa.
 
-/** Lo que una fila de observación mide: cuánto se espera sin acciones (ms), con el simulador apagado o encendido. */
+/** Esperas de la prueba (la historia no fija plazos): sin simulador se observa 5 s; con él, hasta 12 s (tres intervalos de 4000 ms). */
 const WINDOW_OFF_MS = 5_000;
 const WINDOW_ON_MS = 12_000;
+const ESPERA_NOTE = `Espera de la prueba: hasta ${WINDOW_ON_MS / 1000} s (tres intervalos de 4000 ms) para el evento de origen simulator; la historia no fija plazo.`;
 
 /** Gravedad de cada tipo del ciclo fijo del simulador (Regla 19 de la historia). */
 const GRAVEDAD_DEL_TIPO: ReadonlyMap<string, string> = new Map<string, string>([
@@ -44,9 +50,9 @@ const GRAVEDAD_DEL_TIPO: ReadonlyMap<string, string> = new Map<string, string>([
 ]);
 
 /** Último `seq` del historial (el más reciente), o `undefined` si el resumen no lo trae. */
-const lastSeqOf = (summary: Awaited<ReturnType<typeof summaryOf>>): number | undefined => recentOf(summary)?.[0]?.seq;
+const lastSeqOf = (summary: ApiResult): number | undefined => recentOf(summary)?.[0]?.seq;
 
-// --- Esquema 1: con el simulador apagado no llega ningún evento sin una acción -----------------------------------------------
+// --- Esquema 1: con el simulador apagado no llega ningún evento sin una acción (pila principal, SIMULATOR_MS 0) --------
 
 const SITUACION_APAGADO: ReadonlyMap<string, 'con-conexion' | 'sin-conexion'> = new Map<string, 'con-conexion' | 'sin-conexion'>([
   ['gestor@sigpro.test tiene una conexión abierta', 'con-conexion'],
@@ -65,9 +71,9 @@ const apagado: ApiRowHandler = async (row) => {
   const expected = cell(row, 'resultado');
   const gestor = await gestorSession(TENANT_A);
   if (gestor.session === undefined) return prepFailure(expected, 'gestor@sigpro.test inicia sesión en alumno01', gestor.result);
-  const before = await summaryOf(gestor.session.accessToken, TENANT_A);
   const notOff = await simulatorMsOutcome(expected, 0);
   if (notOff) return notOff;
+  const before = await summaryOf(gestor.session.accessToken, TENANT_A);
   if (lastSeqOf(before) !== 6) return prepFailureReason(expected, `el historial recién reiniciado no empieza en seq 6 (último: ${String(lastSeqOf(before) ?? '(sin leer)')})`);
   let client: RealtimeClient | undefined;
   if (situacion === 'con-conexion') {
@@ -92,7 +98,7 @@ const apagado: ApiRowHandler = async (row) => {
   }
 };
 
-// --- Esquema 2: con el simulador encendido solo reciben eventos los tenants con una conexión abierta -------------------------
+// --- Esquema 2: con el simulador encendido solo reciben eventos los tenants con una conexión abierta (instancia auxiliar) --
 
 const SITUACION_ENCENDIDO: ReadonlyMap<string, 'con-conexion' | 'sin-conexion'> = new Map<string, 'con-conexion' | 'sin-conexion'>([
   ['gestor@sigpro.test tiene una conexión abierta', 'con-conexion'],
@@ -104,31 +110,28 @@ const RESULTADO_ENCENDIDO: ReadonlyMap<string, 'con-conexion' | 'sin-conexion'> 
   ['el último seq sigue en 6', 'sin-conexion'],
 ]);
 
-const encendido: ApiRowHandler = async (row) => {
-  await resetTenants([TENANT_A]);
-  const situacion = strict('situacion', SITUACION_ENCENDIDO, cell(row, 'situacion'));
-  const resultado = strict('resultado', RESULTADO_ENCENDIDO, cell(row, 'resultado'));
-  const expected = cell(row, 'resultado');
-  const gestor = await gestorSession(TENANT_A);
-  if (gestor.session === undefined) return prepFailure(expected, 'gestor@sigpro.test inicia sesión en alumno01', gestor.result);
-  const before = await summaryOf(gestor.session.accessToken, TENANT_A);
-  // Esta fila necesita una pila con SIMULATOR_MS=4000; con otra configuración no es ejecutable (no es un fallo de la app)
-  const notFourThousand = await simulatorMsOutcome(expected, 4000);
-  if (notFourThousand) return notFourThousand;
+/** Cuerpo de la fila 2 contra la instancia auxiliar (SIMULATOR_MS 4000): reinicio, historial inicial, conexión y espera del evento. */
+const encendidoEn = async (aux: AuxApi, situacion: 'con-conexion' | 'sin-conexion', resultado: 'con-conexion' | 'sin-conexion', expected: string): Promise<Outcome> => {
+  // Reinicio de alumno01 con el token de su administrador, contra la instancia auxiliar
+  const reset = await resetAt(aux.base, TENANT_A);
+  if (reset.adminToken === undefined) return prepFailure(expected, 'alumno01@sigpro.lab inicia sesión (instancia auxiliar)', reset.login);
+  if (reset.reset === undefined || !isOk(reset.reset)) return prepFailure(expected, 'alumno01@sigpro.lab reinicia el tenant (instancia auxiliar)', reset.reset ?? reset.login);
+  const gestor = await sessionAt(aux.base, TENANT_A, DEMO.gestor);
+  if (gestor.accessToken === undefined) return prepFailure(expected, 'gestor@sigpro.test inicia sesión (instancia auxiliar)', gestor.result);
+  const before = await summaryAt(aux.base, TENANT_A, gestor.accessToken);
   if (lastSeqOf(before) !== 6) return prepFailureReason(expected, `el historial recién reiniciado no empieza en seq 6 (último: ${String(lastSeqOf(before) ?? '(sin leer)')})`);
   let client: RealtimeClient | undefined;
   if (situacion === 'con-conexion') {
-    client = await openRealtime({ token: gestor.session.accessToken });
+    client = await openRealtime({ token: gestor.accessToken }, {}, aux.base);
     if (client.handshake.status !== 'accepted') {
       await client.close();
-      return prepFailure(expected, 'la conexión del gestor se abre', { status: 0, body: client.handshake, ms: 0 });
+      return prepFailure(expected, 'la conexión del gestor se abre (instancia auxiliar)', { status: 0, body: client.handshake, ms: 0 });
     }
   }
   try {
     if (resultado === 'con-conexion') {
-      // Espera con techo: la historia no fija plazo; la prueba observa hasta tres intervalos del simulador
       const event = await client?.waitEvent((item) => item.origin === 'simulator', WINDOW_ON_MS);
-      const after = await summaryOf(gestor.session.accessToken, TENANT_A);
+      const after = await summaryAt(aux.base, TENANT_A, gestor.accessToken);
       const last = lastSeqOf(after);
       return conclude(
         [
@@ -136,18 +139,25 @@ const encendido: ApiRowHandler = async (row) => {
           check(last !== undefined && last > 6, 'el último seq sube por encima de 6', `el último seq es ${String(last ?? '(sin leer)')}`),
           check(ncOpenOf(after) === 8, 'el número de NC abiertas del resumen sigue en 8', `NC abiertas del resumen ${String(ncOpenOf(after) ?? '(sin leer)')}`),
         ],
-        { evidence: { eventoRecibido: describeEvent(event), saludo: describeHandshake(client?.handshake ?? { status: 'sin-respuesta', detail: 'sin conexión' }) } },
+        { note: ESPERA_NOTE, evidence: { eventoRecibido: describeEvent(event), saludo: describeHandshake(client?.handshake ?? { status: 'sin-respuesta', detail: 'sin conexión' }) } },
       );
     }
     await sleep(WINDOW_ON_MS);
-    const after = await summaryOf(gestor.session.accessToken, TENANT_A);
-    return conclude([check(lastSeqOf(after) === 6, 'el último seq sigue en 6', `el último seq es ${String(lastSeqOf(after) ?? '(sin leer)')}`)]);
+    const after = await summaryAt(aux.base, TENANT_A, gestor.accessToken);
+    return conclude([check(lastSeqOf(after) === 6, 'el último seq sigue en 6', `el último seq es ${String(lastSeqOf(after) ?? '(sin leer)')}`)], { note: ESPERA_NOTE });
   } finally {
     await client?.close();
   }
 };
 
-// --- Esquema 3: la secuencia del simulador es fija (eventos provocados con POST /api/mission/tick) -----------------------
+const encendido: ApiRowHandler = async (row) => {
+  const situacion = strict('situacion', SITUACION_ENCENDIDO, cell(row, 'situacion'));
+  const resultado = strict('resultado', RESULTADO_ENCENDIDO, cell(row, 'resultado'));
+  const expected = cell(row, 'resultado');
+  return withAuxApi({ label: `US-MISION-FEED-004-E2-${situacion}`, env: { SIMULATOR_MS: '4000' }, expected }, (aux) => encendidoEn(aux, situacion, resultado, expected));
+};
+
+// --- Esquema 3: la secuencia del simulador es fija (eventos provocados con POST /api/mission/tick; pila principal) ----
 
 const secuenciaFija: ApiRowHandler = async (row) => {
   await resetTenants([TENANT_A]);
@@ -188,6 +198,8 @@ defineApiRows({
   story: 'US-MISION-FEED-004',
   surface: 'api',
   tenants: [TENANT_A],
+  // La fila 2 arranca una instancia auxiliar (hasta 40 s de espera) antes de la prueba: plazo mayor que el de las demás
+  rowTimeoutMs: (row) => (row.esquemaIndex === 2 ? 240_000 : 120_000),
   handlers: new Map<number, ApiRowHandler>([
     [1, apagado],
     [2, encendido],

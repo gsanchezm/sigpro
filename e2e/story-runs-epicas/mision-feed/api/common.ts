@@ -132,7 +132,7 @@ type WsConstructor = new (url: string, init?: WsInit) => WebSocket;
 const NodeWebSocket = globalThis.WebSocket as unknown as WsConstructor;
 
 /** URL del socket: el mismo servidor de la API, en `/socket.io` (no bajo `/api`), con el transporte WebSocket que usa la app. */
-export const realtimeUrl = (): string => `${new URL(API_URL).origin.replace(/^http/, 'ws')}${MISSION_SOCKET_PATH}/?EIO=4&transport=websocket`;
+export const realtimeUrl = (base: string = API_URL): string => `${new URL(base).origin.replace(/^http/, 'ws')}${MISSION_SOCKET_PATH}/?EIO=4&transport=websocket`;
 
 const parseJson = (text: string): unknown => {
   try {
@@ -164,7 +164,7 @@ const waitFor = async <T>(find: () => T | undefined, ceilingMs: number): Promise
  * Abre una conexión en tiempo real con `auth` (el campo `auth.token` del handshake; `{}` si no se da token) y cabeceras opcionales.
  * Resuelve cuando la API acepta o rechaza el saludo, o a los 5 s. Los eventos `mission:event` se acumulan en orden.
  */
-export const openRealtime = (auth: { readonly token?: string }, headers: Readonly<Record<string, string>> = {}): Promise<RealtimeClient> =>
+export const openRealtime = (auth: { readonly token?: string }, headers: Readonly<Record<string, string>> = {}, base: string = API_URL): Promise<RealtimeClient> =>
   new Promise<RealtimeClient>((resolve) => {
     const events: MissionEventDto[] = [];
     const state: { handshake: Handshake; open: boolean; settled: boolean } = {
@@ -172,7 +172,7 @@ export const openRealtime = (auth: { readonly token?: string }, headers: Readonl
       open: false,
       settled: false,
     };
-    const socket = new NodeWebSocket(realtimeUrl(), { headers });
+    const socket = new NodeWebSocket(realtimeUrl(base), { headers });
     const client: RealtimeClient = {
       get handshake() {
         return state.handshake;
