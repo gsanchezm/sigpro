@@ -103,12 +103,19 @@ const unknownIdNoChange: ApiRowHandler = async (row) => {
   const id = idCell.requested ? (typeof requestedId === 'string' ? requestedId : undefined) : idCell.id;
   if (id === undefined) return preparationFailed(expected, 'leer el id de la cuenta recién solicitada en alumno02', adminB);
   const before = snapshotOf(usersOf(await listUsers(tokenA)));
+  const auditBefore = await auditTotal(tokenA);
+  const otherBefore = snapshotOf(usersOf(await listUsersWith(tokenB, TENANT_B)));
   const rejected = await patchUser(tokenA, id, { active: false });
   const after = usersOf(await listUsers(tokenA));
+  const auditAfter = await auditTotal(tokenA);
+  const otherAfter = snapshotOf(usersOf(await listUsersWith(tokenB, TENANT_B)));
   return conclude(
     [
       statusCheck(rejected, { status: 404, code: 'user_not_found' }),
       check(snapshotOf(after) === before && after.length === 7, 'la lista de alumno01 sigue con sus siete cuentas, sin cambios', `la lista de alumno01 tiene ${after.length} cuentas${snapshotOf(after) === before ? ', sin cambios' : ', con cambios'}`),
+      // Regla: una petición rechazada no cambia nada ni deja registro de auditoría (también en la otra cuenta del tenant de alumno02)
+      check(auditAfter === auditBefore, `el total de GET /api/audit sigue en ${String(auditBefore)}`, `el total de GET /api/audit pasa de ${String(auditBefore)} a ${String(auditAfter)}`),
+      check(otherAfter === otherBefore, 'la lista de alumno02 no cambia', otherAfter === otherBefore ? 'la lista de alumno02 no cambia' : 'la lista de alumno02 cambia'),
     ],
     { evidence: { idProbado: idCell.requested ? '(id de alumno02)' : idCell.id } },
   );
@@ -147,8 +154,17 @@ const bodyBeforeLookup: ApiRowHandler = async (row) => {
   const admin = await signIn(ADMIN_A, TENANT_A);
   const token = sessionOf(admin)?.accessToken;
   if (token === undefined) return preparationFailed(expected, 'alumno01@sigpro.lab inicia sesión', admin);
+  const auditBefore = await auditTotal(token);
+  const listBefore = snapshotOf(usersOf(await listUsers(token)));
   const sent = await patchUser(token, id, body);
-  const extra: Check[] = outcome.motive === undefined ? [] : [motiveCheck(errorsOf(sent), outcome.motive, `el motivo ${outcome.motive.reason ?? ''}`)];
+  const auditAfter = await auditTotal(token);
+  const listAfter = snapshotOf(usersOf(await listUsers(token)));
+  // Regla: una petición rechazada no cambia nada ni deja registro de auditoría
+  const extra: Check[] = [
+    check(auditAfter === auditBefore, `el total de GET /api/audit sigue en ${String(auditBefore)}`, `el total de GET /api/audit pasa de ${String(auditBefore)} a ${String(auditAfter)}`),
+    check(listAfter === listBefore, 'la lista de usuarios de alumno01 no cambia', listAfter === listBefore ? 'la lista de usuarios de alumno01 no cambia' : 'la lista de usuarios de alumno01 cambia'),
+    ...(outcome.motive === undefined ? [] : [motiveCheck(errorsOf(sent), outcome.motive, `el motivo ${outcome.motive.reason ?? ''}`)]),
+  ];
   return conclude([statusCheck(sent, outcome.expect), ...extra], { evidence: { cuerpoEnviado: JSON.stringify(body) } });
 };
 

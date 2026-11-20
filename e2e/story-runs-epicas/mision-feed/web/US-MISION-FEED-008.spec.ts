@@ -1,16 +1,21 @@
 import type { Page } from '@playwright/test';
-import { defineBrowserRows, type BrowserRowHandler } from '../../core/framework';
+import { defineBrowserRows, notExecutable, type BrowserRowHandler } from '../../core/framework';
 import { MISION_TESTIDS } from '../../../../packages/shared/src/testids';
 import { quoted, waitUntil } from '../../support/browser';
 import { check, cell, strict, type Check } from '../../support/checks';
 import { adminAccess, createNc, intOf, resetTenants, tickOf, TENANT_A, isOk } from '../api/common';
 import {
+  CUT_NOTE,
+  PERMANENCIA_MS,
   conclude,
   cutLink,
   cutNote,
   describeRow,
+  describePermanence,
   feedTexts,
   installRealtimeLink,
+  isStable,
+  observePermanence,
   onWeb,
   prepFailed,
   prepFailedReason,
@@ -25,20 +30,17 @@ import {
   waitAccepted,
   waitView,
   withNoteWeb,
-  RECONNECT_OFFLINE_MS,
   type RealtimeLink,
 } from './common';
 
 // US-MISION-FEED-008 — Indicador de conexión en /mission: en vivo, sin conexión y vuelta al panel (web).
-// Preparación: alumno01 reiniciado; gestor abre /mission con la conexión en vivo. El corte es el del navegador («sin conexión»)
-// y se comprueba con un control; si el navegador no corta la conexión en 5 s, la fila lo declara como aproximación en su nota.
+// Preparación: alumno01 reiniciado; gestor abre /mission con la conexión en vivo. El corte («el servidor no responde») se hace en la
+// prueba y su control debe sacar el indicador de «En vivo» en 5 s; si no lo hace, la fila es no ejecutable con la lectura como evidencia.
 
 const TIP_LIVE = 'Conectado por WebSocket: los eventos llegan solos.';
 const TIP_OFFLINE = 'Sin conexión en tiempo real. Se reintentará automáticamente.';
 const TEXTO_NC_NUEVA = 'NC-013 abierta (Menor) en PRG-002';
 const TEXTO_TELEMETRIA = 'Telemetría PRG-013: 766 paquetes/s';
-/** Ventana en la que la historia habla de permanencia («sigue en Sin conexión»). */
-const PERMANENCIA_MS = 3_000;
 
 /** Explicación que la historia dice que se lee al pasar el cursor por el icono, según el estado (celda «explicacion»). */
 const EXPLICACION: ReadonlyMap<string, string> = new Map<string, string>([
@@ -80,14 +82,18 @@ interface HoverRead {
 
 const readHover = (page: Page): Promise<HoverRead | undefined> =>
   page
-    .evaluate((ids: { readonly connection: string; readonly tooltip: string }) => {
-      const connection = document.querySelector<HTMLElement>(`[data-testid="${ids.connection}"]`);
-      const tooltip = document.querySelector<HTMLElement>(`[data-testid="${ids.tooltip}"]`);
-      return {
-        indicator: connection?.querySelector('button')?.getAttribute('aria-label') ?? undefined,
-        tooltip: tooltip ? (tooltip.textContent ?? '').replace(/\u00a0/g, ' ').trim() : undefined,
-      };
-    }, { connection: MISION_TESTIDS.MISSION_CONNECTION, tooltip: MISION_TESTIDS.MISSION_CONNECTION_TOOLTIP })
+    .evaluate(
+      (ids: { readonly connection: string; readonly tooltip: string }) => {
+        const connection = document.querySelector<HTMLElement>(`[data-testid="${ids.connection}"]`);
+        const tooltip = document.querySelector<HTMLElement>(`[data-testid="${ids.tooltip}"]`);
+        const nbsp = new RegExp(String.fromCharCode(160), 'g');
+        return {
+          indicator: connection?.querySelector('button')?.getAttribute('aria-label') ?? undefined,
+          tooltip: tooltip ? (tooltip.textContent ?? '').replace(nbsp, ' ').trim() : undefined,
+        };
+      },
+      { connection: MISION_TESTIDS.MISSION_CONNECTION, tooltip: MISION_TESTIDS.MISSION_CONNECTION_TOOLTIP },
+    )
     .catch(() => undefined);
 
 /** Pasa el cursor por el icono y lee, en una sola evaluación, el indicador y su explicación; repite hasta que la explicación coincide. */
@@ -99,18 +105,6 @@ const explainedAs = async (page: Page, expected: string): Promise<{ readonly rea
     return last?.tooltip === expected;
   }, SHOW_CEILING_MS);
   return { reached: reached.reached, indicator: last?.indicator, tooltip: last?.tooltip };
-};
-
-/** Permanencia: durante la ventana el indicador no vuelve a «En vivo» y, al final, sigue en el estado dado. */
-const permanence = async (page: Page, state: string): Promise<{ readonly held: boolean; readonly liveSeen: boolean; readonly endText?: string }> => {
-  let liveSeen = false;
-  const started = Date.now();
-  while (Date.now() - started < PERMANENCIA_MS) {
-    if ((await readConnectionText(page)) === 'En vivo') liveSeen = true;
-    await settle(250);
-  }
-  const endText = await readConnectionText(page);
-  return { held: !liveSeen && endText === state, liveSeen, endText };
 };
 
 // --- Esquema 1: el indicador dice si la conexión en tiempo real está abierta ------------------------------------------
@@ -128,15 +122,18 @@ const indicador: BrowserRowHandler = onWeb(async (row, { page }) => {
   let note: string | undefined;
   if (situacion === 'offline') {
     const cut = await cutLink(page, link);
+    if (!cut.controlOk) return notExecutable(expected, `El corte no saca el indicador de «En vivo» (${cut.evidence}). ${CUT_NOTE}`);
     note = cutNote(cut);
-    // Sin conexión debe aparecer; la permanencia se mide después (el indicador puede parpadear mientras reintenta)
-    const down = await waitView(page, (view) => view.connectionText === 'Sin conexión', RECONNECT_OFFLINE_MS);
+    const down = await waitView(page, (view) => view.connectionText === 'Sin conexión', cut.reconnectMs);
     checks.push(check(down.reached, 'el indicador dice «Sin conexión»', `el indicador dice «${down.view?.connectionText ?? '(sin leer)'}»`));
-    const held = await permanence(page, 'Sin conexión');
-    checks.push(check(held.held, `el indicador se mantiene en «Sin conexión» durante ${PERMANENCIA_MS / 1000} s`, `${held.liveSeen ? 'vuelve a «En vivo» durante la ventana' : 'no vuelve a «En vivo»'}; al final dice «${held.endText ?? '(sin leer)'}»`));
+    const perm = await observePermanence(page);
+    if (!perm.liveSeen && !isStable(perm)) return notExecutable(expected, `El corte no es estable: ${describePermanence(perm)}. ${CUT_NOTE}`);
+    checks.push(
+      check(!perm.liveSeen, `el indicador no vuelve a «En vivo» durante ${PERMANENCIA_MS / 1000} s`, perm.liveSeen ? 'vuelve a «En vivo» durante la ventana' : 'no vuelve a «En vivo»'),
+      check(isStable(perm), `la mayoría de las lecturas dice «Sin conexión» durante ${PERMANENCIA_MS / 1000} s`, describePermanence(perm)),
+    );
   } else {
-    const live = await readConnectionText(page);
-    checks.push(textCheck(live, texto, 'el indicador dice'));
+    checks.push(textCheck(await readConnectionText(page), texto, 'el indicador dice'));
   }
   const explained = await explainedAs(page, explicacion);
   // Lectura atómica: el indicador y su explicación al pasar el cursor, en el mismo instante
@@ -155,7 +152,8 @@ const vuelveEnVivo: BrowserRowHandler = onWeb(async (row, { page }) => {
   const failure = await startWeb(page, link);
   if (failure) return prepFailed(expected, failure);
   const cut = await cutLink(page, link);
-  const down = await waitView(page, (view) => view.connectionText === 'Sin conexión', RECONNECT_OFFLINE_MS);
+  if (!cut.controlOk) return notExecutable(expected, `El corte no saca el indicador de «En vivo» (${cut.evidence}). ${CUT_NOTE}`);
+  const down = await waitView(page, (view) => view.connectionText === 'Sin conexión', cut.reconnectMs);
   if (!down.reached) return prepFailedReason(expected, `el indicador no pasa a «Sin conexión» tras el corte (dice «${down.view?.connectionText ?? '(sin leer)'}»)`);
   const before = link.accepted();
   await restoreLink(page, link, cut);
@@ -175,7 +173,7 @@ const vuelveEnVivo: BrowserRowHandler = onWeb(async (row, { page }) => {
       textCheck(view?.connectionText, 'En vivo', 'el indicador dice'),
       check(rowHas(first, texto), `la primera fila dice «${texto}»`, `la primera fila dice ${describeRow(first)}`),
     ],
-    { ...(cutNote(cut) === undefined ? {} : { note: cutNote(cut) }) },
+    { note: cutNote(cut) },
   );
 });
 
@@ -193,7 +191,8 @@ const duranteElCorte: BrowserRowHandler = onWeb(async (row, { page }) => {
   const initial = await waitView(page, (current) => current.ncValue === '8' && current.feed.length === 6);
   if (!initial.reached) return prepFailedReason(expected, `antes del corte no se ve «NC abiertas» 8 con 6 filas (ve ${initial.view?.ncValue ?? '(sin leer)'} y ${feedTexts(initial.view).length} filas)`);
   const cut = await cutLink(page, link);
-  const down = await waitView(page, (view) => view.connectionText === 'Sin conexión', RECONNECT_OFFLINE_MS);
+  if (!cut.controlOk) return notExecutable(expected, `El corte no saca el indicador de «En vivo» (${cut.evidence}). ${CUT_NOTE}`);
+  const down = await waitView(page, (view) => view.connectionText === 'Sin conexión', cut.reconnectMs);
   if (!down.reached) return prepFailedReason(expected, `el indicador no pasa a «Sin conexión» tras el corte (dice «${down.view?.connectionText ?? '(sin leer)'}»)`);
   const admin = await adminAccess(TENANT_A);
   if (admin.token === undefined) return prepFailed(expected, { message: 'alumno01@sigpro.lab no inicia sesión', callLog: [] });
@@ -221,12 +220,12 @@ const duranteElCorte: BrowserRowHandler = onWeb(async (row, { page }) => {
     const present = feedTexts(view).some((item) => rowHas(item, textoLista));
     checks.push(check(present, `la lista incluye el texto «${textoLista}»`, `la lista ${present ? 'incluye' : 'no incluye'} el texto «${textoLista}» (${feedTexts(view).length} filas)`));
   }
-  return conclude(checks, { ...(cutNote(cut) === undefined ? {} : { note: cutNote(cut) }), evidence: { filas: feedTexts(view).length } });
+  return conclude(checks, { note: cutNote(cut), evidence: { filas: feedTexts(view).length } });
 });
 
 // Reglas de la historia sin fila que las pruebe (se anotan, no se juzgan):
 const NOTA_CONECTANDO =
-  'Regla «Conectando…» y su explicación («Abriendo la conexión en tiempo real…»): ningún Esquema la comprueba; el indicador transitorio no se mide aquí.';
+  'Regla «Conectando…» y su explicación («Abriendo la conexión en tiempo real…»): ningún Esquema la comprueba; el estado transitorio no se mide aquí.';
 const NOTA_TOKEN =
   'Regla de renovación del token caducado cuando la conexión vuelve: ninguna fila lo provoca (el accessToken de la prueba sigue vigente); la renovación no se comprueba.';
 

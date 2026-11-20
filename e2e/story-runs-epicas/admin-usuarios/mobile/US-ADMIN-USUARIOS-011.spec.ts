@@ -1,10 +1,11 @@
-import type { Page } from '@playwright/test';
+import type { Page, Request } from '@playwright/test';
+import { ADMIN_DYNAMIC_TESTIDS } from '../../../../packages/shared/src/testids';
 import { TENANT_A } from '../../../story-runs/support/prepare';
 import { ACTION, attrOf, isVisible, quoted, runSteps, safe, textOf, waitUntil } from '../../support/browser';
 import { check, cell, preparationFailedWeb, strict } from '../../support/checks';
 import { defineBrowserRows, type BrowserRowHandler } from '../../core/framework';
 import { SEED_ID } from '../api/common';
-import { armToasts, corsFor, credentialsOf, errorBody, isApiPath, quietOk, resetAlumno, toastBodyOf, toastShown } from '../web/common';
+import { armToasts, corsFor, credentialsOf, errorBody, isApiPath, quietOk, resetAlumno, toastBodyOf, toastClosedAfter, toastLog, toastShown } from '../web/common';
 import {
   activeSwitchOf,
   cardOf,
@@ -112,16 +113,22 @@ const roleSaved: BrowserRowHandler = async (row, { page }) => {
   const picked = await pickRole(page, id, roleLabel, roleValue);
   if (picked.problem !== undefined) return verdict([check(false, `se puede elegir «${roleLabel}» en la tarjeta de ${email}`, `${picked.problem}; opciones visibles: ${picked.offered}`)], undefined, { opciones: picked.offered });
   const toast = await toastShown(page, 'ok', TOAST_UPDATED, aviso);
+  const closed = toast.firstAt === undefined ? undefined : await toastClosedAfter(page, toast.firstAt);
   const back = await runSteps([
     ['abrir «Auditoría»', () => tabOf(page, 'audit').click(ACTION)],
     ['volver a abrir «Usuarios»', () => tabOf(page, 'users').click(ACTION)],
   ]);
   const ready = await waitUsersReady(page);
   const roleAfter = await rowRole(page, id);
-  return verdict([
-    check(toast.seen, `aparece el aviso «${TOAST_UPDATED}» con «${aviso}»`, `el registro dice: ${toast.observed}`),
-    check(back === undefined && ready && roleAfter === roleLabel, `tras volver a abrir «Usuarios», la tarjeta de ${email} muestra «${roleLabel}»`, back ?? `la tarjeta muestra «${roleAfter ?? '(sin leer)'}»`),
-  ]);
+  return verdict(
+    [
+      check(toast.seen, `aparece el aviso «${TOAST_UPDATED}» con «${aviso}»`, `el registro dice: ${toast.observed}`),
+      check(closed !== undefined && closed <= 3500, 'el aviso se cierra solo a los 3 segundos', `el aviso sale del DOM a los ${closed === undefined ? '(no sale antes del techo)' : `${closed} ms`}`),
+      check(back === undefined && ready && roleAfter === roleLabel, `tras volver a abrir «Usuarios», la tarjeta de ${email} muestra «${roleLabel}»`, back ?? `la tarjeta muestra «${roleAfter ?? '(sin leer)'}»`),
+    ],
+    undefined,
+    { opciones: picked.offered, cierreMs: closed ?? null },
+  );
 };
 
 // --- Esquema 2: elegir el rol que la cuenta ya tiene no cambia nada ----------------------------------------------------------
@@ -204,16 +211,18 @@ const rejectedChange: BrowserRowHandler = async (row, { page }) => {
   const reverted = await waitUntil(async () => (before.kind === 'role' ? (await rowRole(page, id)) === before.label : (await rowSwitchOn(page, id)) === before.on));
   const revertedNow = before.kind === 'role' ? await rowRole(page, id) : await rowSwitchOn(page, id);
   const body = await toastBodyOf(page, 'danger', TOAST_FAILED);
+  // La historia dice «una traza del error»: se comprueba que hay una traza; su formato exacto va como evidencia
   const motiveCheck =
     motive.kind === 'text'
       ? check(failed.seen, `el aviso «${TOAST_FAILED}» dice «${motive.text}»`, `el registro dice: ${failed.observed}`)
-      : check(body !== undefined && body.startsWith(`PATCH /api/admin/users/${id} → ${motive.status}`), `el aviso «${TOAST_FAILED}» trae la traza PATCH /api/admin/users/${id} → ${motive.status}`, `el cuerpo del aviso es «${body ?? '(ninguno)'}»`);
+      : check(body !== undefined && body.length > 0, `el aviso «${TOAST_FAILED}» muestra una traza del error`, `el cuerpo del aviso es «${body ?? '(ninguno)'}»`);
   return verdict(
     [
       check(reverted.reached, `la tarjeta vuelve a ${cell(row, 'valor_anterior')}`, `la tarjeta muestra ${before.kind === 'role' ? `el rol «${String(revertedNow)}»` : `el interruptor ${String(revertedNow)}`}`),
       motiveCheck,
     ],
     `La API respondió ${rejection.status} una sola vez a PATCH /api/admin/users/${id}.`,
+    { trazaMedida: body ?? '(ninguna)' },
   );
 };
 
@@ -227,23 +236,46 @@ const CONTROL_CELLS: ReadonlyMap<string, 'role' | 'switch'> = new Map<string, 'r
 const ownCard: BrowserRowHandler = async (row, { page }) => {
   const control = strict('control', CONTROL_CELLS, cell(row, 'control'));
   const id = idOf('alumno01@sigpro.lab') ?? 'u7';
-  const expected = `${cell(row, 'control')} está deshabilitado, debajo se ve «${OWN_REASON}» y junto al nombre la marca «tú»`;
+  const expected = `${cell(row, 'control')} está deshabilitado, debajo se ve «${OWN_REASON}», junto al nombre la marca «tú», y intentarlo no envía ninguna petición ni cambia nada`;
   const preparation = await openUsers(page, 'alumno01@sigpro.lab', expected);
   if (preparation !== undefined) return preparationFailedWeb(expected, preparation);
   const target = control === 'role' ? roleComboOf(page, id) : activeSwitchOf(page, id);
   const disabledAttr = await attrOf(target, 'aria-disabled');
   const reason = await textOf(reasonOf(page, id));
   const mark = await isVisible(cardOf(page, id).getByText('tú', { exact: true }));
-  // Estado efectivo: un clic de prueba sobre el control deshabilitado no debe cambiar nada ni avisar
+  const before = control === 'role' ? await rowRole(page, id) : await rowSwitchOn(page, id);
   await ensureArmed(page);
+  // Cuenta cada petición PATCH a la propia cuenta durante el intento (debe ser ninguna)
+  const sent: string[] = [];
+  const onRequest = (request: Request): void => {
+    if (request.method() === 'PATCH' && new URL(request.url()).pathname.endsWith(`/admin/users/${id}`)) sent.push(request.url());
+  };
+  page.on('request', onRequest);
+  // Clic de prueba sobre el control deshabilitado
   await safe(() => target.click({ force: true, timeout: 2_000 }), undefined);
+  let sheetOpened = false;
+  if (control === 'role') {
+    sheetOpened = await isVisible(page.getByTestId(`${ADMIN_DYNAMIC_TESTIDS.ADMIN_USER_ROLE(id)}-dialog`));
+    // Si la hoja se abriera, se elige OTRA opción: tampoco debe salir ninguna petición
+    if (sheetOpened) {
+      const other = before === 'Admin' ? 'auditor' : 'admin';
+      await safe(() => page.getByTestId(`${ADMIN_DYNAMIC_TESTIDS.ADMIN_USER_ROLE(id)}-option-${other}`).click({ force: true, timeout: 2_000 }), undefined);
+    }
+  }
   const quiet = await quietOk(page);
-  const stillSelf = control === 'role' ? (await rowRole(page, id)) === 'Admin' : (await rowSwitchOn(page, id)) === true;
+  page.off('request', onRequest);
+  const log = await toastLog(page);
+  const dangers = log === undefined ? undefined : log.filter((entry) => entry.tone === 'danger').length;
+  const after = control === 'role' ? await rowRole(page, id) : await rowSwitchOn(page, id);
+  if (sheetOpened) await safe(() => page.keyboard.press('Escape'), undefined);
   return verdict([
     check(disabledAttr === 'true', `${cell(row, 'control')} está deshabilitado`, `aria-disabled ${disabledAttr ?? '(sin atributo)'}`),
     check(reason === OWN_REASON, `debajo se ve «${OWN_REASON}»`, `debajo se ve «${reason ?? '(sin texto)'}»`),
     check(mark, 'junto al nombre se ve la marca «tú»', `marca «tú» visible=${String(mark)}`),
-    check(quiet !== undefined && quiet.held && stillSelf, 'el intento de cambio no cambia nada ni avisa', quiet === undefined ? 'el registro de avisos no se puede leer' : `avisos ok: ${quiet.seen || 'ninguno'}; estado ${stillSelf ? 'sin cambios' : 'cambiado'}`),
+    check(!sheetOpened, 'el selector no abre su hoja de opciones', `hoja de opciones abierta=${String(sheetOpened)}`),
+    check(sent.length === 0, 'ninguna petición PATCH a la propia cuenta', `peticiones PATCH a la propia cuenta: ${sent.length}`),
+    check(dangers === 0, 'ningún aviso de error', dangers === undefined ? 'el registro de avisos no se puede leer' : `avisos de error: ${dangers}`),
+    check(quiet !== undefined && quiet.held && after === before, 'ningún aviso de éxito y el estado no cambia', `avisos ok: ${quiet?.seen || 'ninguno'}; estado ${String(before)} → ${String(after)}`),
   ]);
 };
 

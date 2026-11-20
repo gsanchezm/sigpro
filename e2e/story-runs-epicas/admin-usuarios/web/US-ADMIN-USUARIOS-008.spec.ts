@@ -24,6 +24,7 @@ import {
   switchChecked,
   toastBodyOf,
   toastLog,
+  toastClosedAfter,
   toastShown,
   verdict,
   waitTableReady,
@@ -139,13 +140,20 @@ const roleSaved: BrowserRowHandler = async (row, { page }) => {
   const choice = await chooseRoleOption(roleSelectOf(page, id), roleLabel, roleValue);
   if (choice.problem !== undefined) return verdict([check(false, `se puede elegir «${roleLabel}» en el selector de la fila de ${email}`, `${choice.problem}; opciones del selector: ${choice.offered}`)], undefined, { opciones: choice.offered });
   const toast = await toastShown(page, 'ok', TOAST_UPDATED, aviso);
+  const closed = toast.firstAt === undefined ? undefined : await toastClosedAfter(page, toast.firstAt);
   const reloaded = await runSteps([['recargar la página', () => page.reload({ timeout: CEILING_MS })]]);
   const ready = await waitTableReady(page);
   const roleAfter = await rowRole(page, id);
-  return verdict([
-    check(toast.seen, `aparece el aviso «${TOAST_UPDATED}» con «${aviso}»`, `el registro dice: ${toast.observed}`),
-    check(reloaded === undefined && ready && roleAfter === roleLabel, `tras recargar, la fila de ${email} muestra «${roleLabel}»`, reloaded ?? `tras recargar, la fila muestra «${roleAfter ?? '(sin leer)'}»`),
-  ]);
+  return verdict(
+    [
+      check(toast.seen, `aparece el aviso «${TOAST_UPDATED}» con «${aviso}»`, `el registro dice: ${toast.observed}`),
+      // Regla: el aviso emergente se cierra solo a los 3 segundos
+      check(closed !== undefined && closed <= 3500, 'el aviso se cierra solo a los 3 segundos', `el aviso sale del DOM a los ${closed === undefined ? '(no sale antes del techo)' : `${closed} ms`}`),
+      check(reloaded === undefined && ready && roleAfter === roleLabel, `tras recargar, la fila de ${email} muestra «${roleLabel}»`, reloaded ?? `tras recargar, la fila muestra «${roleAfter ?? '(sin leer)'}»`),
+    ],
+    undefined,
+    { opciones: choice.offered, cierreMs: closed ?? null },
+  );
 };
 
 // --- Esquema 2: un cambio de activo se guarda, lo confirma un aviso y actualiza la insignia ---------------------------------
@@ -169,6 +177,8 @@ const switchSaved: BrowserRowHandler = async (row, { page }) => {
   if (preparation !== undefined) return preparationFailedWeb(expected, preparation);
   const initial = await rowSwitchOn(page, id);
   if (initial !== (before === 'true')) return preparationFailedWeb(expected, `el interruptor de «Activo» de ${email} está ${String(initial)} y no ${before}`);
+  // Si la insignia ya muestra el valor esperado antes del clic, la insignia no distingue el cambio: se anota
+  const badgeBefore = await textOf(statusBadgeOf(page, id));
   if (!(await armToasts(page))) throw new Error('registro de avisos no instalado en la página: fallo del arnés');
   const clicked = await runSteps([[`pulsar el interruptor de «Activo» de ${email}`, () => activeSwitchOf(page, id).click(ACTION)]]);
   if (clicked !== undefined) {
@@ -176,12 +186,20 @@ const switchSaved: BrowserRowHandler = async (row, { page }) => {
     return verdict([check(false, `se puede pulsar el interruptor de «Activo» de ${email}`, `${clicked}; el interruptor ${exists ? 'existe' : 'no existe'} en la fila`)]);
   }
   const toast = await toastShown(page, 'ok', TOAST_UPDATED, aviso);
+  // La insignia se lee cuando el interruptor ya muestra el valor nuevo (la respuesta llegó y la fila se actualizó)
+  const newValue = before === 'true' ? 'false' : 'true';
+  const switched = await waitUntil(async () => (await switchChecked(activeSwitchOf(page, id))) === newValue);
   const badge = await waitUntil(async () => (await textOf(statusBadgeOf(page, id))) === status);
   const badgeNow = await textOf(statusBadgeOf(page, id));
-  return verdict([
-    check(toast.seen, `aparece el aviso «${TOAST_UPDATED}» con «${aviso}»`, `el registro dice: ${toast.observed}`),
-    check(badge.reached, `la insignia de «Estado» muestra «${status}»`, `la insignia de «Estado» muestra «${badgeNow ?? '(sin texto)'}»`),
-  ]);
+  const distinguishes = badgeBefore !== status;
+  return verdict(
+    [
+      check(toast.seen, `aparece el aviso «${TOAST_UPDATED}» con «${aviso}»`, `el registro dice: ${toast.observed}`),
+      check(switched.reached && badge.reached, `la insignia de «Estado» muestra «${status}»`, `la insignia de «Estado» muestra «${badgeNow ?? '(sin texto)'}»; el interruptor ${switched.reached ? 'ya muestra el valor nuevo' : 'no cambia'}`),
+    ],
+    distinguishes ? undefined : `La insignia ya mostraba «${badgeBefore ?? '(sin leer)'}» antes del clic: en esta fila la insignia no distingue el cambio; lo distingue el interruptor.`,
+    { insigniaAntesDelClic: badgeBefore ?? '(sin leer)' },
+  );
 };
 
 // --- Esquema 3: mientras la API responde, la fila ya muestra el cambio -----------------------------------------------------------
@@ -245,16 +263,23 @@ const rejectedChange: BrowserRowHandler = async (row, { page }) => {
   const reverted = await waitUntil(async () => (before.kind === 'role' ? (await rowRole(page, id)) === before.label : (await rowSwitchOn(page, id)) === before.on));
   const revertedNow = before.kind === 'role' ? await rowRole(page, id) : await rowSwitchOn(page, id);
   const body = await toastBodyOf(page, 'danger', TOAST_FAILED);
+  // La historia dice «una traza del error»: se comprueba que hay una traza; su formato exacto va como evidencia
   const motiveCheck =
     motive.kind === 'text'
       ? check(failed.seen, `el aviso «${TOAST_FAILED}» dice «${motive.text}»`, `el registro dice: ${failed.observed}`)
-      : check(body !== undefined && body.startsWith(`PATCH /api/admin/users/${id} → ${motive.status}`), `el aviso «${TOAST_FAILED}» trae la traza PATCH /api/admin/users/${id} → ${motive.status}`, `el cuerpo del aviso es «${body ?? '(ninguno)'}»`);
+      : check(body !== undefined && body.length > 0, `el aviso «${TOAST_FAILED}» muestra una traza del error`, `el cuerpo del aviso es «${body ?? '(ninguno)'}»`);
+  // El 409 self_change sobre una cuenta ajena no es una regla de la API (esa regla es para la propia cuenta): la historia lo fija como motivo del aviso
+  const note =
+    rejection.code === 'self_change' && id !== 'u7'
+      ? `El 409 self_change sobre ${id} no es una regla de la API (la regla es para la propia cuenta): la historia lo fija como motivo del aviso y la prueba lo fuerza con el interceptor.`
+      : `La API respondió ${rejection.status} una sola vez a PATCH /api/admin/users/${id}.`;
   return verdict(
     [
       check(reverted.reached, `la fila vuelve a ${cell(row, 'valor_anterior')}`, `la fila muestra ${before.kind === 'role' ? `el rol «${String(revertedNow)}»` : `el interruptor ${String(revertedNow)}`}`),
       motiveCheck,
     ],
-    `La API respondió ${rejection.status} una sola vez a PATCH /api/admin/users/${id}.`,
+    note,
+    { trazaMedida: body ?? '(ninguna)' },
   );
 };
 

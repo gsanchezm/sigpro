@@ -25,6 +25,9 @@ import {
 
 // --- Esquema 1: solo el rol admin recibe la lista de usuarios -----------------------------------------------------------------
 
+/** Clave de administración del entorno (la misma que usa el arnés); no sustituye al token en estos endpoints. */
+const ADMIN_KEY = process.env.ADMIN_KEY ?? 'dev-admin-key';
+
 const LIST_EXPECT: ReadonlyMap<string, Expect> = new Map<string, Expect>([
   ['200 con la lista de usuarios', { status: 200 }],
   ['403 forbidden', { status: 403, code: 'forbidden' }],
@@ -133,7 +136,14 @@ const withoutValidToken: ApiRowHandler = async (row) => {
   const header = authorization(token);
   const headers: Record<string, string> = { 'x-tenant': TENANT_A, ...(header === undefined ? {} : { authorization: header }) };
   const sent = await rawCall(method, path, headers, method === 'PATCH' ? { active: false } : undefined);
-  return conclude([statusCheck(sent, expectedResponse)]);
+  // Regla: la clave de administración (X-Admin-Key) no sustituye al token en estos dos endpoints: también con la clave, 401 missing_token
+  const keyed = await rawCall('GET', '/admin/users', { 'x-tenant': TENANT_A, 'x-admin-key': ADMIN_KEY });
+  const keyedPatch = await rawCall('PATCH', '/admin/users/u4', { 'x-tenant': TENANT_A, 'x-admin-key': ADMIN_KEY }, { active: false });
+  return conclude([
+    statusCheck(sent, expectedResponse),
+    statusCheck(keyed, { status: 401, code: 'missing_token' }),
+    statusCheck(keyedPatch, { status: 401, code: 'missing_token' }),
+  ]);
 };
 
 defineApiRows({

@@ -1,7 +1,7 @@
 import type { Page } from '@playwright/test';
-import { PROGRAMAS_TESTIDS } from '../../../../packages/shared/src/testids';
+import { ADMIN_TESTIDS, PROGRAMAS_TESTIDS } from '../../../../packages/shared/src/testids';
 import { TENANT_A } from '../../../story-runs/support/prepare';
-import { ACTION, CEILING_MS, isVisible, linesOf, quoted, runSteps, safe, textOf, valueOf, waitUntil } from '../../support/browser';
+import { ACTION, CEILING_MS, attrOf, isVisible, linesOf, quoted, runSteps, safe, textOf, valueOf, waitUntil } from '../../support/browser';
 import { check, cell, preparationFailedWeb, sleep, strict } from '../../support/checks';
 import { defineBrowserRows, type BrowserRowHandler } from '../../core/framework';
 import { SEED_ID } from '../api/common';
@@ -26,6 +26,7 @@ import {
   usersError,
   usersRetry,
   usersSearch,
+  usersTable,
   verdict,
   visibleEmails,
   waitTableReady,
@@ -77,6 +78,13 @@ const DELAYS: ReadonlyMap<string, number> = new Map<string, number>([
   ['3 segundos', 3_000],
 ]);
 
+/** Columnas de la tabla en su orden (la historia las nombra en ese orden). */
+const COLUMNS = 'Usuario|Correo|Rol|Activo|Estado';
+/** Nota que la historia pone bajo el recuento. */
+const NOTE = 'No puedes desactivarte ni cambiar tu propio rol, y siempre debe quedar al menos un admin activo.';
+/** Texto de ayuda del campo de búsqueda. */
+const PLACEHOLDER = 'Nombre o correo…';
+
 /** Número de filas de cuentas en la tabla (0 si no se puede leer). */
 const rowCount = (page: Page): Promise<number> => safe(() => userRows(page).count(), 0);
 
@@ -97,13 +105,24 @@ const rowShows: BrowserRowHandler = async (row, { page }) => {
   if (!ready) return preparationFailedWeb(expected, 'la tabla de usuarios no asienta su lista');
   const present = await waitUntil(() => isVisible(rowOf(page, id)));
   const roleShown = await selectedRoleLabel(roleSelectOf(page, id));
-  const activeShown = (await switchChecked(activeSwitchOf(page, id))) === 'true' ? 'encendido' : 'apagado';
+  // Una lectura fallida no es «apagado»: sin valor, la condición no se cumple
+  const checked = await switchChecked(activeSwitchOf(page, id));
+  const activeShown = checked === undefined ? '(sin leer)' : checked === 'true' ? 'encendido' : checked === 'false' ? 'apagado' : `(valor ${checked})`;
   const statusShown = await textOf(statusBadgeOf(page, id));
+  // Reglas de la tabla que la fila da por hechas: columnas, nota, texto de ayuda y marca «tú» solo en la propia cuenta
+  const headers = (await safe(() => usersTable(page).locator('thead th').allTextContents(), [] as string[])).map((text) => text.trim()).join('|');
+  const placeholder = await attrOf(usersSearch(page), 'placeholder');
+  const note = await textOf(page.getByTestId(ADMIN_TESTIDS.ADMIN_USERS_NOTE));
+  const marks = await safe(() => page.getByText('tú', { exact: true }).count(), -1);
+  const markHere = await isVisible(rowOf(page, id).getByText('tú', { exact: true }));
   return verdict([
     check(present.reached, `aparece la fila de ${cell(row, 'correo')}`, present.reached ? `aparece la fila de ${cell(row, 'correo')}` : `no aparece la fila de ${cell(row, 'correo')}`),
     textCheck(roleShown, role, 'el selector «Rol» muestra'),
     check(activeShown === active, `el interruptor de «Activo» está ${active}`, `el interruptor de «Activo» está ${activeShown}`),
     textCheck(statusShown, status, 'la insignia de «Estado» muestra'),
+    check(headers === COLUMNS, `las columnas son ${COLUMNS.split('|').join(', ')}`, `las columnas son ${headers || '(ninguna)'}`),
+    check(markHere === (id === 'u7') && marks === 1, 'la marca «tú» aparece solo en la propia cuenta', `marcas «tú» en la tabla: ${marks}; en esta fila: ${String(markHere)}`),
+    check(placeholder === PLACEHOLDER && note === NOTE, 'el campo «Buscar usuarios» tiene el texto de ayuda «Nombre o correo…» y la nota bajo la tabla', `texto de ayuda «${placeholder ?? '(sin leer)'}»; nota «${note ?? '(sin texto)'}»`),
   ]);
 };
 
@@ -125,39 +144,46 @@ const searchFilters: BrowserRowHandler = async (row, { page }) => {
   if (typing !== undefined) return preparationFailedWeb(expected, typing);
   const counted = await waitUntil(async () => (await textOf(usersCount(page))) === count);
   const recount = await textOf(usersCount(page));
-  const fieldValue = await valueOf(usersSearch(page));
   const emails = await visibleEmails(page);
   const emptyText = await textOf(usersEmpty(page));
+  const fieldValue = await valueOf(usersSearch(page));
   const resultCheck =
     shown.kind === 'only'
       ? check(emails.length === 1 && emails[0] === shown.email, `solo se ve la fila de ${shown.email}`, `se ven ${emails.length} filas: ${emails.join(', ') || '(ninguna)'}`)
       : check(emails.length === 0 && emptyText === 'Ningún usuario coincide con la búsqueda.', 'se ve el aviso «Ningún usuario coincide con la búsqueda.» y ninguna fila', `filas ${emails.length}; aviso «${emptyText ?? '(sin texto)'}»`);
-  return verdict([
-    textCheck(recount, count, 'el recuento dice'),
-    check(counted.reached, `el recuento llega a «${count}»`, counted.reached ? 'el recuento llega al valor esperado' : `el recuento queda en «${recount ?? '(sin texto)'}»`),
-    check(fieldValue === typed, `el campo «Buscar usuarios» conserva ${JSON.stringify(typed)}`, `el campo «Buscar usuarios» tiene ${JSON.stringify(fieldValue ?? '(sin leer)')}`),
-    resultCheck,
-  ]);
+  return verdict(
+    [
+      textCheck(recount, count, 'el recuento dice'),
+      check(counted.reached, `el recuento llega a «${count}»`, counted.reached ? 'el recuento llega al valor esperado' : `el recuento queda en «${recount ?? '(sin texto)'}»`),
+      resultCheck,
+    ],
+    undefined,
+    // El valor que queda en el campo no lo fija la historia: se anota como evidencia
+    { valorDelCampoTrasEscribir: fieldValue ?? '(sin leer)', escrito: typed },
+  );
 };
 
 // --- Esquema 3: si la lista no se puede cargar, el aviso ofrece reintentar -----------------------------------------------------
 
 const listFails: BrowserRowHandler = async (row, { page }) => {
   const code = strict('codigo', CODES, cell(row, 'codigo'));
-  const expected = `aviso «No se pudieron cargar los usuarios» con la traza GET /api/admin/users → ${code} y «Reintentar»; al reintentar, siete cuentas`;
+  const expected = 'aviso «No se pudieron cargar los usuarios» con la traza del error y «Reintentar»; al reintentar, siete cuentas';
   await resetAlumno();
   const signed = await signInWeb(page, 'alumno01@sigpro.lab');
   if (signed !== undefined) return preparationFailedWeb(expected, `iniciar sesión como alumno01@sigpro.lab: ${signed}`);
-  // La prueba responde el código a cada GET de la lista mientras esté «fallando»; «Reintentar» la deja pasar.
-  // En desarrollo StrictMode pide la lista dos veces al montar: con solo la primera petición fallida, la segunda taparía el error.
-  let failing = true;
-  let served = 0;
+  // Se responde el código a la PRIMERA petición GET de la lista (es la precondición de la historia). Las siguientes pasan y se cuentan.
+  let answered = 0;
+  let passed = 0;
   await page.route(
     (url) => isApiPath(url, '/admin/users'),
     (route) => {
-      if (!failing || route.request().method() !== 'GET') return route.continue();
-      served += 1;
-      return route.fulfill({ status: code, contentType: 'application/json', headers: corsFor(route), body: errorBody(code, 'internal_error') });
+      if (route.request().method() !== 'GET') return route.continue();
+      if (answered === 0) {
+        answered += 1;
+        return route.fulfill({ status: code, contentType: 'application/json', headers: corsFor(route), body: errorBody(code, 'internal_error') });
+      }
+      passed += 1;
+      return route.continue();
     },
   );
   const opened = await runSteps([['abrir /admin', () => page.goto(ADMIN_PATH, { timeout: CEILING_MS })]]);
@@ -166,19 +192,24 @@ const listFails: BrowserRowHandler = async (row, { page }) => {
   if (!errorShown.reached) return preparationFailedWeb(expected, 'el aviso de error no aparece tras la petición fallida');
   const lines = linesOf(await textOf(usersError(page)));
   const trace = lines.find((line) => line.startsWith('GET /api/admin/users'));
+  const passedBeforeRetry = passed;
   const retryShown = await isVisible(usersRetry(page));
-  failing = false;
   const retried = await runSteps([['pulsar «Reintentar»', () => usersRetry(page).click(ACTION)]]);
   const back = await waitUntil(async () => (await rowCount(page)) === 7);
   const rows = await rowCount(page);
+  const note =
+    passedBeforeRetry > 0
+      ? `La app pidió la lista ${passedBeforeRetry + 1} veces antes de «Reintentar» (StrictMode en desarrollo); la prueba falló solo la primera y la fila lo anota.`
+      : undefined;
   return verdict(
     [
       textCheck(lines[0], 'No se pudieron cargar los usuarios', 'el aviso dice'),
-      check(trace !== undefined && trace.startsWith(`GET /api/admin/users → ${code}`), `la traza es GET /api/admin/users → ${code}`, `la traza es «${trace ?? '(no aparece)'}»`),
+      check(trace !== undefined, 'el aviso muestra la traza del error', `traza visible: «${trace ?? '(ninguna)'}»`),
       check(retryShown, 'el aviso tiene el botón «Reintentar»', `botón «Reintentar» visible=${String(retryShown)}`),
       check(retried === undefined && back.reached, 'al reintentar aparecen las siete cuentas del tenant', retried ?? `la tabla muestra ${rows} cuentas`),
     ],
-    `La prueba respondió ${code} a ${served} petición(es) de la lista antes de «Reintentar».`,
+    note,
+    { trazaMedida: trace ?? '(no aparece)', codigoInterceptado: code, peticionesGETFalladas: answered, peticionesGETDejadasPasar: passed },
   );
 };
 
@@ -226,4 +257,3 @@ defineBrowserRows({
     [4, onWeb(slowList)],
   ]),
 });
-

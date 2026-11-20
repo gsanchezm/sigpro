@@ -196,6 +196,8 @@ export interface ToastResult {
   readonly seen: boolean;
   /** Lo que hay en el registro desde la «armada», en una frase (medido). */
   readonly observed: string;
+  /** Marca de tiempo (reloj de la página) de la primera aparición del aviso buscado. */
+  readonly firstAt?: number;
 }
 
 const describeLog = (log: readonly ToastEntry[] | undefined): string => {
@@ -209,7 +211,28 @@ export const toastShown = async (page: Page, tone: 'ok' | 'danger' | 'info' | 'w
   const matches = (entry: ToastEntry): boolean => entry.tone === tone && entry.title === title && (body === undefined || entry.body === body);
   const found = await waitUntil(async () => ((await toastLog(page)) ?? []).some(matches));
   const log = await toastLog(page);
-  return { seen: found.reached, observed: describeLog(log) };
+  const hit = (log ?? []).find(matches);
+  return { seen: found.reached, observed: describeLog(log), ...(hit === undefined ? {} : { firstAt: hit.at }) };
+};
+
+/**
+ * Milisegundos desde la aparición de un aviso (`firstAt`, reloj de la página) hasta que su elemento sale del DOM, o `undefined` si
+ * no sale antes del techo. Mide con el reloj de la página y solo cuenta los avisos de la app (`role=status`).
+ */
+export const toastClosedAfter = async (page: Page, firstAt: number, ceilingMs = 8_000): Promise<number | undefined> => {
+  // Solo los avisos de la app (sus cuatro tonos); el contenedor «toast-region» no cuenta
+  const query = '[data-testid="toast-ok"],[data-testid="toast-danger"],[data-testid="toast-info"],[data-testid="toast-warn"]';
+  const started = Date.now();
+  let seen = false;
+  while (Date.now() - started < ceilingMs) {
+    const probe = await safe(() => page.evaluate((selector: string) => ({ count: document.querySelectorAll(selector).length, now: Date.now() }), query), undefined);
+    if (probe === undefined) return undefined;
+    if (probe.count > 0) seen = true;
+    // Sin haber visto el aviso no hay medida: un selector que no casa no puede dar «se cerró enseguida»
+    if (seen && probe.count === 0) return probe.now - firstAt;
+    await sleep(50);
+  }
+  return undefined;
 };
 
 /** Cuerpo del primer aviso de ese tono y título en el registro (o `undefined` si no hay ni se puede leer). */
@@ -254,13 +277,16 @@ export const textCheck = (observed: string | undefined, expected: string, what: 
   check(observed === expected, `${what} «${expected}»`, `${what} «${observed ?? '(sin texto)'}»`);
 
 /** Un resultado de fila de navegador a partir de sus comprobaciones. */
-export const verdict = (checks: readonly Check[], note?: string, evidence?: Readonly<Record<string, unknown>>): Outcome =>
-  outcome(
+export const verdict = (checks: readonly Check[], note?: string, evidence?: Readonly<Record<string, unknown>>): Outcome => {
+  // Sin comprobaciones no hay nada que dé por cumplido: un veredicto vacío sería «coincide» falso
+  if (checks.length === 0) throw new Error('verdict sin comprobaciones: fallo del arnés (la fila no tiene ningún Entonces que comprobar)');
+  return outcome(
     checks.every((entry) => entry.ok),
     checks.map((entry) => entry.expected).join('; '),
     checks.map((entry) => entry.observed).join('; '),
     { ...(note === undefined ? {} : { note }), ...(evidence === undefined ? {} : { evidence }) },
   );
+};
 
 /** Una opción de un selector: su valor técnico y el texto que ve la persona. */
 export interface OptionView {

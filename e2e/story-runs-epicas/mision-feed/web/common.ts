@@ -9,13 +9,17 @@ import { field, type ApiResult } from '../../../story-runs/support/api';
 import { gestorSession, recentOf, simulatorMsOf, summaryOf } from '../api/common';
 
 // Piezas comunes de las filas WEB de EP-MISION-FEED (escritorio 1440 px). Los localizadores son de rol y nombre accesible cuando la
-// pantalla los ofrece (botones, indicador, lista); los ids de prueba, donde no hay otro rastro (filas, cifras, barras). Cada lectura
-// de la pantalla va en UNA sola evaluación atómica; una lectura fallida es «no legible», nunca «vacío» ni «0».
+// pantalla los ofrece; los ids de prueba, donde no hay otro rastro. Cada lectura de la pantalla va en UNA sola evaluación atómica.
 //
-// CORTE DE LA CONEXIÓN. La historia 008 dice «poniendo el navegador sin conexión»: el corte real es `context.setOffline(true)`. Se
-// comprueba con un control (el indicador debe salir de «En vivo» en 5 s); si no sale, el corte se hace cerrando el socket con
-// `routeWebSocket` y la fila lo declara como aproximación en su nota. Los reintentos de Socket.IO tardan más tras un cierre de la ruta
-// (su intento colgado expira a los 20 s), así que la espera de reconexión depende del método.
+// CORTE DE LA CONEXIÓN («el servidor no responde»). La app usa SOLO WebSocket (transports: ['websocket'] en apps/web/src/state/live.tsx
+// y apps/mobile/src/features/mission/use-mission-socket.ts): socket.io-client no hace polling. Por eso el corte:
+//  - mientras NO hay corte, el WebSocket de la página se reenvía al servidor real (`connectToServer`) y se guarda cada conexión abierta;
+//  - para CORTAR: se marca `cut`, se cierran los WebSocket abiertos y cada intento nuevo se cierra al instante (el cliente lo ve como un
+//    fallo y reintenta según su backoff); las peticiones de polling de engine.io (si las hubiera) fallan con `route.abort`;
+//  - para RESTABLECER: `cut=false`; el siguiente reintento pasa por el proxy y la conexión vuelve.
+// CONTROL: tras cortar, el indicador debe salir de «En vivo» en 5 s. Si no sale, la fila es `no-ejecutable` con la lectura como evidencia.
+// PERMANENCIA: se muestrea el indicador durante 3 s; nunca debe volver a «En vivo» y, de las muestras, la mayoría debe decir «Sin conexión»
+// (entre reintentos el cliente muestra «Conectando…» un instante).
 
 export const LOGIN_URL = `/login?tenant=${TENANT_A}`;
 export const MISSION_PATH = '/mission';
@@ -29,10 +33,19 @@ export const COOKIE_NOTE = 'La prueba fija la preferencia de cookies (sigpro.coo
 export const QUIET_MS = 4_000;
 /** Espera con techo a que la pantalla llegue a lo que la historia dice (la red local tarda menos de 1 s). */
 export const SHOW_CEILING_MS = 8_000;
-/** Espera de reconexión tras restablecer: con `setOffline` los reintentos fallan deprisa (backoff de Socket.IO, máximo ~5 s). */
-export const RECONNECT_OFFLINE_MS = 12_000;
-/** Espera de reconexión tras un corte con `routeWebSocket`: el intento colgado expira a los 20 s de Socket.IO. */
-export const RECONNECT_ROUTE_MS = 25_000;
+/** Espera de reconexión tras restablecer: el backoff de socket.io llega a 5 s por intento; el techo deja margen. */
+export const RECONNECT_CEILING_MS = 15_000;
+/** Plazo del control: el indicador debe salir de «En vivo» tras cortar. */
+export const CONTROL_MS = 5_000;
+/** Ventana de permanencia y muestreo (la historia habla de permanencia; el muestreo evita leer solo un instante). */
+export const PERMANENCIA_MS = 3_000;
+const PERMANENCIA_PASO_MS = 100;
+/** Fracción mínima de muestras con «Sin conexión» para afirmar que el corte es estable. */
+export const ESTABLE_MINIMO = 0.8;
+
+/** Nota de todo corte: el mecanismo y su alcance (la app no usa polling). */
+export const CUT_NOTE =
+  'El corte se hace en la prueba: cierra los WebSocket abiertos y rechaza cada intento nuevo mientras dura (la app usa solo WebSocket, así que el corte por polling de engine.io no aplica).';
 
 /** Añade a cada resultado de una fila web la salvedad de cookies. */
 export const onWeb =
@@ -100,20 +113,20 @@ export const openMission = (page: Page): Promise<StepFailure | undefined> =>
     ['ver la pantalla del panel de misión', () => page.getByTestId(MISION_TESTIDS.MISSION_PAGE).waitFor({ timeout: CEILING_MS })],
   ]);
 
-// --- Conexión en tiempo real: registro y corte por la ruta ----------------------------------------------------------------
+// --- Conexión en tiempo real: proxy, registro y corte --------------------------------------------------------------------
 
 /** Ruta de WebSocket del lado del navegador (el tipo de `page.routeWebSocket`). */
 type ClientRoute = Parameters<Parameters<Page['routeWebSocket']>[1]>[0];
 
-/** Control de la conexión en tiempo real de la página: saludos aceptados, eventos recibidos y el corte por la ruta (respaldo). */
+/** Control de la conexión en tiempo real de la página: saludos aceptados, eventos recibidos y el corte. */
 export interface RealtimeLink {
   /** Saludos aceptados (paquete `40{…}` del servidor) desde que se instaló el control. */
   readonly accepted: () => number;
   /** Tipos de los `mission:event` que llegaron por la conexión, en orden. */
   readonly eventTypes: () => readonly string[];
-  /** Corte por la ruta: cierra las conexiones abiertas y rechaza las nuevas hasta `restore`. */
+  /** Corta: marca el corte, cierra los WebSocket abiertos y rechaza los intentos nuevos hasta `restore`. */
   readonly cut: () => Promise<void>;
-  /** Vuelve a dejar pasar las conexiones por la ruta. */
+  /** Restablece: los siguientes intentos pasan por el proxy al servidor real. */
   readonly restore: () => void;
 }
 
@@ -139,8 +152,14 @@ export const installRealtimeLink = async (page: Page): Promise<RealtimeLink> => 
     const type = field(packet[1], 'type');
     if (typeof type === 'string') types.push(type);
   };
+  // Guarda para el polling de engine.io: durante el corte, sus peticiones fallan al instante (la app usa solo WebSocket)
+  await page.route(
+    (url) => url.pathname.startsWith('/socket.io/'),
+    (route) => (cut ? route.abort('failed').catch(() => undefined) : route.continue().catch(() => undefined)),
+  );
   await page.routeWebSocket(/\/socket\.io\//, (route) => {
     if (cut) {
+      // Intento nuevo durante el corte: se cierra al instante (el cliente lo ve como un fallo y reintenta según su backoff)
       void route.close({ code: 4000, reason: 'corte de la prueba' }).catch(() => undefined);
       return;
     }
@@ -170,45 +189,78 @@ export const installRealtimeLink = async (page: Page): Promise<RealtimeLink> => 
 /** Espera (con techo) a que el saludo aceptado aumente respecto a `before`: la conexión está establecida. */
 export const waitAccepted = async (link: RealtimeLink, before: number, ceilingMs = SHOW_CEILING_MS): Promise<boolean> => (await waitUntil(async () => link.accepted() > before, ceilingMs)).reached;
 
-/** Un corte aplicado: el método que funcionó, lo que tardó el indicador en salir de «En vivo» y la espera de reconexión que le toca. */
+/** Un corte aplicado y su control: si el indicador salió de «En vivo» en el plazo, y lo que se leyó (evidencia). */
 export interface Cut {
-  readonly method: 'setOffline' | 'routeWebSocket';
+  readonly controlOk: boolean;
   readonly leftLiveMs: number;
-  /** Aproximación que la fila declara en su nota (vacío si el corte fue el de la historia: sin conexión del navegador). */
-  readonly approximation?: string;
   readonly reconnectMs: number;
+  readonly evidence: string;
 }
 
 /**
- * Corta la conexión como dice la historia («poniendo el navegador sin conexión»): `setOffline(true)`, y un control de que el
- * indicador sale de «En vivo» en 5 s. Si no sale, se revierte y se corta el socket con la ruta, declarándolo en la nota.
+ * Corta la conexión («el servidor no responde») y comprueba el control: el indicador debe salir de «En vivo» en 5 s. Si no sale, la fila
+ * se declara no ejecutable con la lectura (`cut.controlOk === false`).
  */
 export const cutLink = async (page: Page, link: RealtimeLink): Promise<Cut> => {
   const started = Date.now();
-  await page.context().setOffline(true);
-  const left = await waitUntil(async () => {
-    const text = (await readWeb(page))?.connectionText;
-    return text !== undefined && text !== 'En vivo';
-  }, 5_000);
-  if (left.reached) return { method: 'setOffline', leftLiveMs: Date.now() - started, reconnectMs: RECONNECT_OFFLINE_MS };
-  await page.context().setOffline(false);
   await link.cut();
+  const left = await waitUntil(async () => {
+    const text = await readConnectionText(page);
+    return text !== undefined && text !== 'En vivo';
+  }, CONTROL_MS);
+  const last = await readConnectionText(page);
   return {
-    method: 'routeWebSocket',
+    controlOk: left.reached,
     leftLiveMs: Date.now() - started,
-    approximation: 'setOffline no sacó el indicador de «En vivo» en 5 s: el corte se hizo cerrando el socket con routeWebSocket (aproximación; los reintentos pueden tardar hasta 20 s).',
-    reconnectMs: RECONNECT_ROUTE_MS,
+    reconnectMs: RECONNECT_CEILING_MS,
+    evidence: `indicador «${last ?? '(sin leer)'}» ${left.reached ? `sale de «En vivo» a los ${Date.now() - started} ms` : `sigue en «En vivo» tras ${CONTROL_MS / 1000} s`}`,
   };
 };
 
-/** Restablece la conexión cortada por `cutLink`: vuelve a la red (o a dejar pasar el socket). */
-export const restoreLink = async (page: Page, link: RealtimeLink, cut: Cut): Promise<void> => {
-  if (cut.method === 'setOffline') await page.context().setOffline(false);
-  else link.restore();
+/** Restablece la conexión cortada: los intentos vuelven a pasar por el proxy. */
+export const restoreLink = (_page: Page, link: RealtimeLink, _cut: Cut): Promise<void> => {
+  link.restore();
+  return Promise.resolve();
 };
 
-/** Nota de un corte: la aproximación, si la hubo. */
-export const cutNote = (cut: Cut): string | undefined => cut.approximation;
+/** Nota de un corte: el mecanismo y su alcance. */
+export const cutNote = (_cut: Cut): string => CUT_NOTE;
+
+/** Una muestra de permanencia: cuántas veces se leyó cada estado durante la ventana y la lectura final. */
+export interface Permanence {
+  readonly liveSeen: boolean;
+  readonly samples: number;
+  readonly offSamples: number;
+  readonly connectingSamples: number;
+  readonly endText?: string;
+  readonly endRetry?: boolean;
+}
+
+/** Muestrea el indicador durante `PERMANENCIA_MS` (cada 100 ms, una lectura atómica por muestra) y lee el estado final. */
+export const observePermanence = async (page: Page): Promise<Permanence> => {
+  let liveSeen = false;
+  let samples = 0;
+  let off = 0;
+  let connecting = 0;
+  const started = Date.now();
+  while (Date.now() - started < PERMANENCIA_MS) {
+    const view = await readWeb(page);
+    samples += 1;
+    if (view?.connectionText === 'En vivo') liveSeen = true;
+    if (view?.connectionText === 'Sin conexión') off += 1;
+    if (view?.connectionText === 'Conectando…') connecting += 1;
+    await sleep(PERMANENCIA_PASO_MS);
+  }
+  const end = await readWeb(page);
+  return { liveSeen, samples, offSamples: off, connectingSamples: connecting, endText: end?.connectionText, endRetry: end?.retryPresent };
+};
+
+/** ¿Es el corte estable? (la mayoría de las muestras dicen «Sin conexión»). */
+export const isStable = (permanence: Permanence): boolean => permanence.samples > 0 && permanence.offSamples / permanence.samples >= ESTABLE_MINIMO;
+
+/** Resumen de la permanencia para lo observado y las notas. */
+export const describePermanence = (permanence: Permanence): string =>
+  `muestras ${permanence.samples}: «Sin conexión» ${permanence.offSamples}, «Conectando…» ${permanence.connectingSamples}, «En vivo» ${permanence.liveSeen ? 'sí' : 'no'}; al final «${permanence.endText ?? '(sin leer)'}»`;
 
 // --- Registro de recargas y marcador «sin recargar» ----------------------------------------------------------------------
 
@@ -272,9 +324,9 @@ export interface WebView {
   readonly count?: string;
   readonly pauseLabel?: string;
   readonly pausedNote?: string;
-  /** Texto visible del indicador de conexión (solo la etiqueta, no el texto de un tooltip abierto). */
+  /** Etiqueta visible del indicador (el nombre accesible del botón de la web, sin el texto de un tooltip abierto). */
   readonly connectionText?: string;
-  /** ¿Está el botón «Reintentar» del aviso de conexión en el DOM (visible cuando la conexión está caída)? */
+  /** ¿Está el botón «Reintentar» del aviso de conexión en el DOM (solo se ve con la conexión caída)? */
   readonly retryPresent?: boolean;
   readonly feed: readonly FeedRow[];
   readonly empty?: string;
@@ -289,11 +341,12 @@ export const readWeb = (page: Page): Promise<WebView | undefined> =>
       page.evaluate(
         (ids: { readonly feed: string; readonly row: string; readonly count: string; readonly pause: string; readonly note: string; readonly empty: string; readonly connection: string; readonly retry: string; readonly ncValue: string; readonly msValue: string; readonly msCard: string; readonly msBar: string; readonly ncBar: string }) => {
           const byTestId = (id: string): HTMLElement | null => document.querySelector<HTMLElement>(`[data-testid="${id}"]`);
-          const textOf = (element: Element | null | undefined): string | undefined => (element ? (element.textContent ?? '').replace(/\u00a0/g, ' ').trim() : undefined);
+          const nbsp = new RegExp(String.fromCharCode(160), 'g');
+          const textOf = (element: Element | null | undefined): string | undefined => (element ? (element.textContent ?? '').replace(nbsp, ' ').trim() : undefined);
           const feedRows = Array.from(document.querySelectorAll<HTMLElement>(`[data-testid="${ids.feed}"] [data-testid^="${ids.row}"]`)).map((element) => {
             const lines = element.innerText
               .split('\n')
-              .map((line) => line.replace(/\u00a0/g, ' ').trim())
+              .map((line) => line.replace(nbsp, ' ').trim())
               .filter((line) => line !== '');
             const time = element.querySelector('time');
             return {
@@ -413,9 +466,10 @@ export const readTable = (page: Page, tableTestId: string): Promise<readonly { r
       page.evaluate((id: string) => {
         const table = document.querySelector<HTMLElement>(`[data-testid="${id}"]`);
         if (!table) return undefined;
+        const nbsp = new RegExp(String.fromCharCode(160), 'g');
         return Array.from(table.querySelectorAll('tbody tr')).map((row) => ({
-          key: (row.querySelector('th')?.textContent ?? '').replace(/\u00a0/g, ' ').trim(),
-          cells: Array.from(row.querySelectorAll('td')).map((cell) => (cell.textContent ?? '').replace(/\u00a0/g, ' ').trim()),
+          key: (row.querySelector('th')?.textContent ?? '').replace(nbsp, ' ').trim(),
+          cells: Array.from(row.querySelectorAll('td')).map((cell) => (cell.textContent ?? '').replace(nbsp, ' ').trim()),
         }));
       }, tableTestId),
     undefined,
@@ -445,7 +499,7 @@ export const prepFailedReason = (expected: string, reason: string): Outcome =>
   notExecutable(expected, `La preparación no se cumplió: ${reason}. La fila no se pudo ejecutar; no se atribuye a la app.`);
 
 /** Texto normalizado para comparar: los espacios no separables cuentan como espacios; el texto no cambia. */
-export const normalized = (text: string | undefined): string | undefined => text?.replace(/\u00a0/g, ' ').trim();
+export const normalized = (text: string | undefined): string | undefined => text?.split(String.fromCharCode(160)).join(' ').trim();
 
 /** Una comprobación de texto exacto: `observed` ya leído (undefined = no legible, y eso NO cumple). */
 export const textCheck = (observed: string | undefined, expected: string, what: string): Check =>
@@ -455,7 +509,7 @@ export const textCheck = (observed: string | undefined, expected: string, what: 
 export const conclude = (checks: readonly Check[], extra: Pick<Outcome, 'note' | 'evidence'> = {}): Outcome => {
   const failing = checks.filter((entry) => !entry.ok);
   const automatic = failing.length === 0 ? undefined : `No se cumple: ${failing.map((entry) => entry.expected).join('; ')}. Observado: ${failing.map((entry) => entry.observed).join('; ')}.`;
-  // La nota explícita (aproximación del corte, regla sin fila) se añade a la automática: nunca la sustituye
+  // La nota explícita (mecanismo del corte, regla sin fila) se añade a la automática: nunca la sustituye
   const note = extra.note === undefined ? automatic : automatic === undefined ? extra.note : `${automatic} ${extra.note}`;
   return outcome(failing.length === 0, checks.map((entry) => entry.expected).join('; '), checks.map((entry) => entry.observed).join('; '), {
     ...(note === undefined ? {} : { note }),
@@ -483,7 +537,7 @@ export const settle = (ms = QUIET_MS): Promise<void> => sleep(ms);
 export const GESTOR_WEB: Credentials = { email: 'gestor@sigpro.test', password: 'Gestor1234!' };
 
 /**
- * Deja la página lista como la historia la da por hecha: inicio de sesión del gestor, /mission abierto y la conexión en tiempo real
+ * Deja la página lista como la historia la da por hecho: inicio de sesión del gestor, /mission abierto y la conexión en tiempo real
  * establecida (saludo aceptado y indicador «En vivo»). Devuelve el fallo si algo de eso no se produce.
  */
 export const startWeb = async (page: Page, link: RealtimeLink): Promise<StepFailure | undefined> => {

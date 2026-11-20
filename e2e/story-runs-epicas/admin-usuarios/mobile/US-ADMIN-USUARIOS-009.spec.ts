@@ -1,4 +1,4 @@
-import { ADMIN_TESTIDS, MOVIL_DYNAMIC_TESTIDS, MOVIL_TESTIDS } from '../../../../packages/shared/src/testids';
+import { ADMIN_DYNAMIC_TESTIDS, ADMIN_TESTIDS, MOVIL_DYNAMIC_TESTIDS, MOVIL_TESTIDS } from '../../../../packages/shared/src/testids';
 import { TENANT_A } from '../../../story-runs/support/prepare';
 import { ACTION, CEILING_MS, isVisible, linesOf, runSteps, safe, textOf, waitUntil } from '../../support/browser';
 import { check, cell, preparationFailedWeb, strict } from '../../support/checks';
@@ -70,7 +70,7 @@ const moreShowsAdmin: BrowserRowHandler = async (row, { page }) => {
 
 const chooseTab: BrowserRowHandler = async (row, { page }) => {
   const target = strict('pestana', TAB_CELLS, cell(row, 'pestana'));
-  const expected = `la pestaña ${cell(row, 'pestana')} seleccionada, la ruta ${target.address} y la sección «${target.heading}»`;
+  const expected = `la pestaña ${cell(row, 'pestana')} seleccionada, la ruta ${target.address} y la pantalla muestra esa sección`;
   await resetAlumno();
   const signed = await signInMobile(page, 'alumno01@sigpro.lab', credentialsOf('alumno01@sigpro.lab').password);
   if (signed !== undefined) return preparationFailedWeb(expected, `iniciar sesión como alumno01@sigpro.lab: ${signed}`);
@@ -78,15 +78,28 @@ const chooseTab: BrowserRowHandler = async (row, { page }) => {
   if (entered !== undefined) return preparationFailedWeb(expected, entered);
   const ready = await waitUsersReady(page);
   if (!ready) return preparationFailedWeb(expected, 'la pestaña «Usuarios» no asienta su lista');
+  // «Usuarios» no puede ser trivial: parte de «Auditoría» (ruta ?tab=audit) y vuelve a «Usuarios» (ruta sin parámetro)
+  if (target.key === 'users') {
+    const away = await runSteps([['elegir «Auditoría»', () => tabOf(page, 'audit').click(ACTION)]]);
+    const awayReached = await waitUntil(async () => pathAndQuery(page) === '/admin?tab=audit');
+    if (away !== undefined || !awayReached.reached) return preparationFailedWeb(expected, away ?? `la ruta no pasa a /admin?tab=audit (${pathAndQuery(page)})`);
+  }
   const clicked = await runSteps([[`elegir «${cell(row, 'pestana')}»`, () => tabOf(page, target.key).click(ACTION)]]);
   const selected = await waitUntil(async () => (await selectedTab(page, target.key)) === 'true');
   const address = await waitUntil(async () => pathAndQuery(page) === target.address);
-  const heading = await waitUntil(() => isVisible(page.getByRole('heading', { name: target.heading, exact: true })));
-  return verdict([
-    check(clicked === undefined && selected.reached, `la pestaña ${cell(row, 'pestana')} seleccionada`, clicked ?? `la pestaña ${cell(row, 'pestana')} está ${String(await selectedTab(page, target.key))}`),
-    check(address.reached, `la ruta es ${target.address}`, `la ruta es ${pathAndQuery(page)}`),
-    check(heading.reached, `la pantalla muestra la sección «${target.heading}»`, heading.reached ? `la pantalla muestra «${target.heading}»` : `no se ve «${target.heading}»`),
-  ]);
+  const panel = page.getByTestId(ADMIN_DYNAMIC_TESTIDS.ADMIN_PANEL(target.key));
+  const panelShown = await waitUntil(() => isVisible(panel));
+  // El encabezado de la sección no lo fija la historia: se anota como evidencia, no se compara
+  const heading = await textOf(panel.getByRole('heading').first());
+  return verdict(
+    [
+      check(clicked === undefined && selected.reached, `la pestaña ${cell(row, 'pestana')} seleccionada`, clicked ?? `la pestaña ${cell(row, 'pestana')} está ${String(await selectedTab(page, target.key))}`),
+      check(address.reached, `la ruta es ${target.address}`, `la ruta es ${pathAndQuery(page)}`),
+      check(panelShown.reached, 'la pantalla muestra esa sección', `la sección ${target.key} visible=${String(panelShown.reached)}`),
+    ],
+    undefined,
+    { encabezadoDeLaSeccion: heading ?? '(sin texto)', rutaMedida: pathAndQuery(page) },
+  );
 };
 
 // --- Esquema 3: una pestaña que no existe en la ruta muestra Usuarios ---------------------------------------------------------

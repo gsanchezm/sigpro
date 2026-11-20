@@ -81,7 +81,7 @@ const menuLink: BrowserRowHandler = async (row, { page }) => {
 
 const chooseTab: BrowserRowHandler = async (row, { page }) => {
   const target = strict('pestana', TAB_CELLS, cell(row, 'pestana'));
-  const expected = `la pestaña ${cell(row, 'pestana')} seleccionada, la dirección ${target.address} y la sección «${target.heading}»`;
+  const expected = `la pestaña ${cell(row, 'pestana')} seleccionada, la dirección ${target.address} y la página muestra esa sección`;
   await resetAlumno();
   const signed = await signInWeb(page, 'alumno01@sigpro.lab');
   if (signed !== undefined) return preparationFailedWeb(expected, `iniciar sesión como alumno01@sigpro.lab: ${signed}`);
@@ -89,15 +89,27 @@ const chooseTab: BrowserRowHandler = async (row, { page }) => {
   if (opened !== undefined) return preparationFailedWeb(expected, opened);
   const ready = await waitTableReady(page);
   if (!ready) return preparationFailedWeb(expected, 'la pestaña «Usuarios» no asienta su lista');
+  // La fila «Usuarios» no puede ser trivial: parte de «Auditoría» (?tab=audit) y vuelve a «Usuarios», cuya dirección no lleva parámetro
+  if (target.key === 'users') {
+    const away = await runSteps([['pulsar «Auditoría»', () => tabOf(page, 'audit').click(ACTION)]]);
+    const awayReached = await waitUntil(async () => pathAndQuery(page) === '/admin?tab=audit');
+    if (away !== undefined || !awayReached.reached) return preparationFailedWeb(expected, away ?? `la dirección no pasa a /admin?tab=audit (${pathAndQuery(page)})`);
+  }
   const clicked = await runSteps([[`pulsar «${cell(row, 'pestana')}»`, () => tabOf(page, target.key).click(ACTION)]]);
   const selected = await waitUntil(async () => (await selectedTab(page, target.key)) === 'true');
   const address = await waitUntil(async () => pathAndQuery(page) === target.address);
-  const headingShown = await waitUntil(() => isVisible(panelOf(page, target.key).getByRole('heading', { name: target.heading, exact: true })));
-  return verdict([
-    check(clicked === undefined && selected.reached, `la pestaña ${cell(row, 'pestana')} seleccionada`, clicked ?? `la pestaña ${cell(row, 'pestana')} está ${String(await selectedTab(page, target.key))}`),
-    check(address.reached, `la dirección es ${target.address}`, `la dirección es ${pathAndQuery(page)}`),
-    check(headingShown.reached, `la página muestra la sección «${target.heading}»`, headingShown.reached ? `la página muestra la sección «${target.heading}»` : `no se ve la sección «${target.heading}»`),
-  ]);
+  const panelShown = await waitUntil(() => isVisible(panelOf(page, target.key)));
+  // El encabezado de la sección no lo fija la historia: se anota como evidencia, no se compara
+  const heading = await textOf(panelOf(page, target.key).getByRole('heading').first());
+  return verdict(
+    [
+      check(clicked === undefined && selected.reached, `la pestaña ${cell(row, 'pestana')} seleccionada`, clicked ?? `la pestaña ${cell(row, 'pestana')} está ${String(await selectedTab(page, target.key))}`),
+      check(address.reached, `la dirección es ${target.address}`, `la dirección es ${pathAndQuery(page)}`),
+      check(panelShown.reached, 'la página muestra esa sección', `la sección ${target.key} visible=${String(panelShown.reached)}`),
+    ],
+    undefined,
+    { encabezadoDeLaSeccion: heading ?? '(sin texto)', direccionMedida: pathAndQuery(page) },
+  );
 };
 
 // --- Esquema 3: una sección que no existe en la dirección muestra Usuarios --------------------------------------------------

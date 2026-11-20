@@ -1,4 +1,4 @@
-import { sessionOf } from '../../../story-runs/support/api';
+import { call, field, sessionOf } from '../../../story-runs/support/api';
 import { DEMO, TENANT_A, resetTenants } from '../../../story-runs/support/prepare';
 import { cell, check, conclude, preparationFailed, strict } from '../../support/checks';
 import { defineApiRows, type ApiRowHandler } from '../../core/framework';
@@ -36,7 +36,8 @@ import {
 
 const roleApplied: ApiRowHandler = async (row) => {
   const id = strict('id', SEED_IDS, cell(row, 'id'));
-  const email = strict('correo', ACCOUNTS, cell(row, 'correo')).email;
+  const credentials = strict('correo', ACCOUNTS, cell(row, 'correo'));
+  const email = credentials.email;
   const role = strict('rol_nuevo', ROLE_VALUES, cell(row, 'rol_nuevo'));
   const expected = `200 con el usuario ${email} y el rol ${role}; GET /api/admin/users muestra el rol ${role} para ${email}`;
   await resetTenants([TENANT_A]);
@@ -47,6 +48,9 @@ const roleApplied: ApiRowHandler = async (row) => {
   const changed = await patchUser(token, id, { role });
   const body = recordOf(changed.body);
   const after = userByEmail(usersOf(await listUsers(token)), email);
+  // Regla: cambiar el rol no toca la contraseña. Con la de siempre la cuenta sigue «aceptada»: 200, o 403 pending_approval si la pendencia lo corta después
+  const login = await signIn(credentials, TENANT_A);
+  const passwordKept = login.status === 200 || field(login.body, 'code') === 'pending_approval';
   return conclude([
     statusCheck(changed, { status: 200 }),
     check(body?.email === email && body?.role === role, `el usuario ${email} con el rol ${role}`, `el usuario ${String(body?.email)} con el rol ${String(body?.role)}`),
@@ -58,6 +62,7 @@ const roleApplied: ApiRowHandler = async (row) => {
       'active, locked y pending siguen como estaban',
       `antes active ${String(before?.active)}, locked ${String(before?.locked)}, pending ${String(before?.pending)}; después active ${String(body?.active)}, locked ${String(body?.locked)}, pending ${String(body?.pending)}`,
     ),
+    check(passwordKept, 'la contraseña de siempre sigue sirviendo', `inicio de sesión con la contraseña de siempre: ${login.status}${typeof field(login.body, 'code') === 'string' ? ` ${String(field(login.body, 'code'))}` : ''}`),
   ]);
 };
 
@@ -101,17 +106,24 @@ const reactivatedLogin: ApiRowHandler = async (row) => {
   const admin = await signIn(ADMIN_A, TENANT_A);
   const token = sessionOf(admin)?.accessToken;
   if (token === undefined) return preparationFailed(expected, 'alumno01@sigpro.lab inicia sesión', admin);
+  // Regla: el refreshToken de la cuenta, emitido mientras estaba activa, deja de renovar al desactivarla
+  const earlier = await signIn(DEMO.auditor, TENANT_A);
+  const refreshToken = sessionOf(earlier)?.refreshToken;
+  if (refreshToken === undefined) return preparationFailed(expected, 'auditor@sigpro.test inicia sesión antes de desactivarla', earlier);
   // La fila parte de «ha desactivado la cuenta auditor@sigpro.test» (preparación del Esquema)
   const disabled = await patchUser(token, 'u4', { active: false });
   if (disabled.status !== 200) return preparationFailed(expected, 'desactivar auditor@sigpro.test con PATCH /api/admin/users/u4', disabled);
   const changed = await patchUser(token, 'u4', { active });
   const login = await signIn(DEMO.auditor, TENANT_A);
+  // Solo cuando la cuenta queda desactivada, su refreshToken previo debe responder 401 invalid_token
+  const renewed = outcome.session ? undefined : await call('POST', '/auth/refresh', { tenant: TENANT_A, body: { refreshToken } });
   return conclude([
     statusCheck(changed, { status: 200 }),
     check(recordOf(changed.body)?.active === active, `la cuenta u4 queda con active ${String(active)}`, `la cuenta u4 queda con active ${String(recordOf(changed.body)?.active)}`),
     statusCheck(login, outcome.expect),
     outcome.session ? sessionTokens(login) : noSessionTokens(login),
     ...(outcome.session ? [check(loginRoleOf(login) === 'auditor', 'el usuario con el rol auditor', `el usuario con el rol ${loginRoleOf(login) ?? '(ausente)'}`)] : []),
+    ...(renewed === undefined ? [] : [statusCheck(renewed, { status: 401, code: 'invalid_token' })]),
   ]);
 };
 

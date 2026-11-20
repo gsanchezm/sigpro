@@ -30,13 +30,16 @@ export const onMobile =
   };
 
 /** Resultado de una fila móvil a partir de sus comprobaciones. */
-export const verdict = (checks: readonly Check[], note?: string, evidence?: Readonly<Record<string, unknown>>): Outcome =>
-  outcome(
+export const verdict = (checks: readonly Check[], note?: string, evidence?: Readonly<Record<string, unknown>>): Outcome => {
+  // Sin comprobaciones no hay nada que dé por cumplido: un veredicto vacío sería «coincide» falso
+  if (checks.length === 0) throw new Error('verdict sin comprobaciones: fallo del arnés (la fila no tiene ningún Entonces que comprobar)');
+  return outcome(
     checks.every((entry) => entry.ok),
     checks.map((entry) => entry.expected).join('; '),
     checks.map((entry) => entry.observed).join('; '),
     { ...(note === undefined ? {} : { note }), ...(evidence === undefined ? {} : { evidence }) },
   );
+};
 
 /** Inicio de sesión en la app móvil: alumno01 en «Tenant de trabajo», el correo y la contraseña de la cuenta, y «Entrar». Termina en «Programas». */
 export const signInMobile = (page: Page, email: string, password: string): Promise<string | undefined> => {
