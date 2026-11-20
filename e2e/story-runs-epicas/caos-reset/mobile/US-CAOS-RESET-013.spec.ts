@@ -2,12 +2,12 @@ import type { Locator, Page } from '@playwright/test';
 import { ADMIN_TESTIDS, MOVIL_ADMIN_TESTIDS } from '../../../../packages/shared/src/testids';
 import { call } from '../../../story-runs/support/api';
 import { DEMO, TENANT_A, type Credentials } from '../../../story-runs/support/prepare';
-import { ACTION, CEILING_MS, isVisible, quoted, textOf, waitUntil } from '../../support/browser';
+import { ACTION, CEILING_MS, holdsFor, isVisible, quoted, textOf, waitUntil } from '../../support/browser';
 import { cell, check, preparationFailedWeb, strict, type Check } from '../../support/checks';
-import { defineBrowserRows, type BrowserRowHandler } from '../../core/framework';
+import { defineBrowserRows, type BrowserRowHandler, type Outcome } from '../../core/framework';
 import { adminAccess, prepareTenant, studentAdmin } from '../api/common';
-import { actionFailed, armToasts, describeSeen, interact, observeTexts, textCheck, toastCheck, waitForValue } from '../web/common';
-import { adminPath, ariaDisabled, mobileOutcome, onMobile, pressTimes, prepareMobile, signInMobile, switchOn } from './common';
+import { actionFailedOn, armToasts, describeSeen, interact, observeTexts, textCheck, toastCheck, waitForValue, type Blocked } from '../web/common';
+import { adminPath, ariaDisabled, mobileOutcome, onMobile, pressTimes, prepareMobile, signInMobile, switchOn, unreachedScreen } from './common';
 
 // US-CAOS-RESET-013 — Modo caos en Administración (app móvil, Expo web a 390 px). Los deslizadores son de pasos: «−» y «+» junto a su
 // valor, con el nombre accesible «<etiqueta> +100» (latencia) y «<etiqueta> +5» (errores). Cada fila reinicia alumno01 y deja el caos
@@ -71,7 +71,21 @@ const previewButton = (page: Page): Locator => page.getByTestId(ADMIN_TESTIDS.AD
 const chaosHeading = (page: Page): Locator => page.getByRole('heading', { name: 'Modo caos', exact: true });
 
 /** Abre /admin?tab=chaos con la sesión de la fila y espera a la pestaña. */
-const openChaos = async (page: Page): Promise<boolean> => (await waitUntil(() => isVisible(chaosHeading(page)))).reached;
+/** Fallo de una acción sobre la pestaña «Modo caos»: discrepa solo si la pantalla está visible (ver `actionFailedOn`). */
+const failOnChaos = (page: Page, expected: string, blocked: Blocked): Promise<Outcome> => actionFailedOn(page, expected, blocked, chaosHeading(page));
+
+/** Espera (con techo) a que el encabezado «Modo caos» esté visible y se mantenga 1 s: la pantalla no se desmonta. No navega. */
+const waitChaosStable = async (page: Page): Promise<boolean> => {
+  const reached = await waitUntil(() => isVisible(chaosHeading(page)));
+  if (!reached.reached) return false;
+  return (await holdsFor(() => isVisible(chaosHeading(page)), 1_000)).held;
+};
+
+/** Abre /admin?tab=chaos con la sesión de la fila y espera a que la pantalla esté estable. */
+const openChaos = async (page: Page): Promise<boolean> => {
+  await page.goto(adminPath('chaos'), { timeout: CEILING_MS });
+  return waitChaosStable(page);
+};
 
 /** Texto de un valor leído, o «(no legible)». */
 const shown = (value: string | undefined): string => (value === undefined ? '(no legible)' : `«${value}»`);
@@ -100,7 +114,7 @@ const onlyAdminSeesChaos: BrowserRowHandler = async (row, { page }) => {
       check(backShown, 'una acción para volver', backShown ? 'una acción para volver' : 'no aparece la acción para volver'),
     ]);
   }
-  const headingShown = await openChaos(page);
+  const headingShown = await waitChaosStable(page);
   const badge = await textOf(statusBadge(page));
   return mobileOutcome([
     check(headingShown, 'el título «Modo caos»', headingShown ? 'el título «Modo caos»' : 'no aparece el título «Modo caos»'),
@@ -121,7 +135,7 @@ const appliesFromControls: BrowserRowHandler = async (row, { page }) => {
   await prepareMobile(page);
   const login = await signInMobile(page, studentAdmin(TENANT_A).email, studentAdmin(TENANT_A).password);
   if (login) return preparationFailedWeb(expected, `alumno01@sigpro.lab no inicia sesión en la app móvil: ${login}`);
-  await openChaos(page);
+  if (!(await openChaos(page))) return unreachedScreen(page, expected, 'Modo caos');
   // Regla sin cambios: «Aplicar» deshabilitado con el motivo «No hay cambios que guardar» como texto visible junto al botón
   const idleDisabled = (await ariaDisabled(applyButton(page))) === true;
   const idleReason = await textOf(applyReason(page));
@@ -130,12 +144,12 @@ const appliesFromControls: BrowserRowHandler = async (row, { page }) => {
     textCheck(idleReason, NO_CHANGES, 'el motivo visible junto a «Aplicar» es'),
   ];
   const latencyDone = await pressTimes(page, `${LATENCY_LABEL} +100`, latencyPresses);
-  if (latencyDone !== undefined) return actionFailed(expected, latencyDone);
+  if (latencyDone !== undefined) return failOnChaos(page, expected, latencyDone);
   const errorsDone = await pressTimes(page, `${ERRORS_LABEL} +5`, errorPresses);
-  if (errorsDone !== undefined) return actionFailed(expected, errorsDone);
+  if (errorsDone !== undefined) return failOnChaos(page, expected, errorsDone);
   if ((await switchOn(flakySwitch(page))) !== switchWanted) {
     const toggled = await interact(flakySwitch(page), 'poner «Textos alternos» activado', (element) => element.click(ACTION));
-    if (toggled) return actionFailed(expected, toggled);
+    if (toggled) return failOnChaos(page, expected, toggled);
   }
   const switchNow = await waitForValue(
     async () => ((await switchOn(flakySwitch(page))) === true ? 'true' : 'false'),
@@ -147,7 +161,7 @@ const appliesFromControls: BrowserRowHandler = async (row, { page }) => {
   const applied = await interact(apply, 'pulsar «Aplicar»', (element) => element.click({ timeout: 5_000 }));
   if (applied) {
     const reason = (await textOf(applyReason(page))) ?? '(sin motivo visible)';
-    return actionFailed(expected, { ...applied, message: `${applied.message} · motivo visible junto a «Aplicar»: «${reason}»` });
+    return failOnChaos(page, expected, { ...applied, message: `${applied.message} · motivo visible junto a «Aplicar»: «${reason}»` });
   }
   const toast = await toastCheck(page, 'ok', UPDATED_TOAST, body);
   const badgeNow = await waitForValue(() => textOf(statusBadge(page)), (value) => value === badge);
@@ -174,11 +188,11 @@ const offReturnsRestMobile: BrowserRowHandler = async (row, { page }) => {
   await prepareMobile(page);
   const login = await signInMobile(page, studentAdmin(TENANT_A).email, studentAdmin(TENANT_A).password);
   if (login) return preparationFailedWeb(expected, `alumno01@sigpro.lab no inicia sesión en la app móvil: ${login}`);
-  await openChaos(page);
+  if (!(await openChaos(page))) return unreachedScreen(page, expected, 'Modo caos');
   const shownLatency = await waitForValue(() => textOf(latencyValue(page)), (value) => value === `${latency} ms`);
   await armToasts(page);
   const off = await interact(offButton(page), 'pulsar «Apagar caos»', (element) => element.click(ACTION));
-  if (off) return actionFailed(expected, off);
+  if (off) return failOnChaos(page, expected, off);
   const toast = await toastCheck(page, 'ok', UPDATED_TOAST, 'Latencia 0 ms · errores 0 % · textos alternos no');
   const badgeNow = await waitForValue(() => textOf(statusBadge(page)), (value) => value === OFF_BADGE);
   const disabled = (await ariaDisabled(offButton(page))) === true;
@@ -205,12 +219,12 @@ const exampleAlternatesOnlyWhenSaved: BrowserRowHandler = async (row, { page }) 
   await prepareMobile(page);
   const login = await signInMobile(page, studentAdmin(TENANT_A).email, studentAdmin(TENANT_A).password);
   if (login) return preparationFailedWeb(expected, `alumno01@sigpro.lab no inicia sesión en la app móvil: ${login}`);
-  await openChaos(page);
+  if (!(await openChaos(page))) return unreachedScreen(page, expected, 'Modo caos');
   const seen = await observeTexts(previewButton(page), 7_000);
   const before = await textOf(previewButton(page));
   await armToasts(page);
   const clicked = await interact(previewButton(page), 'pulsar el «Botón de ejemplo»', (element) => element.click(ACTION));
-  if (clicked) return actionFailed(expected, clicked);
+  if (clicked) return failOnChaos(page, expected, clicked);
   const toast = await toastCheck(page, 'info', `Has pulsado «${before ?? '(sin texto)'}»`);
   const behaves = flaky ? seen.has('Guardar') && seen.has('Guardar cambios') : seen.size === 1 && seen.has('Guardar');
   const behavesCheck: Check = check(behaves, `el botón de ejemplo ${behavior}`, `el botón de ejemplo muestra ${describeSeen(seen)}`);

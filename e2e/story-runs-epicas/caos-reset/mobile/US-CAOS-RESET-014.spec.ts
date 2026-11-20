@@ -5,8 +5,8 @@ import { ACTION, CEILING_MS, isVisible, safe, textOf, waitUntil } from '../../su
 import { cell, check, preparationFailedWeb, strict, type Check } from '../../support/checks';
 import { defineBrowserRows, type BrowserRowHandler } from '../../core/framework';
 import { markerKept, markerProgram, prepareTenant, studentAdmin } from '../api/common';
-import { actionFailed, armToasts, describeLog, interact, noOkToast, waitToast } from '../web/common';
-import { adminPath, closedCheck, mobileOutcome, onMobile, prepareMobile, signInMobile } from './common';
+import { actionFailedOn, armToasts, describeLog, interact, noOkToast, waitToast } from '../web/common';
+import { adminPath, closedCheck, mobileOutcome, onMobile, prepareMobile, signInMobile, unreachedScreen } from './common';
 
 // US-CAOS-RESET-014 — Restaurar los datos del tenant desde Administración (app móvil, Expo web a 390 px). El diálogo es el de la app
 // (`role="dialog"`), no el `confirm()` nativo. Cada fila reinicia alumno01, abre la pestaña «Datos» y deja el caos apagado al terminar.
@@ -23,6 +23,7 @@ const ACTIONS: ReadonlyMap<string, string> = new Map<string, string>([['«Cancel
 const TENANTS: ReadonlyMap<string, string> = new Map<string, string>([['alumno01', TENANT_A]]);
 
 const dialogOf = (page: Page): Locator => page.getByTestId(MOVIL_ADMIN_TESTIDS.RESET_DIALOG);
+const dataHeading = (page: Page): Locator => page.getByRole('heading', { name: 'Datos del tenant', exact: true });
 const resetButton = (page: Page): Locator => page.getByTestId(ADMIN_TESTIDS.ADMIN_RESET).first();
 const dataPanel = (page: Page): Locator => page.getByTestId(ADMIN_TESTIDS.ADMIN_DATA_PANEL);
 
@@ -97,16 +98,16 @@ const cancelDoesNothing: BrowserRowHandler = async (row, { page }) => {
   const account = studentAdmin(TENANT_A);
   const login = await signInMobile(page, account.email, account.password);
   if (login) return preparationFailedWeb(expected, `alumno01@sigpro.lab no inicia sesión en la app móvil: ${login}`);
-  if (!(await openData(page))) return mobileOutcome([check(false, 'la pestaña «Datos del tenant» se abre', 'no aparece la pestaña «Datos del tenant» tras esperar')]);
+  if (!(await openData(page))) return unreachedScreen(page, expected, 'Datos del tenant');
   const dataChecks = await dataTabChecks(page);
   await armToasts(page);
   const opened = await interact(resetButton(page), `pulsar «${RESET_TITLE}»`, (element) => element.click(ACTION));
-  if (opened) return actionFailed(expected, opened);
+  if (opened) return actionFailedOn(page, expected, opened, dataHeading(page));
   const shownDialog = await waitUntil(() => isVisible(dialogOf(page)));
   if (!shownDialog.reached) return mobileOutcome([...dataChecks, check(false, `el diálogo «${RESET_TITLE}» se abre`, 'el diálogo no aparece tras esperar')]);
   const shown = await dialogChecks(page);
   const cancelled = await interact(dialogOf(page).getByRole('button', { name: action, exact: true }), `pulsar «${action}» del diálogo`, (element) => element.click(ACTION));
-  if (cancelled) return actionFailed(expected, cancelled);
+  if (cancelled) return actionFailedOn(page, expected, cancelled, dialogOf(page));
   const closed = await waitClosed(page);
   const quiet = await noOkToast(page, Date.now());
   const kept = await markerKept(TENANT_A, marker.token, marker.code);
@@ -129,16 +130,16 @@ const confirmRestores: BrowserRowHandler = async (row, { page }) => {
   const account = studentAdmin(TENANT_A);
   const login = await signInMobile(page, account.email, account.password);
   if (login) return preparationFailedWeb(expected, `alumno01@sigpro.lab no inicia sesión en la app móvil: ${login}`);
-  if (!(await openData(page))) return mobileOutcome([check(false, 'la pestaña «Datos del tenant» se abre', 'no aparece la pestaña «Datos del tenant» tras esperar')]);
+  if (!(await openData(page))) return unreachedScreen(page, expected, 'Datos del tenant');
   const dataChecks = await dataTabChecks(page);
   await armToasts(page);
   const opened = await interact(resetButton(page), `pulsar «${RESET_TITLE}»`, (element) => element.click(ACTION));
-  if (opened) return actionFailed(expected, opened);
+  if (opened) return actionFailedOn(page, expected, opened, dataHeading(page));
   const shownDialog = await waitUntil(() => isVisible(dialogOf(page)));
   if (!shownDialog.reached) return mobileOutcome([...dataChecks, check(false, `el diálogo «${RESET_TITLE}» se abre`, 'el diálogo no aparece tras esperar')]);
   const shown = await dialogChecks(page);
   const confirmed = await interact(dialogOf(page).getByRole('button', { name: RESET_TITLE, exact: true }), `pulsar «${RESET_TITLE}» del diálogo`, (element) => element.click(ACTION));
-  if (confirmed) return actionFailed(expected, confirmed);
+  if (confirmed) return actionFailedOn(page, expected, confirmed, dialogOf(page));
   // El aviso llega cuando la API responde; el diálogo se cierra al resolver el reinicio (DataPanel.tsx): se espera a ambos, con techo
   const toast = await waitToast(page, 'ok', 'Datos restaurados');
   const body = toast.found?.body ?? '';

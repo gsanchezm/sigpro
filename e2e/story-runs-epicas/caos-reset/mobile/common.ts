@@ -2,9 +2,9 @@ import type { Locator, Page } from '@playwright/test';
 import { TENANT_A } from '../../../story-runs/support/prepare';
 import { ACTION, CEILING_MS, runSteps, safe, type Step } from '../../support/browser';
 import { check, type Check } from '../../support/checks';
-import { outcome, type BrowserRowHandler, type Outcome } from '../../core/framework';
+import { notExecutable, outcome, type BrowserRowHandler, type Outcome } from '../../core/framework';
 import { withDifference } from '../api/common';
-import { interact, recordToasts, restoringAfter, TOAST_KEY, type Blocked } from '../web/common';
+import { interact, recordToasts, restoringAfter, screenDiagnosis, TOAST_KEY, type Blocked } from '../web/common';
 
 // Piezas comunes de las filas MÓVILES de EP-CAOS-RESET: la app móvil servida como web de Expo a 390 × 844. NO es iOS ni Android nativo:
 // el veredicto vale para Expo web. Las lecturas de texto van acotadas a su elemento y las esperas, con techo (`waitUntil`).
@@ -79,3 +79,12 @@ export const pressTimes = async (page: Page, name: string, count: number): Promi
   }
   return undefined;
 };
+
+/**
+ * La pantalla de la fila no llegó (no aparece tras abrir la ruta): la fila NO es ejecutable, porque la app no se ha probado. La evidencia
+ * (URL, aviso de rol, encabezado, elementos de Administración) dice dónde quedó la prueba.
+ */
+export const unreachedScreen = async (page: Page, expected: string, what: string): Promise<Outcome> => ({
+  ...notExecutable(expected, `la prueba no llegó a la pantalla «${what}» tras abrir la ruta (no es un hallazgo sobre la app)`),
+  evidence: await screenDiagnosis(page),
+});

@@ -1,7 +1,7 @@
 import type { Locator, Page } from '@playwright/test';
-import { LAB_TESTIDS } from '../../../../packages/shared/src/testids';
+import { ADMIN_TESTIDS, LAB_TESTIDS } from '../../../../packages/shared/src/testids';
 import { TENANT_A, type Credentials } from '../../../story-runs/support/prepare';
-import { ACTION, CEILING_MS, attrOf, runSteps, safe, textOf, waitUntil } from '../../support/browser';
+import { ACTION, CEILING_MS, attrOf, isVisible, runSteps, safe, textOf, waitUntil } from '../../support/browser';
 import { check, sleep, type Check } from '../../support/checks';
 import { notExecutable, outcome, type BrowserRowHandler, type Outcome } from '../../core/framework';
 import { restoreTenants, withDifference } from '../api/common';
@@ -363,4 +363,28 @@ export const ariaChecked = async (target: Locator): Promise<boolean | undefined>
 export const normalizedText = async (target: Locator): Promise<string | undefined> => {
   const text = await textOf(target);
   return text === undefined ? undefined : text.replace(/\s+/g, ' ').trim();
+};
+
+// --- Diagnóstico de la pantalla de la fila -----------------------------------------------------------------------------------------
+
+/**
+ * Lo que se ve de la pantalla en el momento de un fallo: URL, si hay aviso de rol, si el encabezado «Modo caos» está y cuántos elementos
+ * de Administración hay en la página. Es la evidencia de por qué la prueba no encontró lo que buscaba (no contiene tokens).
+ */
+export const screenDiagnosis = async (page: Page): Promise<Readonly<Record<string, unknown>>> => ({
+  url: page.url(),
+  avisoDeRolVisible: await isVisible(page.getByTestId(ADMIN_TESTIDS.ADMIN_FORBIDDEN)),
+  encabezadoModoCaosVisible: await isVisible(page.getByRole('heading', { name: 'Modo caos', exact: true })),
+  elementosDeAdministracion: await safe<number | undefined>(() => page.locator('[data-testid^="admin-"]').count(), undefined),
+});
+
+/**
+ * Como `actionFailed`, pero antes de declarar «la app no ofrece el elemento» (discrepa) comprueba que la pantalla de la fila está visible.
+ * Si no lo está, la prueba no llegó a la pantalla: la fila NO es ejecutable, con la URL y lo que se ve como evidencia.
+ */
+export const actionFailedOn = async (page: Page, expected: string, blocked: Blocked, screen: Locator): Promise<Outcome> => {
+  if (blocked.kind !== 'ausente') return actionFailed(expected, blocked);
+  const diagnosis = await screenDiagnosis(page);
+  if (await isVisible(screen)) return actionFailed(expected, { ...blocked, evidence: { ...(blocked.evidence ?? {}), ...diagnosis } });
+  return { ...notExecutable(expected, `la prueba no llegó a la pantalla de la fila (no está visible): ${blocked.message}`), evidence: diagnosis };
 };
