@@ -5,7 +5,7 @@ epica: EP-API-PLATAFORMA
 titulo: "[Móvil] Panel «Usuarios de prueba» en /login: un toque rellena correo y contraseña"
 etiquetas: [movil]
 relacionadas: [US-API-PLATAFORMA-003, US-API-PLATAFORMA-007, US-API-PLATAFORMA-009, US-LOGIN-012]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["/login"]
 ---
 
