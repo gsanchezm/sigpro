@@ -2,12 +2,13 @@ import type { Locator, Page } from '@playwright/test';
 import { LAB_TESTIDS } from '../../../../packages/shared/src/testids';
 import { DEMO, TENANT_A, type Credentials } from '../../../story-runs/support/prepare';
 import { CEILING_MS, isVisible, waitUntil } from '../../support/browser';
-import { cell, check, preparationFailedWeb, strict } from '../../support/checks';
+import { cell, check, preparationFailedWeb, strict, type Check } from '../../support/checks';
 import { defineBrowserRows, type BrowserRowHandler } from '../../core/framework';
 import { adminAccess, prepareTenant, studentAdmin } from '../api/common';
 import { call } from '../../../story-runs/support/api';
 import {
   actionFailed,
+  actionFailedOn,
   armToasts,
   controlCheck,
   describeLog,
@@ -94,6 +95,37 @@ const presetChaos = async (flags: { readonly latencyMs: number; readonly errorRa
   return preset.status === 200 ? undefined : `PATCH /api/admin/chaos responde ${preset.status}`;
 };
 
+/**
+ * Respuesta GET de la configuración del caos (`/api/admin/chaos`). El formulario de /lab arranca en 0 (LabPage.tsx, estado inicial) y se
+ * rellena cuando llega esta respuesta: escribir antes puede perderse. Devuelve `false` si no llega dentro del techo.
+ */
+const chaosResponse = (page: Page): Promise<boolean> =>
+  page
+    .waitForResponse((response) => response.url().includes('/admin/chaos') && response.request().method() === 'GET', { timeout: CEILING_MS })
+    .then(
+      () => true,
+      () => false,
+    );
+
+/** Abre /lab como administrador y espera a que llegue la configuración del caos antes de escribir en el formulario. */
+const openLabAsAdmin = async (page: Page): Promise<boolean> => {
+  const loaded = chaosResponse(page);
+  await openLab(page);
+  return loaded;
+};
+
+/** Recarga /lab como administrador y espera a que vuelva a llegar la configuración guardada. */
+const reloadLabAsAdmin = async (page: Page): Promise<boolean> => {
+  const loaded = chaosResponse(page);
+  await page.reload({ timeout: CEILING_MS });
+  await waitUntil(() => isVisible(labHeading(page)));
+  return loaded;
+};
+
+/** Comprobación de que la recarga volvió a leer la configuración del tenant (sin ella, lo que se lee del formulario no es fiable). */
+const reloadCheck = (ok: boolean): Check =>
+  check(ok, 'al recargar, /lab vuelve a leer la configuración guardada', ok ? 'al recargar, /lab vuelve a leer la configuración guardada' : 'la configuración no llega tras recargar (no hay respuesta de GET /api/admin/chaos)');
+
 /** Abre /lab (con o sin la sesión que ya hay en la página) y espera a que la pantalla esté montada. */
 const openLab = async (page: Page): Promise<void> => {
   await page.goto(`/lab?tenant=${TENANT_A}`, { timeout: CEILING_MS });
@@ -137,21 +169,34 @@ const appliesAndKeeps: BrowserRowHandler = async (row, { page }) => {
   const expected = `ve el aviso ok «${APPLIED_TOAST}»; al recargar /lab los campos muestran ${latency} y ${rate}, y la casilla queda ${cell(row, 'casilla')}`;
   await prepareTenant(TENANT_A);
   // Estado previo distinto de la fila en TODOS los campos (la casilla, al contrario): así aplicar cambia algo de verdad
-  const presetError = await presetChaos({ latencyMs: 100, errorRate: 0.1, flakyLabels: !flaky });
+  const preset = { latencyMs: 100, errorRate: 0.1, flakyLabels: !flaky };
+  const presetError = await presetChaos(preset);
   if (presetError !== undefined) return preparationFailedWeb(expected, `alumno01@sigpro.lab fija un estado previo: ${presetError}`);
   await prepareBrowser(page);
   const login = await signInWeb(page, studentAdmin(TENANT_A));
   if (login) return preparationFailedWeb(expected, `alumno01@sigpro.lab no inicia sesión: ${login}`);
-  await openLab(page);
+  const loaded = await openLabAsAdmin(page);
+  if (!loaded) return preparationFailedWeb(expected, 'la configuración del caos no llega a /lab tras abrirlo (no hay respuesta de GET /api/admin/chaos)');
+  // El formulario arranca en 0: se espera a que MUESTRE el estado previo (latencia 100, tasa 0.1, casilla del preset) antes de escribir
+  const shownLatency = await waitForValue(() => inputOf(latencyBox(page)), (value) => value !== undefined && Number(value) === preset.latencyMs);
+  const shownRate = await waitForValue(() => inputOf(rateBox(page)), (value) => value !== undefined && Number(value) === preset.errorRate);
+  const shownFlaky = await waitChecked(flakyBox(page), preset.flakyLabels);
+  const showsPreset = shownLatency !== undefined && Number(shownLatency) === preset.latencyMs && shownRate !== undefined && Number(shownRate) === preset.errorRate && shownFlaky === preset.flakyLabels;
+  if (!showsPreset) {
+    return preparationFailedWeb(
+      expected,
+      `el formulario no muestra el estado previo (latencia ${shownLatency ?? '(no legible)'}, tasa ${shownRate ?? '(no legible)'}, casilla ${shownFlaky === undefined ? '(no legible)' : shownFlaky ? 'marcada' : 'sin marcar'})`,
+    );
+  }
   await armToasts(page);
   const blocked = await applyOnLab(page, { latency: String(latency), rate: String(rate), flaky });
-  if (blocked) return actionFailed(expected, blocked);
+  if (blocked) return actionFailedOn(page, expected, blocked, labHeading(page));
   const toast = await toastCheck(page, 'ok', APPLIED_TOAST);
-  await page.reload({ timeout: CEILING_MS });
-  await waitUntil(() => isVisible(labHeading(page)));
+  const reloadedOk = await reloadLabAsAdmin(page);
   const saved = await readSaved(page, latency, rate, flaky);
   return rowOutcome([
     toast,
+    reloadCheck(reloadedOk),
     numberCheck(saved.latency, latency, 'al recargar, el campo «Latencia máxima (ms)» muestra'),
     numberCheck(saved.rate, rate, 'al recargar, el campo «Tasa de errores 500 en escrituras (0–1)» muestra'),
     check(saved.flaky === flaky, `al recargar, la casilla queda ${cell(row, 'casilla')}`, `al recargar, la casilla queda ${saved.flaky === undefined ? '(no legible)' : saved.flaky ? 'marcada' : 'sin marcar'}`),
@@ -169,7 +214,7 @@ const offReturnsRest: BrowserRowHandler = async (row, { page }) => {
   await prepareBrowser(page);
   const login = await signInWeb(page, studentAdmin(TENANT_A));
   if (login) return preparationFailedWeb(expected, `alumno01@sigpro.lab no inicia sesión: ${login}`);
-  await openLab(page);
+  if (!(await openLabAsAdmin(page))) return preparationFailedWeb(expected, 'la configuración del caos no llega a /lab tras abrirlo');
   // Preparación: el caos queda aplicado con los valores de la fila (se comprueba el aviso antes de desactivar)
   await armToasts(page);
   const applied = await applyOnLab(page, { latency: String(latency), rate: String(rate), flaky });
@@ -201,7 +246,7 @@ const outOfRangeNotSaved: BrowserRowHandler = async (row, { page }) => {
   await prepareBrowser(page);
   const login = await signInWeb(page, studentAdmin(TENANT_A));
   if (login) return preparationFailedWeb(expected, `alumno01@sigpro.lab no inicia sesión: ${login}`);
-  await openLab(page);
+  if (!(await openLabAsAdmin(page))) return preparationFailedWeb(expected, 'la configuración del caos no llega a /lab tras abrirlo');
   const box = field === LATENCY_LABEL ? latencyBox(page) : rateBox(page);
   await armToasts(page);
   const typed = await interact(box, `escribir ${value} en «${field}»`, (element) => element.fill(value, { timeout: CEILING_MS }));
@@ -210,8 +255,7 @@ const outOfRangeNotSaved: BrowserRowHandler = async (row, { page }) => {
   if (pressed) return actionFailed(expected, pressed);
   const error = await waitToast(page, 'danger', ERROR_TITLE);
   const body = error.found?.body ?? '';
-  await page.reload({ timeout: CEILING_MS });
-  await waitUntil(() => isVisible(labHeading(page)));
+  const reloadedOk = await reloadLabAsAdmin(page);
   const saved = await readSaved(page, 0, 0, false);
   return rowOutcome([
     check(error.found !== undefined, `aviso de error «${ERROR_TITLE}»`, error.found === undefined ? describeLog(error.log) : `aviso de error «${ERROR_TITLE}»`),
@@ -220,6 +264,7 @@ const outOfRangeNotSaved: BrowserRowHandler = async (row, { page }) => {
       'con la traza de la petición PATCH /api/admin/chaos y el 422',
       `traza «${body === '' ? '(sin traza)' : body}»`,
     ),
+    reloadCheck(reloadedOk),
     numberCheck(saved.latency, 0, 'al recargar, el campo «Latencia máxima (ms)» muestra'),
     numberCheck(saved.rate, 0, 'al recargar, el campo «Tasa de errores 500 en escrituras (0–1)» muestra'),
     check(saved.flaky === false, 'al recargar, la casilla queda sin marcar', `al recargar, la casilla queda ${saved.flaky === undefined ? '(no legible)' : saved.flaky ? 'marcada' : 'sin marcar'}`),
@@ -256,7 +301,7 @@ const exampleAlternatesAfterApply: BrowserRowHandler = async (row, { page }) => 
   await prepareBrowser(page);
   const login = await signInWeb(page, account);
   if (login) return preparationFailedWeb(expected, `${cell(row, 'cuenta')} no inicia sesión: ${login}`);
-  await openLab(page);
+  if (!(await openLabAsAdmin(page))) return preparationFailedWeb(expected, 'la configuración del caos no llega a /lab tras abrirlo');
   const applied = await applyOnLab(page, { latency: '0', rate: '0', flaky: true });
   if (applied) return actionFailed(expected, applied);
   const toast = await toastCheck(page, 'ok', APPLIED_TOAST);
