@@ -5,7 +5,7 @@ epica: EP-MISION-FEED
 titulo: "[Web] Ver los eventos en directo en /mission: historia inicial, orden, pausa y tope de 50"
 etiquetas: [web]
 relacionadas: [US-MISION-FEED-001, US-MISION-FEED-003, US-MISION-FEED-005, US-MISION-FEED-009]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["/mission"]
 ---
 

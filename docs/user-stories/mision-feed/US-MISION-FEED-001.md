@@ -5,7 +5,7 @@ epica: EP-MISION-FEED
 titulo: "[API] Abrir la conexión en tiempo real solo con un token de acceso vigente"
 etiquetas: [api]
 relacionadas: [US-LOGIN-001, US-MFA-001, US-SESION-004]
-verificacion: codigo
+verificacion: ejecutada
 ---
 
 ## Historia

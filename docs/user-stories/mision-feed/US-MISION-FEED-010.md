@@ -5,7 +5,7 @@ epica: EP-MISION-FEED
 titulo: "[Móvil] Actualizar en vivo «NC abiertas», su gráfica por severidad y «Hitos cumplidos» sin recargar"
 etiquetas: [movil]
 relacionadas: [US-MISION-FEED-003, US-MISION-FEED-007, US-MISION-FEED-009, US-PROG-METRICAS-005]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["/mission"]
 ---
 

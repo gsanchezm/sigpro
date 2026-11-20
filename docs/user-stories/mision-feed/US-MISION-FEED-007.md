@@ -5,7 +5,7 @@ epica: EP-MISION-FEED
 titulo: "[Web] Actualizar en vivo «NC abiertas», su gráfica por severidad y «Hitos cumplidos» sin recargar"
 etiquetas: [web]
 relacionadas: [US-MISION-FEED-003, US-MISION-FEED-006, US-MISION-FEED-008, US-PROG-METRICAS-004, US-HITOS-004]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["/mission"]
 ---
 

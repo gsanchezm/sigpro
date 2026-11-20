@@ -5,7 +5,7 @@ epica: EP-MISION-FEED
 titulo: "[API] Forma, gravedad y cifras de cada evento de misión"
 etiquetas: [api]
 relacionadas: [US-MISION-FEED-001, US-MISION-FEED-002, US-PROG-METRICAS-004]
-verificacion: codigo
+verificacion: ejecutada
 ---
 
 ## Historia

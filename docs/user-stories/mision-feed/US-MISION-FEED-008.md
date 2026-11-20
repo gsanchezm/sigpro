@@ -5,7 +5,7 @@ epica: EP-MISION-FEED
 titulo: "[Web] Indicador de conexión en /mission: en vivo, sin conexión y vuelta al panel"
 etiquetas: [web]
 relacionadas: [US-MISION-FEED-001, US-MISION-FEED-006, US-MISION-FEED-007, US-MISION-FEED-011, US-SESION-006]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["/mission"]
 ---
 

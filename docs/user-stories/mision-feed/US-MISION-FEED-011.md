@@ -5,7 +5,7 @@ epica: EP-MISION-FEED
 titulo: "[Móvil] Indicador de conexión, «Reintentar» y resumen tras una caída en /mission"
 etiquetas: [movil]
 relacionadas: [US-MISION-FEED-001, US-MISION-FEED-008, US-MISION-FEED-010, US-SESION-009]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["/mission"]
 ---
 

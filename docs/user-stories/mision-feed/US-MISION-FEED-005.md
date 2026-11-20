@@ -5,7 +5,7 @@ epica: EP-MISION-FEED
 titulo: "[API] Reiniciar el tenant devuelve el feed a su historia inicial"
 etiquetas: [api]
 relacionadas: [US-MISION-FEED-002, US-MISION-FEED-004]
-verificacion: codigo
+verificacion: ejecutada
 ---
 
 ## Historia

@@ -5,7 +5,7 @@ epica: EP-MISION-FEED
 titulo: "[API] Entregar cada evento solo a las conexiones de su tenant"
 etiquetas: [api]
 relacionadas: [US-MISION-FEED-001, US-MISION-FEED-003, US-MISION-FEED-005]
-verificacion: codigo
+verificacion: ejecutada
 ---
 
 ## Historia

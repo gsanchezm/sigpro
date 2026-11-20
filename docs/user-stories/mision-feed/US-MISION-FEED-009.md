@@ -5,7 +5,7 @@ epica: EP-MISION-FEED
 titulo: "[Móvil] Ver los eventos en directo en /mission: historia inicial, pausa y tope de 50"
 etiquetas: [movil]
 relacionadas: [US-MISION-FEED-001, US-MISION-FEED-003, US-MISION-FEED-005, US-MISION-FEED-006]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["/mission"]
 ---
 
