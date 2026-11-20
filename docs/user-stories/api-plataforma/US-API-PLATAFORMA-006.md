@@ -4,7 +4,7 @@ tipo: historia
 epica: EP-API-PLATAFORMA
 titulo: "[API] Aceptar las peticiones de los orígenes permitidos del navegador"
 etiquetas: [api]
-verificacion: codigo
+verificacion: ejecutada
 ---
 
 ## Historia

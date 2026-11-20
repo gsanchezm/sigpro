@@ -4,7 +4,7 @@ tipo: historia
 epica: EP-API-PLATAFORMA
 titulo: "[API] Comprobar que el servicio responde sin autenticación"
 etiquetas: [api]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["GET /api/health"]
 ---
 

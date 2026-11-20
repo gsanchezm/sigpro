@@ -5,7 +5,7 @@ epica: EP-API-PLATAFORMA
 titulo: "[API] Responder los errores con código, mensaje, traza y errores por campo"
 etiquetas: [api]
 relacionadas: [US-LOGIN-001]
-verificacion: codigo
+verificacion: ejecutada
 ---
 
 ## Historia
