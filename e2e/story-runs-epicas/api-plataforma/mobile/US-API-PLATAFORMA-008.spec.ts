@@ -1,9 +1,10 @@
-import type { Locator, Page } from '@playwright/test';
+import type { BrowserContext, Locator, Page } from '@playwright/test';
 import { DEMO, TENANT_A, WRONG_PASSWORD } from '../../../story-runs/support/prepare';
 import { ACTION, CEILING_MS, attrOf, holdsFor, pathOf, safe, waitUntil } from '../../support/browser';
 import { cell, check, preparationFailedWeb, strict } from '../../support/checks';
 import { defineBrowserRows, notExecutable, type BrowserRowHandler } from '../../core/framework';
 import { judge, prepareAlumno } from '../api/common';
+import { prepareAux, withAuxApi, type AuxClient } from '../api/aux-api';
 import {
   ALERT_LOGIN,
   HOLD_MS,
@@ -28,12 +29,21 @@ import {
 // US-API-PLATAFORMA-008 — Panel «Usuarios de prueba» en /login (app móvil servida como web de Expo, 390 × 844; NO es nativo).
 // Preparación de cada fila: alumno01 reiniciado, caos apagado, /login sin sesión guardada y «alumno01» escrito en «Tenant de trabajo»
 // (la app móvil no usa ?tenant=). Las opciones del panel son `role="radio"` dentro de un `radiogroup` llamado «Usuarios de prueba».
+// Esquema 4 (staging y production): el bundle de Expo lleva fija la URL de la API (http://localhost:3000/api). Esas filas arrancan una
+// API auxiliar con su APP_ENV y redirigen con Playwright las peticiones de la app a ella: las respuestas son reales de esa API.
 
 const STEP = 'abrir /login sin sesión y con alumno01 en «Tenant de trabajo»';
+const STEP_AUX = 'preparar alumno01 y abrir /login con la app redirigida a la API auxiliar';
+/** La URL de la API que el bundle de Expo lleva fija (EXPO_PUBLIC_API_URL por defecto). */
+const BUNDLE_API = 'http://localhost:3000/**';
 const ENVIRONMENTS: ReadonlyMap<string, string> = new Map<string, string>([
   ['dev', 'dev'],
   ['staging', 'staging'],
   ['production', 'production'],
+]);
+const PANEL_RESULTS: ReadonlyMap<string, 'visible' | 'absent'> = new Map<string, 'visible' | 'absent'>([
+  ['ve «Usuarios de prueba» y una opción por cada una de las seis cuentas', 'visible'],
+  ['no ve «Usuarios de prueba» ni ninguna opción', 'absent'],
 ]);
 const MFA_STEP: ReadonlyMap<string, string> = new Map<string, string>([['verificación en dos pasos', 'verificación en dos pasos']]);
 
@@ -46,14 +56,18 @@ const panelGroup = (page: Page): Locator => page.getByRole('radiogroup', { name:
 const chipOf = (page: Page, nombre: string): Locator => page.getByRole('radio', { name: new RegExp(`^${nombre} · `) });
 const mfaTitle = (page: Page): Locator => page.getByRole('heading', { name: 'Verificación en dos pasos', exact: true });
 
-/** Abre /login con el almacenamiento vacío y escribe «alumno01» en «Tenant de trabajo» con UN `fill`. */
-const openMobileLogin = async (page: Page): Promise<string | undefined> => {
-  await prepareAlumno();
-  return runStepsLogged([
+/** Abre /login con el almacenamiento vacío y escribe «alumno01» en «Tenant de trabajo» con UN `fill`. No prepara nada. */
+const openMobileLoginPage = async (page: Page): Promise<string | undefined> =>
+  runStepsLogged([
     ['abrir /login', () => page.goto('/login', { timeout: CEILING_MS })],
     ['ver el título «Iniciar sesión»', () => loginHeading(page).waitFor({ timeout: CEILING_MS })],
     ['escribir el tenant en «Tenant de trabajo»', () => tenantField(page).fill(TENANT_A, ACTION)],
   ]);
+
+/** Igual, con el estado de la pila principal preparado primero (reinicio y caos apagado). */
+const openMobileLogin = async (page: Page): Promise<string | undefined> => {
+  await prepareAlumno();
+  return openMobileLoginPage(page);
 };
 
 /** Un toque (clic de ratón de Playwright) sobre la opción de una cuenta; devuelve el diagnóstico si no se pudo. */
@@ -166,28 +180,109 @@ const tapClearsError: BrowserRowHandler = async (row, { page }) => {
 
 // --- Esquema 4: el panel depende del entorno de la API --------------------------------------------------------------------------
 
-const panelByEnvironment: BrowserRowHandler = async (row, { page }) => {
+/** Peticiones que la app hizo a la API del bundle y que se redirigieron a la auxiliar. */
+interface Redirect {
+  /** Estado de cada `/api/config/test-users` que respondió la API auxiliar. */
+  readonly statuses: number[];
+  /** «MÉTODO ruta» de cada petición redirigida (diagnóstico). */
+  readonly seen: string[];
+  /** Error de Playwright al redirigir (si lo hubo). */
+  error?: string;
+}
+
+/**
+ * Redirige con Playwright las peticiones de la app (la URL del bundle, localhost:3000) a la API auxiliar: mismo método, ruta, consulta,
+ * cabeceras y cuerpo; cambian solo el host y el puerto. La respuesta es la que devuelve la API auxiliar (`route.fetch`), que lleva sus
+ * propias cabeceras CORS (su CORS_ORIGIN incluye el origen de la página, localhost:8081).
+ */
+const redirectApiTo = async (context: BrowserContext, port: number): Promise<Redirect> => {
+  const redirect: Redirect = { statuses: [], seen: [] };
+  await context.route(BUNDLE_API, async (route) => {
+    const original = new URL(route.request().url());
+    const target = new URL(original.href);
+    target.hostname = 'localhost';
+    target.port = String(port);
+    redirect.seen.push(`${route.request().method()} ${original.pathname}`);
+    try {
+      const response = await route.fetch({ url: target.href });
+      if (original.pathname === '/api/config/test-users') redirect.statuses.push(response.status());
+      await route.fulfill({ response });
+    } catch (error) {
+      redirect.error = error instanceof Error ? (error.message.split('\n')[0] ?? error.message) : String(error);
+      await route.abort().catch(() => undefined);
+    }
+  });
+  return redirect;
+};
+
+const panelByEnvironment: BrowserRowHandler = async (row, { page, context }) => {
   const entorno = strict('entorno', ENVIRONMENTS, cell(row, 'entorno'));
   const expected = cell(row, 'resultado');
-  // Staging y production no se ejecutan: el build de Expo fija la URL de la API en el bundle (no hay instancia auxiliar que apuntar)
-  if (entorno !== 'dev') return notExecutable(expected, 'el build de Expo lleva la URL de la API fija en el bundle: EXPO_PUBLIC_API_URL');
-  const opened = await openMobileLogin(page);
-  if (opened) return preparationFailedWeb(STEP, opened);
-  const group = panelGroup(page);
-  await waitVisible(group);
-  const count = await safe(() => group.getByRole('radio').count(), -1);
-  // La historia dice «ve «Usuarios de prueba»» y la ayuda: se mide el TEXTO visible del encabezado (login.tsx:179), no solo el aria-label del grupo
-  const heading = page.getByText(/Usuarios de prueba/);
-  const help = page.getByText('clic para rellenar', { exact: false });
-  return judge(
-    [
-      presence(await readingOf(group), true, 'el grupo «Usuarios de prueba»'),
-      presence(await readingOf(heading), true, 'el texto visible «Usuarios de prueba»'),
-      presence(await readingOf(help), true, 'la ayuda «clic para rellenar» junto al encabezado'),
-      check(count === 6, 'una opción por cada una de las seis cuentas', `${count} opciones`),
-    ],
-    { note: MOBILE_NOTE },
-  );
+  const wanted = strict('resultado', PANEL_RESULTS, expected);
+  if (entorno === 'dev') {
+    const opened = await openMobileLogin(page);
+    if (opened) return preparationFailedWeb(STEP, opened);
+    const group = panelGroup(page);
+    await waitVisible(group);
+    const count = await safe(() => group.getByRole('radio').count(), -1);
+    // La historia dice «ve «Usuarios de prueba»» y la ayuda: se mide el TEXTO visible del encabezado (login.tsx:179), no solo el aria-label del grupo
+    const heading = page.getByText(/Usuarios de prueba/);
+    const help = page.getByText('clic para rellenar', { exact: false });
+    return judge(
+      [
+        presence(await readingOf(group), true, 'el grupo «Usuarios de prueba»'),
+        presence(await readingOf(heading), true, 'el texto visible «Usuarios de prueba»'),
+        presence(await readingOf(help), true, 'la ayuda «clic para rellenar» junto al encabezado'),
+        check(count === 6, 'una opción por cada una de las seis cuentas', `${count} opciones`),
+      ],
+      { note: MOBILE_NOTE },
+    );
+  }
+  // staging y production: API auxiliar con ese APP_ENV; las peticiones de la app se redirigen a ella (la principal no se toca)
+  const redirectNote = `las peticiones de la app (URL fija del bundle: localhost:3000) se redirigen con Playwright a una API auxiliar arrancada por el manejador con APP_ENV=${entorno}; la principal no se modificó. ${MOBILE_NOTE}`;
+  return withAuxApi({ label: `008 E4 ${entorno}`, env: { APP_ENV: entorno }, expected }, async (aux: AuxClient) => {
+    const prep = await prepareAux(aux);
+    if (prep !== undefined) return preparationFailedWeb(STEP_AUX, prep);
+    // La redirección se instala ANTES de abrir la app, para que su primera petición ya vaya a la auxiliar
+    const redirect = await redirectApiTo(context, aux.port);
+    const opened = await openMobileLoginPage(page);
+    if (opened !== undefined) return preparationFailedWeb(STEP_AUX, opened);
+    // Control de cableado: alguna petición de usuarios de prueba de la app llega a la API auxiliar y responde 200
+    const control = await waitUntil(async () => redirect.statuses.includes(200));
+    const evidence = { peticionesRedirigidas: redirect.seen.length, estadosTestUsers: redirect.statuses, errorRedireccion: redirect.error };
+    if (!control.reached) {
+      return notExecutable(
+        expected,
+        `control de cableado: ninguna petición a /api/config/test-users de la app llegó a la API auxiliar con 200 (estados ${JSON.stringify(redirect.statuses)}; peticiones redirigidas: ${redirect.seen.join(' | ') || '(ninguna)'}${redirect.error === undefined ? '' : `; error de redirección: ${redirect.error}`})`,
+      );
+    }
+    if (wanted === 'visible') {
+      const group = panelGroup(page);
+      await waitVisible(group);
+      const count = await safe(() => group.getByRole('radio').count(), -1);
+      const heading = page.getByText(/Usuarios de prueba/);
+      const help = page.getByText('clic para rellenar', { exact: false });
+      return judge(
+        [
+          presence(await readingOf(group), true, 'el grupo «Usuarios de prueba»'),
+          presence(await readingOf(heading), true, 'el texto visible «Usuarios de prueba»'),
+          presence(await readingOf(help), true, 'la ayuda «clic para rellenar» junto al encabezado'),
+          check(count === 6, 'una opción por cada una de las seis cuentas', `${count} opciones`),
+        ],
+        { note: redirectNote, evidence },
+      );
+    }
+    // Ausencia: primero que la pantalla de acceso está lista, y después una ventana fija sin el panel
+    await waitVisible(loginHeading(page));
+    const absent = await holdsFor(async () => (await readingOf(panelGroup(page))) === 'oculto' && (await readingOf(page.getByText(/Usuarios de prueba/))) === 'oculto', HOLD_MS);
+    return judge(
+      [
+        presence(await readingOf(loginHeading(page)), true, 'la pantalla de acceso lista'),
+        check(absent.held, expected, `grupo de opciones ${readingText(await readingOf(panelGroup(page)))}; texto «Usuarios de prueba» ${readingText(await readingOf(page.getByText(/Usuarios de prueba/)))}`),
+      ],
+      { note: redirectNote, evidence },
+    );
+  });
 };
 
 // --- Esquema 5: el panel no aparece en la verificación en dos pasos ------------------------------------------------------------
@@ -225,6 +320,8 @@ defineBrowserRows({
   story: 'US-API-PLATAFORMA-008',
   surface: 'expo-web',
   tenants: [TENANT_A],
+  // Las filas de API auxiliar arrancan una API y la redirección: su plazo es mayor que el de las demás
+  rowTimeoutMs: (row) => (row.esquemaIndex === 4 ? 180_000 : 120_000),
   handlers: new Map<number, BrowserRowHandler>([
     [1, tapFills],
     [2, tapReplaces],
