@@ -3,7 +3,7 @@ import { DEMO, TENANT_A } from '../../../story-runs/support/prepare';
 import { ACTION, CEILING_MS, isVisible, linesOf, noSessionCheck, pathOf, safe } from '../../support/browser';
 import { check, cell, conclude, strict } from '../../support/checks';
 import { defineBrowserRows, type BrowserRowHandler } from '../../core/framework';
-import { COOKIE_NOTE, PASSWORDS, countVisible, describeCount, enterButton, failedAction, heading1, openLogin, prepFailed, programsTitle, quietCookies, resetAlumno, settle, submitLogin, typeCredentials, runStepsLogged } from './common';
+import { COOKIE_NOTE, PASSWORDS, countVisible, describeCount, enterButton, failedAction, heading1, openLogin, prepFailed, programsTitle, quietCookies, resetAlumno, settle, submitLogin, typeCredentials, runStepsLogged, withRoutesReleased } from './common';
 
 // US-A11Y-006 — Avisos dentro de la pantalla: alerta para los errores y estado para las confirmaciones (web, 1440 px).
 // Preparación de cada fila: reinicio de alumno01 y acceso desde /login?tenant=alumno01 en un navegador sin sesión guardada.
@@ -122,8 +122,8 @@ defineBrowserRows({
   surface: 'web',
   tenants: [TENANT_A],
   handlers: new Map<number, BrowserRowHandler>([
-    [1, accessError],
-    [2, redirectStatus],
-    [3, signedOutStatus],
+    [1, withRoutesReleased(accessError)],
+    [2, withRoutesReleased(redirectStatus)],
+    [3, withRoutesReleased(signedOutStatus)],
   ]),
 });

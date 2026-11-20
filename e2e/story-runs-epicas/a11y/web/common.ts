@@ -1,8 +1,8 @@
-import type { Browser, BrowserContext, Locator, Page } from '@playwright/test';
+import type { Browser, BrowserContext, Locator, Page, Route } from '@playwright/test';
 import { DEMO, TENANT_A, WRONG_PASSWORD, resetTenants } from '../../../story-runs/support/prepare';
 import { ACTION, CEILING_MS, safe, waitUntil, type Step } from '../../support/browser';
 import { check, preparationFailedWeb, type Check } from '../../support/checks';
-import { notExecutable, outcome, type Outcome } from '../../core/framework';
+import { notExecutable, outcome, type BrowserRowHandler, type Outcome } from '../../core/framework';
 
 // Piezas comunes de las filas de EP-A11Y: web a 1440 px y la app móvil servida como web de Expo a 390 px (NO es nativa).
 // Criterio: cada elemento se localiza por algo distinto de la propiedad que la fila comprueba (su contenedor, la fila o la tarjeta
@@ -279,14 +279,49 @@ export const isBlockingReason = (title: string | undefined): boolean => title !=
 
 // --- Respuestas controladas por la prueba (fallo 500 o retraso) --------------------------------------------------------------------
 
+// Una ruta que sigue en vuelo cuando la fila ya terminó (o la página se cerró) no puede dejar un error asíncrono: `quietRoute` lo
+// absorbe, y `withRoutesReleased` / `releaseContextRoutes` retiran las rutas al salir de cada fila.
+
+/** Envuelve el cuerpo de una ruta: si la fila terminó o la página se cerró antes de responder, no hay nada que responder y no se lanza. */
+const quietRoute =
+  (handler: (route: Route) => Promise<void>): ((route: Route) => Promise<void>) =>
+  async (route: Route): Promise<void> => {
+    try {
+      await handler(route);
+    } catch {
+      // La fila terminó o la página se cerró: la petición ya no tiene a quién responder
+    }
+  };
+
+/** Retira las rutas de la página al terminar la fila; las peticiones en vuelo ya no pueden responder después. */
+export const releaseRoutes = async (page: Page): Promise<void> => {
+  await page.unrouteAll({ behavior: 'ignoreErrors' }).catch(() => undefined);
+};
+
+/** Igual que `releaseRoutes`, para las rutas del contexto de la app móvil que abre una fila. */
+export const releaseContextRoutes = async (context: BrowserContext): Promise<void> => {
+  await context.unrouteAll({ behavior: 'ignoreErrors' }).catch(() => undefined);
+};
+
+/** Envuelve un manejador de fila: al salir, con éxito o con error, retira las rutas de la página de la fila. */
+export const withRoutesReleased =
+  (handler: BrowserRowHandler): BrowserRowHandler =>
+  async (row, fixtures) => {
+    try {
+      return await handler(row, fixtures);
+    } finally {
+      await releaseRoutes(fixtures.page);
+    }
+  };
+
 /** 500 para las peticiones GET de `pathname` mientras `active()` diga que sí. Las demás peticiones siguen su curso. */
 export const failGets = async (page: Page, pathname: string, active: () => boolean): Promise<void> => {
   await page.route(
     (url) => url.pathname === pathname,
-    async (route) => {
+    quietRoute(async (route) => {
       if (route.request().method() !== 'GET' || !active()) return route.fallback();
       await route.fulfill({ status: 500, contentType: 'application/json', body: JSON.stringify({ code: 'internal_error', message: 'Error simulado por la prueba' }) });
-    },
+    }),
   );
 };
 
@@ -294,13 +329,13 @@ export const failGets = async (page: Page, pathname: string, active: () => boole
 const holdResponses = async (page: Page, method: string, pathname: string, ms: number, released: { at: number }): Promise<void> => {
   await page.route(
     (url) => url.pathname === pathname,
-    async (route) => {
+    quietRoute(async (route) => {
       if (route.request().method() !== method) return route.fallback();
       const response = await route.fetch();
       await new Promise((done) => setTimeout(done, ms));
       released.at = Date.now();
       await route.fulfill({ response });
-    },
+    }),
   );
 };
 

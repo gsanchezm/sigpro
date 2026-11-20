@@ -3,7 +3,7 @@ import { DEMO, TENANT_A } from '../../../story-runs/support/prepare';
 import { CEILING_MS, quoted } from '../../support/browser';
 import { cell, conclude, strict } from '../../support/checks';
 import { defineBrowserRows, type BrowserRowHandler } from '../../core/framework';
-import { ALUMNO_ADMIN, COOKIE_NOTE, PASSWORDS, ambiguityOutcome, heading1, namedCheck, ncCard, openLogin, prepFailed, programRow, quietCookies, resetAlumno, runStepsLogged, signInToPrograms } from './common';
+import { ALUMNO_ADMIN, COOKIE_NOTE, PASSWORDS, ambiguityOutcome, heading1, namedCheck, ncCard, openLogin, prepFailed, programRow, quietCookies, resetAlumno, runStepsLogged, signInToPrograms, withRoutesReleased } from './common';
 
 // US-A11Y-001 — Nombres accesibles y textos alternativos de controles, campos e imágenes (web, 1440 px).
 // Preparación de cada fila: reinicio de alumno01 con su administrador y, en las filas que lo piden, inicio de sesión desde el
@@ -105,8 +105,8 @@ defineBrowserRows({
   surface: 'web',
   tenants: [TENANT_A],
   handlers: new Map<number, BrowserRowHandler>([
-    [1, accessControl],
-    [2, programControl],
-    [3, imageAlt],
+    [1, withRoutesReleased(accessControl)],
+    [2, withRoutesReleased(programControl)],
+    [3, withRoutesReleased(imageAlt)],
   ]),
 });

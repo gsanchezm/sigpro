@@ -25,6 +25,8 @@ import {
   submitLogin,
   typeCredentials,
   runStepsLogged,
+  withRoutesReleased,
+  releaseContextRoutes,
 } from './common';
 import { MOBILE_NOTE, expoNotRunning, mobileButton, mobileField, mobileSignInSteps } from './mobile';
 
@@ -251,6 +253,7 @@ const verifyOnPhone: BrowserRowHandler = async (row, { context }) => {
       { note: `${MOBILE_NOTE} ${PHONE_REASON_NOTE}` },
     );
   } finally {
+    await releaseContextRoutes(phone);
     await phone.close();
   }
 };
@@ -308,6 +311,7 @@ const runDeniedPhone: BrowserRowHandler = async (row, { context }) => {
       { note: MOBILE_NOTE },
     );
   } finally {
+    await releaseContextRoutes(phone);
     await phone.close();
   }
 };
@@ -317,13 +321,13 @@ defineBrowserRows({
   surface: 'web',
   tenants: [TENANT_A],
   handlers: new Map<number, BrowserRowHandler>([
-    [1, roleDenied],
-    [2, enabledNoReason],
-    [3, exportState],
-    [4, enterWhileProcessing],
-    [5, verifyCode],
-    [6, verifyOnPhone],
-    [7, runDeniedWeb],
-    [8, runDeniedPhone],
+    [1, withRoutesReleased(roleDenied)],
+    [2, withRoutesReleased(enabledNoReason)],
+    [3, withRoutesReleased(exportState)],
+    [4, withRoutesReleased(enterWhileProcessing)],
+    [5, withRoutesReleased(verifyCode)],
+    [6, withRoutesReleased(verifyOnPhone)],
+    [7, withRoutesReleased(runDeniedWeb)],
+    [8, withRoutesReleased(runDeniedPhone)],
   ]),
 });

@@ -3,7 +3,7 @@ import { DEMO, TENANT_A } from '../../../story-runs/support/prepare';
 import { CEILING_MS, quoted, safe } from '../../support/browser';
 import { check, cell, conclude, strict } from '../../support/checks';
 import { defineBrowserRows, notExecutable, type BrowserRowHandler } from '../../core/framework';
-import { MOBILE_URL, ambiguityOutcome, describeNamed, failedAction, namedOf, prepFailed, reachable, resetAlumno, runStepsLogged } from '../web/common';
+import { MOBILE_URL, ambiguityOutcome, describeNamed, failedAction, namedOf, prepFailed, reachable, resetAlumno, runStepsLogged, withRoutesReleased } from '../web/common';
 import { MOBILE_NOTE, expoNotRunning, mobileProgramsArrival, mobileSignInSteps } from '../web/mobile';
 
 // US-A11Y-009 — Objetivos táctiles de al menos 44 px y nombres de los controles (app móvil: Expo web a 390 × 844; NO es nativo).
@@ -120,8 +120,8 @@ defineBrowserRows({
   surface: 'expo-web',
   tenants: [TENANT_A],
   handlers: new Map<number, BrowserRowHandler>([
-    [1, touchSize],
-    [2, rowActionName],
-    [3, tabName],
+    [1, withRoutesReleased(touchSize)],
+    [2, withRoutesReleased(rowActionName)],
+    [3, withRoutesReleased(tabName)],
   ]),
 });

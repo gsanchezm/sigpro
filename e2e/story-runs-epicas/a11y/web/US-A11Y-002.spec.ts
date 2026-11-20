@@ -21,6 +21,7 @@ import {
   submitLogin,
   typeCredentials,
   runStepsLogged,
+  withRoutesReleased,
 } from './common';
 
 // US-A11Y-002 — Campos con etiqueta visible, texto de ejemplo distinto y aviso ligado al campo (web, 1440 px).
@@ -182,8 +183,8 @@ defineBrowserRows({
   surface: 'web',
   tenants: [TENANT_A],
   handlers: new Map<number, BrowserRowHandler>([
-    [1, labelsAndExamples],
-    [2, emptySubmit],
-    [3, badEmail],
+    [1, withRoutesReleased(labelsAndExamples)],
+    [2, withRoutesReleased(emptySubmit)],
+    [3, withRoutesReleased(badEmail)],
   ]),
 });

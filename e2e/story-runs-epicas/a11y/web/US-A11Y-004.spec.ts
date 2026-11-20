@@ -3,7 +3,7 @@ import { DEMO, TENANT_A } from '../../../story-runs/support/prepare';
 import { CEILING_MS, textOf } from '../../support/browser';
 import { cell, check, conclude, strict } from '../../support/checks';
 import { defineBrowserRows, type BrowserRowHandler } from '../../core/framework';
-import { COOKIE_NOTE, ambiguityOutcome, describeNamed, namedOf, ncCard, prepFailed, programRow, quietCookies, resetAlumno, settle, signInToPrograms, runStepsLogged } from './common';
+import { COOKIE_NOTE, ambiguityOutcome, describeNamed, namedOf, ncCard, prepFailed, programRow, quietCookies, resetAlumno, settle, signInToPrograms, runStepsLogged, withRoutesReleased } from './common';
 import { DETALLE_TESTIDS } from '../../../../packages/shared/src/testids';
 
 // US-A11Y-004 — Insignias y barras de progreso con su valor escrito (web, 1440 px).
@@ -117,9 +117,9 @@ defineBrowserRows({
   surface: 'web',
   tenants: [TENANT_A],
   handlers: new Map<number, BrowserRowHandler>([
-    [1, programStatus],
-    [2, severityLabel],
-    [3, progressRow],
-    [4, detailProgress],
+    [1, withRoutesReleased(programStatus)],
+    [2, withRoutesReleased(severityLabel)],
+    [3, withRoutesReleased(progressRow)],
+    [4, withRoutesReleased(detailProgress)],
   ]),
 });

@@ -3,7 +3,7 @@ import { DEMO, TENANT_A } from '../../../story-runs/support/prepare';
 import { ACTION, CEILING_MS, safe } from '../../support/browser';
 import { check, cell, conclude, strict, type Check } from '../../support/checks';
 import { defineBrowserRows, type BrowserRowHandler } from '../../core/framework';
-import { ALUMNO_ADMIN, COOKIE_NOTE, countVisible, describeCount, describeNamed, focusCheck, focusedNamed, prepFailed, programRow, quietCookies, resetAlumno, settle, signInToPrograms, runStepsLogged } from './common';
+import { ALUMNO_ADMIN, COOKIE_NOTE, countVisible, describeCount, describeNamed, focusCheck, focusedNamed, prepFailed, programRow, quietCookies, resetAlumno, settle, signInToPrograms, runStepsLogged, withRoutesReleased } from './common';
 
 // US-A11Y-008 — Diálogos: el foco entra, no sale y vuelve al control que lo abrió (web de 1440 px).
 // Preparación de cada fila: reinicio de alumno01 y sesión desde el formulario de acceso. Un diálogo se localiza por su título y el
@@ -224,9 +224,9 @@ defineBrowserRows({
   surface: 'web',
   tenants: [TENANT_A],
   handlers: new Map<number, BrowserRowHandler>([
-    [1, openDialogs],
-    [2, trapped],
-    [3, closeWithoutCreating],
-    [4, deleteConfirmation],
+    [1, withRoutesReleased(openDialogs)],
+    [2, withRoutesReleased(trapped)],
+    [3, withRoutesReleased(closeWithoutCreating)],
+    [4, withRoutesReleased(deleteConfirmation)],
   ]),
 });

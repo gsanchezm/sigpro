@@ -26,6 +26,8 @@ import {
   signInToPrograms,
   typeCredentials,
   runStepsLogged,
+  withRoutesReleased,
+  releaseContextRoutes,
 } from './common';
 import { MOBILE_NOTE, expoNotRunning, mobileSignInSteps } from './mobile';
 
@@ -152,6 +154,7 @@ const phoneLoading: BrowserRowHandler = async (row, { context }) => {
       { note: `${MOBILE_NOTE} La respuesta se retrasa ${ms} ms en el navegador de la prueba.` },
     );
   } finally {
+    await releaseContextRoutes(phone);
     await phone.close();
   }
 };
@@ -264,6 +267,7 @@ const phoneError: BrowserRowHandler = async (row, { context }) => {
       { note: MOBILE_NOTE },
     );
   } finally {
+    await releaseContextRoutes(phone);
     await phone.close();
   }
 };
@@ -273,11 +277,11 @@ defineBrowserRows({
   surface: 'web',
   tenants: [TENANT_A],
   handlers: new Map<number, BrowserRowHandler>([
-    [1, busyWhileLoading],
-    [2, phoneLoading],
-    [3, emptyList],
-    [4, clearFilters],
-    [5, webError],
-    [6, phoneError],
+    [1, withRoutesReleased(busyWhileLoading)],
+    [2, withRoutesReleased(phoneLoading)],
+    [3, withRoutesReleased(emptyList)],
+    [4, withRoutesReleased(clearFilters)],
+    [5, withRoutesReleased(webError)],
+    [6, withRoutesReleased(phoneError)],
   ]),
 });

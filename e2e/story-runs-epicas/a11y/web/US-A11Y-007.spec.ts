@@ -20,6 +20,7 @@ import {
   settle,
   signInToPrograms,
   runStepsLogged,
+  withRoutesReleased,
 } from './common';
 
 // US-A11Y-007 — Recorrer y accionar la pantalla solo con el teclado (web de 1440 px).
@@ -206,9 +207,9 @@ defineBrowserRows({
   surface: 'web',
   tenants: [TENANT_A],
   handlers: new Map<number, BrowserRowHandler>([
-    [1, tabOrder],
-    [2, rowMenu],
-    [3, skipToContent],
-    [4, treeKeys],
+    [1, withRoutesReleased(tabOrder)],
+    [2, withRoutesReleased(rowMenu)],
+    [3, withRoutesReleased(skipToContent)],
+    [4, withRoutesReleased(treeKeys)],
   ]),
 });
