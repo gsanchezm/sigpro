@@ -5,7 +5,7 @@ epica: EP-LEGAL-AYUDA
 titulo: "[Web] Llegar a las páginas legales y a la ayuda desde el pie de Acceso"
 etiquetas: [web]
 relacionadas: [US-LOGIN-006, US-LEGAL-AYUDA-004]
-verificacion: codigo
+verificacion: ejecutada
 ---
 
 ## Historia

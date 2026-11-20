@@ -5,7 +5,7 @@ epica: EP-LEGAL-AYUDA
 titulo: "[Móvil] Llegar a las páginas legales y a la ayuda desde el pie de Acceso y desde «Más»"
 etiquetas: [movil]
 relacionadas: [US-LOGIN-011, US-LEGAL-AYUDA-002]
-verificacion: codigo
+verificacion: ejecutada
 ---
 
 ## Historia

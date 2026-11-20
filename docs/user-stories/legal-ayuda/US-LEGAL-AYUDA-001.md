@@ -5,7 +5,7 @@ epica: EP-LEGAL-AYUDA
 titulo: "[Web] Leer las páginas legales y la ayuda, con su contenido y su enlace de retorno"
 etiquetas: [web]
 relacionadas: [US-LEGAL-AYUDA-003]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["/legal/terms", "/legal/privacy", "/help"]
 ---
 
