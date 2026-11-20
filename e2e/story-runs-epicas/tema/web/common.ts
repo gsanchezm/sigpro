@@ -19,8 +19,8 @@ export const SETTLE_MS = 2_000;
 export const MIN_CONTRAST = 4.5;
 /** Clave de preferencia de tema que usa la propia web (lib/storage.ts). Solo se lee como dato; ningún paso la escribe. */
 export const THEME_STORAGE_KEY = 'sigpro.theme';
-/** Nota de alcance: estas filas se ejecutan solo en web; el móvil del mismo requisito no se ejecuta aquí. */
-export const WEB_ONLY_NOTE = 'Transversal: esta fila se ejecuta solo en la web (escritorio 1440 px); la app móvil no se ejecuta con esta historia.';
+/** Nota de alcance de las historias transversales de la web: la regla de la historia para la app móvil NO se mide aquí. */
+export const WEB_ONLY_NOTE = 'Transversal, solo web (escritorio 1440 px): la regla de la historia para la app móvil no se mide en esta fila (ni la preferencia guardada en el dispositivo móvil, ni que los colores sean los mismos en web y en móvil).';
 
 export type Tema = 'claro' | 'oscuro';
 
@@ -107,6 +107,8 @@ export const newProgramButton = (page: Page): Locator => page.getByTestId(PROGRA
 export const formMain = (page: Page): Locator => page.getByRole('main');
 /** Panel de marca de Acceso: decorativo (aria-hidden), así que no tiene rol; es el único `aside` de la pantalla. */
 export const brandPanel = (page: Page): Locator => page.locator('aside[aria-hidden="true"]');
+/** Filtro «Responsable» de /programs: combobox con nombre accesible del catálogo `programas.owner`, dentro de un chip de la barra de filtros. */
+export const ownerFilter = (page: Page): Locator => page.getByRole('combobox', { name: 'Responsable', exact: true });
 
 // --- Lecturas que no mienten -----------------------------------------------------------------------------------------------------
 
@@ -269,6 +271,63 @@ export const themeChecks = async (page: Page, expected: ThemeExpectation, backgr
     checks.push(check(icono === expected.icono, `el control muestra el icono de ${expected.icono}`, `el control muestra ${icono === 'ninguno' ? 'ningún icono' : icono === undefined ? '(no legible)' : `el icono de ${icono}`}`));
   }
   return checks;
+};
+
+/** Mismas comprobaciones con su paso precedido de `prefix` (p. ej. «tras recargar: »), para no confundir dos momentos de la misma fila. */
+export const prefixed = (prefix: string, checks: readonly Check[]): Check[] =>
+  checks.map((entry) => ({ ok: entry.ok, expected: `${prefix}${entry.expected}`, observed: `${prefix}${entry.observed}` }));
+
+/** Ruta sin la query de la fila (`/login?tenant=alumno01` → `/login`): la URL final debe ser la de la fila, no una redirección. */
+export const pathFromRoute = (route: string): string => route.split('?')[0] ?? route;
+
+/** Preferencia del sistema que el navegador declara con `matchMedia` (lo fija `emulateMedia` antes de cargar). */
+export const systemSchemeIs = (page: Page, scheme: 'light' | 'dark'): Promise<boolean> =>
+  safe(
+    () =>
+      page.locator('html').evaluate(
+        (_element, name) => window.matchMedia(`(prefers-color-scheme: ${name})`).matches,
+        scheme,
+        { timeout: 2000 },
+      ),
+    false,
+  );
+
+/**
+ * Estado de partida de la preferencia: sin valor guardado. Devuelve el motivo si hay un valor o si la lectura falla (una lectura
+ * fallida no cuenta como «vacío»); `undefined` solo si la clave existe vacía (`null`).
+ */
+export const noStoredPreference = async (page: Page): Promise<string | undefined> => {
+  const stored = await storedThemeOf(page);
+  if (stored === null) return undefined;
+  if (stored === undefined) return 'no se pudo leer la preferencia guardada';
+  return `hay una preferencia guardada (${stored})`;
+};
+
+/** Espera (con tolerancia de la prueba) a que el valor guardado sea `expected` y devuelve la última lectura. */
+export const settledStoredTheme = async (page: Page, expected: string): Promise<string | null | undefined> => {
+  await waitUntil(async () => (await storedThemeOf(page)) === expected, SETTLE_MS);
+  return storedThemeOf(page);
+};
+
+/**
+ * Pulsa «Cambiar tema» `times` veces desde el tema claro y comprueba el estado TRAS CADA pulsación: la impar deja el tema oscuro y
+ * la raíz `dark`; la par, el claro y la raíz `light`. Así un control muerto no pasa como «claro» final. Si una pulsación no se puede
+ * hacer, devuelve el motivo en `failure`.
+ */
+export const pressAndWatch = async (page: Page, times: number): Promise<{ readonly failure?: string; readonly checks: Check[] }> => {
+  const checks: Check[] = [];
+  for (let index = 1; index <= times; index += 1) {
+    const expectedTema: Tema = index % 2 === 1 ? 'oscuro' : 'claro';
+    const expectedValor = expectedTema === 'oscuro' ? 'dark' : 'light';
+    const failure = await runStepsLogged([[`pulsar «Cambiar tema» (vez ${index})`, () => themeToggle(page).click(ACTION)]]);
+    if (failure) return { failure, checks };
+    await waitUntil(async () => (await temaOf(page)) === expectedTema, SETTLE_MS);
+    const observed = await temaOf(page);
+    const root = await rootValueOf(page);
+    checks.push(check(observed === expectedTema, `tras la pulsación ${index} el tema es ${expectedTema}`, `tras la pulsación ${index} el tema es ${observed ?? '(no legible)'}`));
+    checks.push(check(root === expectedValor, `tras la pulsación ${index} el elemento raíz declara ${expectedValor}`, `tras la pulsación ${index} el elemento raíz declara ${root ?? '(no legible)'}`));
+  }
+  return { checks };
 };
 
 // --- Pasos de navegación y de preparación ------------------------------------------------------------------------------------------

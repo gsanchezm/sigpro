@@ -1,14 +1,15 @@
 import { TENANT_A, resetTenants } from '../../../story-runs/support/prepare';
-import { waitUntil } from '../../support/browser';
+import { pathOf, waitUntil } from '../../support/browser';
 import { cell, check, preparationFailedWeb, strict, type Check } from '../../support/checks';
 import { defineBrowserRows, type BrowserRowHandler } from '../../core/framework';
 import { EXPO_NOTE, MOBILE_SETTLE_MS, openScreenSteps, pressOnceSteps, schemeOf, settleScheme, tenantSteps, toggleOf } from './common';
-import { RGB, actionMissing, backgroundOf, concluded, hexOf, runStepsLogged, storedThemeOf, type Tema } from '../web/common';
+import { RGB, actionMissing, backgroundOf, concluded, hexOf, noStoredPreference, runStepsLogged, storedThemeOf, systemSchemeIs, type Tema } from '../web/common';
 
 // US-TEMA-003 — Tema inicial de la app móvil: el del sistema hasta que la persona elige uno (Expo web a 390 × 844; NO es nativo).
 // Preparación de cada fila: reinicio del tenant alumno01; /login con alumno01 en «Tenant de trabajo»; navegador (contexto) nuevo y sin
-// preferencia guardada; el tema del sistema se fija con emulateMedia. «Cerrar la app y volver a abrirla» = abrir otra página del mismo
-// contexto (el almacenamiento se conserva) y cerrar la anterior, como en sesion/mobile/common.ts.
+// preferencia guardada (comprobado leyendo la clave, una lectura fallida no cuenta como vacía); el tema del sistema se fija con
+// emulateMedia y se comprueba con matchMedia tras cargar. «Cerrar la app y volver a abrirla» = abrir otra página del mismo contexto
+// (el almacenamiento se conserva) y cerrar la anterior, como en sesion/mobile/common.ts.
 
 const SISTEMA: ReadonlyMap<string, 'light' | 'dark'> = new Map<string, 'light' | 'dark'>([
   ['claro', 'light'],
@@ -36,8 +37,9 @@ const followsSystem: BrowserRowHandler = async (row, { page }) => {
   await page.emulateMedia({ colorScheme: system });
   const opened = await runStepsLogged([...openScreenSteps(page, '/login'), ...tenantSteps(page)]);
   if (opened) return preparationFailedWeb(expected, opened);
-  const stored = await storedThemeOf(page);
-  if (typeof stored === 'string') return preparationFailedWeb(expected, `hay una preferencia guardada antes de elegir (${stored})`);
+  if (!(await systemSchemeIs(page, system))) return preparationFailedWeb(expected, `el navegador no declara el sistema en ${followedSystem(system)}`);
+  const preference = await noStoredPreference(page);
+  if (preference) return preparationFailedWeb(expected, preference);
 
   // La app lee el tema guardado de forma asíncrona: se espera al tema que muestra antes de juzgar
   const settled = await settleScheme(page, tema);
@@ -46,6 +48,7 @@ const followsSystem: BrowserRowHandler = async (row, { page }) => {
   const checks: Check[] = [
     check(observed === tema, `la pantalla se ve con el tema ${tema}`, `la pantalla se ve con el tema ${observed ?? '(no legible)'}`),
     check(fondo === fondoRgb, `el fondo de la pantalla es ${fondoHex}`, `el fondo de la pantalla es ${hexOf(fondo)}`),
+    check(pathOf(page) === '/login', 'la pantalla sigue en /login', `la pantalla está en ${pathOf(page)}`),
   ];
   return concluded(checks, { note: EXPO_NOTE, evidence: { tema_sistema: system, asentado: settled } });
 };
@@ -59,13 +62,18 @@ const keepsChoice: BrowserRowHandler = async (row, { page, context }) => {
   const fondoRgb = strict('fondo', RGB, fondoHex);
   const expected = `tras cerrar y volver a abrir la app, la pantalla se ve con el tema ${tema}, fondo ${fondoHex}`;
 
-  // Preparación: reinicio, sistema en el tema de la fila, /login con alumno01 y una pulsación de «Cambiar tema»
+  // Preparación: reinicio, sistema en el tema de la fila, /login con alumno01, sistema comprobado y sin preferencia guardada
   await resetTenants([TENANT_A]);
   await page.emulateMedia({ colorScheme: system });
   const opened = await runStepsLogged([...openScreenSteps(page, '/login'), ...tenantSteps(page)]);
   if (opened) return preparationFailedWeb(expected, opened);
+  if (!(await systemSchemeIs(page, system))) return preparationFailedWeb(expected, `el navegador no declara el sistema en ${followedSystem(system)}`);
+  const preference = await noStoredPreference(page);
+  if (preference) return preparationFailedWeb(expected, preference);
   const before = await schemeOf(page);
   if (before !== followedSystem(system)) return preparationFailedWeb(expected, `antes de elegir la app muestra ${before ?? '(no legible)'}, no el del sistema`);
+
+  // Dado: una pulsación de «Cambiar tema»; la pantalla debe pasar al tema de la fila
   const pressed = await runStepsLogged(pressOnceSteps(page));
   if (pressed) return actionMissing(expected, pressed);
   const flipped = await settleScheme(page, tema);
@@ -75,19 +83,21 @@ const keepsChoice: BrowserRowHandler = async (row, { page, context }) => {
   const storedValue = tema === 'oscuro' ? 'dark' : 'light';
   await waitUntil(async () => (await storedThemeOf(page)) === storedValue, MOBILE_SETTLE_MS);
 
-  // «Cerrar la app y volver a abrirla»: otra página del mismo contexto, la anterior se cierra
+  // Cuando: «cerrar la app y volver a abrirla»: otra página del mismo contexto, la anterior se cierra
   const reopened = await context.newPage();
   await reopened.emulateMedia({ colorScheme: system });
   await page.close();
   const back = await runStepsLogged(openScreenSteps(reopened, '/login'));
   if (back) return concluded([check(false, expected, `no se pudo volver a abrir la app: ${back}`)], { note: EXPO_NOTE });
 
+  // Entonces: el tema elegido y el fondo, tras reabrir
   const settled = await settleScheme(reopened, tema);
   const observed = await schemeOf(reopened);
   const fondo = await backgroundOf(toggleOf(reopened));
   const checks: Check[] = [
     check(observed === tema, `la pantalla se ve con el tema ${tema}`, `la pantalla se ve con el tema ${observed ?? '(no legible)'}`),
     check(fondo === fondoRgb, `el fondo de la pantalla es ${fondoHex}`, `el fondo de la pantalla es ${hexOf(fondo)}`),
+    check(pathOf(reopened) === '/login', 'la app vuelve a abrirse en /login', `la app se abre en ${pathOf(reopened)}`),
   ];
   return concluded(checks, { note: EXPO_NOTE, evidence: { tema_sistema: system, asentado_tras_reabrir: settled } });
 };

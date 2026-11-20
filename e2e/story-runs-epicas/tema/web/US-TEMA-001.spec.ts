@@ -1,5 +1,5 @@
 import { TENANT_A, resetTenants } from '../../../story-runs/support/prepare';
-import { ACTION } from '../../support/browser';
+import { ACTION, pathOf } from '../../support/browser';
 import { cell, check, preparationFailedWeb, strict, type Check } from '../../support/checks';
 import { defineBrowserRows, type BrowserRowHandler } from '../../core/framework';
 import {
@@ -14,6 +14,8 @@ import {
   markPage,
   markSurvives,
   openLoginSteps,
+  pathFromRoute,
+  pressAndWatch,
   pressSteps,
   runStepsLogged,
   signInSteps,
@@ -71,10 +73,12 @@ const everyWidth: BrowserRowHandler = async (row, { page }) => {
 
   // Marca de página para «sin recargarla» (solo si la fila pulsa)
   await markPage(page);
-  const failure = await runStepsLogged(pressSteps(page, presses));
-  if (failure) return actionMissing(expected, failure);
+  // Tras CADA pulsación se comprueba el estado intermedio (un control muerto no pasa como «claro» final)
+  const pressed = await pressAndWatch(page, presses);
+  if (pressed.failure) return actionMissing(expected, pressed.failure);
 
   const checks: Check[] = [
+    ...pressed.checks,
     ...(await themeChecks(page, { tema, valor, fondo: { hex: fondoHex, rgb: fondoRgb }, icono: tema === 'oscuro' ? 'sol' : 'luna' }, page.locator('body'))),
   ];
   // Regla: el control no tiene texto visible (solo el icono)
@@ -109,13 +113,16 @@ const alternatesInAccess: BrowserRowHandler = async (row, { page }) => {
   if (opened) return preparationFailedWeb(expected, opened);
 
   await markPage(page);
-  const failure = await runStepsLogged(pressSteps(page, 1));
-  if (failure) return actionMissing(expected, failure);
+  const pressed = await runStepsLogged(pressSteps(page, 1));
+  if (pressed) return actionMissing(expected, pressed);
 
   const checks: Check[] = [...(await themeChecks(page, { tema: 'oscuro', valor: 'dark', fondo: DARK, icono: 'sol' }, page.locator('body')))];
   // Regla: el cambio se ve en la página sin recargarla
   const survived = await markSurvives(page);
   checks.push(check(survived, 'el cambio se ve sin recargar la página', survived ? 'la página no se recargó' : 'la página se recargó'));
+  // La URL final es la de la fila: una redirección (p. ej. a /login) no cuenta como la pantalla pedida
+  const path = pathFromRoute(route);
+  checks.push(check(pathOf(page) === path, `la pantalla sigue en ${path}`, `la pantalla está en ${pathOf(page)}`));
   return concluded(checks, { evidence: { ruta: route } });
 };
 
@@ -141,10 +148,11 @@ const brandStaysDark: BrowserRowHandler = async (row, { page }) => {
   const opened = await runStepsLogged(openLoginSteps(page));
   if (opened) return preparationFailedWeb(expected, opened);
 
-  const failure = await runStepsLogged(pressSteps(page, presses));
-  if (failure) return actionMissing(expected, failure);
+  // Tras cada pulsación, el estado intermedio (con dos pulsaciones, la primera deja el tema oscuro)
+  const pressed = await pressAndWatch(page, presses);
+  if (pressed.failure) return actionMissing(expected, pressed.failure);
 
-  const checks: Check[] = [...(await themeChecks(page, { tema }, page.locator('body')))];
+  const checks: Check[] = [...pressed.checks, ...(await themeChecks(page, { tema }, page.locator('body')))];
   const brand = await backgroundOf(brandPanel(page));
   checks.push(check(brand === DARK.rgb, 'el panel de marca de la izquierda tiene fondo #141017', `el panel de marca tiene fondo ${hexOf(brand)}`));
   const column = await backgroundOf(formMain(page));
