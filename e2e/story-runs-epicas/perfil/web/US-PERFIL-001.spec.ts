@@ -15,7 +15,7 @@ import {
   concluded,
   installInitScripts,
   openProfileWeb,
-  permissionCheck,
+  permissionChecks,
   permissionOrder,
   readPermission,
   signInWeb,
@@ -59,7 +59,7 @@ const permissionsRow: BrowserRowHandler = async (row, { page, context }) => {
   for (const [column, label] of PERMISSION_COLUMNS) {
     const cellText = cell(row, column);
     const want = strict('permiso', PERMISSION_CELLS, cellText);
-    checks.push(permissionCheck(label, cellText, want, await readPermission(page, label)));
+    checks.push(...permissionChecks(label, cellText, want, await readPermission(page, label), false));
   }
   const order = await permissionOrder(page);
   checks.push(check(JSON.stringify(order) === JSON.stringify(PERMISSION_ORDER), 'los seis permisos aparecen en el orden de la historia', order === undefined ? 'orden no legible' : order.join(' · ')));

@@ -9,7 +9,7 @@ import { notExecutable, outcome, type BrowserRowHandler, type Outcome } from '..
 // Piezas comunes de las filas de «Perfil» en la web (1440 px). Los localizadores van por rol y nombre accesible, acotados a la
 // página «Perfil» (`profile-page`): la cabecera repite el avatar y tiene su propio selector de idioma. Donde la pantalla no ofrece
 // otro rastro se usa el identificador de prueba de `testids.ts` (respaldo). Cada lectura espera con techo y nunca cuenta como
-// cumplida si falla: un control ausente, ambiguo o no legible da «no aparece», «ambiguo» o «no legible», jamás «no visible».
+// cumplida si falla: un control ausente da «no aparece» (discrepancia), y ambiguo o no legible dan no ejecutable.
 
 export const TENANT = TENANT_A;
 export const LOGIN_PATH = `/login?tenant=${TENANT}`;
@@ -21,9 +21,30 @@ export const TOAST_KEY = '__perfilToasts';
 /** Ventana en la que se muestrean los textos alternos (el ciclo del modo caos es de 2,5 s). */
 export const ALTERNATION_MS = 6_000;
 export const SAMPLE_MS = 100;
+/** Tolerancia de un intervalo del modo caos alrededor de sus 2,5 s. */
+export const INTERVAL_MIN_MS = 2_000;
+export const INTERVAL_MAX_MS = 3_000;
+
 export const COOKIE_NOTE = 'La prueba fija solo la preferencia de cookies (sigpro.cookies = accepted) antes de abrir la app, como en el resto de épicas: el aviso de cookies no se ejerce aquí.';
+export const PREP_NOTE = 'Preparación: el reinicio envía solo el token del administrador del tenant (el tenant sale del token; la cabecera x-tenant no cambia nada) y cada fila arranca con un contexto nuevo, sin preferencias ni sesión guardadas.';
 /** Las preferencias no tienen endpoint: su persistencia se mira en la propia página (recarga o reapertura), no por la API. */
 export const NO_ENDPOINT_NOTE = 'Las preferencias no tienen endpoint de API: su persistencia se comprueba por la recarga o la reapertura de la página, no por GET.';
+export const TOOLTIP_NOTE = 'La explicación «al pasar el cursor» se lee del atributo title del botón: el tooltip nativo no es observable en el navegador headless.';
+export const DIGEST_NOTE = 'El resumen semanal es simulado y no tiene endpoint: el oráculo de «no envía correo» es la ausencia de peticiones de escritura (no GET) durante el guardado.';
+export const HEADER_OBSERVATION_NOTE = 'Observación sin veredicto (no es regla de la historia): cambiar idioma o tema desde la cabecera con /profile abierto no actualiza el borrador (ProfilePage.tsx:38-42).';
+export const CHAOS_ORDER_NOTE = 'El caos de textos alternos se activa ANTES de iniciar sesión: la web lee la configuración al autenticarse (apps/web/src/state/config.tsx:37-40).';
+export const NOT_APPLIED_NOTE = 'Regla «cambiar un control no aplica nada»: solo se mira el tema (html[data-theme] sigue «light» durante el borrador); el interruptor y la casilla no tienen fila que lo pruebe.';
+export const RESET_VALUE_NOTE = 'Regla «si un control vuelve a su valor guardado, Guardar vuelve a deshabilitarse»: solo se prueba con el idioma (fila 002 E1 F3); tema, interruptor y casilla no tienen fila.';
+
+// Envoltorios de notas: cada fila de la superficie añade su nota común (sin cambiar el veredicto).
+export const withNote =
+  (note: string) =>
+  (handler: BrowserRowHandler): BrowserRowHandler =>
+  async (row, fixtures) => {
+    const result = await handler(row, fixtures);
+    return { ...result, note: result.note === undefined ? note : `${result.note} ${note}` };
+  };
+export const withCookieNote = withNote(`${COOKIE_NOTE} ${PREP_NOTE}`);
 
 /** Las tres secciones que la página «Perfil» tiene con su título. */
 export const SECTIONS: readonly string[] = ['Cuenta', 'Qué puedes hacer con tu rol', 'Preferencias'];
@@ -67,8 +88,8 @@ export const ACCOUNTS: ReadonlyMap<string, { readonly mfa: boolean }> = new Map<
   ['alumno01@sigpro.lab', { mfa: false }],
 ]);
 
-/** Controles interactivos que no deben existir dentro del bloque de la cuenta (que solo se lee). */
-export const CONTROL_SELECTOR = 'input, select, textarea, button, [role="button"], [role="combobox"], [role="textbox"], [role="switch"], [role="checkbox"], [role="radio"], [role="link"], [contenteditable="true"]';
+/** Controles interactivos: no deben existir dentro de la sección «Cuenta» (que solo se lee). */
+export const CONTROL_SELECTOR = 'input, select, textarea, button, a[href], summary, [tabindex], [role="button"], [role="combobox"], [role="textbox"], [role="switch"], [role="checkbox"], [role="radio"], [role="link"], [contenteditable="true"]';
 
 // --- Resultado de una lectura -----------------------------------------------------------------------------------------------
 
@@ -108,13 +129,14 @@ export const checkedSettled = async (target: Locator, want: boolean, ceilingMs: 
 export const rootOf = (page: Page): Locator => page.getByTestId(PERFIL_TESTIDS.PROFILE_PAGE);
 export const profileTitle = (page: Page, name: string = 'Perfil'): Locator => rootOf(page).getByRole('heading', { name, level: 1, exact: true });
 export const sectionHeading = (page: Page, name: string): Locator => rootOf(page).getByRole('heading', { name, level: 2, exact: true });
+/** La sección «Cuenta»: el padre de su encabezado (la sección en la web, la tarjeta en la app móvil). */
+export const accountSection = (page: Page): Locator => sectionHeading(page, 'Cuenta').locator('xpath=..');
 export const saveButton = (page: Page): Locator => rootOf(page).getByRole('button', { name: /^Guardar( cambios)?$/ });
 /** Su nombre accesible («Idioma de la interfaz») cambia con el idioma guardado: se localiza por su identificador de prueba. */
 export const langSelect = (page: Page): Locator => rootOf(page).getByTestId(PERFIL_TESTIDS.PROFILE_LANG);
 export const themeRadio = (page: Page, name: string): Locator => rootOf(page).getByRole('radio', { name, exact: true });
 export const liveSwitch = (page: Page): Locator => rootOf(page).getByRole('switch', { name: 'Notificaciones en tiempo real', exact: true });
 export const digestBox = (page: Page): Locator => rootOf(page).getByRole('checkbox', { name: 'Recibir un resumen semanal por correo (simulado)', exact: true });
-export const accountBlock = (page: Page): Locator => rootOf(page).getByTestId(PERFIL_TESTIDS.PROFILE_AVATAR).locator('xpath=..');
 export const permissionItems = (page: Page): Locator => rootOf(page).getByTestId(PERFIL_TESTIDS.PROFILE_PERMISSIONS).getByRole('listitem');
 
 export const loginHeading = (page: Page): Locator => page.getByRole('heading', { name: 'Iniciar sesión', exact: true });
@@ -226,12 +248,6 @@ export const concluded = (checks: readonly Check[], extra: Pick<Outcome, 'note' 
 
 // --- Preparación común ----------------------------------------------------------------------------------------------------
 
-/** Añade la nota de cookies (preferencia fijada por la prueba) a cada resultado de la superficie web. */
-export const withCookieNote = (handler: BrowserRowHandler): BrowserRowHandler => async (row, fixtures) => {
-  const result = await handler(row, fixtures);
-  return { ...result, note: result.note === undefined ? COOKIE_NOTE : `${result.note} ${COOKIE_NOTE}` };
-};
-
 /** Fija SOLO la preferencia de cookies antes de abrir la app: el aviso tapa zonas de la página y no es una sesión. */
 export const fixCookiePreference = (): void => {
   try {
@@ -281,15 +297,15 @@ export const installInitScripts = async (context: BrowserContext): Promise<void>
   await context.addInitScript(recordToasts, TOAST_KEY);
 };
 
-/** Registro de avisos de la página desde su carga (vacío si la página no se puede leer). */
-export const toastLog = (page: Page): Promise<readonly ToastEntry[]> =>
-  safe(() => page.evaluate((key: string) => ((window as unknown as Record<string, unknown>)[key] as ToastEntry[] | undefined) ?? [], TOAST_KEY), []);
+/** Registro de avisos de la página: `undefined` si no se puede leer (un error no es «ningún aviso»). */
+export const toastLog = (page: Page): Promise<readonly ToastEntry[] | undefined> =>
+  safe<readonly ToastEntry[] | undefined>(() => page.evaluate((key: string) => ((window as unknown as Record<string, unknown>)[key] as ToastEntry[] | undefined) ?? [], TOAST_KEY), undefined);
 
-/** Espera (con techo) a que aparezca en el registro un aviso con ese texto. Devuelve el aviso si apareció. */
-export const awaitToast = async (page: Page, title: string): Promise<{ readonly entry: ToastEntry | undefined; readonly reached: boolean }> => {
-  const waited = await waitUntil(async () => (await toastLog(page)).some((item) => item.title === title), CEILING_MS);
-  const entry = (await toastLog(page)).find((item) => item.title === title);
-  return { entry, reached: waited.reached };
+/** Espera (con techo) a que aparezca en el registro un aviso con ese texto. Devuelve el aviso y si el registro se pudo leer. */
+export const awaitToast = async (page: Page, title: string): Promise<{ readonly entry: ToastEntry | undefined; readonly reached: boolean; readonly log: readonly ToastEntry[] | undefined }> => {
+  const waited = await waitUntil(async () => ((await toastLog(page)) ?? []).some((item) => item.title === title), CEILING_MS);
+  const log = await toastLog(page);
+  return { entry: log?.find((item) => item.title === title), reached: waited.reached, log };
 };
 
 /** Registro de escrituras de red (no GET) desde que se llama hasta `stop()`: sirve para «no envía ningún correo». */
@@ -384,38 +400,123 @@ export const profileTitleCheck = async (page: Page, name: string): Promise<Check
   return check(title.ok && title.value, `el título de la página es «${name}»`, title.ok ? (title.value ? `título «${name}» visible` : 'título no visible') : title.reason);
 };
 
-/** Texto de un dato de la cuenta («Nombre», «Correo», «Rol», «Tenant»), por su identificador de prueba (la lista no tiene rol propio). */
-export const accountValue = async (page: Page, testid: string): Promise<string | undefined> => {
-  const read = await readOne(rootOf(page).getByTestId(testid), textNodeOf);
-  return read.ok ? read.value.trim() : undefined;
+// --- La cuenta: pares etiqueta → valor, avatar e iniciales ---------------------------------------------------------------
+
+/** Iniciales por la regla de la historia: la primera letra de las dos primeras palabras, en mayúsculas. */
+export const initialsOf = (name: string): string =>
+  name
+    .split(/\s+/)
+    .filter((word) => word !== '')
+    .slice(0, 2)
+    .map((word) => word.charAt(0))
+    .join('')
+    .toUpperCase();
+
+/** Comprobaciones de un dato de la cuenta: la fila (etiqueta y valor, par `dt`/`dd` o Text de etiqueta y de valor) y el valor. */
+const pairChecks = async (page: Page, testid: string, label: string, value: string): Promise<Check[]> => {
+  const read = await readOne(rootOf(page).getByTestId(testid), (found) =>
+    found.evaluate((node) => ({ label: (node.previousElementSibling?.textContent ?? '').trim(), value: (node.textContent ?? '').trim() })),
+  );
+  if (!read.ok) return [check(false, `ve el dato «${label}» con ${value}`, read.reason)];
+  return [
+    check(read.value.label === label, `la fila del dato se llama «${label}»`, `la etiqueta es «${read.value.label}»`),
+    check(read.value.value === value, `ve el ${label.toLowerCase()} ${value}`, `ve el ${label.toLowerCase()} ${read.value.value}`),
+  ];
 };
 
-/** Número de controles interactivos dentro del bloque de la cuenta (avatar y datos). */
-export const controlsInAccount = async (page: Page): Promise<number | undefined> => safe(() => accountBlock(page).locator(CONTROL_SELECTOR).count(), undefined);
+/** Texto de iniciales del avatar: en la app móvil es el Text del avatar; en la web, el `<text>` del SVG del `data:` URI. */
+export const avatarInitials = async (page: Page): Promise<Read<string>> => {
+  const wrapper = rootOf(page).getByTestId(PERFIL_TESTIDS.PROFILE_AVATAR);
+  const text = await readOne(wrapper, (found) => found.textContent({ timeout: 1000 }).then((value) => (value ?? '').trim()));
+  if (!text.ok) return text;
+  if (text.value !== '') return { ok: true, value: text.value };
+  return readOne(wrapper.getByRole('img'), async (found) => {
+    const src = (await found.getAttribute('src', { timeout: 1000 })) ?? '';
+    const svg = decodeURIComponent(src.slice(src.indexOf(',') + 1));
+    const captured = /<text[^>]*>([^<]*)<\/text>/.exec(svg)?.[1];
+    if (captured === undefined) throw new Error('el SVG del avatar no lleva texto');
+    return captured;
+  });
+};
+
+/** Comprobaciones de la sección «Cuenta»: los cuatro datos (etiqueta y valor), el avatar con su nombre e iniciales, y ningún control. */
+export const accountChecks = async (page: Page, correo: string, nombre: string, rol: string): Promise<Check[]> => {
+  const rows: readonly (readonly [string, string, string])[] = [
+    [PERFIL_TESTIDS.PROFILE_NAME, 'Nombre', nombre],
+    [PERFIL_TESTIDS.PROFILE_EMAIL, 'Correo', correo],
+    [PERFIL_TESTIDS.PROFILE_ROLE, 'Rol', rol],
+    [PERFIL_TESTIDS.PROFILE_TENANT, 'Tenant', TENANT],
+  ];
+  const checks: Check[] = [];
+  for (const [testid, label, value] of rows) {
+    checks.push(...(await pairChecks(page, testid, label, value)));
+  }
+  const avatar = await avatarNamed(page, nombre);
+  checks.push(check(avatar === 1, `el avatar tiene como nombre accesible ${nombre}`, avatar === undefined ? 'avatar no legible' : `${avatar} avatar(es) con ese nombre accesible`));
+  const expectedInitials = initialsOf(nombre);
+  const initials = await avatarInitials(page);
+  checks.push(check(initials.ok && initials.value === expectedInitials, `el avatar muestra las iniciales «${expectedInitials}»`, initials.ok ? `el avatar muestra «${initials.value}»` : `avatar: ${initials.reason}`));
+  const controls = await controlsInAccount(page);
+  checks.push(check(controls === 0, 'ninguno de esos cuatro datos tiene un control para cambiarlo', controls === undefined ? 'controles de «Cuenta» no legibles' : `${controls} controles en la sección «Cuenta»`));
+  return checks;
+};
+
+/** Número de controles interactivos dentro de la sección «Cuenta» (el encabezado y su sección). */
+export const controlsInAccount = async (page: Page): Promise<number | undefined> => safe(() => accountSection(page).locator(CONTROL_SELECTOR).count(), undefined);
 
 /** Cuántos avatares de la cuenta tienen ese nombre accesible. */
 export const avatarNamed = async (page: Page, name: string): Promise<number | undefined> =>
   safe(() => rootOf(page).getByTestId(PERFIL_TESTIDS.PROFILE_AVATAR).getByRole('img', { name, exact: true }).count(), undefined);
 
-/** Una fila de «Qué puedes hacer con tu rol»: glifo, nombre del permiso y texto de estado (tres hijos, en ese orden). */
+// --- Permisos: glifo, nombre y estado, con lo que se ve de verdad --------------------------------------------------------
+
+/** Una fila de «Qué puedes hacer con tu rol»: glifo, nombre y estado (tres hijos, en ese orden) y si cada parte se pinta. */
 export interface PermissionReading {
   readonly label: string;
   readonly mark: string;
   readonly status: string;
+  readonly painted: { readonly mark: boolean; readonly label: boolean; readonly status: boolean };
 }
 
-/** Lee la fila del permiso `label`. Devuelve el motivo (no aparece, ambiguo, no legible) si no se puede leer con exactitud. */
-export const readPermission = async (page: Page, label: string): Promise<PermissionReading | string> => {
-  const row = permissionItems(page).filter({ hasText: label });
-  const read = await readOne(row, (found) => found.locator('xpath=./*').allTextContents());
-  if (!read.ok) return read.reason;
-  const [mark = '', name = '', status = ''] = read.value.map((text) => text.trim());
-  return name === label ? { label: name, mark, status } : `fila con otro nombre («${name}»)`;
+/** Se pinta si es visible y su caja mide más de 1 px (el texto de lector de pantalla tiene 1×1 px y no se ve). */
+export const paintedOf = async (found: Locator): Promise<boolean> => {
+  if (!(await found.isVisible({ timeout: 1000 }))) return false;
+  const box = await found.boundingBox({ timeout: 1000 });
+  return box !== null && box.width > 1 && box.height > 1;
+};
+
+/** Lee la fila del permiso `label`: texto de cada parte y si se pinta. */
+export const readPermission = async (page: Page, label: string): Promise<Read<PermissionReading>> => {
+  const read = await readOne(permissionItems(page).filter({ hasText: label }), async (found) => {
+    const parts = found.locator('xpath=./*');
+    const texts = await parts.allTextContents();
+    const painted = [await paintedOf(parts.nth(0)), await paintedOf(parts.nth(1)), await paintedOf(parts.nth(2))];
+    return { texts, painted };
+  });
+  if (!read.ok) return read;
+  const [mark = '', name = '', status = ''] = read.value.texts.map((text) => text.trim());
+  if (name !== label) return { ok: false, reason: `fila con otro nombre («${name}»)` };
+  const [markPainted = false, namePainted = false, statusPainted = false] = read.value.painted;
+  return { ok: true, value: { label: name, mark, status, painted: { mark: markPainted, label: namePainted, status: statusPainted } } };
+};
+
+/** Comprobaciones de una fila de permiso: el texto del glifo y del estado, que el glifo y el nombre se ven, y que el estado se ve o no (según la superficie). */
+export const permissionChecks = (label: string, cellText: string, want: PermissionCell, read: Read<PermissionReading>, statusShownAsText: boolean): Check[] => {
+  const expected = `${label} muestra ${cellText}`;
+  if (!read.ok) return [check(false, expected, `${label}: ${read.reason}`), check(false, `${label}: el glifo y el nombre se ven`, `${label}: ${read.reason}`)];
+  const value = read.value;
+  return [
+    check(value.mark === want.mark && value.status === want.status, expected, `${value.label} muestra ${value.mark} «${value.status}»`),
+    check(value.painted.mark && value.painted.label, `${label}: el glifo y el nombre se ven`, `glifo ${value.painted.mark ? 'visible' : 'no visible'}, nombre ${value.painted.label ? 'visible' : 'no visible'}`),
+    check(value.painted.status === statusShownAsText, `${label}: el texto «${want.status}» ${statusShownAsText ? 'se ve' : 'no se ve (solo lector de pantalla)'}`, `texto de estado ${value.painted.status ? 'visible' : 'no visible'}`),
+  ];
 };
 
 /** Orden de los permisos tal como aparecen en la lista. */
 export const permissionOrder = (page: Page): Promise<readonly string[] | undefined> =>
   safe(async () => permissionItems(page).evaluateAll((items) => items.map((item) => (item.children[1]?.textContent ?? '').trim())), undefined);
+
+// --- Estado de «Guardar» y del borrador -----------------------------------------------------------------------------------
 
 /** Estado de «Guardar» en palabras: deshabilitado (con su explicación) o habilitado; o el motivo si no se puede leer. */
 export interface SaveState {
@@ -458,6 +559,26 @@ export const selectedLangCheck = async (page: Page, label: string): Promise<Chec
   return check(read.ok && read.value === label, `el selector muestra «${label}»`, read.ok ? `el selector muestra «${read.value}»` : read.reason);
 };
 
+/** Tema de la página (`html[data-theme]`): lo que el borrador no debe cambiar hasta «Guardar». Sin espera salvo que se pida. */
+export const documentTheme = async (page: Page): Promise<Read<string | null>> => {
+  try {
+    return { ok: true, value: await page.evaluate(() => document.documentElement.getAttribute('data-theme')) };
+  } catch (error) {
+    return { ok: false, reason: `no legible (${firstLine(error)})` };
+  }
+};
+
+export const documentThemeCheck = async (page: Page, want: 'light' | 'dark', expected: string, settle = false): Promise<Check> => {
+  if (settle) {
+    await waitUntil(async () => {
+      const current = await documentTheme(page);
+      return current.ok && current.value === want;
+    }, 3_000);
+  }
+  const read = await documentTheme(page);
+  return check(read.ok && read.value === want, expected, read.ok ? `html[data-theme] = «${read.value}»` : read.reason);
+};
+
 /**
  * Estado inicial «sin cambios» de la historia: idioma «Español», tema «Claro», interruptor activado, casilla desmarcada y «Guardar»
  * deshabilitado con su explicación. Se comprueba antes de cualquier acción de la fila.
@@ -486,8 +607,10 @@ export const saveCheck = async (page: Page, expected: string, wanted: (state: Sa
 /** Comprueba que el aviso «Preferencias guardadas» aparece en el registro (el «×» no forma parte del mensaje). Si no, muestra lo que hubo. */
 export const toastCheck = async (page: Page, expected: string): Promise<Check> => {
   const toast = await awaitToast(page, SAVED);
-  const seen = (await toastLog(page)).map((entry) => `«${entry.title}» (${entry.tone})`);
-  return check(toast.reached, expected, toast.entry ? `ve «${toast.entry.title}» (${toast.entry.tone})` : `no aparece «${SAVED}»; avisos registrados: ${seen.length === 0 ? 'ninguno' : seen.join(', ')}`);
+  if (toast.entry !== undefined) return check(toast.reached, expected, `ve «${toast.entry.title}» (${toast.entry.tone})`);
+  if (toast.log === undefined) return check(false, expected, 'sin leer el registro de avisos (no legible)');
+  const seen = toast.log.map((entry) => `«${entry.title}» (${entry.tone})`);
+  return check(false, expected, `no aparece «${SAVED}»; avisos registrados: ${seen.length === 0 ? 'ninguno' : seen.join(', ')}`);
 };
 
 /** Comprueba un control de estado (marcado o activado) frente al valor que dice la historia; una lectura fallida no cumple. */
@@ -506,46 +629,101 @@ export const enableFlakyLabels = async (expected: string): Promise<Outcome | und
   return flaky === true ? undefined : preparationFailed(expected, 'GET /api/config no muestra los textos alternos', config);
 };
 
-/** Apaga el caos del tenant (lo que la siguiente fila encontraría de todos modos). */
+/** Apaga el caos del tenant y comprueba el 2xx: si no se apaga es un error de la prueba, no una nota. */
 export const restoreChaos = async (): Promise<void> => {
-  await setChaos(TENANT, NO_CHAOS);
+  const restored = await setChaos(TENANT, NO_CHAOS);
+  if (restored.status !== 200) throw new Error(`No se pudo apagar el caos de ${TENANT}: respuesta ${restored.status} ${JSON.stringify(restored.body).slice(0, 200)}`);
 };
 
-/** Muestrea el texto del botón «Guardar» durante la ventana y devuelve los textos vistos (sin repetir, sin los no legibles). */
-export const sampleSaveLabels = async (page: Page): Promise<string[]> => {
-  const seen = new Set<string>();
+/** Un cambio de texto observado en el botón «Guardar», con su instante. */
+export interface LabelChange {
+  readonly label: string;
+  readonly at: number;
+}
+export interface LabelSample {
+  readonly changes: readonly LabelChange[];
+  readonly unreadable: number;
+}
+
+/** Muestrea el botón «Guardar» durante la ventana y registra las TRANSICIONES de su texto, con su marca de tiempo. */
+export const sampleSaveTransitions = async (page: Page): Promise<LabelSample> => {
+  const changes: LabelChange[] = [];
+  let unreadable = 0;
   const started = Date.now();
   while (Date.now() - started < ALTERNATION_MS) {
     const label = await readOne(saveButton(page), (found) => found.innerText({ timeout: 500 }));
-    if (label.ok) seen.add(label.value.trim());
+    if (!label.ok) unreadable += 1;
+    else {
+      const text = label.value.trim();
+      const last = changes[changes.length - 1];
+      if (last === undefined || last.label !== text) changes.push({ label: text, at: Date.now() });
+    }
     await sleep(SAMPLE_MS);
   }
-  return [...seen];
+  return { changes, unreadable };
+};
+
+/**
+ * La historia pide que el texto alterne. Con el modo caos el ciclo es de 2,5 s: se exigen al menos dos transiciones que alternen
+ * entre «Guardar» y «Guardar cambios», con intervalos entre 2 y 3 s, y ninguna lectura fallida.
+ */
+export const alternationCheck = (sample: LabelSample, expected: string): Check => {
+  const labels = sample.changes.map((item) => item.label);
+  const intervals = sample.changes.slice(1).map((item, index) => item.at - (sample.changes[index]?.at ?? item.at));
+  const alternates = labels.length >= 3 && labels.every((label) => label === 'Guardar' || label === 'Guardar cambios') && labels.every((label, index) => index === 0 || label !== labels[index - 1]);
+  const timed = intervals.length >= 2 && intervals.every((ms) => ms >= INTERVAL_MIN_MS && ms <= INTERVAL_MAX_MS);
+  const path = labels.length === 0 ? '(ninguno legible)' : labels.map((label) => `«${label}»`).join(' → ');
+  const observed = `${path}; intervalos ${intervals.length === 0 ? '—' : intervals.map((ms) => `${ms} ms`).join(', ')}${sample.unreadable > 0 ? `; lecturas no legibles: ${sample.unreadable}` : ''}`;
+  return check(alternates && timed && sample.unreadable === 0, expected, observed);
 };
 
 // --- Acciones de una persona sobre los controles ---------------------------------------------------------------------------
 
-/** Una acción sobre un control de «Perfil». Se hace solo si el control existe, se ve y está habilitado (si no, es una discrepancia). */
+/**
+ * Una acción sobre un control de «Perfil». Se hace solo si el control existe, se ve y está habilitado (si no, es una discrepancia).
+ * Tras actuar, `applied` comprueba que el control refleja el cambio pedido (si no, la app no lo muestra: discrepancia).
+ */
 export interface Action {
   readonly what: string;
   readonly target: (page: Page) => Locator;
   /** Actúa sobre el control encontrado; recibe la página por si la acción abre otro elemento (p. ej. una hoja del móvil). */
   readonly act: (found: Locator, page: Page) => Promise<unknown>;
+  readonly applied?: (page: Page) => Promise<Check>;
 }
 
 export const enabledOf = (found: Locator): Promise<boolean> => found.isEnabled({ timeout: 1000 });
 
-export const chooseLang = (label: 'English' | 'Español'): Action => ({ what: `cambiar el idioma a «${label}»`, target: langSelect, act: (found) => found.selectOption({ label }, ACTION) });
-export const chooseTheme = (name: 'Claro' | 'Oscuro'): Action => ({ what: `marcar el tema «${name}»`, target: (page) => themeRadio(page, name), act: (found) => found.check(ACTION) });
-export const toggleLive: Action = { what: 'pulsar el interruptor «Notificaciones en tiempo real»', target: liveSwitch, act: (found) => found.click(ACTION) };
-export const checkDigest: Action = { what: 'marcar la casilla del resumen semanal', target: digestBox, act: (found) => found.check(ACTION) };
+export const chooseLang = (label: 'English' | 'Español'): Action => ({
+  what: `cambiar el idioma a «${label}»`,
+  target: langSelect,
+  act: (found) => found.selectOption({ label }, ACTION),
+  applied: (page) => selectedLangCheck(page, label),
+});
+export const chooseTheme = (name: 'Claro' | 'Oscuro'): Action => ({
+  what: `marcar el tema «${name}»`,
+  target: (page) => themeRadio(page, name),
+  act: (found) => found.check(ACTION),
+  applied: async (page) => checkedState(await checkedSettled(themeRadio(page, name), true), true, `la opción «${name}» queda marcada`, 'marcada', 'sin marcar'),
+});
+export const toggleLive: Action = {
+  what: 'pulsar el interruptor «Notificaciones en tiempo real»',
+  target: liveSwitch,
+  act: (found) => found.click(ACTION),
+  applied: async (page) => checkedState(await checkedSettled(liveSwitch(page), false), false, 'el interruptor «Notificaciones en tiempo real» queda desactivado', 'activado', 'desactivado'),
+};
+export const checkDigest: Action = {
+  what: 'marcar la casilla del resumen semanal',
+  target: digestBox,
+  act: (found) => found.check(ACTION),
+  applied: async (page) => checkedState(await checkedSettled(digestBox(page), true), true, 'la casilla del resumen semanal queda marcada', 'marcada', 'sin marcar'),
+};
 /** Pulsa «Guardar» con el texto que tenga en ese momento (vale «Guardar» o «Guardar cambios»). */
 export const pressSave: Action = { what: 'pulsar «Guardar»', target: saveButton, act: (found) => found.click(ACTION) };
 
 /**
  * Ejecuta las acciones en orden. Antes de cada una: si la pantalla no es «Perfil» o el control no se puede leer con exactitud es
- * no ejecutable; si el control no aparece (con «Perfil» visible) o no se ve o está deshabilitado, la app no ofrece lo que la historia
- * nombra (discrepancia); si el localizador o el clic fallan, no ejecutable con el diagnóstico como evidencia.
+ * no ejecutable; si el control no aparece (con «Perfil» visible), no se ve o está deshabilitado, la app no ofrece lo que la historia
+ * nombra (discrepancia); si el localizador o el clic fallan, no ejecutable con el diagnóstico. Tras actuar, comprueba el cambio.
  */
 export const runActions = async (page: Page, expected: string, actions: readonly Action[]): Promise<Outcome | undefined> => {
   for (const action of actions) {
@@ -570,35 +748,16 @@ const runAction = async (page: Page, expected: string, action: Action): Promise<
   if (!enabled.ok) return notReached(expected, `${action.what}: ${enabled.reason}`);
   if (!enabled.value) return notOffered(expected, `${action.what}: el control está deshabilitado`, 'La app deja deshabilitado un control que la historia manda usar.');
   const failure = await runDiagnosed([{ what: action.what, act: () => action.act(target, page), target }]);
-  return failure ? notReached(expected, failure) : undefined;
+  if (failure) return notReached(expected, failure);
+  if (action.applied === undefined) return undefined;
+  const reflected = await action.applied(page);
+  if (reflected.ok) return undefined;
+  return reflected.observed.includes('no legible')
+    ? notReached(expected, `${action.what}: ${reflected.observed}`)
+    : outcome(false, expected, reflected.observed, { note: `El control no refleja el cambio que pide la historia (${action.what}).` });
 };
 
-/** Comprobación de una fila de «Qué puedes hacer con tu rol»: glifo y texto de estado frente a lo que dice la historia para ese rol. */
-export const permissionCheck = (label: string, cellText: string, want: PermissionCell, reading: PermissionReading | string): Check => {
-  const expected = `${label} muestra ${cellText}`;
-  if (typeof reading === 'string') return check(false, expected, `${label}: ${reading}`);
-  return check(reading.mark === want.mark && reading.status === want.status, expected, `${reading.label} muestra ${reading.mark} «${reading.status}»`);
-};
-
-/** Comprobaciones de la sección «Cuenta»: los cuatro datos de la sesión, el avatar con el nombre accesible y ningún control para cambiarlos. */
-export const accountChecks = async (page: Page, correo: string, nombre: string, rol: string): Promise<Check[]> => {
-  const name = await accountValue(page, PERFIL_TESTIDS.PROFILE_NAME);
-  const email = await accountValue(page, PERFIL_TESTIDS.PROFILE_EMAIL);
-  const role = await accountValue(page, PERFIL_TESTIDS.PROFILE_ROLE);
-  const tenant = await accountValue(page, PERFIL_TESTIDS.PROFILE_TENANT);
-  const avatar = await avatarNamed(page, nombre);
-  const controls = await controlsInAccount(page);
-  return [
-    check(name === nombre, `ve el nombre ${nombre}`, name === undefined ? 'nombre no legible' : `ve el nombre ${name}`),
-    check(email === correo, `ve el correo ${correo}`, email === undefined ? 'correo no legible' : `ve el correo ${email}`),
-    check(role === rol, `ve el rol ${rol}`, role === undefined ? 'rol no legible' : `ve el rol ${role}`),
-    check(tenant === TENANT, `ve el tenant ${TENANT}`, tenant === undefined ? 'tenant no legible' : `ve el tenant ${tenant}`),
-    check(avatar === 1, `el avatar tiene como nombre accesible ${nombre}`, avatar === undefined ? 'avatar no legible' : `${avatar} avatar(es) con ese nombre accesible`),
-    check(controls === 0, 'ninguno de esos cuatro datos tiene un control para cambiarlo', controls === undefined ? 'controles de «Cuenta» no legibles' : `${controls} controles en «Cuenta»`),
-  ];
-};
-
-/** Nota de la prueba de «al pasar el cursor»: la explicación se lee del atributo `title` del botón (el tooltip nativo no se ve en el navegador headless). */
-export const TOOLTIP_NOTE = 'La explicación «al pasar el cursor» se lee del atributo title del botón: el tooltip nativo no es observable en el navegador headless.';
-/** Nota del oráculo de «no envía correo»: el resumen es simulado y no tiene endpoint; se mira la ausencia de peticiones de escritura. */
-export const DIGEST_NOTE = 'El resumen semanal es simulado y no tiene endpoint: el oráculo de «no envía correo» es la ausencia de peticiones de escritura (no GET) durante el guardado.';
+/** Comprobación de un control de estado de la cuenta: se usa en filas que comprueban «Guardar» tras el cambio. */
+export const liveDisabled = async (page: Page, expected: string): Promise<Check> => checkedState(await checkedSettled(liveSwitch(page), false), false, expected, 'activado', 'desactivado');
+export const digestMarked = async (page: Page, expected: string): Promise<Check> => checkedState(await checkedSettled(digestBox(page), true), true, expected, 'marcada', 'sin marcar');
+export const themeMarked = async (page: Page, name: string, expected: string): Promise<Check> => checkedState(await checkedSettled(themeRadio(page, name), true), true, expected, 'marcada', 'sin marcar');

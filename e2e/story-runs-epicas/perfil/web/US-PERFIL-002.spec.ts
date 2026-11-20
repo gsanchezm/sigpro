@@ -4,26 +4,29 @@ import { CEILING_MS, pathOf, quoted, runSteps, waitUntil } from '../../support/b
 import { cell, check, sleep, strict, type Check } from '../../support/checks';
 import { defineBrowserRows, outcome, type BrowserRowHandler, type Outcome } from '../../core/framework';
 import {
-  ALTERNATION_MS,
+  CHAOS_ORDER_NOTE,
   DIGEST_NOTE,
+  HEADER_OBSERVATION_NOTE,
   NO_CHANGES,
   NO_ENDPOINT_NOTE,
+  NOT_APPLIED_NOTE,
+  RESET_VALUE_NOTE,
   SAVED,
   TENANT,
   TOOLTIP_NOTE,
+  alternationCheck,
   checkDigest,
-  checkedSettled,
-  checkedState,
   chooseLang,
   chooseTheme,
   concluded,
   defaultsChecks,
   describeSave,
-  digestBox,
+  digestMarked,
+  documentThemeCheck,
   enableFlakyLabels,
   installInitScripts,
   leaveAndReturnWeb,
-  liveSwitch,
+  liveDisabled,
   notReached,
   onProfile,
   openProfileWeb,
@@ -32,17 +35,18 @@ import {
   readOne,
   restoreChaos,
   runActions,
-  sampleSaveLabels,
+  sampleSaveTransitions,
   saveButton,
   saveCheck,
   selectedLangCheck,
   settledSave,
   signInWeb,
-  themeRadio,
+  themeMarked,
   toastCheck,
   toggleLive,
   watchWrites,
   withCookieNote,
+  withNote,
   type Action,
   type SaveState,
 } from './common';
@@ -50,7 +54,7 @@ import {
 // US-PERFIL-002 — Cambiar las preferencias en borrador y guardarlas en el perfil (web, 1440 px). Preparación de cada fila:
 // reinicio de alumno01 con su administrador, /login?tenant=alumno01 en un contexto sin sesión ni preferencias, inicio de sesión de
 // gestor@sigpro.test con Gestor1234! y «Menú de usuario» → «Perfil». Solo la fila de textos alternos activa el caos (`flakyLabels`)
-// antes de iniciar sesión, porque la web lee la configuración al autenticarse, y lo apaga al terminar.
+// antes de iniciar sesión, porque la web lee la configuración al autenticarse, y lo apaga al terminar (con comprobación).
 
 const GESTOR_EMAIL = 'gestor@sigpro.test';
 const GESTOR_PASSWORD = 'Gestor1234!';
@@ -62,12 +66,6 @@ const arriveAsGestor = async (page: Page, context: BrowserContext): Promise<Outc
   await resetTenants([TENANT]);
   return (await signInWeb(page, ARRIVAL, GESTOR_EMAIL, GESTOR_PASSWORD, false)) ?? (await openProfileWeb(page, ARRIVAL));
 };
-
-const themeMarked = async (page: Page, name: string, expected: string): Promise<Check> => checkedState(await checkedSettled(themeRadio(page, name), true), true, expected, 'marcada', 'sin marcar');
-
-const liveDisabled = async (page: Page, expected: string): Promise<Check> => checkedState(await checkedSettled(liveSwitch(page), false), false, expected, 'activado', 'desactivado');
-
-const digestMarked = async (page: Page, expected: string): Promise<Check> => checkedState(await checkedSettled(digestBox(page), true), true, expected, 'marcada', 'sin marcar');
 
 // --- Esquema 1: «Guardar» solo se activa cuando hay un cambio pendiente ---------------------------------------------------
 
@@ -95,7 +93,8 @@ const saveEnablesRow: BrowserRowHandler = async (row, { page, context }) => {
   const before = await defaultsChecks(page);
   const failed = await runActions(page, `«Guardar» está ${estado}`, actions);
   if (failed) return failed;
-  return concluded([...before, await saveCheck(page, estado, wanted)], { note: TOOLTIP_NOTE });
+  const notApplied = await documentThemeCheck(page, 'light', 'el tema de la página no cambia durante el borrador (html[data-theme] sigue «light»)');
+  return concluded([...before, await saveCheck(page, estado, wanted), notApplied], { note: [TOOLTIP_NOTE, NOT_APPLIED_NOTE, RESET_VALUE_NOTE].join(' ') });
 };
 
 // --- Esquema 2: un cambio sin guardar no se aplica y se descarta al salir ----------------------------------------------
@@ -119,24 +118,33 @@ const discardRow: BrowserRowHandler = async (row, { page, context }) => {
   const arrival = await arriveAsGestor(page, context);
   if (arrival) return arrival;
   const before = await defaultsChecks(page);
+  // Cada cambio se comprueba al actuar (runActions): antes de salir, el control ya lo refleja
   const failed = await runActions(page, accion, plan.actions);
   if (failed) return failed;
+  const notApplied = await documentThemeCheck(page, 'light', 'el tema de la página no cambia durante el borrador (html[data-theme] sigue «light»)');
   if (plan.leave) {
     const back = await leaveAndReturnWeb(page, accion);
     if (back) return back;
   }
-  return concluded([...before, ...(await results(page))]);
+  return concluded([...before, notApplied, ...(await results(page))]);
 };
 
 // --- Esquema 3: guardar aplica las preferencias, avisa y se conservan al recargar -----------------------------------------
 
-const CHANGE: ReadonlyMap<string, { readonly actions: readonly Action[]; readonly digest: boolean }> = new Map<string, { readonly actions: readonly Action[]; readonly digest: boolean }>([
-  ['cambia «Tema» a «Oscuro»', { actions: [chooseTheme('Oscuro')], digest: false }],
-  ['desmarca «Notificaciones en tiempo real»', { actions: [toggleLive], digest: false }],
-  ['marca «Recibir un resumen semanal por correo (simulado)»', { actions: [checkDigest], digest: true }],
+interface ChangePlan {
+  readonly actions: readonly Action[];
+  readonly digest: boolean;
+  readonly theme: boolean;
+  readonly live: boolean;
+}
+
+const CHANGE: ReadonlyMap<string, ChangePlan> = new Map<string, ChangePlan>([
+  ['cambia «Tema» a «Oscuro»', { actions: [chooseTheme('Oscuro')], digest: false, theme: true, live: false }],
+  ['desmarca «Notificaciones en tiempo real»', { actions: [toggleLive], digest: false, theme: false, live: true }],
+  ['marca «Recibir un resumen semanal por correo (simulado)»', { actions: [checkDigest], digest: true, theme: false, live: false }],
   [
     'cambia «Tema» a «Oscuro», desmarca «Notificaciones en tiempo real» y marca «Recibir un resumen semanal por correo (simulado)»',
-    { actions: [chooseTheme('Oscuro'), toggleLive, checkDigest], digest: true },
+    { actions: [chooseTheme('Oscuro'), toggleLive, checkDigest], digest: true, theme: true, live: true },
   ],
 ]);
 
@@ -172,6 +180,11 @@ const saveAndReloadRow: BrowserRowHandler = async (row, { page, context }) => {
   const toast = await toastCheck(page, `ve el aviso «${SAVED}»`);
   const disabledAfterSave = await settledSave(page, (state) => state.disabled);
   const disabledCheck = check(disabledAfterSave.ok && disabledAfterSave.value.disabled, '«Guardar» vuelve a estar deshabilitado', describeSave(disabledAfterSave));
+  // Lo guardado se aplica a la vez, sin recargar: el tema de la página y los controles ya muestran lo guardado
+  const appliedAtOnce: Check[] = [];
+  if (plan.theme) appliedAtOnce.push(await documentThemeCheck(page, 'dark', 'al guardar el tema se aplica a la página (html[data-theme] = «dark»)', true));
+  if (plan.live) appliedAtOnce.push(await liveDisabled(page, 'al guardar, el interruptor «Notificaciones en tiempo real» queda desactivado'));
+  if (plan.digest) appliedAtOnce.push(await digestMarked(page, 'al guardar, la casilla del resumen semanal queda marcada'));
   await sleep(500);
   writes.stop();
   const noMail = plan.digest
@@ -182,7 +195,7 @@ const saveAndReloadRow: BrowserRowHandler = async (row, { page, context }) => {
   const back = await waitUntil(() => onProfile(page));
   if (!back.reached) return outcome(false, `al recargar /profile, ${cell(row, 'tras_recargar')}`, `tras recargar la ruta es ${pathOf(page)}`, { note: 'Recargar /profile no deja la página de perfil.' });
   const notes = [TOOLTIP_NOTE, NO_ENDPOINT_NOTE, ...(plan.digest ? [DIGEST_NOTE] : [])].join(' ');
-  return concluded([...before, toast, disabledCheck, ...noMail, ...(await after(page))], { note: notes });
+  return concluded([...before, toast, disabledCheck, ...appliedAtOnce, ...noMail, ...(await after(page))], { note: notes });
 };
 
 // --- Esquema 4: el idioma guardado cambia la página y el aviso sale en el idioma anterior ---------------------------------
@@ -206,7 +219,7 @@ const saveLangRow: BrowserRowHandler = async (row, { page, context }) => {
   return concluded([...before, toast, await profileTitleCheck(page, titulo), await selectedLangCheck(page, idioma)]);
 };
 
-// --- Esquema 5: con los textos alternos del modo caos, «Guardar» alterna su texto y guarda con cualquiera de los dos ---------
+// --- Esquema 5: con los textos alternos del modo caos, «Guardar» alterna su texto y guarda con cualquiera de los dos -----
 
 const ACCION_E5: ReadonlyMap<string, 'observar' | 'pulsar'> = new Map<string, 'observar' | 'pulsar'>([
   ['observa el botón «Guardar» durante el tiempo que elige la prueba', 'observar'],
@@ -221,7 +234,7 @@ const RESULTADO_E5: ReadonlyMap<string, 'alterna' | 'aviso'> = new Map<string, '
 const flakyRow: BrowserRowHandler = async (row, { page, context }) => {
   const accion = strict('accion', ACCION_E5, cell(row, 'accion'));
   const resultado = cell(row, 'resultado');
-  const expectation = strict('resultado', RESULTADO_E5, resultado);
+  const kind = strict('resultado', RESULTADO_E5, resultado);
   await installInitScripts(context);
   await resetTenants([TENANT]);
   try {
@@ -233,16 +246,18 @@ const flakyRow: BrowserRowHandler = async (row, { page, context }) => {
     const changed = await runActions(page, resultado, [chooseTheme('Oscuro')]);
     if (changed) return changed;
     if (accion === 'observar') {
-      const labels = await sampleSaveLabels(page);
-      const alternates = expectation === 'alterna' && labels.length === 2 && labels.includes('Guardar') && labels.includes('Guardar cambios');
-      const seen = labels.length === 0 ? '(ninguno legible)' : labels.map((label) => `«${label}»`).join(' y ');
-      return concluded([check(alternates, resultado, `textos vistos en ${ALTERNATION_MS / 1000} s: ${seen}`)]);
+      if (kind !== 'alterna') throw new Error('la fila observa el texto de «Guardar» pero su resultado no es la alternancia: la tabla no coincide con el manejador');
+      const sample = await sampleSaveTransitions(page);
+      return concluded([alternationCheck(sample, resultado)], { note: CHAOS_ORDER_NOTE });
     }
+    if (kind !== 'aviso') throw new Error('la fila pulsa «Guardar» pero su resultado no es el aviso: la tabla no coincide con el manejador');
     const before = await readOne(saveButton(page), (found) => found.innerText({ timeout: 500 }));
     const saved = await runActions(page, resultado, [pressSave]);
     if (saved) return saved;
     const toast = await toastCheck(page, resultado);
-    return concluded([toast], { evidence: { textoAntesDelClic: before.ok ? before.value : before.reason } });
+    // Tras el clic, «Guardar» queda deshabilitado con «No hay cambios que guardar»: lo guardado ya es el borrador
+    const disabledAfter = await saveCheck(page, 'deshabilitado con la explicación «No hay cambios que guardar»', (state) => state.disabled && state.title === NO_CHANGES);
+    return concluded([toast, disabledAfter], { note: CHAOS_ORDER_NOTE, evidence: { textoAntesDelClic: before.ok ? before.value : before.reason } });
   } finally {
     await restoreChaos();
   }
@@ -253,10 +268,10 @@ defineBrowserRows({
   surface: 'web',
   tenants: [TENANT],
   handlers: new Map<number, BrowserRowHandler>([
-    [1, withCookieNote(saveEnablesRow)],
-    [2, withCookieNote(discardRow)],
-    [3, withCookieNote(saveAndReloadRow)],
-    [4, withCookieNote(saveLangRow)],
+    [1, withCookieNote(withNote(HEADER_OBSERVATION_NOTE)(saveEnablesRow))],
+    [2, withCookieNote(withNote(HEADER_OBSERVATION_NOTE)(discardRow))],
+    [3, withCookieNote(withNote(HEADER_OBSERVATION_NOTE)(saveAndReloadRow))],
+    [4, withCookieNote(withNote(HEADER_OBSERVATION_NOTE)(saveLangRow))],
     [5, withCookieNote(flakyRow)],
   ]),
 });

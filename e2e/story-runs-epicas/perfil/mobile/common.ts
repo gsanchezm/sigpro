@@ -7,6 +7,7 @@ import {
   COOKIE_NOTE,
   MFA_CODE,
   NO_CHANGES,
+  PREP_NOTE,
   TENANT,
   checkedState,
   disabledOf,
@@ -25,17 +26,18 @@ import {
 
 // Piezas comunes de las filas de «Perfil» en la app móvil servida como web de Expo (390 × 844). NO es la app nativa: el veredicto
 // vale para Expo web. Los controles de estado (interruptor, casilla y opciones de tema) se localizan por su identificador de prueba
-// (el de `testids.ts`, que la app móvil reutiliza) y su estado se lee del atributo `aria-checked`; «Guardar», el selector de idioma y
-// la hoja de opciones se localizan por rol y nombre accesible dentro de `profile-page`. Los avisos y el registro de escrituras son los
-// de la web (`web/common.ts`).
+// (el de `testids.ts`, que la app móvil reutiliza) y su estado se lee del atributo `aria-checked`, que debe ser `true` o `false`;
+// «Guardar», el selector de idioma y la hoja de opciones se localizan por rol y nombre accesible dentro de `profile-page`.
 
 export const EXPO_NOTE = 'El veredicto vale para Expo web (390 × 844): la app móvil servida como web, no el nativo; no se ha comprobado en iOS ni en Android nativo. El tema del sistema se fija en claro (emulateMedia) para que el tema inicial sea «Claro».';
 export const REOPEN_NOTE = 'Cerrar la app y volver a abrirla se aproxima cerrando la página y abriendo otra en el mismo contexto de navegador (la sesión y las preferencias guardadas se conservan); no reinicia el proceso nativo.';
+export const MOBILE_MAIL_NOTE = '«no envía ningún correo» no se comprueba en móvil: toda la persistencia es local (AsyncStorage, que en web es localStorage) y no hay petición de envío que discrimine; no es un veredicto.';
+export const MOBILE_RULE_NOTE = 'Reglas sin fila en móvil: «cambiar un control no aplica nada» no se ve en el DOM del tema (la app no cambia el tema hasta «Guardar», pero no hay atributo que lo muestre); «si un control vuelve a su valor guardado…» solo se prueba con el idioma.';
 
-/** Añade a cada resultado de la app móvil la salvedad de Expo web y la nota de cookies. */
+/** Añade a cada resultado de la app móvil la salvedad de Expo web, la preparación y la nota de cookies. */
 export const withExpoNote = (handler: BrowserRowHandler): BrowserRowHandler => async (row, fixtures) => {
   const result = await handler(row, fixtures);
-  const note = `${EXPO_NOTE} ${COOKIE_NOTE}`;
+  const note = `${EXPO_NOTE} ${COOKIE_NOTE} ${PREP_NOTE}`;
   return { ...result, note: result.note === undefined ? note : `${result.note} ${note}` };
 };
 
@@ -68,8 +70,12 @@ const codeField = (page: Page): Locator => textbox(page, 'Código de verificaci�
 const isShell = async (page: Page): Promise<boolean> => pathOf(page) === '/programs' && (await isVisible(moreTab(page)));
 const alertText = async (page: Page): Promise<string | undefined> => linesOf(await safe(() => page.getByRole('alert').first().innerText({ timeout: 1000 }), undefined))[0];
 
-/** `aria-checked` de un control de estado de RN-web: `true` solo si está marcado o activado. */
-export const ariaCheckedOf = (found: Locator): Promise<boolean> => found.getAttribute('aria-checked', { timeout: 1000 }).then((value) => value === 'true');
+/** `aria-checked` de un control de estado de RN-web: debe ser `true` o `false`; si falta, la lectura no es válida. */
+export const ariaCheckedOf = async (found: Locator): Promise<boolean> => {
+  const value = await found.getAttribute('aria-checked', { timeout: 1000 });
+  if (value !== 'true' && value !== 'false') throw new Error(`aria-checked ausente o no booleano («${value ?? 'sin atributo'}»)`);
+  return value === 'true';
+};
 
 /** Lectura de `aria-checked` con espera: espera (con techo) a que esté como se pide y devuelve la última lectura. */
 export const checkedAttrSettled = async (target: Locator, want: boolean, ceilingMs: number = 3_000): Promise<Read<boolean>> => {
@@ -138,9 +144,9 @@ export const openProfileMobile = async (page: Page, expected: string): Promise<O
   if (clicked) return notReached(expected, clicked);
   const arrived = await waitUntil(() => onProfile(page));
   if (!arrived.reached) return outcome(false, expected, `tras «Perfil» la ruta es ${pathOf(page)}`, { note: 'No se llega a /profile desde «Más».' });
-  // Las preferencias se pintan cuando la app termina de leer el almacenamiento: se espera a su sección antes de leer nada
-  await waitUntil(() => isVisible(sectionHeading(page, 'Preferencias')), CEILING_MS);
-  return undefined;
+  // Las preferencias se pintan cuando la app termina de leer el almacenamiento: si no aparecen, la prueba no llegó a la pantalla
+  const shown = await waitUntil(() => isVisible(sectionHeading(page, 'Preferencias')), CEILING_MS);
+  return shown.reached ? undefined : notReached(expected, 'la sección «Preferencias» no aparece en «Perfil»: la prueba no llegó a la pantalla');
 };
 
 /** Sale de «Perfil» por la pestaña «Programas» (la pila de «Más» se vacía al cambiar de pestaña) y vuelve a abrirlo desde «Más». */
@@ -166,6 +172,19 @@ export const reopenMobile = async (context: BrowserContext, previous: Page, expe
   if (opened) return { page: next, outcome: notReached(expected, opened) };
   const back = await waitUntil(() => isShell(next));
   return back.reached ? { page: next } : { page: next, outcome: outcome(false, expected, `tras volver a abrir la app la ruta es ${pathOf(next)}`, { note: 'La app no vuelve a la pestaña «Programas» al abrirla.' }) };
+};
+
+/**
+ * Espera (con techo) a que la app escriba en el almacenamiento los valores guardados: AsyncStorage escribe de forma asíncrona y la
+ * reapertura solo tiene sentido después. Devuelve si llegaron; si no llegan, la comprobación de la reapertura lo hará visible.
+ */
+export const waitStoredValues = async (page: Page, values: Readonly<Record<string, string>>): Promise<boolean> => {
+  const keys = Object.keys(values);
+  const waited = await waitUntil(async () => {
+    const stored = await safe<(string | null)[] | undefined>(() => page.evaluate((list: readonly string[]) => list.map((key) => localStorage.getItem(key)), keys), undefined);
+    return stored !== undefined && keys.every((key, index) => stored[index] === values[key]);
+  }, 3_000);
+  return waited.reached;
 };
 
 // --- Estado de «Guardar» en la app móvil: deshabilitado o no, y si se lee «No hay cambios que guardar» ------------------------
@@ -220,7 +239,7 @@ export const mobileDefaults = async (page: Page): Promise<Check[]> => {
   ];
 };
 
-// --- Acciones móviles -------------------------------------------------------------------------------------------------------
+// --- Acciones móviles (cada una comprueba que el control refleja el cambio) -----------------------------------------------
 
 /** Elige un idioma: abre el selector, toca la opción en la hoja y la hoja se cierra. */
 export const mobileLang = (label: 'English' | 'Español'): Action => ({
@@ -230,10 +249,26 @@ export const mobileLang = (label: 'English' | 'Español'): Action => ({
     await found.click(ACTION);
     await page.getByRole('radiogroup', { name: 'Idioma de la interfaz', exact: true }).getByRole('radio', { name: label, exact: true }).click(ACTION);
   },
+  applied: (page) => comboCheckSettled(page, label),
 });
 
-export const mobileTheme = (name: 'Claro' | 'Oscuro'): Action => ({ what: `marcar el tema «${name}»`, target: (page) => themeRadio(page, name), act: (found) => found.click(ACTION) });
+export const mobileTheme = (name: 'Claro' | 'Oscuro'): Action => ({
+  what: `marcar el tema «${name}»`,
+  target: (page) => themeRadio(page, name),
+  act: (found) => found.click(ACTION),
+  applied: async (page) => checkedState(await checkedAttrSettled(themeRadio(page, name), true), true, `la opción «${name}» queda seleccionada`, 'seleccionada', 'sin seleccionar'),
+});
 
-export const mobileLive: Action = { what: 'pulsar el interruptor «Notificaciones en tiempo real»', target: liveSwitchM, act: (found) => found.click(ACTION) };
+export const mobileLive: Action = {
+  what: 'pulsar el interruptor «Notificaciones en tiempo real»',
+  target: liveSwitchM,
+  act: (found) => found.click(ACTION),
+  applied: async (page) => checkedState(await checkedAttrSettled(liveSwitchM(page), false), false, 'el interruptor «Notificaciones en tiempo real» queda desactivado', 'activado', 'desactivado'),
+};
 
-export const mobileDigest: Action = { what: 'pulsar la casilla del resumen semanal', target: digestBoxM, act: (found) => found.click(ACTION) };
+export const mobileDigest: Action = {
+  what: 'pulsar la casilla del resumen semanal',
+  target: digestBoxM,
+  act: (found) => found.click(ACTION),
+  applied: async (page) => checkedState(await checkedAttrSettled(digestBoxM(page), true), true, 'la casilla del resumen semanal queda marcada', 'marcada', 'sin marcar'),
+};

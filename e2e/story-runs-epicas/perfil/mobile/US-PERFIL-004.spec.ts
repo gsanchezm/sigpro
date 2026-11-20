@@ -1,10 +1,10 @@
 import type { BrowserContext, Page } from '@playwright/test';
 import { resetTenants } from '../../../story-runs/support/prepare';
 import { quoted } from '../../support/browser';
-import { cell, check, sleep, strict, type Check } from '../../support/checks';
+import { cell, strict, type Check } from '../../support/checks';
 import { defineBrowserRows, type BrowserRowHandler, type Outcome } from '../../core/framework';
 import {
-  DIGEST_NOTE,
+  HEADER_OBSERVATION_NOTE,
   NO_ENDPOINT_NOTE,
   SAVED,
   TENANT,
@@ -15,10 +15,12 @@ import {
   profileTitleCheck,
   runActions,
   toastCheck,
-  watchWrites,
+  withNote,
   type Action,
 } from '../web/common';
 import {
+  MOBILE_MAIL_NOTE,
+  MOBILE_RULE_NOTE,
   REOPEN_NOTE,
   checkedAttrSettled,
   comboCheckSettled,
@@ -35,6 +37,7 @@ import {
   reopenMobile,
   signInMobile,
   themeRadio,
+  waitStoredValues,
   withExpoNote,
   type MobileSave,
 } from './common';
@@ -56,6 +59,7 @@ const arriveGestor = async (page: Page, context: BrowserContext): Promise<Outcom
 
 const comboCheck = (page: Page, label: string): Promise<Check> => comboCheckSettled(page, label);
 
+/** Tras volver a abrir la app, el tema y las preferencias se leen del almacenamiento de forma asíncrona: se espera a su estado. */
 const themeSelected = async (page: Page, name: string, expected: string): Promise<Check> =>
   checkedState(await checkedAttrSettled(themeRadio(page, name), true), true, expected, 'seleccionada', 'sin seleccionar');
 
@@ -90,7 +94,7 @@ const saveEnablesRow: BrowserRowHandler = async (row, { page, context }) => {
   const before = await mobileDefaults(page);
   const failed = await runActions(page, `«Guardar» está ${estado}`, actions);
   if (failed) return failed;
-  return concluded([...before, await mobileSaveCheck(page, estado, wanted)]);
+  return concluded([...before, await mobileSaveCheck(page, estado, wanted)], { note: MOBILE_RULE_NOTE });
 };
 
 // --- Esquema 2: un cambio sin guardar no se aplica y se descarta al salir ----------------------------------------------
@@ -114,24 +118,31 @@ const discardRow: BrowserRowHandler = async (row, { page, context }) => {
   const arrival = await arriveGestor(page, context);
   if (arrival) return arrival;
   const before = await mobileDefaults(page);
+  // Cada cambio se comprueba al actuar (runActions): antes de salir, la pantalla ya lo muestra
   const failed = await runActions(page, accion, plan.actions);
   if (failed) return failed;
   if (plan.leave) {
     const back = await leaveAndReturnMobile(page, accion);
     if (back) return back;
   }
-  return concluded([...before, ...(await results(page))]);
+  return concluded([...before, ...(await results(page))], { note: MOBILE_RULE_NOTE });
 };
 
 // --- Esquema 3: «Guardar» aplica las preferencias, avisa y se conservan al volver a abrir la app -----------------------
 
-const CHANGE: ReadonlyMap<string, { readonly actions: readonly Action[]; readonly digest: boolean }> = new Map<string, { readonly actions: readonly Action[]; readonly digest: boolean }>([
-  ['cambia «Tema» a «Oscuro»', { actions: [mobileTheme('Oscuro')], digest: false }],
-  ['desmarca «Notificaciones en tiempo real»', { actions: [mobileLive], digest: false }],
-  ['marca «Recibir un resumen semanal por correo (simulado)»', { actions: [mobileDigest], digest: true }],
+interface ChangePlan {
+  readonly actions: readonly Action[];
+  /** Valores que la app escribe al guardar: se espera a que estén antes de cerrar y reabrir. */
+  readonly stored: Readonly<Record<string, string>>;
+}
+
+const CHANGE: ReadonlyMap<string, ChangePlan> = new Map<string, ChangePlan>([
+  ['cambia «Tema» a «Oscuro»', { actions: [mobileTheme('Oscuro')], stored: { 'sigpro.theme': 'dark' } }],
+  ['desmarca «Notificaciones en tiempo real»', { actions: [mobileLive], stored: { 'sigpro.live': 'off' } }],
+  ['marca «Recibir un resumen semanal por correo (simulado)»', { actions: [mobileDigest], stored: { 'sigpro.digest': 'on' } }],
   [
     'cambia «Tema» a «Oscuro», desmarca «Notificaciones en tiempo real» y marca «Recibir un resumen semanal por correo (simulado)»',
-    { actions: [mobileTheme('Oscuro'), mobileLive, mobileDigest], digest: true },
+    { actions: [mobileTheme('Oscuro'), mobileLive, mobileDigest], stored: { 'sigpro.theme': 'dark', 'sigpro.live': 'off', 'sigpro.digest': 'on' } },
   ],
 ]);
 
@@ -157,28 +168,20 @@ const saveAndReopenRow: BrowserRowHandler = async (row, { page, context }) => {
   const before = await mobileDefaults(page);
   const changed = await runActions(page, `ve el aviso «${SAVED}»`, plan.actions);
   if (changed) return changed;
-  // Las escrituras de red se miran en las filas que tocan la casilla
-  const writes = watchWrites(page);
   const saved = await runActions(page, `ve el aviso «${SAVED}»`, [pressSave]);
-  if (saved) {
-    writes.stop();
-    return saved;
-  }
+  if (saved) return saved;
   const toast = await toastCheck(page, `ve el aviso «${SAVED}»`);
   const disabledAfterSave = await mobileSaveCheck(page, 'deshabilitado, y se lee «No hay cambios que guardar»', (state) => state.disabled && state.hintVisible);
-  await sleep(500);
-  writes.stop();
-  const noMail = plan.digest
-    ? [check(writes.writes.length === 0, 'al guardar la casilla no se envía ningún correo (sin peticiones de escritura)', writes.writes.length === 0 ? 'sin peticiones de escritura al guardar' : `peticiones de escritura: ${writes.writes.join(', ')}`)]
-    : [];
+  // AsyncStorage escribe de forma asíncrona: se espera (con techo) a que lo guardado esté en el almacenamiento antes de reabrir
+  await waitStoredValues(page, plan.stored);
   const reopenExpected = `al volver a abrir la app y abrir «Perfil» desde «Más», ${cell(row, 'tras_reabrir')}`;
   const reopened = await reopenMobile(context, page, reopenExpected);
   if (reopened.outcome) return reopened.outcome;
   const next = reopened.page;
   const opened = await openProfileMobile(next, reopenExpected);
   if (opened) return opened;
-  const notes = [REOPEN_NOTE, NO_ENDPOINT_NOTE, ...(plan.digest ? [DIGEST_NOTE] : [])].join(' ');
-  return concluded([...before, toast, disabledAfterSave, ...noMail, ...(await after(next))], { note: notes });
+  const notes = [REOPEN_NOTE, NO_ENDPOINT_NOTE, MOBILE_MAIL_NOTE, MOBILE_RULE_NOTE].join(' ');
+  return concluded([...before, toast, disabledAfterSave, ...(await after(next))], { note: notes });
 };
 
 // --- Esquema 4: el idioma guardado cambia la pantalla y el aviso sale en el idioma anterior ---------------------------
@@ -199,7 +202,7 @@ const saveLangRow: BrowserRowHandler = async (row, { page, context }) => {
   if (failed) return failed;
   // El aviso se mira en el idioma en el que estaba la pantalla al guardar; después, el título y el selector en el idioma nuevo
   const toast = await toastCheck(page, `ve el aviso «${SAVED}»`);
-  return concluded([...before, toast, await profileTitleCheck(page, titulo), await comboCheck(page, idioma)]);
+  return concluded([...before, toast, await profileTitleCheck(page, titulo), await comboCheck(page, idioma)], { note: MOBILE_RULE_NOTE });
 };
 
 defineBrowserRows({
@@ -207,9 +210,9 @@ defineBrowserRows({
   surface: 'expo-web',
   tenants: [TENANT],
   handlers: new Map<number, BrowserRowHandler>([
-    [1, withExpoNote(saveEnablesRow)],
-    [2, withExpoNote(discardRow)],
-    [3, withExpoNote(saveAndReopenRow)],
-    [4, withExpoNote(saveLangRow)],
+    [1, withExpoNote(withNote(HEADER_OBSERVATION_NOTE)(saveEnablesRow))],
+    [2, withExpoNote(withNote(HEADER_OBSERVATION_NOTE)(discardRow))],
+    [3, withExpoNote(withNote(HEADER_OBSERVATION_NOTE)(saveAndReopenRow))],
+    [4, withExpoNote(withNote(HEADER_OBSERVATION_NOTE)(saveLangRow))],
   ]),
 });
