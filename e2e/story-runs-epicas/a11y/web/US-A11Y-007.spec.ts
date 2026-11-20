@@ -29,6 +29,9 @@ import {
 // comprueba después es lo que tiene el foco (lectura de `:focus`), no el elemento que la prueba buscó.
 // El contorno de foco (2 px, `--accent`) se mide en las filas en que el foco cae sobre un botón o un enlace.
 
+const RING_NOTE = 'El contorno de foco se mide solo cuando el foco cae en un botón o un enlace, y en el tema del documento (claro por defecto); el de oscuro lo cubre EP-TEMA.';
+const NOT_EVALUATED_NOTE = 'Reglas sin fila (no evaluadas): Tab recorre /nc y el árbol en el mismo orden; el cajón de navegación y la búsqueda global quedan en EP-NAVEGACION.';
+
 // --- Esquema 1: Tab recorre la tarjeta de acceso en orden de lectura ------------------------------------------------------------
 
 const TAB_TARGETS: ReadonlyMap<string, { readonly name: string; readonly role?: string }> = new Map<string, { readonly name: string; readonly role?: string }>([
@@ -65,7 +68,7 @@ const tabOrder: BrowserRowHandler = async (row, { page, context }) => {
   if (tabbed) return prepFailed(expected, tabbed);
   // El contorno de foco de la historia es para botones y enlaces: solo se mide cuando el foco cae en uno de ellos
   const ring = wanted.role === 'button' || wanted.role === 'link' ? [await focusRingCheck(page)] : [];
-  return conclude([await focusCheck(page, wanted.name, wanted.role), ...ring], { note: COOKIE_NOTE });
+  return conclude([await focusCheck(page, wanted.name, wanted.role), ...ring], { note: `${COOKIE_NOTE} ${RING_NOTE} ${NOT_EVALUATED_NOTE}` });
 };
 
 // --- Esquema 2: el menú de acciones de una fila se maneja con el teclado -------------------------------------------------------
@@ -107,7 +110,7 @@ const rowMenu: BrowserRowHandler = async (row, { page, context }) => {
   const focus = await focusCheck(page, result.focus);
   return conclude(
     [check(menuOpen.ok, result.open ? 'el menú está abierto' : 'el menú está cerrado', menuOpen.value ? 'el menú está abierto' : 'el menú está cerrado'), focus],
-    { note: COOKIE_NOTE },
+    { note: `${COOKIE_NOTE} El nombre «Acciones para PRG-001» del menú es expectativa de este manejador (el menú se etiqueta con el nombre de su botón).` },
   );
 };
 
@@ -148,7 +151,9 @@ const skipToContent: BrowserRowHandler = async (row, { page, context }) => {
       ring,
       check(inMain.ok, 'el foco está en el contenido principal de la página', inMain.ok ? 'el foco está en el contenido principal de la página' : 'el foco no está en el contenido principal de la página'),
     ],
-    { note: `${COOKIE_NOTE} El foco al inicio se establece con una recarga de /programs (documento nuevo); se comprueba que no hay elemento enfocado antes del Tab.` },
+    {
+      note: `${COOKIE_NOTE} El foco al inicio se establece con una recarga de /programs (documento nuevo); se comprueba que no hay elemento enfocado antes del Tab. «Contenido principal» se interpreta como el elemento main de la página. ${RING_NOTE}`,
+    },
   );
 };
 
@@ -158,6 +163,13 @@ const TREE_KEYS: ReadonlyMap<string, string> = new Map([
   ['la flecha de la izquierda', 'ArrowLeft'],
   ['F2', 'F2'],
   ['Inicio', 'Home'],
+]);
+
+/** Fila de partida de cada tecla: REQ-016 (hoja) salvo «Inicio», que parte de REQ-017 para que su resultado sea distinguible. */
+const START_CODE: ReadonlyMap<string, string> = new Map([
+  ['la flecha de la izquierda', 'REQ-016'],
+  ['F2', 'REQ-016'],
+  ['Inicio', 'REQ-017'],
 ]);
 
 /** El foco está en la fila del árbol de ese código (su nombre accesible empieza por el código y un espacio). */
@@ -190,16 +202,20 @@ const treeKeys: BrowserRowHandler = async (row, { page, context }) => {
     ['ver el árbol de requisitos', () => page.getByRole('tree').waitFor({ timeout: CEILING_MS })],
   ]);
   if (opened) return prepFailed(expected, opened);
-  // Punto de partida: REQ-015 desplegado y el foco en la fila de REQ-016 (se da el foco a la fila, no se pulsa)
+  // Punto de partida: REQ-015 desplegado y el foco en una fila del árbol (se da el foco a la fila, no se pulsa). Para «Inicio» el
+  // punto de partida es REQ-017, no REQ-016: desde REQ-016, «Inicio» y «flecha izquierda» dan el mismo resultado (REQ-015) y no se
+  // distinguirían. REQ-017 tiene un hijo (REQ-018), así que su fila sale del árbol desde arriba, no desde la hoja.
   const expanded = await attrOf(page.getByRole('treeitem', { name: /^REQ-015 / }), 'aria-expanded');
   if (expanded !== 'true') return prepFailed(expected, `REQ-015 no está desplegado (aria-expanded ${expanded ?? '(sin atributo)'})`);
-  const placed = await runStepsLogged([['dar el foco a la fila de REQ-016', () => page.getByRole('treeitem', { name: /^REQ-016 / }).focus({ timeout: CEILING_MS })]]);
+  const startCode = strict('tecla', START_CODE, tecla);
+  const placed = await runStepsLogged([[`dar el foco a la fila de ${startCode}`, () => page.getByRole('treeitem', { name: new RegExp(`^${startCode} `) }).focus({ timeout: CEILING_MS })]]);
   if (placed) return prepFailed(expected, placed);
-  const start = await treeRowFocus(page, 'REQ-016', 'el foco está en la fila de REQ-016');
+  const start = await treeRowFocus(page, startCode, `el foco está en la fila de ${startCode}`);
   if (!start.ok) return prepFailed(expected, `punto de partida: ${start.observed}`);
   const pressed = await runStepsLogged([[`pulsar ${tecla}`, () => page.keyboard.press(key)]]);
   if (pressed) return prepFailed(expected, pressed);
-  return conclude([await result(page)], { note: COOKIE_NOTE });
+  const note = tecla === 'Inicio' ? `${COOKIE_NOTE} Punto de partida REQ-017 (no REQ-016) para distinguir «Inicio» de la flecha izquierda.` : COOKIE_NOTE;
+  return conclude([await result(page)], { note });
 };
 
 defineBrowserRows({

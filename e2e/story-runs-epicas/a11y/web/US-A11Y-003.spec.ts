@@ -2,50 +2,61 @@ import type { Locator, Page } from '@playwright/test';
 import { DEMO, TENANT_A } from '../../../story-runs/support/prepare';
 import { ACTION, CEILING_MS, attrOf, isDisabled, quoted, safe, waitUntil, type Step } from '../../support/browser';
 import { check, cell, conclude, strict, type Check } from '../../support/checks';
-import { defineBrowserRows, notExecutable, type BrowserRowHandler } from '../../core/framework';
+import { defineBrowserRows, notExecutable, type BrowserRowHandler, type Outcome } from '../../core/framework';
+import { VERIFICACION_TESTIDS } from '../../../../packages/shared/src/testids';
 import {
   ALUMNO_ADMIN,
   COOKIE_NOTE,
+  NETWORK_MS,
   PASSWORDS,
   browserOf,
+  countVisible,
   delayPost,
+  describedByText,
   enterButton,
   failedAction,
+  filterState,
   heading1,
   isBlockingReason,
+  missingControlOutcome,
   MOBILE_URL,
   openLogin,
   phoneContext,
   prepFailed,
   quietCookies,
   reachable,
+  releaseContextRoutes,
   resetAlumno,
+  runStepsLogged,
   settle,
   signInToPrograms,
   submitLogin,
   typeCredentials,
-  runStepsLogged,
+  verticalGap,
   withRoutesReleased,
-  releaseContextRoutes,
 } from './common';
 import { MOBILE_NOTE, expoNotRunning, mobileButton, mobileField, mobileSignInSteps } from './mobile';
 
 // US-A11Y-003 — Botones deshabilitados con el motivo a la vista (web de 1440 px y, en las filas de la app móvil, Expo web a 390 px).
 // Preparación de cada fila: reinicio de alumno01; cada fila inicia la sesión de su cuenta en un navegador sin sesión guardada.
-// Un botón de la web se lee por su `disabled` y su motivo por el `title` que escribe al pasar el puntero (la tooltip nativa no es
-// observable en el DOM). En la app móvil el botón se lee por `aria-disabled` y el motivo como texto visible.
+// Un botón de la web se lee por su `disabled` y su motivo por el `title` (o la descripción accesible) que escribe al pasar el puntero;
+// la tooltip nativa no es observable en el DOM. En la app móvil el botón se lee por `aria-disabled` y el motivo como texto visible.
 
 const CREATE_DENIED = 'Tu rol no permite crear programas';
 const EXPORT_EMPTY = 'No hay programas para exportar';
 const CODE_INCOMPLETE = 'Introduce los 6 dígitos del código';
 const RUN_DENIED = 'Tu rol no permite registrar ejecuciones';
 const PROCESSING = 'Procesando…';
+/** «Junto al botón»: el texto se ve a 80 px o menos del borde del control (criterio de esta prueba; la historia no fija distancia). */
+const NEAR_PX = 80;
 
-const WEB_NOTE = `${COOKIE_NOTE} El motivo de la web se lee en el atributo title del botón.`;
+const WEB_NOTE = `${COOKIE_NOTE} El motivo de la web se lee en el atributo title del botón y, si no lo tiene, en su descripción accesible (aria-description o aria-describedby).`;
 /** Lo que la app móvil escribe cuando el botón está deshabilitado: el nombre del campo, no la frase de la historia. */
-const PHONE_REASON_NOTE = 'La app móvil no tiene `title`: su motivo va en el atributo de descripción del botón. Se compara lo que se ve como texto.';
+const PHONE_REASON_NOTE = 'La app móvil no tiene `title`: su motivo va en el atributo de descripción del botón y el texto visible es el nombre del campo. Se compara el texto visible junto al botón.';
+const PHONE_SURFACE_NOTE = 'Fila de Expo web (390 × 844) dentro de web/: la cabecera de superficie dice «web»; el veredicto vale para Expo web, no para iOS ni Android nativos.';
+const NOT_EVALUATED_NOTE = 'Reglas sin fila (no evaluadas): que el motivo se pueda leer con el teclado (decisión pendiente de la historia).';
 
-/** Cuentas de las filas (la contraseña sale del seed por su correo). */
+/** Cuentas de las filas (la contraseña sale de la celda, validada con el mapa de contraseñas). */
 const ACCOUNTS: ReadonlyMap<string, { readonly email: string; readonly password: string }> = new Map<string, { readonly email: string; readonly password: string }>([
   [DEMO.consultor.email, DEMO.consultor],
   [DEMO.auditor.email, DEMO.auditor],
@@ -58,6 +69,15 @@ const ACCOUNTS: ReadonlyMap<string, { readonly email: string; readonly password:
 const BUTTON_STATE: ReadonlyMap<string, boolean> = new Map<string, boolean>([
   ['deshabilitado', true],
   ['habilitado', false],
+]);
+
+/**
+ * Filas que da la semilla para «Responsable» = Marta Ruiz (u1): es propietaria de PRG-001, PRG-007, PRG-013 y PRG-019 (estados activo,
+ * activo, activo y borrador). Cancelado: 0 filas; Activo: 3 (PRG-001, PRG-007 y PRG-013).
+ */
+const SEEDED_ROWS: ReadonlyMap<string, number> = new Map<string, number>([
+  ['«Cancelado»', 0],
+  ['«Activo»', 3],
 ]);
 
 const WAITS: ReadonlyMap<string, number> = new Map([
@@ -73,30 +93,44 @@ const MOTIVOS: ReadonlyMap<string, string | undefined> = new Map<string, string 
   ['no aparece ningún motivo que explique un bloqueo', undefined],
 ]);
 
-/** Pasar el puntero sobre un control (la tooltip nativa no se lee: el motivo está en `title`). */
+/** Pasar el puntero sobre un control: en la web es lo que muestra el motivo (el `title` y la descripción se leen después). */
 const hoverStep = (locator: Locator, label: string): Step => [`pasar el puntero sobre «${label}»`, () => locator.hover(ACTION)];
 
 interface WebButtonRead {
   readonly disabled: boolean;
   readonly title: string | undefined;
+  readonly description: string | undefined;
 }
 
-const readWebButton = async (button: Locator): Promise<WebButtonRead> => ({ disabled: await isDisabled(button), title: await attrOf(button, 'title') });
+/** Motivo de un botón de la web: su `title` o, si no lo tiene, su descripción accesible. */
+const reasonOf = (read: WebButtonRead): string | undefined => read.title ?? read.description;
+
+const readWebButton = async (button: Locator): Promise<WebButtonRead> => {
+  const ariaDescription = await attrOf(button, 'aria-description');
+  return {
+    disabled: await isDisabled(button),
+    title: await attrOf(button, 'title'),
+    description: ariaDescription ?? (await describedByText(button)),
+  };
+};
 
 /** Comprobaciones de un botón de la web frente a lo que dice la historia: estado, y motivo (o ausencia de motivo). */
-const judgeWeb = (label: string, expectedDisabled: boolean, expectedReason: string | undefined, measured: WebButtonRead): Check[] => [
-  check(measured.disabled === expectedDisabled, `«${label}» ${expectedDisabled ? 'deshabilitado' : 'habilitado'}`, `«${label}» ${measured.disabled ? 'deshabilitado' : 'habilitado'}`),
-  expectedReason === undefined
-    ? check(!isBlockingReason(measured.title), 'no aparece ningún motivo que explique un bloqueo', measured.title === undefined ? 'no aparece ningún motivo' : `aparece «${measured.title}», que no explica un bloqueo`)
-    : check(measured.title === expectedReason, `se ve el motivo «${expectedReason}»`, measured.title === undefined ? 'sin motivo (sin atributo title)' : `motivo «${measured.title}»`),
-];
+const judgeWeb = (label: string, expectedDisabled: boolean, expectedReason: string | undefined, measured: WebButtonRead): Check[] => {
+  const reason = reasonOf(measured);
+  return [
+    check(measured.disabled === expectedDisabled, `«${label}» ${expectedDisabled ? 'deshabilitado' : 'habilitado'}`, `«${label}» ${measured.disabled ? 'deshabilitado' : 'habilitado'}`),
+    expectedReason === undefined
+      ? check(!isBlockingReason(reason), 'no aparece ningún motivo que explique un bloqueo', reason === undefined ? 'no aparece ningún motivo' : `aparece «${reason}», que no explica un bloqueo`)
+      : check(reason === expectedReason, `se ve el motivo «${expectedReason}»`, reason === undefined ? 'sin motivo (sin title ni descripción accesible)' : `motivo «${reason}»`),
+  ];
+};
 
 /** Lee el botón cuando ya tiene el estado que describe la historia (la reacción local tarda ~1 s); si no llega, lee lo que hay. */
 const settledButton = async (button: Locator, expectedDisabled: boolean, expectedReason: string | undefined): Promise<WebButtonRead> =>
   (
     await settle(
       () => readWebButton(button),
-      (read) => read.disabled === expectedDisabled && (expectedReason === undefined ? !isBlockingReason(read.title) : read.title === expectedReason),
+      (read) => read.disabled === expectedDisabled && (expectedReason === undefined ? !isBlockingReason(reasonOf(read)) : reasonOf(read) === expectedReason),
     )
   ).value;
 
@@ -105,6 +139,27 @@ const mobileDisabled = async (button: Locator): Promise<boolean> => (await attrO
 
 /** Cuenta de texto visible y exacto en la página (-1 si la lectura falla). */
 const visibleTextCount = (page: Page, text: string): Promise<number> => safe(() => page.getByText(text, { exact: true }).filter({ visible: true }).count(), -1);
+
+/**
+ * «Junto al botón»: el texto visible y único del motivo está a NEAR_PX o menos del borde del control. Se mide con las cajas, no con
+ * la presencia del texto en cualquier parte de la página.
+ */
+const nearControl = async (page: Page, text: string, control: Locator, label: string): Promise<Check[]> => {
+  const visible = await visibleTextCount(page, text);
+  const gap = visible === 1 ? await verticalGap(page.getByText(text, { exact: true }).filter({ visible: true }), control) : undefined;
+  const near = gap !== undefined && gap <= NEAR_PX;
+  return [
+    check(
+      visible === 1 && near,
+      `se ve el texto «${text}» ${label} (a ${NEAR_PX} px o menos del control)`,
+      visible !== 1 ? `no se ve el texto «${text}» (${visible} visibles)` : gap === undefined ? 'el texto o el control no tienen caja visible' : `el texto se ve a ${Math.round(gap)} px del control`,
+    ),
+  ];
+};
+
+/** Fallo de la sección de registro (web) o del botón (móvil) en la preparación: discrepancia si la pantalla correcta está visible y el control no tiene ningún nodo. */
+const missingRunControl = async (page: Page, expected: string, reason: string, control: Locator): Promise<Outcome> =>
+  missingControlOutcome(expected, reason, (await countVisible(page.getByRole('heading', { level: 1 }))) === 1, await safe(() => control.count(), 0));
 
 // --- Esquema 1: el botón de crear programa explica el rol -----------------------------------------------------------------------
 
@@ -120,7 +175,9 @@ const roleDenied: BrowserRowHandler = async (row, { page, context }) => {
   if (signed) return prepFailed(expected, signed);
   const hovered = await runStepsLogged([hoverStep(newProgramButton(page), '+ Nuevo programa')]);
   if (hovered) return failedAction(expected, hovered);
-  return conclude(judgeWeb('+ Nuevo programa', true, CREATE_DENIED, await settledButton(newProgramButton(page), true, CREATE_DENIED)), { note: WEB_NOTE });
+  return conclude(judgeWeb('+ Nuevo programa', true, CREATE_DENIED, await settledButton(newProgramButton(page), true, CREATE_DENIED)), {
+    note: `${WEB_NOTE} ${NOT_EVALUATED_NOTE}`,
+  });
 };
 
 // --- Esquema 2: un botón habilitado no muestra motivo ---------------------------------------------------------------------------
@@ -149,6 +206,7 @@ const exportState: BrowserRowHandler = async (row, { page, context }) => {
   const boton = cell(row, 'boton');
   const expectDisabled = strict('boton', BUTTON_STATE, boton);
   const expectedReason = strict('motivo', MOTIVOS, cell(row, 'motivo'));
+  const expectedRows = strict('estado', SEEDED_ROWS, estado);
   const expected = `«Exportar CSV» ${boton} con «Responsable» «Marta Ruiz» y «Estado» ${estado}`;
   await quietCookies(context);
   await resetAlumno();
@@ -160,18 +218,34 @@ const exportState: BrowserRowHandler = async (row, { page, context }) => {
   ]);
   if (applied) return prepFailed(expected, applied);
   // La última respuesta de la lista corresponde al filtro completo: se espera a ella antes de leer el botón (que se deshabilita al cargar)
-  const listed = page.waitForResponse((response) => new URL(response.url()).pathname === '/api/programs' && response.request().method() === 'GET', { timeout: CEILING_MS }).then(
-    () => true,
-    () => false,
-  );
+  const listed = page
+    .waitForResponse((response) => new URL(response.url()).pathname === '/api/programs' && response.request().method() === 'GET', { timeout: CEILING_MS })
+    .then(
+      () => true,
+      () => false,
+    );
   const status = await runStepsLogged([[`elegir ${estado} en «Estado»`, () => page.getByRole('combobox', { name: 'Estado', exact: true }).selectOption(quoted(estado), ACTION)]]);
   if (status) return prepFailed(expected, status);
   if (!(await listed)) return prepFailed(expected, 'la lista no pidió la respuesta filtrada tras elegir el estado');
   const ready = await waitUntil(async () => (await attrOf(page.getByRole('table'), 'aria-busy')) === 'false', CEILING_MS);
   if (!ready.reached) return prepFailed(expected, 'la tabla sigue marcada como ocupada tras el plazo');
+  // El filtro debe estar aplicado (con su valor y con las filas que da la semilla) antes de leer el botón: si no, la fila no prueba nada
+  const filter = await settle(
+    () => filterState(page),
+    (state) => state.owner === 'Marta Ruiz' && state.status === quoted(estado) && state.rows === expectedRows,
+    NETWORK_MS,
+  );
+  if (!filter.ok) {
+    return prepFailed(
+      expected,
+      `el filtro no quedó aplicado: «Responsable» ${filter.value.owner === undefined ? '(ilegible)' : `«${filter.value.owner}»`}, «Estado» ${filter.value.status === undefined ? '(ilegible)' : `«${filter.value.status}»`}, ${filter.value.rows} filas (la semilla da ${expectedRows})`,
+    );
+  }
   const hovered = await runStepsLogged([hoverStep(exportButton(page), 'Exportar CSV')]);
   if (hovered) return failedAction(expected, hovered);
-  return conclude(judgeWeb('Exportar CSV', expectDisabled, expectedReason, await settledButton(exportButton(page), expectDisabled, expectedReason)), { note: WEB_NOTE });
+  return conclude(judgeWeb('Exportar CSV', expectDisabled, expectedReason, await settledButton(exportButton(page), expectDisabled, expectedReason)), {
+    note: `${WEB_NOTE} La historia dice «… solo cuando la lista está vacía»: la app muestra el mismo motivo también durante la carga y con error (ProgramsPage.tsx:213); esa nota de texto no se juzga aquí.`,
+  });
 };
 
 // --- Esquema 4: el botón de entrar explica que se está procesando ---------------------------------------------------------------
@@ -181,7 +255,7 @@ const enterWhileProcessing: BrowserRowHandler = async (row, { page, context }) =
   const expected = `«Entrar» deshabilitado con motivo «${PROCESSING}» mientras espera la respuesta`;
   await quietCookies(context);
   await resetAlumno();
-  const released = { at: 0 };
+  const released = { at: 0, intercepted: false };
   await delayPost(page, '/api/auth/login', ms, released);
   const prepared = await runStepsLogged([
     openLogin(page),
@@ -193,6 +267,8 @@ const enterWhileProcessing: BrowserRowHandler = async (row, { page, context }) =
   if (clicked) return failedAction(expected, clicked);
   const hovered = await runStepsLogged([hoverStep(enterButton(page), 'Entrar')]);
   if (hovered) return failedAction(expected, hovered);
+  // Control positivo de la retención: sin una petición de inicio de sesión retenida, la lectura de «Procesando…» no prueba nada
+  if (!released.intercepted) return notExecutable(expected, 'La retención de la respuesta no se activó: ninguna petición de inicio de sesión casó con la ruta (sin control positivo, la lectura no vale).');
   // Si la respuesta ya se liberó al leer, la lectura llegó tarde: un fallo del arnés, no un hallazgo
   if (released.at !== 0) return notExecutable(expected, `Lectura tardía: la respuesta se liberó antes de leer el motivo (plazo de ${ms} ms); fallo del arnés, no de la app.`);
   return conclude(judgeWeb('Entrar', true, PROCESSING, await settledButton(enterButton(page), true, PROCESSING)), { note: WEB_NOTE });
@@ -225,7 +301,7 @@ const verifyCode: BrowserRowHandler = async (row, { page, context }) => {
   return conclude(judgeWeb('Verificar', expectDisabled, expectedReason, await settledButton(verifyButton(page), expectDisabled, expectedReason)), { note: WEB_NOTE });
 };
 
-// --- Esquema 6: en la app móvil, el motivo de verificar se ve como texto -------------------------------------------------------
+// --- Esquema 6: en la app móvil, el motivo de verificar se ve como texto junto al botón ----------------------------------------
 
 const verifyOnPhone: BrowserRowHandler = async (row, { context }) => {
   const codigo = cell(row, 'codigo');
@@ -244,13 +320,12 @@ const verifyOnPhone: BrowserRowHandler = async (row, { context }) => {
     if (typed) return failedAction(expected, typed);
     const button = mobileButton(page, 'Verificar');
     const disabled = await waitUntil(() => mobileDisabled(button), 2_000);
-    const visible = await visibleTextCount(page, CODE_INCOMPLETE);
     return conclude(
       [
         check(disabled.reached, '«Verificar» deshabilitado', disabled.reached ? '«Verificar» deshabilitado' : '«Verificar» habilitado'),
-        check(visible === 1, `se ve el texto «${CODE_INCOMPLETE}» junto al botón`, visible === 1 ? `se ve el texto «${CODE_INCOMPLETE}»` : `no se ve el texto «${CODE_INCOMPLETE}» (${visible} visibles)`),
+        ...(await nearControl(page, CODE_INCOMPLETE, button, 'junto al botón')),
       ],
-      { note: `${MOBILE_NOTE} ${PHONE_REASON_NOTE}` },
+      { note: `${MOBILE_NOTE} ${PHONE_REASON_NOTE} ${PHONE_SURFACE_NOTE}` },
     );
   } finally {
     await releaseContextRoutes(phone);
@@ -261,7 +336,8 @@ const verifyOnPhone: BrowserRowHandler = async (row, { context }) => {
 // --- Esquema 7: en la web, registrar una ejecución sin permiso muestra el motivo ----------------------------------------------
 
 /** El botón de enviar de la sección «Registrar ejecución» (la sección se nombra por su título). */
-const runSubmit = (page: Page): Locator => page.getByRole('region', { name: 'Registrar ejecución', exact: true }).getByRole('button', { name: 'Registrar ejecución', exact: true });
+const runSection = (page: Page): Locator => page.getByRole('region', { name: 'Registrar ejecución', exact: true });
+const runSubmit = (page: Page): Locator => runSection(page).getByRole('button', { name: 'Registrar ejecución', exact: true });
 
 const runDeniedWeb: BrowserRowHandler = async (row, { page, context }) => {
   const account = strict('correo', ACCOUNTS, cell(row, 'correo'));
@@ -273,15 +349,19 @@ const runDeniedWeb: BrowserRowHandler = async (row, { page, context }) => {
   if (signed) return prepFailed(expected, signed);
   const shown = await runStepsLogged([
     ['abrir /verification/TC-001', () => page.goto('/verification/TC-001', { timeout: CEILING_MS })],
-    ['ver la sección «Registrar ejecución»', () => runSubmit(page).waitFor({ timeout: CEILING_MS })],
+    ['ver la sección «Registrar ejecución»', () => runSection(page).waitFor({ timeout: CEILING_MS })],
   ]);
-  if (shown) return prepFailed(expected, shown);
+  if (shown) {
+    // La sección falta: es un hallazgo si la pantalla del caso está visible y no hay ningún nodo de la sección; si no, el arnés no llegó
+    const nodes = (await runSection(page).count()) + (await page.getByTestId(VERIFICACION_TESTIDS.RUN_FORM).count());
+    return missingControlOutcome(expected, shown, (await countVisible(page.getByRole('heading', { level: 1 }))) === 1, nodes);
+  }
   const hovered = await runStepsLogged([hoverStep(runSubmit(page), 'Registrar ejecución')]);
   if (hovered) return failedAction(expected, hovered);
   return conclude(judgeWeb('Registrar ejecución', true, RUN_DENIED, await settledButton(runSubmit(page), true, RUN_DENIED)), { note: WEB_NOTE });
 };
 
-// --- Esquema 8: en la app móvil, registrar una ejecución sin permiso muestra el motivo como texto ------------------------
+// --- Esquema 8: en la app móvil, registrar una ejecución sin permiso muestra el motivo como texto junto al formulario ------
 
 const runDeniedPhone: BrowserRowHandler = async (row, { context }) => {
   const account = strict('correo', ACCOUNTS, cell(row, 'correo'));
@@ -300,15 +380,14 @@ const runDeniedPhone: BrowserRowHandler = async (row, { context }) => {
     if (prepared) return prepFailed(expected, prepared);
     const button = mobileButton(page, 'Registrar ejecución');
     const shown = await runStepsLogged([['ver el botón «Registrar ejecución»', () => button.waitFor({ timeout: CEILING_MS })]]);
-    if (shown) return prepFailed(expected, shown);
+    if (shown) return missingRunControl(page, expected, shown, button);
     const disabled = await waitUntil(() => mobileDisabled(button), 2_000);
-    const visible = await visibleTextCount(page, RUN_DENIED);
     return conclude(
       [
         check(disabled.reached, '«Registrar ejecución» deshabilitado', disabled.reached ? '«Registrar ejecución» deshabilitado' : '«Registrar ejecución» habilitado'),
-        check(visible === 1, `se ve el texto «${RUN_DENIED}» junto al formulario`, visible === 1 ? `se ve el texto «${RUN_DENIED}»` : `no se ve el texto «${RUN_DENIED}» (${visible} visibles)`),
+        ...(await nearControl(page, RUN_DENIED, button, 'junto al formulario')),
       ],
-      { note: MOBILE_NOTE },
+      { note: `${MOBILE_NOTE} ${PHONE_SURFACE_NOTE}` },
     );
   } finally {
     await releaseContextRoutes(phone);

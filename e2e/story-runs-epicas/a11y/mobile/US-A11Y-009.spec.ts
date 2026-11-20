@@ -65,9 +65,30 @@ const touchSize: BrowserRowHandler = async (row, { page }) => {
   if (box === null) return notExecutable(expected, `No se puede medir ${control}: el elemento no tiene caja visible (lectura del arnés, no un dato de la app).`);
   const width = Math.round(box.width);
   const height = Math.round(box.height);
+  // El toque en el centro de la caja lo debe recibir el propio control (o un descendiente), no otro elemento que lo tape
+  const receives = await safe(
+    () =>
+      target.evaluate(
+        (element) => {
+          const rect = element.getBoundingClientRect();
+          const top = document.elementFromPoint(rect.x + rect.width / 2, rect.y + rect.height / 2);
+          return top !== null && (element === top || element.contains(top));
+        },
+        undefined,
+        { timeout: 1_000 },
+      ),
+    false,
+  );
   return conclude(
-    [check(height >= MIN_PX, `alto de al menos ${MIN_PX} px`, `alto de ${height} px`), check(width >= MIN_PX, `ancho de al menos ${MIN_PX} px`, `ancho de ${width} px`)],
-    { note: `${MOBILE_NOTE} El área de respuesta se mide con la caja del elemento (sin área extra de toque).`, evidence: { width, height } },
+    [
+      check(height >= MIN_PX, `alto de al menos ${MIN_PX} px`, `alto de ${height} px`),
+      check(width >= MIN_PX, `ancho de al menos ${MIN_PX} px`, `ancho de ${width} px`),
+      check(receives === true, 'el toque en el centro del control lo recibe el propio control', receives === true ? 'el toque en el centro lo recibe el control' : 'el toque en el centro lo recibe otro elemento'),
+    ],
+    {
+      note: `${MOBILE_NOTE} El área de respuesta se mide con la caja del elemento (sin área extra de toque) y se comprueba qué elemento recibe el toque en su centro. Reglas sin fila (no evaluadas): el criterio de 44 px en la web responsive es decisión pendiente (el botón de menú mide 32 px y la búsqueda 36 px).`,
+      evidence: { width, height },
+    },
   );
 };
 

@@ -2,8 +2,9 @@ import type { Locator, Page } from '@playwright/test';
 import { DEMO, TENANT_A } from '../../../story-runs/support/prepare';
 import { ACTION, CEILING_MS, safe } from '../../support/browser';
 import { check, cell, conclude, strict, type Check } from '../../support/checks';
-import { defineBrowserRows, type BrowserRowHandler } from '../../core/framework';
-import { ALUMNO_ADMIN, COOKIE_NOTE, countVisible, describeCount, describeNamed, focusCheck, focusedNamed, prepFailed, programRow, quietCookies, resetAlumno, settle, signInToPrograms, runStepsLogged, withRoutesReleased } from './common';
+import { defineBrowserRows, notExecutable, type BrowserRowHandler } from '../../core/framework';
+import { ALUMNO_ADMIN, COOKIE_NOTE, NETWORK_MS, countVisible, describeCount, focusCheck, prepFailed, programRow, quietCookies, resetAlumno, runStepsLogged, settle, signInToPrograms, withRoutesReleased } from './common';
+import { adminToken, call, field } from '../../../story-runs/support/api';
 
 // US-A11Y-008 — Diálogos: el foco entra, no sale y vuelve al control que lo abrió (web de 1440 px).
 // Preparación de cada fila: reinicio de alumno01 y sesión desde el formulario de acceso. Un diálogo se localiza por su título y el
@@ -61,12 +62,18 @@ const LANDS_ON: ReadonlyMap<string, 'programa' | 'submit'> = new Map<string, 'pr
   ['el botón «Abrir no conformidad»', 'submit'],
 ]);
 
-/** Códigos de las tarjetas de no conformidad del tablero, ordenados (la identidad de cada tarjeta, no su número). */
-const cardCodes = (page: Page): Promise<string[]> =>
-  safe(
-    () => ncCards(page).evaluateAll((elements) => elements.map((element) => (element.getAttribute('aria-label') ?? '').replace(/^Abrir /, '')).sort()),
-    [] as string[],
-  );
+/**
+ * Códigos de las no conformidades que devuelve la API (`GET /api/nc`, `items[].code`), ordenados. Es el oráculo del conjunto: no se
+ * cuentan tarjetas de la interfaz. `undefined` si la respuesta no es una lista (fallo del arnés o de la petición).
+ */
+const apiNcCodes = async (): Promise<string[] | undefined> => {
+  const result = await call('GET', '/nc', { tenant: TENANT_A, token: await adminToken(TENANT_A) });
+  const items = field(result.body, 'items');
+  if (result.status !== 200 || !Array.isArray(items)) return undefined;
+  return (items as readonly unknown[]).map((item) => String(field(item, 'code'))).sort();
+};
+
+const sameList = (a: readonly string[], b: readonly string[]): boolean => a.length === b.length && a.every((code, index) => code === b[index]);
 
 const KEYS: ReadonlyMap<string, string> = new Map([
   ['Tab', 'Tab'],
@@ -78,15 +85,18 @@ const CLOSERS: ReadonlyMap<string, (page: Page) => Promise<unknown>> = new Map<s
   ['«Cancelar»', (page) => newNcDialog(page).getByRole('button', { name: NC_CANCEL, exact: true }).click(ACTION)],
 ]);
 
-/** El foco está dentro de `dialog` y es un botón (la confirmación de borrado enfoca «Eliminar»). */
+/**
+ * El foco inicial de la confirmación de borrado es el botón que el propio diálogo indica (DeleteDialog.tsx:27, `initialFocus`:
+ * «Eliminar»), dentro del diálogo. No vale cualquier botón.
+ */
 const focusOnDialogButton = async (page: Page, dialog: Locator): Promise<Check> => {
   const inside = await settle(
-    () => safe(() => dialog.evaluate((element) => element.contains(document.activeElement) && document.activeElement?.tagName === 'BUTTON', undefined, { timeout: 1_000 }), false),
+    () => safe(() => dialog.evaluate((element) => element.contains(document.activeElement), undefined, { timeout: 1_000 }), false),
     (value) => value === true,
     2_000,
   );
-  const named = await focusedNamed(page);
-  return check(inside.ok, 'el foco está en un botón del diálogo', `el foco está en ${describeNamed(named)}`);
+  const focus = await focusCheck(page, 'Eliminar', 'button');
+  return check(inside.ok && focus.ok, 'el foco inicial está en el botón «Eliminar» del diálogo', inside.ok ? focus.observed : `${focus.observed} (fuera del diálogo)`);
 };
 
 // --- Esquema 1: al abrirse, el foco entra en el diálogo ------------------------------------------------------------------------
@@ -168,8 +178,9 @@ const closeWithoutCreating: BrowserRowHandler = async (row, { page, context }) =
   if (signed) return prepFailed(expected, signed);
   const ready = await runStepsLogged([['abrir /nc', () => page.goto('/nc', { timeout: CEILING_MS })], ['ver el tablero', () => ncCards(page).first().waitFor({ timeout: CEILING_MS })]]);
   if (ready) return prepFailed(expected, ready);
-  const idsBefore = await cardCodes(page);
-  if (idsBefore.length !== NC_COUNT) return prepFailed(expected, `antes de abrir el diálogo hay ${idsBefore.length} tarjetas de NC, no ${NC_COUNT}`);
+  const idsBefore = await apiNcCodes();
+  if (idsBefore === undefined) return notExecutable(expected, 'GET /api/nc no devolvió una lista de no conformidades (error del arnés, con la evidencia).');
+  if (idsBefore.length !== NC_COUNT) return prepFailed(expected, `antes de abrir el diálogo la API lista ${idsBefore.length} no conformidades, no ${NC_COUNT}`);
   const opened = await runStepsLogged([['pulsar «Nueva no conformidad»', () => ncTrigger(page).click(ACTION)]]);
   if (opened) return prepFailed(expected, opened);
   const dialogOpen = await settle(() => countVisible(newNcDialog(page)), (count) => count === 1, 2_000);
@@ -178,13 +189,17 @@ const closeWithoutCreating: BrowserRowHandler = async (row, { page, context }) =
   if (closed) return prepFailed(expected, closed);
   const gone = await settle(() => countVisible(newNcDialog(page)), (count) => count === 0, 2_000);
   const focus = await focusCheck(page, NC_TRIGGER, 'button');
-  const idsAfter = await settle(() => cardCodes(page), (codes) => codes.length === NC_COUNT, 2_000);
-  const sameCards = idsAfter.value.length === idsBefore.length && idsBefore.every((code, index) => idsAfter.value[index] === code);
+  const idsAfter = await settle(() => apiNcCodes(), (codes) => codes !== undefined && codes.length === NC_COUNT, NETWORK_MS);
+  const sameCards = idsAfter.value !== undefined && sameList(idsAfter.value, idsBefore);
   return conclude(
     [
       check(gone.ok, 'el diálogo se cierra', gone.ok ? 'el diálogo se cierra' : `el diálogo sigue abierto (${describeCount(gone.value)})`),
       focus,
-      check(sameCards, `siguen existiendo las ${NC_COUNT} no conformidades (mismos códigos, ninguna nueva)`, `hay ${idsAfter.value.length} tarjetas: ${idsAfter.value.join(', ')}`),
+      check(
+        sameCards,
+        `siguen existiendo las ${NC_COUNT} no conformidades (mismos códigos según la API, ninguna nueva)`,
+        idsAfter.value === undefined ? 'GET /api/nc no devolvió lista tras cerrar el diálogo' : `la API lista ${idsAfter.value.length}: ${idsAfter.value.join(', ')}`,
+      ),
     ],
     { note: COOKIE_NOTE },
   );
@@ -215,7 +230,9 @@ const deleteConfirmation: BrowserRowHandler = async (row, { page, context }) => 
       check(body.ok, `su texto dice «${text}»`, body.ok ? `su texto dice «${text}»` : `no aparece ese texto en el diálogo (${describeCount(body.value)})`),
       check(cancel === 1 && confirm === 1, 'sus botones son «Cancelar» y «Eliminar»', `botones: «Cancelar» (${describeCount(cancel)}) y «Eliminar» (${describeCount(confirm)})`),
     ],
-    { note: COOKIE_NOTE },
+    {
+      note: `${COOKIE_NOTE} La confirmación se localiza como role alertdialog (DeleteDialog.tsx:22). Reglas sin fila (no evaluadas): el foco vuelve al control que abrió este diálogo tras cerrarlo; no se mide porque ninguna fila cierra la confirmación.`,
+    },
   );
 };
 

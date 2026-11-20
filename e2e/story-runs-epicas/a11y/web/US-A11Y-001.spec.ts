@@ -10,6 +10,9 @@ import { ALUMNO_ADMIN, COOKIE_NOTE, PASSWORDS, ambiguityOutcome, heading1, named
 // formulario con la cuenta y el tenant de la fila. Los nombres se leen del elemento que el contenedor de la historia contiene
 // (cabecera, formulario, fila, tarjeta, pie de la barra lateral), y no por su nombre.
 
+/** Reglas de la historia sin fila: no se evalúan aquí. */
+const NOT_EVALUATED_NOTE = 'Reglas sin fila (no evaluadas): dos controles distintos de una misma pantalla no comparten nombre (solo se miran las filas listadas); el nombre del botón de mostrar contraseña cuando está en claro es decisión pendiente.';
+
 // --- Esquema 1: los controles de la pantalla de acceso -------------------------------------------------------------------------
 
 const ACCESS_CONTROLS: ReadonlyMap<string, (page: Page) => Locator> = new Map<string, (page: Page) => Locator>([
@@ -32,7 +35,7 @@ const accessControl: BrowserRowHandler = async (row, { page, context }) => {
   const target = strict('control', ACCESS_CONTROLS, control)(page);
   const ambiguous = await ambiguityOutcome(target, expected, control);
   if (ambiguous) return ambiguous;
-  return conclude([await namedCheck(target, expected, control)], { note: COOKIE_NOTE });
+  return conclude([await namedCheck(target, expected, control)], { note: `${COOKIE_NOTE} ${NOT_EVALUATED_NOTE}` });
 };
 
 // --- Esquema 2: los controles de una fila de Programas -----------------------------------------------------------------------
@@ -53,7 +56,7 @@ const programControl: BrowserRowHandler = async (row, { page, context }) => {
   const target = strict('control', ROW_CONTROLS, control)(programRow(page, code));
   const ambiguous = await ambiguityOutcome(target, expected, `${control} de ${code}`);
   if (ambiguous) return ambiguous;
-  return conclude([await namedCheck(target, expected, `${control} de ${code}`)], { note: COOKIE_NOTE });
+  return conclude([await namedCheck(target, expected, `${control} de ${code}`)], { note: `${COOKIE_NOTE} ${NOT_EVALUATED_NOTE}` });
 };
 
 // --- Esquema 3: el texto alternativo de cada imagen -----------------------------------------------------------------------------
@@ -97,7 +100,7 @@ const imageAlt: BrowserRowHandler = async (row, { page, context }) => {
   const target = strict('imagen', IMAGES, image)(page);
   const ambiguous = await ambiguityOutcome(target, expected, image);
   if (ambiguous) return ambiguous;
-  return conclude([await namedCheck(target, expected, image)], { note: COOKIE_NOTE });
+  return conclude([await namedCheck(target, expected, image)], { note: `${COOKIE_NOTE} ${NOT_EVALUATED_NOTE}` });
 };
 
 defineBrowserRows({

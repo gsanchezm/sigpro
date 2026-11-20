@@ -15,30 +15,33 @@ import {
   enterButton,
   failGets,
   failedAction,
+  filterState,
   openLogin,
   phoneContext,
   prepFailed,
   programsTitle,
   quietCookies,
   reachable,
+  releaseContextRoutes,
   resetAlumno,
   settle,
   signInToPrograms,
   typeCredentials,
-  runStepsLogged,
   withRoutesReleased,
-  releaseContextRoutes,
+  type HeldResponse,
+  runStepsLogged,
 } from './common';
 import { MOBILE_NOTE, expoNotRunning, mobileSignInSteps } from './mobile';
 
 // US-A11Y-005 — Listas con carga ocupada, estado vacío y error anunciables (web de 1440 px y, en las filas móviles, Expo web a 390 px).
 // Preparación de cada fila: reinicio de alumno01; las filas que retrasan o rompen una respuesta lo fijan en el navegador de la prueba
-// ANTES de la acción. Si la lectura de «ocupada» o de «Cargando…» llega después de que la prueba libera la respuesta, la fila no es un
-// hallazgo sobre la app (lectura tardía del arnés) y sale `notExecutable`.
+// ANTES de la acción. La retención tiene control positivo (la ruta casó con la petición); una lectura cuenta solo si termina antes de
+// que la prueba libere la respuesta. Si no hubo ninguna lectura antes de liberar, la lectura llegó tarde: fallo del arnés, no hallazgo.
 
 const TITLE_EMPTY = 'Sin programas';
 const EMPTY_EXPLANATION = 'Ningún programa coincide con los filtros aplicados.';
 const CLEAR = 'Limpiar filtros';
+const NOT_EVALUATED_NOTE = 'Reglas sin fila (no evaluadas): el tablero de no conformidades también marca su carga como ocupada (no se mide aquí); la carga con texto en la web es decisión pendiente.';
 
 const RESPONSIBLE: ReadonlyMap<string, string> = new Map([['«Marta Ruiz»', 'Marta Ruiz']]);
 const STATUS: ReadonlyMap<string, string> = new Map([['«Cancelado»', 'Cancelado']]);
@@ -71,10 +74,12 @@ const filterBy = async (page: Page, owner: string, status: string): Promise<stri
   ]);
   if (applied) return applied;
   // La última respuesta de la lista corresponde al filtro completo: se arma antes de elegir el estado
-  const listed = page.waitForResponse((response) => new URL(response.url()).pathname === '/api/programs' && response.request().method() === 'GET', { timeout: CEILING_MS }).then(
-    () => true,
-    () => false,
-  );
+  const listed = page
+    .waitForResponse((response) => new URL(response.url()).pathname === '/api/programs' && response.request().method() === 'GET', { timeout: CEILING_MS })
+    .then(
+      () => true,
+      () => false,
+    );
   const selected = await runStepsLogged([[`elegir «${status}» en «Estado»`, () => page.getByRole('combobox', { name: 'Estado', exact: true }).selectOption(status, ACTION)]]);
   if (selected) return selected;
   if (!(await listed)) return 'la lista no pidió la respuesta filtrada tras elegir el estado';
@@ -90,8 +95,8 @@ const busyWhileLoading: BrowserRowHandler = async (row, { page, context }) => {
   const expected = `mientras espera, ${cell(row, 'region')} se anuncia como ocupada y, al llegar la respuesta, deja de anunciarse así`;
   await quietCookies(context);
   await resetAlumno();
-  const released = { at: 0 };
-  await delayGets(page, '/api/programs', ms, released);
+  const held: HeldResponse = { at: 0, intercepted: false };
+  await delayGets(page, '/api/programs', ms, held);
   const prepared = await runStepsLogged([openLogin(page), ...typeCredentials(page, DEMO.gestor.email, DEMO.gestor.password)]);
   if (prepared) return prepFailed(expected, prepared);
   const clicked = await runStepsLogged([
@@ -99,25 +104,26 @@ const busyWhileLoading: BrowserRowHandler = async (row, { page, context }) => {
     ['llegar a /programs', () => programsTitle(page).waitFor({ timeout: CEILING_MS })],
   ]);
   if (clicked) return failedAction(expected, clicked);
-  // Se mira la tabla hasta que aparece la marca o hasta que la prueba libera la respuesta. Una lectura hecha ANTES de liberar que no
-  // vea la marca es un hallazgo; si no hubo ninguna lectura antes de liberar, la lectura llegó tarde (fallo del arnés).
+  // Mirar la tabla hasta ver la marca o hasta que se libere la respuesta. Una lectura cuenta solo si empieza y acaba antes de liberar.
   const table = region(page);
   const reads = { busy: false, beforeRelease: false };
   await waitUntil(async () => {
+    const startedBefore = held.at === 0;
     const value = await attrOf(table, 'aria-busy');
-    if (released.at === 0) reads.beforeRelease = true;
-    if (value === 'true') reads.busy = true;
-    return reads.busy || released.at !== 0;
+    if (startedBefore && held.at === 0 && value === 'true') reads.busy = true;
+    if (startedBefore && held.at === 0) reads.beforeRelease = true;
+    return reads.busy || held.at !== 0;
   }, ms + NETWORK_MS);
+  // Control positivo: sin una petición retenida, la marca de ocupada no se ha probado
+  if (!held.intercepted) return notExecutable(expected, 'La retención de la respuesta no se activó: ninguna petición de la tabla casó con la ruta (sin control positivo, la lectura no vale).');
   if (!reads.busy && !reads.beforeRelease) return notExecutable(expected, `Lectura tardía: la respuesta se liberó a los ${ms} ms antes de la primera lectura de la tabla; fallo del arnés, no de la app.`);
-  const busy = { reached: reads.busy };
   const idle = await waitUntil(async () => (await attrOf(table, 'aria-busy')) === 'false', ms + NETWORK_MS);
   return conclude(
     [
-      check(busy.reached, `mientras espera la respuesta, ${cell(row, 'region')} se anuncia como ocupada`, busy.reached ? `${cell(row, 'region')} marcada como ocupada` : `${cell(row, 'region')} sin marca de ocupada (aria-busy distinto de true)`),
+      check(reads.busy, `mientras espera la respuesta, ${cell(row, 'region')} se anuncia como ocupada`, reads.busy ? `${cell(row, 'region')} marcada como ocupada` : `${cell(row, 'region')} sin marca de ocupada (aria-busy distinto de true) antes de la respuesta`),
       check(idle.reached, 'cuando llega la respuesta, deja de anunciarse como ocupada', idle.reached ? 'aria-busy vuelve a false' : 'sigue marcada como ocupada tras la respuesta'),
     ],
-    { note: `${COOKIE_NOTE} La respuesta se retrasa ${ms} ms en el navegador de la prueba.` },
+    { note: `${COOKIE_NOTE} La respuesta se retrasa ${ms} ms en el navegador de la prueba. ${NOT_EVALUATED_NOTE}` },
   );
 };
 
@@ -131,27 +137,29 @@ const phoneLoading: BrowserRowHandler = async (row, { context }) => {
   const phone = await phoneContext(browserOf(context));
   try {
     const page = await phone.newPage();
-    const released = { at: 0 };
-    await delayGets(page, '/api/programs', ms, released);
+    const held: HeldResponse = { at: 0, intercepted: false };
+    await delayGets(page, '/api/programs', ms, held);
     const prepared = await runStepsLogged(mobileSignInSteps(page, DEMO.gestor.email, DEMO.gestor.password));
     if (prepared) return prepFailed(expected, prepared);
     const loading = page.getByRole('status', { name: 'Cargando…', exact: true });
-    // Igual que en la lista de escritorio: se mira hasta ver «Cargando…» o hasta que la prueba libera la respuesta
+    // Solo cuenta una lectura que empieza y acaba antes de liberar la respuesta
     const reads = { seen: false, beforeRelease: false };
     await waitUntil(async () => {
-      if (released.at === 0) reads.beforeRelease = true;
-      if ((await countVisible(loading)) === 1) reads.seen = true;
-      return reads.seen || released.at !== 0;
+      const startedBefore = held.at === 0;
+      const count = await countVisible(loading);
+      if (startedBefore && held.at === 0) reads.beforeRelease = true;
+      if (startedBefore && held.at === 0 && count === 1) reads.seen = true;
+      return reads.seen || held.at !== 0;
     }, ms + NETWORK_MS);
+    if (!held.intercepted) return notExecutable(expected, 'La retención de la respuesta no se activó: ninguna petición de la lista casó con la ruta (sin control positivo, la lectura no vale).');
     if (!reads.seen && !reads.beforeRelease) return notExecutable(expected, `Lectura tardía: la respuesta se liberó a los ${ms} ms antes de la primera lectura de «Cargando…»; fallo del arnés, no de la app.`);
-    const seen = { reached: reads.seen };
     const busy = await safe(() => loading.first().getAttribute('aria-busy', { timeout: 1_000 }), undefined);
     return conclude(
       [
-        check(seen.reached, 'se ve «Cargando…»', seen.reached ? 'se ve «Cargando…»' : `no se ve «Cargando…» (${describeCount(await countVisible(loading))})`),
+        check(reads.seen, 'se ve «Cargando…»', reads.seen ? 'se ve «Cargando…»' : `no se ve «Cargando…» antes de la respuesta (${describeCount(await countVisible(loading))})`),
         check(busy === 'true', 'se anuncia como ocupada', busy === 'true' ? 'se anuncia como ocupada (aria-busy true)' : `aria-busy ${busy ?? '(sin atributo)'}`),
       ],
-      { note: `${MOBILE_NOTE} La respuesta se retrasa ${ms} ms en el navegador de la prueba.` },
+      { note: `${MOBILE_NOTE} La respuesta se retrasa ${ms} ms en el navegador de la prueba. Fila de Expo web dentro de web/: la cabecera de superficie dice «web».` },
     );
   } finally {
     await releaseContextRoutes(phone);
@@ -182,7 +190,7 @@ const emptyList: BrowserRowHandler = async (row, { page, context }) => {
       check(clear.ok, `ve el botón «${CLEAR}»`, clear.ok ? `ve el botón «${CLEAR}»` : `no se ve «${CLEAR}» (${describeCount(clear.value)})`),
       check(announced.ok, 'el estado vacío se anuncia como estado', announced.ok ? 'el estado vacío se anuncia como estado' : 'el estado vacío no está en ninguna región de estado'),
     ],
-    { note: COOKIE_NOTE },
+    { note: `${COOKIE_NOTE} ${NOT_EVALUATED_NOTE}` },
   );
 };
 
@@ -198,11 +206,19 @@ const clearFilters: BrowserRowHandler = async (row, { page, context }) => {
   if (signed) return prepFailed(expected, signed);
   const filtered = await filterBy(page, owner, status);
   if (filtered) return prepFailed(expected, filtered);
-  // Con la lista vacía hay dos botones «Limpiar filtros» (barra de filtros y bloque vacío): se pulsa el de la barra
+  // El Dado: la lista filtrada está vacía. Se comprueba ANTES de limpiar; si no lo está, la fila no prueba nada.
+  const emptyBefore = await settle(() => countVisible(page.getByText(TITLE_EMPTY, { exact: true })), (count) => count === 1);
+  if (!emptyBefore.ok) return prepFailed(expected, `antes de limpiar no aparece «${TITLE_EMPTY}» (${describeCount(emptyBefore.value)}): el filtro no deja la lista vacía`);
+  // Dos botones «Limpiar filtros» cuando la lista está vacía: se pulsa el de la barra de filtros (la región de búsqueda)
   const cleared = await runStepsLogged([[`pulsar «${CLEAR}»`, () => page.getByRole('search').getByRole('button', { name: CLEAR, exact: true }).click(ACTION)]]);
   if (cleared) return failedAction(expected, cleared);
-  const rows = await settle(() => countVisible(programRows(page)), (count) => count === 10, NETWORK_MS);
-  return conclude([check(rows.ok, 've de nuevo la tabla de programas con 10 filas en la primera página', `la tabla muestra ${describeCount(rows.value)} filas de programa (${rows.value})`)], { note: COOKIE_NOTE });
+  const after = await settle(() => filterState(page), (state) => state.owner === '' && state.status !== status && state.rows === 10, NETWORK_MS);
+  return conclude(
+    [
+      check(after.ok, 've de nuevo la tabla de programas con 10 filas en la primera página', `tras limpiar: «Responsable» ${after.value.owner === undefined ? '(ilegible)' : `«${after.value.owner}»`}, «Estado» ${after.value.status ?? '(ilegible)'}, ${after.value.rows} filas de programa`),
+    ],
+    { note: `${COOKIE_NOTE} ${NOT_EVALUATED_NOTE}` },
+  );
 };
 
 // --- Esquema 5: una lista que no se puede cargar muestra el aviso y «Reintentar» como alerta (web) ----------------------------
@@ -264,7 +280,7 @@ const phoneError: BrowserRowHandler = async (row, { context }) => {
         check(shown.ok, `ve el título «${titulo}» dentro de una alerta`, shown.ok ? `ve el título «${titulo}» dentro de una alerta` : `no se ve «${titulo}» dentro de una alerta (${describeCount(shown.value)})`),
         check(retry.ok, 've el botón «Reintentar» dentro de la alerta', retry.ok ? 've el botón «Reintentar» dentro de la alerta' : `no se ve «Reintentar» dentro de la alerta (${describeCount(retry.value)})`),
       ],
-      { note: MOBILE_NOTE },
+      { note: `${MOBILE_NOTE} Fila de Expo web dentro de web/: la cabecera de superficie dice «web».` },
     );
   } finally {
     await releaseContextRoutes(phone);

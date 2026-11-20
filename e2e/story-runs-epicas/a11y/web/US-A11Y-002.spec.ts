@@ -11,6 +11,7 @@ import {
   focusCheck,
   heading1,
   namedOf,
+  sameElementByLabel,
   noticeBelow,
   openLogin,
   prepFailed,
@@ -66,6 +67,9 @@ const labelVisible = (field: Locator): Promise<boolean> =>
     false,
   );
 
+/** Reglas de la historia sin fila: no se evalúan aquí. */
+const NOT_EVALUATED_NOTE = 'Reglas sin fila (no evaluadas): un formulario con varios errores lleva el foco al primero en orden del formulario (la fila de envío vacío solo tiene un error por campo); el aviso de error del servidor es US-A11Y-006.';
+
 // --- Esquema 1: cada campo se anuncia con su etiqueta y su ejemplo --------------------------------------------------------------
 
 const PREVIOUS: ReadonlyMap<string, (page: Page) => Promise<string | undefined>> = new Map<string, (page: Page) => Promise<string | undefined>>([
@@ -98,17 +102,22 @@ const labelsAndExamples: BrowserRowHandler = async (row, { page, context }) => {
   const prepared = await strict('previo', PREVIOUS, previo)(page);
   if (prepared) return prepFailed(`«${etiqueta}» en el formulario previsto`, prepared);
   const field = strict('campo', FIELDS, etiqueta)(page);
-  const announced = (await namedOf(field))?.name ?? (await labelOf(field));
+  // Lo que se anuncia: el nombre de la API de accesibilidad. Si el campo no tiene rol legible, vale su etiqueta solo cuando
+  // `getByLabel` con esa etiqueta casa con un único elemento y ese elemento es este mismo campo (no se da por bueno el texto de la celda)
+  const named = await namedOf(field);
+  const sameField = named === undefined ? await sameElementByLabel(page, field, etiqueta) : false;
+  const announcedOk = named !== undefined ? named.name === etiqueta : sameField;
+  const announced = named?.name;
   const labelText = await labelOf(field);
   const visible = await labelVisible(field);
   const placeholder = await attrOf(field, 'placeholder');
   const exampleOk = ejemplo === NONE ? placeholder === undefined || placeholder === '' : placeholder === ejemplo && ejemplo !== etiqueta;
   const checks: Check[] = [
-    check(announced === etiqueta, `lo anuncia como «${etiqueta}»`, `lo anuncia como ${announced === undefined ? '(sin nombre legible)' : `«${announced}»`}`),
+    check(announcedOk, `lo anuncia como «${etiqueta}»`, announced !== undefined ? `lo anuncia como «${announced}»` : announcedOk ? `lo anuncia como «${etiqueta}» (sin rol legible: su etiqueta casa con este mismo campo)` : '(sin nombre legible: su etiqueta no lo identifica de forma única)'),
     check(labelText === etiqueta && visible, `etiqueta visible «${etiqueta}»`, `etiqueta ${labelText === undefined ? '(sin etiqueta asociada)' : `«${labelText}»`} ${visible ? 'visible' : 'no visible'}`),
     check(exampleOk, `su texto de ejemplo es ${ejemplo === NONE ? '(ninguno)' : `«${ejemplo}»`}`, `su texto de ejemplo es ${placeholder === undefined || placeholder === '' ? '(ninguno)' : `«${placeholder}»`}`),
   ];
-  return conclude(checks, { note: COOKIE_NOTE });
+  return conclude(checks, { note: `${COOKIE_NOTE} ${NOT_EVALUATED_NOTE}` });
 };
 
 // --- Esquema 2: un formulario vacío avisa junto al primer campo y lleva el foco allí ----------------------------------------------
@@ -144,7 +153,7 @@ const emptySubmit: BrowserRowHandler = async (row, { page, context }) => {
     check(notice.ok, `ve el aviso «${REQUIRED}» debajo del campo «${campo}»`, notice.value === undefined ? '(sin aviso asociado al campo)' : `el aviso asociado dice «${notice.value}»`),
     check(below.ok, `el aviso queda debajo del campo «${campo}»`, below.value === true ? 'el aviso queda debajo del campo' : below.value === false ? 'el aviso no queda debajo del campo' : '(sin aviso medible)'),
     focus,
-  ], { note: COOKIE_NOTE });
+  ], { note: `${COOKIE_NOTE} ${NOT_EVALUATED_NOTE}` });
 };
 
 // --- Esquema 3: un correo mal escrito avisa junto a «Correo electrónico» y deja el foco allí -------------------------------------
@@ -175,7 +184,7 @@ const badEmail: BrowserRowHandler = async (row, { page, context }) => {
     check(below.ok, 'el aviso queda debajo del campo «Correo electrónico»', below.value === true ? 'el aviso queda debajo del campo' : below.value === false ? 'el aviso no queda debajo del campo' : '(sin aviso medible)'),
     focus,
     stays,
-  ], { note: COOKIE_NOTE });
+  ], { note: `${COOKIE_NOTE} ${NOT_EVALUATED_NOTE}` });
 };
 
 defineBrowserRows({

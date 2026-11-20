@@ -56,8 +56,12 @@ export const browserOf = (context: BrowserContext): Browser => {
 };
 
 /** Contexto nuevo de la app móvil servida como web de Expo a 390 × 844 (el mismo criterio que el proyecto `mobile` del config). */
-export const phoneContext = (browser: Browser): Promise<BrowserContext> =>
-  browser.newContext({ baseURL: MOBILE_URL, viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, hasTouch: true, locale: 'es-ES', timezoneId: 'Europe/Madrid', serviceWorkers: 'block' });
+export const phoneContext = async (browser: Browser): Promise<BrowserContext> => {
+  const context = await browser.newContext({ baseURL: MOBILE_URL, viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, hasTouch: true, locale: 'es-ES', timezoneId: 'Europe/Madrid', serviceWorkers: 'block' });
+  // La app móvil no muestra el aviso de cookies, pero se fija la misma preferencia que en la web para que los dos contextos sean iguales
+  await quietCookies(context);
+  return context;
+};
 
 /** ¿Responde la URL? Sin respuesta, la fila móvil no se ejecuta en esta superficie (entorno, no hallazgo). */
 export const reachable = (url: string): Promise<boolean> => safe(async () => (await fetch(url, { signal: AbortSignal.timeout(3_000) })).ok, false);
@@ -153,28 +157,82 @@ export interface Named {
   readonly name: string;
 }
 
-const SNAPSHOT_HEAD = /^\s*-\s+([\w-]+)(?:\s+"((?:[^"\\]|\\.)*)")?/;
+/**
+ * Clave de una línea del `ariaSnapshot` sin el guion. Playwright escribe `rol "nombre"` (nombre entre comillas dobles, JSON); si la
+ * clave contiene caracteres como «: », la envuelve en comillas simples, con `''` como comilla simple escapada.
+ */
+const snapshotKey = (line: string): string | undefined => {
+  const text = line.replace(/^\s*-\s+/, '').trim();
+  if (text === '') return undefined;
+  if (!text.startsWith("'")) return text;
+  let out = '';
+  for (let index = 1; index < text.length; index += 1) {
+    const char = text.charAt(index);
+    if (char === "'" && text.charAt(index + 1) === "'") {
+      out += "'";
+      index += 1;
+    } else if (char === "'") {
+      return out;
+    } else {
+      out += char;
+    }
+  }
+  return out;
+};
 
-/** Rol y nombre accesible del único elemento de `locator` (`ariaSnapshot`); `undefined` si no hay uno solo o la lectura falla. */
+const NAMED_KEY = /^([\w-]+)(?: ("(?:[^"\\]|\\.)*"))?/;
+
+/** Rol y nombre de una clave (`rol "nombre"` o `rol`). `undefined` si la clave no empieza por un rol. */
+const parseSnapshotKey = (key: string): Named | undefined => {
+  const match = NAMED_KEY.exec(key);
+  if (!match?.[1]) return undefined;
+  const quoted = match[2];
+  if (quoted === undefined) return { role: match[1], name: '' };
+  try {
+    return { role: match[1], name: JSON.parse(quoted) as string };
+  } catch {
+    return undefined;
+  }
+};
+
+/** Rol y nombre accesible del único elemento de `locator` (`ariaSnapshot`); `undefined` si no hay uno solo, si no tiene rol o si la lectura falla. */
 export const namedOf = (locator: Locator): Promise<Named | undefined> =>
   safe(async () => {
     if ((await locator.count()) !== 1) return undefined;
     const snapshot = await locator.ariaSnapshot({ timeout: 1_000 });
-    const head = snapshot.split('\n').find((line) => line.trim() !== '') ?? '';
-    const match = SNAPSHOT_HEAD.exec(head);
-    if (!match?.[1]) return undefined;
-    return { role: match[1], name: (match[2] ?? '').replace(/\\"/g, '"') };
+    const head = snapshot.split('\n').find((line) => line.trim() !== '');
+    if (head === undefined) return undefined;
+    const key = snapshotKey(head);
+    return key === undefined ? undefined : parseSnapshotKey(key);
   }, undefined);
 
-/** Nombre del elemento enfocado desde el DOM, si la API de accesibilidad no le da rol (p. ej. un campo de contraseña). */
+/** Campo sin rol que la API no lee: se acepta si `getByLabel` con su etiqueta casa con un único elemento y ese elemento es el mismo campo. */
+export const sameElementByLabel = async (page: Page, field: Locator, label: string): Promise<boolean> => {
+  const byLabel = page.getByLabel(label, { exact: true });
+  if ((await safe(() => byLabel.count(), 0)) !== 1) return false;
+  const handle = await field.elementHandle({ timeout: 1_000 }).catch(() => null);
+  if (handle === null) return false;
+  return byLabel.evaluate((element, other) => element === other, handle).catch(() => false);
+};
+
+/** Nombre del elemento enfocado desde el DOM, para cuando la API de accesibilidad no le da nombre. Resuelve `aria-labelledby` y mapea el rol de los `input` por su tipo. */
 const focusedByDom = (page: Page): Promise<Named | undefined> =>
   safe(
     () =>
       page.evaluate(() => {
         const element = document.activeElement as HTMLElement | null;
         if (!element || element === document.body) return undefined;
+        const labelledIds = (element.getAttribute('aria-labelledby') ?? '').split(' ').filter((id) => id !== '');
+        const labelledText = labelledIds
+          .map((id) => document.getElementById(id)?.textContent?.trim() ?? '')
+          .join(' ')
+          .trim();
         const labelled = (element as HTMLInputElement).labels?.[0]?.textContent?.trim();
-        return { role: element.getAttribute('role') ?? element.tagName.toLowerCase(), name: element.getAttribute('aria-label') ?? labelled ?? element.textContent?.trim() ?? '' };
+        const explicit = element.getAttribute('role');
+        const inputType = element instanceof HTMLInputElement ? element.type : '';
+        const implicit = element instanceof HTMLInputElement ? (inputType === 'checkbox' || inputType === 'radio' ? inputType : inputType === 'password' ? 'password' : 'textbox') : element.tagName.toLowerCase();
+        const name = element.getAttribute('aria-label') ?? (labelledText !== '' ? labelledText : (labelled ?? element.textContent?.trim() ?? ''));
+        return { role: explicit ?? implicit, name };
       }),
     undefined,
   );
@@ -239,8 +297,32 @@ export const describeCount = (count: number): string => {
   if (count < 0) return 'lectura fallida';
   if (count === 0) return 'ninguno visible';
   if (count === 1) return 'uno visible';
-  return `${count} visibles (ambiguo)`;
+  return `${count} visibles`;
 };
+
+/** Distancia vertical entre dos cajas (0 si se solapan en vertical). `undefined` si alguna no tiene caja visible. */
+export const verticalGap = async (a: Locator, b: Locator): Promise<number | undefined> => {
+  const boxA = await safe(() => a.first().boundingBox({ timeout: 1_000 }), null);
+  const boxB = await safe(() => b.first().boundingBox({ timeout: 1_000 }), null);
+  if (boxA === null || boxB === null) return undefined;
+  return Math.max(boxA.y - (boxB.y + boxB.height), boxB.y - (boxA.y + boxA.height), 0);
+};
+
+/** Estado de la lista de programas: lo que muestran el filtro «Responsable», el «Estado» y el número de filas. */
+export interface FilterState {
+  readonly owner: string | undefined;
+  readonly status: string | undefined;
+  readonly rows: number;
+}
+
+export const filterState = async (page: Page): Promise<FilterState> => ({
+  owner: await safe(() => page.getByRole('combobox', { name: 'Responsable', exact: true }).inputValue({ timeout: 1_000 }), undefined),
+  status: await safe(
+    () => page.getByRole('combobox', { name: 'Estado', exact: true }).evaluate((element) => (element as HTMLSelectElement).selectedOptions[0]?.textContent?.trim() ?? '', undefined, { timeout: 1_000 }),
+    undefined,
+  ),
+  rows: await safe(() => page.getByRole('table').getByRole('row').filter({ has: page.getByRole('checkbox', { name: /^Seleccionar PRG-/ }) }).count(), -1),
+});
 
 /** «lo anuncia como «X»»: el elemento de `locator` tiene ese nombre accesible. Lo observado es el nombre que se lee. */
 export const namedCheck = async (locator: Locator, expectedName: string, label: string, ceilingMs: number = REACTION_MS): Promise<Check> => {
@@ -273,6 +355,17 @@ export const focusRingCheck = async (page: Page): Promise<Check> => {
   const ok = ring.style === 'solid' && ring.width === '2px' && ring.offset === '2px' && ring.color === color;
   return check(ok, `contorno de foco de 2 px sólido, separado 2 px, color ${color}`, `contorno ${ring.style} ${ring.width}, separado ${ring.offset}, color ${ring.color}`);
 };
+
+/**
+ * Un control que la historia da por hecho y que no aparece en la preparación. Es un hallazgo (discrepa) solo si la pantalla correcta
+ * está visible y el control no tiene ningún nodo; si no, el arnés no llegó a la pantalla y la fila sale `notExecutable`.
+ */
+export const missingControlOutcome = (expected: string, reason: string, screenVisible: boolean, controlNodes: number): Outcome =>
+  screenVisible && controlNodes === 0
+    ? outcome(false, expected, `el control no aparece en la pantalla correcta (${reason})`, {
+        note: 'La historia da por hecho este control; la pantalla correcta está visible y el control no tiene ningún nodo (ni por rol ni por identificador de prueba).',
+      })
+    : notExecutable(expected, `Pantalla o control no alcanzado (error del arnés, con la evidencia): ${reason}`);
 
 /** Motivo de bloqueo en un `title`. El nombre con el atajo («Nuevo programa (N)») no es un motivo. */
 export const isBlockingReason = (title: string | undefined): boolean => title !== undefined && !/\(N\)$/.test(title);
@@ -325,20 +418,30 @@ export const failGets = async (page: Page, pathname: string, active: () => boole
   );
 };
 
-/** Retrasa `ms` la respuesta real de las peticiones `method` de `pathname`. Anota en `released` cuándo la libera: una lectura posterior es un fallo del arnés. */
-const holdResponses = async (page: Page, method: string, pathname: string, ms: number, released: { at: number }): Promise<void> => {
+/**
+ * Estado de una respuesta retenida: `intercepted` pasa a true cuando la ruta casa con una petición real (control positivo: sin él, la
+ * retención no se ha producido y la lectura no vale); `at` es el instante de la liberación (0 mientras no se libera).
+ */
+export interface HeldResponse {
+  at: number;
+  intercepted: boolean;
+}
+
+/** Retrasa `ms` la respuesta real de las peticiones `method` de `pathname`. Marca `intercepted` al casar y anota `at` al liberar. */
+const holdResponses = async (page: Page, method: string, pathname: string, ms: number, held: HeldResponse): Promise<void> => {
   await page.route(
     (url) => url.pathname === pathname,
     quietRoute(async (route) => {
       if (route.request().method() !== method) return route.fallback();
+      held.intercepted = true;
       const response = await route.fetch();
       await new Promise((done) => setTimeout(done, ms));
-      released.at = Date.now();
+      held.at = Date.now();
       await route.fulfill({ response });
     }),
   );
 };
 
-export const delayGets = (page: Page, pathname: string, ms: number, released: { at: number }): Promise<void> => holdResponses(page, 'GET', pathname, ms, released);
+export const delayGets = (page: Page, pathname: string, ms: number, held: HeldResponse): Promise<void> => holdResponses(page, 'GET', pathname, ms, held);
 
-export const delayPost = (page: Page, pathname: string, ms: number, released: { at: number }): Promise<void> => holdResponses(page, 'POST', pathname, ms, released);
+export const delayPost = (page: Page, pathname: string, ms: number, held: HeldResponse): Promise<void> => holdResponses(page, 'POST', pathname, ms, held);
