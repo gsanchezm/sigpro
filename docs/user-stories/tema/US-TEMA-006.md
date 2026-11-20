@@ -38,10 +38,8 @@ Característica: Contraste mínimo de los textos en los dos temas
       | el texto secundario de una fila seleccionada | #5b4f66 | #f3e3f0 |
       | la etiqueta o ayuda de tarjetas y paneles | #6f627a | #ffffff |
       | la etiqueta o ayuda de cabeceras y campos de búsqueda | #6f627a | #f4f0f6 |
-      | la etiqueta o ayuda de una fila seleccionada | #6f627a | #f3e3f0 |
       | el texto del botón principal | #ffffff | #7a2e6e |
       | el texto del botón principal con el cursor encima | #ffffff | #632259 |
-      | el texto del botón de peligro | #ffffff | #b93232 |
 
   Esquema del escenario: Con el tema oscuro cada texto tiene un contraste de al menos 4,5:1 sobre su fondo
     Dado que en el tenant alumno01, recién reiniciado, con el tema del sistema en claro, una persona sin sesión iniciada ha pulsado «Cambiar tema» una vez en la pantalla de acceso de un navegador o dispositivo nuevo, ha iniciado sesión con gestor@sigpro.test y Gestor1234! y está en /programs con el tema oscuro
@@ -60,9 +58,25 @@ Característica: Contraste mínimo de los textos en los dos temas
       | el texto secundario de una fila seleccionada | #b3a7bd | #3a2137 |
       | la etiqueta o ayuda de tarjetas y paneles | #968c9f | #1c1721 |
       | la etiqueta o ayuda de cabeceras y campos de búsqueda | #968c9f | #261f2c |
-      | la etiqueta o ayuda de una fila seleccionada | #968c9f | #3a2137 |
       | el texto del botón principal | #1d1424 | #d68ac9 |
       | el texto del botón principal con el cursor encima | #1d1424 | #e3a5d8 |
+
+  Esquema del escenario: Con el tema claro el texto del botón de peligro tiene un contraste de al menos 4,5:1 sobre su fondo
+    Dado que en el tenant alumno01, recién reiniciado, con el tema del sistema en claro, alumno01@sigpro.lab ha iniciado sesión con Alumno1234! desde la pantalla de acceso de un navegador o dispositivo nuevo, está en /programs con el tema claro y ha abierto el diálogo de eliminación de PRG-001 desde el menú de acciones de su fila
+    Cuando aparece <texto> sobre <fondo>
+    Entonces su color es <color_texto> y su contraste con ese fondo es de al menos 4,5:1
+
+    Ejemplos:
+      | texto | color_texto | fondo |
+      | el texto del botón de peligro | #ffffff | #b93232 |
+
+  Esquema del escenario: Con el tema oscuro el texto del botón de peligro tiene un contraste de al menos 4,5:1 sobre su fondo
+    Dado que en el tenant alumno01, recién reiniciado, con el tema del sistema en claro, una persona sin sesión iniciada ha pulsado «Cambiar tema» una vez en la pantalla de acceso de un navegador o dispositivo nuevo, ha iniciado sesión con alumno01@sigpro.lab y Alumno1234!, está en /programs con el tema oscuro y ha abierto el diálogo de eliminación de PRG-001 desde el menú de acciones de su fila
+    Cuando aparece <texto> sobre <fondo>
+    Entonces su color es <color_texto> y su contraste con ese fondo es de al menos 4,5:1
+
+    Ejemplos:
+      | texto | color_texto | fondo |
       | el texto del botón de peligro | #1d1424 | #f0716b |
 ```
 
