@@ -5,7 +5,7 @@ epica: EP-ADMIN-USUARIOS
 titulo: "[Web] Cambiar el rol o el estado de un usuario desde su fila"
 etiquetas: [web]
 relacionadas: [US-ADMIN-USUARIOS-001, US-ADMIN-USUARIOS-003, US-ADMIN-USUARIOS-004, US-ADMIN-USUARIOS-005, US-ADMIN-USUARIOS-006, US-ADMIN-USUARIOS-007, US-ADMIN-USUARIOS-011]
-verificacion: codigo
+verificacion: ejecutada
 ---
 
 ## Historia

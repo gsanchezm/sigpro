@@ -5,7 +5,7 @@ epica: EP-ADMIN-USUARIOS
 titulo: "[API] Validar el cuerpo y el id de un cambio de usuario"
 etiquetas: [api]
 relacionadas: [US-ADMIN-USUARIOS-002, US-ADMIN-USUARIOS-003, US-ADMIN-USUARIOS-005]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["PATCH /api/admin/users/:id"]
 ---
 

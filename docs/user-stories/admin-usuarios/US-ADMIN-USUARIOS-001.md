@@ -5,7 +5,7 @@ epica: EP-ADMIN-USUARIOS
 titulo: "[API] Listar los usuarios del tenant con su rol y su estado"
 etiquetas: [api]
 relacionadas: [US-ADMIN-USUARIOS-002, US-ADMIN-USUARIOS-003, US-ADMIN-USUARIOS-006, US-LOGIN-003, US-REGISTRO-001]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["GET /api/admin/users"]
 permisos: [users.manage]
 ---

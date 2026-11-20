@@ -5,7 +5,7 @@ epica: EP-ADMIN-USUARIOS
 titulo: "[Móvil] Entrar en Administración según el rol y elegir sus pestañas"
 etiquetas: [movil]
 relacionadas: [US-ADMIN-USUARIOS-006, US-ADMIN-USUARIOS-010, US-ADMIN-USUARIOS-011]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["/admin"]
 ---
 

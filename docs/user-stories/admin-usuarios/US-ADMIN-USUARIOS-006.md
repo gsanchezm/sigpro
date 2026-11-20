@@ -5,7 +5,7 @@ epica: EP-ADMIN-USUARIOS
 titulo: "[Web] Entrar en Administración según el rol y elegir sus pestañas"
 etiquetas: [web]
 relacionadas: [US-ADMIN-USUARIOS-002, US-ADMIN-USUARIOS-007, US-ADMIN-USUARIOS-009, US-LOGIN-007]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["/admin"]
 ---
 

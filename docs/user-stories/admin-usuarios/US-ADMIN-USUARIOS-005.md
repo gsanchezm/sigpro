@@ -5,7 +5,7 @@ epica: EP-ADMIN-USUARIOS
 titulo: "[API] Impedir quitarse el acceso o dejar el tenant sin admin activo"
 etiquetas: [api]
 relacionadas: [US-ADMIN-USUARIOS-002, US-ADMIN-USUARIOS-003, US-ADMIN-USUARIOS-004, US-ADMIN-USUARIOS-008, US-ADMIN-USUARIOS-011]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["PATCH /api/admin/users/:id"]
 ---
 

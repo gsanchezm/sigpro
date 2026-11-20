@@ -5,7 +5,7 @@ epica: EP-ADMIN-USUARIOS
 titulo: "[Móvil] Ver a los usuarios del tenant en tarjetas y buscarlos"
 etiquetas: [movil]
 relacionadas: [US-ADMIN-USUARIOS-006, US-ADMIN-USUARIOS-007, US-ADMIN-USUARIOS-009, US-ADMIN-USUARIOS-011]
-verificacion: codigo
+verificacion: ejecutada
 ---
 
 ## Historia

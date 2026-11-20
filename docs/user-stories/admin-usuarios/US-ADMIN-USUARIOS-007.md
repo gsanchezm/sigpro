@@ -5,7 +5,7 @@ epica: EP-ADMIN-USUARIOS
 titulo: "[Web] Ver la tabla de usuarios, buscarlos y ver sus avisos de carga, vacío y error"
 etiquetas: [web]
 relacionadas: [US-ADMIN-USUARIOS-001, US-ADMIN-USUARIOS-002, US-ADMIN-USUARIOS-006, US-ADMIN-USUARIOS-008, US-ADMIN-USUARIOS-010]
-verificacion: codigo
+verificacion: ejecutada
 ---
 
 ## Historia

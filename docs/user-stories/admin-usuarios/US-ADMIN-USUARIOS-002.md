@@ -5,7 +5,7 @@ epica: EP-ADMIN-USUARIOS
 titulo: "[API] Permitir la administración de usuarios solo al rol admin"
 etiquetas: [api]
 relacionadas: [US-ADMIN-USUARIOS-001, US-ADMIN-USUARIOS-003, US-ADMIN-USUARIOS-004, US-ADMIN-USUARIOS-006, US-SESION-005]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["GET /api/admin/users", "PATCH /api/admin/users/:id"]
 permisos: [users.manage]
 ---

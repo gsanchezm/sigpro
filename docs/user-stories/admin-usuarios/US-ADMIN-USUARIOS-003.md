@@ -5,7 +5,7 @@ epica: EP-ADMIN-USUARIOS
 titulo: "[API] Cambiar el rol o el estado de un usuario del tenant"
 etiquetas: [api]
 relacionadas: [US-ADMIN-USUARIOS-001, US-ADMIN-USUARIOS-002, US-ADMIN-USUARIOS-004, US-ADMIN-USUARIOS-005, US-LOGIN-003, US-SESION-001, US-SESION-005]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["PATCH /api/admin/users/:id"]
 ---
 

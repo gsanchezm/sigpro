@@ -5,7 +5,7 @@ epica: EP-ADMIN-USUARIOS
 titulo: "[Móvil] Cambiar el rol o el estado de un usuario desde su tarjeta"
 etiquetas: [movil]
 relacionadas: [US-ADMIN-USUARIOS-003, US-ADMIN-USUARIOS-005, US-ADMIN-USUARIOS-008, US-ADMIN-USUARIOS-009, US-ADMIN-USUARIOS-010]
-verificacion: codigo
+verificacion: ejecutada
 ---
 
 ## Historia
