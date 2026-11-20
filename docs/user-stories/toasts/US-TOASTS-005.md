@@ -5,7 +5,7 @@ epica: EP-TOASTS
 titulo: "[Web] Avisos informativos y de advertencia con su texto exacto"
 etiquetas: [web]
 relacionadas: [US-TOASTS-001, US-TOASTS-004]
-verificacion: codigo
+verificacion: ejecutada
 ---
 
 ## Historia

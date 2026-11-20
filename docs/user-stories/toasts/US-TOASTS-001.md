@@ -5,7 +5,7 @@ epica: EP-TOASTS
 titulo: "[Transversal] Cuatro tonos de aviso: qué indica cada uno, su título y su cuerpo"
 etiquetas: [transversal]
 relacionadas: [US-TOASTS-004, US-TOASTS-006]
-verificacion: codigo
+verificacion: ejecutada
 ---
 
 ## Historia

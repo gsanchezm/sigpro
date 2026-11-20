@@ -5,7 +5,7 @@ epica: EP-TOASTS
 titulo: "[Móvil] Avisos arriba de la pantalla, rol por tono y avisos de éxito, error e información"
 etiquetas: [movil]
 relacionadas: [US-TOASTS-001, US-TOASTS-003, US-TOASTS-004, US-TOASTS-007]
-verificacion: codigo
+verificacion: ejecutada
 ---
 
 ## Historia

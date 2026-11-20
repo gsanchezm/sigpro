@@ -5,7 +5,7 @@ epica: EP-TOASTS
 titulo: "[Web] Avisos emergentes: esquina inferior derecha, cierre con «Cerrar» y rol de cada tono"
 etiquetas: [web]
 relacionadas: [US-TOASTS-001, US-TOASTS-003, US-TOASTS-005, US-TOASTS-006]
-verificacion: codigo
+verificacion: ejecutada
 ---
 
 ## Historia

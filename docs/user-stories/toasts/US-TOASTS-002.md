@@ -5,7 +5,7 @@ epica: EP-TOASTS
 titulo: "[Transversal] Error del servidor: aviso de error con el título «Ha ocurrido un error inesperado» y rol de alerta"
 etiquetas: [transversal]
 relacionadas: [US-TOASTS-001, US-TOASTS-004, US-TOASTS-006]
-verificacion: codigo
+verificacion: ejecutada
 ---
 
 ## Historia

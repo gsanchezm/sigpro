@@ -5,7 +5,7 @@ epica: EP-TOASTS
 titulo: "[Transversal] Varios avisos a la vez y cierre automático a los 3 segundos"
 etiquetas: [transversal]
 relacionadas: [US-TOASTS-001, US-TOASTS-004, US-TOASTS-006, US-TOASTS-007]
-verificacion: codigo
+verificacion: ejecutada
 ---
 
 ## Historia
