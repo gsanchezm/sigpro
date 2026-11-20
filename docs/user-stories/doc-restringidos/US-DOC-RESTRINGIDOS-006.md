@@ -5,7 +5,7 @@ epica: EP-DOC-RESTRINGIDOS
 titulo: "[Web] Ficha y visor de un restringido: aviso de «No tienes permiso» o documento con su marca"
 etiquetas: [web]
 relacionadas: [US-DOC-RESTRINGIDOS-002, US-DOC-RESTRINGIDOS-005, US-DOC-RESTRINGIDOS-007, US-LOGIN-007, US-MFA-003]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["/documents/:id", "/documents/:id/view"]
 permisos: [document.viewRestricted, document.publish]
 ---

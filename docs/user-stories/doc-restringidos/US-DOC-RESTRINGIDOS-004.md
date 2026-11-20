@@ -5,7 +5,7 @@ epica: EP-DOC-RESTRINGIDOS
 titulo: "[API] La búsqueda global no devuelve los restringidos a quien no los ve"
 etiquetas: [api]
 relacionadas: [US-DOC-RESTRINGIDOS-001, US-DOC-RESTRINGIDOS-005]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["GET /api/search"]
 permisos: [document.viewRestricted]
 ---

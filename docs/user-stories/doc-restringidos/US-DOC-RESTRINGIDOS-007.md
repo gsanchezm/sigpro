@@ -5,7 +5,7 @@ epica: EP-DOC-RESTRINGIDOS
 titulo: "[Móvil] Lista y ficha de un restringido: lo que ve cada rol en la app"
 etiquetas: [movil]
 relacionadas: [US-DOC-RESTRINGIDOS-001, US-DOC-RESTRINGIDOS-002, US-DOC-RESTRINGIDOS-005, US-DOC-RESTRINGIDOS-006, US-LOGIN-012]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["/documents", "/documents/:id"]
 permisos: [document.viewRestricted, document.publish]
 ---

@@ -5,7 +5,7 @@ epica: EP-DOC-RESTRINGIDOS
 titulo: "[API] Lista de documentos sin los restringidos para quien no tiene el permiso"
 etiquetas: [api]
 relacionadas: [US-DOC-RESTRINGIDOS-004, US-DOC-RESTRINGIDOS-005, US-DOC-RESTRINGIDOS-007, US-DOC-LISTA-001, US-LOGIN-001, US-MFA-001]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["GET /api/documents"]
 permisos: [document.viewRestricted]
 ---

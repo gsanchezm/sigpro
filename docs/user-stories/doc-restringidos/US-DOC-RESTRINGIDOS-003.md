@@ -5,7 +5,7 @@ epica: EP-DOC-RESTRINGIDOS
 titulo: "[API] Publicar una versión de un restringido no cambia su clasificación ni su visibilidad"
 etiquetas: [api]
 relacionadas: [US-DOC-RESTRINGIDOS-001, US-DOC-RESTRINGIDOS-002, US-DOC-RESTRINGIDOS-006, US-DOC-RESTRINGIDOS-007, US-MFA-001, US-DOC-VERSIONES-003]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["POST /api/documents/:id/versions"]
 permisos: [document.publish, document.viewRestricted]
 ---

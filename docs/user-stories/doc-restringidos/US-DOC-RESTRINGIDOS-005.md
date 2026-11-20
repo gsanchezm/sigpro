@@ -5,7 +5,7 @@ epica: EP-DOC-RESTRINGIDOS
 titulo: "[Web] Lista de documentos: el consultor no ve los restringidos y lee cuántos hay ocultos"
 etiquetas: [web]
 relacionadas: [US-DOC-RESTRINGIDOS-001, US-DOC-RESTRINGIDOS-004, US-DOC-RESTRINGIDOS-006, US-DOC-RESTRINGIDOS-007, US-LOGIN-007]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["/documents"]
 permisos: [document.viewRestricted]
 ---
