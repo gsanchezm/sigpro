@@ -5,7 +5,7 @@ epica: EP-MULTITENANT-PERMISOS
 titulo: "[Móvil] Acciones por rol: deshabilitadas con su motivo y accesos de la pestaña Más según el rol"
 etiquetas: [movil]
 relacionadas: [US-MULTITENANT-PERMISOS-007, US-MULTITENANT-PERMISOS-008, US-PROG-GESTION-011, US-DOC-VERSIONES-009, US-NC-GESTION-012, US-HITOS-010, US-AUDITORIA-008, US-ADMIN-USUARIOS-009, US-NAVEGACION-011]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["/programs", "/programs/:code", "/programs/:code/requirements", "/verification/:code", "/documents/:id", "/nc", "/more", "/audit", "/admin"]
 permisos: [program.delete, requirement.approve, testrun.execute, document.publish, nc.close, milestone.delete, audit.view, users.manage]
 ---

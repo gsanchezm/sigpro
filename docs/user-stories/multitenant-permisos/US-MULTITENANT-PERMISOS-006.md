@@ -5,7 +5,7 @@ epica: EP-MULTITENANT-PERMISOS
 titulo: "[Transversal] Ningún listado, búsqueda, exportación ni descarga mezcla datos de dos tenants"
 etiquetas: [transversal]
 relacionadas: [US-MULTITENANT-PERMISOS-002, US-MULTITENANT-PERMISOS-003, US-DOC-LISTA-005, US-MISION-FEED-002, US-NAVEGACION-001]
-verificacion: codigo
+verificacion: ejecutada
 ---
 
 ## Historia

@@ -5,7 +5,7 @@ epica: EP-MULTITENANT-PERMISOS
 titulo: "[API] Las cuentas de demostración existen en cada tenant y la de alumnoNN solo en el suyo"
 etiquetas: [api]
 relacionadas: [US-LOGIN-001, US-REGISTRO-001, US-API-PLATAFORMA-003]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["POST /api/auth/login"]
 ---
 

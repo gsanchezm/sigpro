@@ -5,7 +5,7 @@ epica: EP-MULTITENANT-PERMISOS
 titulo: "[Transversal] La API decide el permiso y la interfaz solo lo refleja"
 etiquetas: [transversal]
 relacionadas: [US-MULTITENANT-PERMISOS-005, US-MULTITENANT-PERMISOS-008, US-MULTITENANT-PERMISOS-009, US-REQ-FLUJO-003, US-NC-TABLERO-004, US-AUDITORIA-006]
-verificacion: codigo
+verificacion: ejecutada
 permisos: [program.delete, requirement.approve, requirement.validate, testrun.execute, nc.close, audit.view, users.manage]
 ---
 

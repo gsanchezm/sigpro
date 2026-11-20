@@ -5,7 +5,7 @@ epica: EP-MULTITENANT-PERMISOS
 titulo: "[API] La cabecera x-tenant no cambia el tenant de un token"
 etiquetas: [api]
 relacionadas: [US-LOGIN-001, US-CAOS-RESET-005, US-MULTITENANT-PERMISOS-002, US-MULTITENANT-PERMISOS-003]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["GET /api/programs/:code", "GET /api/auth/me", "GET /api/audit", "POST /api/admin/reset"]
 ---
 

@@ -5,7 +5,7 @@ epica: EP-MULTITENANT-PERMISOS
 titulo: "[API] Un token lee solo los datos de su tenant"
 etiquetas: [api]
 relacionadas: [US-PROG-DETALLE-001, US-REQ-ARBOL-001, US-NC-TABLERO-001, US-DOC-LISTA-005, US-HITOS-006, US-PROVEEDORES-001, US-AUDITORIA-003, US-DOC-VERSIONES-003]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["GET /api/programs", "GET /api/programs/:code", "GET /api/programs/:code/requirements", "GET /api/programs/:code/milestones", "GET /api/requirements/:code", "GET /api/nc", "GET /api/nc/:code", "GET /api/test-cases/:code", "GET /api/documents/:id", "GET /api/suppliers", "GET /api/audit"]
 ---
 

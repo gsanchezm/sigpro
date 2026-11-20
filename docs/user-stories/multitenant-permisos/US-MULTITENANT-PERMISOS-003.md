@@ -5,7 +5,7 @@ epica: EP-MULTITENANT-PERMISOS
 titulo: "[API] Un token no escribe en otro tenant: los recursos ajenos responden 404"
 etiquetas: [api]
 relacionadas: [US-MULTITENANT-PERMISOS-002, US-PROG-GESTION-003, US-DOC-VERSIONES-003, US-AUDITORIA-003, US-HITOS-005]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["POST /api/programs", "PATCH /api/programs/:code", "DELETE /api/programs/:code", "POST /api/programs/:code/archive", "POST /api/programs/:code/milestones", "POST /api/requirements", "PATCH /api/requirements/:code", "DELETE /api/requirements/:code", "POST /api/requirements/:code/move", "POST /api/nc", "PATCH /api/nc/:code", "POST /api/nc/:code/comments", "PATCH /api/milestones/:id", "DELETE /api/milestones/:id", "POST /api/test-cases/:code/runs", "POST /api/documents/:id/versions"]
 ---
 

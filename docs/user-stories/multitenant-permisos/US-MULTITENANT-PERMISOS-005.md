@@ -5,7 +5,7 @@ epica: EP-MULTITENANT-PERMISOS
 titulo: "[API] Permisos por rol: la matriz de cada familia y el orden 401 → 403"
 etiquetas: [api]
 relacionadas: [US-PROG-ALTA-005, US-PROG-GESTION-001, US-REQ-EDICION-006, US-REQ-FLUJO-003, US-VER-EJECUCION-001, US-DOC-RESTRINGIDOS-002, US-DOC-VERSIONES-003, US-AUDITORIA-003, US-ADMIN-USUARIOS-002, US-NC-TABLERO-004, US-NC-GESTION-005, US-HITOS-005, US-CAOS-RESET-005]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["POST /api/programs", "PATCH /api/programs/:code", "POST /api/programs/:code/archive", "DELETE /api/programs/:code", "GET /api/programs/export", "POST /api/requirements", "PATCH /api/requirements/:code", "DELETE /api/requirements/:code", "POST /api/requirements/:code/transition", "POST /api/test-cases/:code/runs", "GET /api/documents/:id", "POST /api/documents/:id/versions", "GET /api/audit", "GET /api/admin/users", "POST /api/nc", "POST /api/nc/:code/comments", "PATCH /api/nc/:code", "POST /api/nc/:code/transition", "PATCH /api/milestones/:id", "DELETE /api/milestones/:id"]
 permisos: [program.create, program.edit, program.archive, program.delete, program.export, requirement.create, requirement.edit, requirement.delete, requirement.approve, requirement.verify, requirement.validate, testrun.execute, document.viewRestricted, document.publish, audit.view, users.manage, nc.create, nc.comment, nc.edit, nc.transition, nc.close, milestone.edit, milestone.delete]
 ---

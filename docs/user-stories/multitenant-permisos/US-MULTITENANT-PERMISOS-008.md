@@ -5,7 +5,7 @@ epica: EP-MULTITENANT-PERMISOS
 titulo: "[Web] Acciones por rol: deshabilitadas con su motivo y accesos del menú según el rol"
 etiquetas: [web]
 relacionadas: [US-MULTITENANT-PERMISOS-007, US-MULTITENANT-PERMISOS-009, US-PROG-GESTION-006, US-REQ-FLUJO-009, US-DOC-VERSIONES-005, US-NC-GESTION-009, US-HITOS-006, US-AUDITORIA-006, US-ADMIN-USUARIOS-006, US-NAVEGACION-004]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["/programs", "/programs/:code", "/programs/:code/requirements", "/verification/:code", "/documents/:id", "/nc/:code", "/audit", "/admin"]
 permisos: [program.delete, requirement.approve, testrun.execute, document.publish, nc.close, milestone.delete, audit.view, users.manage]
 ---
