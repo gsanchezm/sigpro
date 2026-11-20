@@ -5,7 +5,7 @@ epica: EP-TEMA
 titulo: "[Web] Empezar en tema claro y conservar el tema elegido al recargar y al entrar"
 etiquetas: [web]
 relacionadas: [US-TEMA-001, US-TEMA-005, US-LOGIN-007, US-PERFIL-002]
-verificacion: codigo
+verificacion: ejecutada
 ---
 
 ## Historia

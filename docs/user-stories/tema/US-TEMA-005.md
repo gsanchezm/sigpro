@@ -5,7 +5,7 @@ epica: EP-TEMA
 titulo: "[Transversal] La preferencia de tema es del navegador o del dispositivo, no de la cuenta"
 etiquetas: [transversal]
 relacionadas: [US-TEMA-002, US-TEMA-003, US-LOGIN-008, US-LOGIN-013, US-PERFIL-002, US-PERFIL-004]
-verificacion: codigo
+verificacion: ejecutada
 ---
 
 ## Historia

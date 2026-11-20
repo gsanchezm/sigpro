@@ -5,7 +5,7 @@ epica: EP-TEMA
 titulo: "[Móvil] Cambiar el tema con «Cambiar tema» en Acceso y en las páginas legales"
 etiquetas: [movil]
 relacionadas: [US-TEMA-001, US-TEMA-003, US-LOGIN-012, US-PERFIL-004]
-verificacion: codigo
+verificacion: ejecutada
 ---
 
 ## Historia

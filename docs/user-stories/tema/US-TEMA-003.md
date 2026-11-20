@@ -5,7 +5,7 @@ epica: EP-TEMA
 titulo: "[Móvil] Tema inicial: el del sistema hasta que la persona elige uno"
 etiquetas: [movil]
 relacionadas: [US-TEMA-002, US-TEMA-004, US-TEMA-005, US-LOGIN-012]
-verificacion: codigo
+verificacion: ejecutada
 ---
 
 ## Historia

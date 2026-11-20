@@ -5,7 +5,7 @@ epica: EP-TEMA
 titulo: "[Web] Cambiar el tema con «Cambiar tema» en la aplicación, en Acceso y en las páginas legales"
 etiquetas: [web]
 relacionadas: [US-LOGIN-007, US-TEMA-002, US-TEMA-004, US-PERFIL-002]
-verificacion: codigo
+verificacion: ejecutada
 ---
 
 ## Historia
