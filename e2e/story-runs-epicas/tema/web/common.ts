@@ -164,6 +164,13 @@ export const colorOf = async (target: Locator): Promise<string | undefined> => {
   return safe(() => only.evaluate((element) => getComputedStyle(element).color, undefined, { timeout: 2000 }), undefined);
 };
 
+/** Animaciones y transiciones en curso del elemento único (0 cuando el estilo ya se ha asentado); `undefined` si no es legible. */
+export const animationsRunning = async (target: Locator): Promise<number | undefined> => {
+  const only = await onlyOne(target);
+  if (!only) return undefined;
+  return safe(() => only.evaluate((element) => element.getAnimations().length, undefined, { timeout: 2000 }), undefined);
+};
+
 /** Color del texto de marcador (`::placeholder`) de un campo único. */
 export const placeholderColorOf = async (target: Locator): Promise<string | undefined> => {
   const only = await onlyOne(target);
