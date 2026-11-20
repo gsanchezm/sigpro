@@ -1,22 +1,24 @@
-import type { Page } from '@playwright/test';
+import type { Locator, Page } from '@playwright/test';
 import { defineBrowserRows, type BrowserRowHandler, type ManifestRow, type Outcome } from '../../core/framework';
 import { waitUntil } from '../../support/browser';
 import { cell, check, preparationFailedWeb, strict, type Check } from '../../support/checks';
 import { CUENTA, TENANT_A, finish, thenOf } from '../api/common';
 import {
   actionFailed,
+  anyViewerPage,
   backLink,
+  buttonCheck,
+  buttonStateOf,
   countOf,
   detailBadge,
   detailBox,
   detailTitle,
   downloadButton,
-  enabledOf,
   forbiddenBox,
   gotoRoute,
   onWeb,
-  presenceCheck,
   publishButton,
+  seenCheck,
   selectedOptionText,
   signIn,
   textCheck,
@@ -28,13 +30,14 @@ import {
   viewerPageOne,
   viewerTitle,
   viewerVersion,
+  visibleOf,
 } from './common';
 
 // US-DOC-RESTRINGIDOS-006 — Ficha y visor de un restringido en la web: aviso «No tienes permiso» o documento con su marca (1440 px).
-// Preparación de cada fila: el arnés reinicia alumno01; la cuenta de la fila inicia sesión en /login?tenant=alumno01 (admin con el
-// segundo factor) y, en la misma pestaña, se abre la ruta de la fila (carga completa: la sesión guardada se recupera).
-// La línea técnica que muestra la página bajo el aviso de «No tienes permiso» (la traza de la petición) va a la evidencia y a la nota:
-// nunca decide el veredicto (README «Detalle técnico visible»).
+// Preparación de cada fila: `signIn` reinicia alumno01 (POST /api/admin/reset, 2xx comprobado) y entra con la cuenta de la fila (admin
+// con el segundo factor); en la misma pestaña se abre la ruta de la fila (carga completa: la sesión guardada se recupera).
+// Cada elemento cuenta solo si se VE; los botones se leen con su estado efectivo (visible, habilitado y recibiendo el clic).
+// La línea técnica que muestra la página bajo el aviso (la traza de la petición) va a la evidencia y a la nota: nunca decide el veredicto.
 
 const FORBIDDEN_TITLE = 'No tienes permiso para ver este documento';
 const FORBIDDEN_BODY = 'Los documentos restringidos solo los ven admin, gestores de programa y auditores.';
@@ -42,6 +45,8 @@ const BACK = 'Volver a Documentos';
 /** Título del documento restringido DOC-003 (seed) y del público DOC-004. */
 const TITLE_RESTRICTED = 'Plan de verificación PRG-002';
 const TITLE_PUBLIC = 'Especificación técnica PRG-002';
+/** Líneas del cuerpo del seed de DOC-003 (lo que un visor con contenido mostraría). */
+const CONTENT_LINES: readonly string[] = ['1. Objeto', 'Este documento define el alcance de la verificación del sistema.'];
 const TRACE_NOTE =
   'La línea técnica bajo el aviso (la traza de la petición) no decide el veredicto: la historia la deja en «Decisiones pendientes» (README «Detalle técnico visible»); se anota en la evidencia.';
 
@@ -64,7 +69,7 @@ const RESULTADO: ReadonlyMap<string, Vista> = new Map<string, Vista>([
   ['el título «Plan de verificación PRG-002», la insignia «Restringido» y el botón «Publicar nueva versión» deshabilitado', 'ficha-auditor'],
 ]);
 
-/** Resultado de una verificación de pantalla: sus comprobaciones y, si lo hay, la línea técnica que muestra (solo para la evidencia). */
+/** Resultado de una verificación de pantalla: sus comprobaciones y, si lo hay, la línea técnica que muestra (solo evidencia y nota). */
 interface Verification {
   readonly checks: readonly Check[];
   readonly trace?: string;
@@ -73,20 +78,22 @@ interface Verification {
 /** Resultado de la fila: lo que difiere (si difiere) y la línea técnica en la nota y la evidencia; la línea no decide el veredicto. */
 const concluded = (verification: Verification, cuenta: string, ruta: string): Outcome => {
   const differences = verification.checks.filter((entry) => !entry.ok).map((entry) => `«${entry.expected}» no se cumple (${entry.observed})`);
-  const notes = [differences.length > 0 ? `Difiere en: ${differences.join('; ')}` : undefined, verification.trace === undefined ? undefined : TRACE_NOTE].filter((text): text is string => text !== undefined);
+  const notes = [differences.length > 0 ? `Difiere en: ${differences.join('; ')}` : undefined, verification.trace === undefined ? undefined : TRACE_NOTE].filter(
+    (text): text is string => text !== undefined,
+  );
   return finish(verification.checks, {
     ...(notes.length === 0 ? {} : { note: notes.join(' · ') }),
     evidence: { cuenta, ruta, traza: verification.trace ?? '(sin línea técnica)' },
   });
 };
 
-/** Espera a que aparezca el elemento de la pantalla (su propio marcador) y devuelve el recuento medido al final. */
-const waitFor = async (target: () => Promise<number>): Promise<number> => {
-  await waitUntil(async () => (await target()) === 1);
-  return target();
+/** Espera a que el elemento se vea (su propio marcador de pantalla) y devuelve la visibilidad medida al final (`undefined` = no leída). */
+const waitVisible = async (target: Locator): Promise<boolean | undefined> => {
+  await waitUntil(async () => (await visibleOf(target)) === true);
+  return visibleOf(target);
 };
 
-/** Ausencias de la ficha denegada: ni versiones, ni selector, ni descarga, ni publicación, ni título del documento. */
+/** Ausencias de la ficha denegada: ni título del documento, ni versiones, ni selector, ni descarga, ni publicación. */
 const absencesOnDetail = async (page: Page): Promise<Check[]> => {
   const counts: readonly (readonly [string, number])[] = [
     ['el título del documento', await countOf(page.getByText(TITLE_RESTRICTED, { exact: false }))],
@@ -98,87 +105,93 @@ const absencesOnDetail = async (page: Page): Promise<Check[]> => {
   return counts.map(([label, count]) => check(count === 0, `no ve ${label}`, count === 0 ? `no ve ${label}` : count === -1 ? `${label} (sin leer)` : `ve ${label}`));
 };
 
-/** Ficha denegada (consultor en /documents/DOC-003): aviso, texto, enlace de vuelta y ausencias. */
+/** Ficha denegada (consultor en /documents/DOC-003): aviso visible, texto, enlace de vuelta visible y ausencias. */
 const deniedDetail = async (page: Page): Promise<Verification> => {
-  const seen = await waitFor(() => countOf(forbiddenBox(page)));
-  const heading = await countOf(forbiddenBox(page).getByRole('heading', { name: FORBIDDEN_TITLE, exact: true }));
+  const seen = await waitVisible(forbiddenBox(page));
+  const heading = forbiddenBox(page).getByRole('heading', { name: FORBIDDEN_TITLE, exact: true });
+  const headingCount = await countOf(heading);
+  const headingSeen = await visibleOf(heading);
   const body = await textOfLocator(forbiddenBox(page).locator('p').first());
   const back = await textOfLocator(backLink(page));
+  const backSeen = await visibleOf(backLink(page));
   const trace = await textOfLocator(forbiddenBox(page).locator('.trace'));
   return {
     checks: [
-      presenceCheck(seen, `el aviso «${FORBIDDEN_TITLE}»`, 'el aviso'),
-      check(heading === 1, `el título «${FORBIDDEN_TITLE}»`, `hay ${heading} encabezado(s) con ese título`),
+      seenCheck(seen, `el aviso «${FORBIDDEN_TITLE}» se ve`, 'el aviso'),
+      check(headingCount === 1 && headingSeen === true, `el título «${FORBIDDEN_TITLE}» se ve`, `hay ${headingCount} encabezado(s) con ese título${headingSeen === true ? ', visible' : ''}`),
       textCheck(body, FORBIDDEN_BODY, 'el texto dice'),
       textCheck(back, BACK, 'el enlace dice'),
+      seenCheck(backSeen, `el enlace «${BACK}» se ve`, 'el enlace de vuelta'),
       ...(await absencesOnDetail(page)),
     ],
     trace,
   };
 };
 
-/** Visor denegado (consultor en /documents/DOC-003/view): mismo título y texto, y ningún contenido. */
+/** Visor denegado (consultor en /documents/DOC-003/view): mismo título y texto visibles, y ningún contenido del documento. */
 const deniedViewer = async (page: Page): Promise<Verification> => {
-  const seen = await waitFor(() => countOf(viewerError(page)));
-  const heading = await countOf(viewerError(page).getByRole('heading', { name: FORBIDDEN_TITLE, exact: true }));
+  const seen = await waitVisible(viewerError(page));
+  const heading = viewerError(page).getByRole('heading', { name: FORBIDDEN_TITLE, exact: true });
+  const headingCount = await countOf(heading);
+  const headingSeen = await visibleOf(heading);
   const body = await textOfLocator(viewerError(page).locator('p').first());
   const trace = await textOfLocator(viewerError(page).locator('.trace'));
   const titleNodes = await countOf(page.getByText(TITLE_RESTRICTED, { exact: false }));
-  const firstPage = await countOf(viewerPageOne(page));
   const titleBox = await countOf(viewerTitle(page));
+  const firstPage = await countOf(viewerPageOne(page));
+  const anyPage = await countOf(anyViewerPage(page));
+  const lineCounts: readonly number[] = await Promise.all(CONTENT_LINES.map((line) => countOf(page.getByText(line, { exact: true }))));
+  const lineAbsent = lineCounts.every((count) => count === 0);
   return {
     checks: [
-      presenceCheck(seen, `el aviso «${FORBIDDEN_TITLE}»`, 'el aviso del visor'),
-      check(heading === 1, `el título «${FORBIDDEN_TITLE}»`, `hay ${heading} encabezado(s) con ese título`),
+      seenCheck(seen, `el aviso «${FORBIDDEN_TITLE}» se ve`, 'el aviso del visor'),
+      check(headingCount === 1 && headingSeen === true, `el título «${FORBIDDEN_TITLE}» se ve`, `hay ${headingCount} encabezado(s) con ese título${headingSeen === true ? ', visible' : ''}`),
       textCheck(body, FORBIDDEN_BODY, 'el texto dice'),
       check(titleNodes === 0 && titleBox === 0, `no ve el título «${TITLE_RESTRICTED}»`, titleNodes === 0 && titleBox === 0 ? `no ve el título «${TITLE_RESTRICTED}»` : `ve el título (${titleNodes}/${titleBox})`),
-      check(firstPage === 0, 'no ve ningún contenido del documento (sin páginas)', firstPage === 0 ? 'no ve ningún contenido del documento' : `ve contenido (${firstPage})`),
+      check(firstPage === 0 && anyPage === 0, 'no ve ninguna página del contenido (viewer-page-N)', `páginas del visor: ${firstPage === -1 || anyPage === -1 ? '(sin leer)' : anyPage}`),
+      check(lineAbsent, 'no ve líneas del contenido del documento', lineAbsent ? 'no ve líneas del contenido del documento' : `líneas del contenido visibles (${lineCounts.join(', ')})`),
     ],
     trace,
   };
 };
 
-/** Ficha pública (consultor en /documents/DOC-004): título y insignia «Público». */
+/** Ficha pública (consultor en /documents/DOC-004): título y insignia «Público» visibles. */
 const publicDetail = async (page: Page): Promise<Verification> => {
-  const seen = await waitFor(() => countOf(detailBox(page)));
+  const seen = await waitVisible(detailBox(page));
   const title = await textOfLocator(detailTitle(page));
   const badge = await textOfLocator(detailBadge(page));
   return {
-    checks: [
-      presenceCheck(seen, 'la ficha del documento', 'la ficha'),
-      textCheck(title, TITLE_PUBLIC, 'el título es'),
-      textCheck(badge, 'Público', 'la insignia es'),
-    ],
+    checks: [seenCheck(seen, 'la ficha del documento se ve', 'la ficha'), textCheck(title, TITLE_PUBLIC, 'el título es'), textCheck(badge, 'Público', 'la insignia es')],
   };
 };
 
 /** Ficha de un restringido con el permiso (admin y gestor): título, insignia, versión «Versión 2 (última)» y publicar habilitado. */
 const restrictedDetail = async (page: Page): Promise<Verification> => {
-  const seen = await waitFor(() => countOf(detailBox(page)));
+  const seen = await waitVisible(detailBox(page));
   const title = await textOfLocator(detailTitle(page));
   const badge = await textOfLocator(detailBadge(page));
   const selected = await selectedOptionText(versionSelect(page));
-  const publish = await enabledOf(publishButton(page));
+  const publish = await buttonStateOf(publishButton(page));
   return {
     checks: [
-      presenceCheck(seen, 'la ficha del documento', 'la ficha'),
+      seenCheck(seen, 'la ficha del documento se ve', 'la ficha'),
       textCheck(title, TITLE_RESTRICTED, 'el título es'),
       textCheck(badge, 'Restringido', 'la insignia es'),
       textCheck(selected, 'Versión 2 (última)', 'el selector de versión está en'),
-      check(publish === true, '«Publicar nueva versión» está habilitado', `«Publicar nueva versión» está ${publish === undefined ? '(sin leer)' : publish ? 'habilitado' : 'deshabilitado'}`),
+      buttonCheck(publish, 'habilitado', 'Publicar nueva versión'),
     ],
   };
 };
 
-/** Visor de un restringido con permiso: título, insignia «Restringido» y «Versión 2». */
+/** Visor de un restringido con permiso: título, insignia «Restringido» y «Versión 2», visibles. */
 const restrictedViewer = async (page: Page): Promise<Verification> => {
-  const seen = await waitFor(() => countOf(viewerTitle(page)));
+  const seen = await waitVisible(viewerTitle(page));
   const title = await textOfLocator(viewerTitle(page));
   const badge = await textOfLocator(viewerClass(page));
   const version = await textOfLocator(viewerVersion(page));
   return {
     checks: [
-      presenceCheck(seen, 'el encabezado del visor', 'el visor'),
+      seenCheck(seen, 'el encabezado del visor se ve', 'el visor'),
       textCheck(title, TITLE_RESTRICTED, 'el título es'),
       textCheck(badge, 'Restringido', 'la insignia es'),
       textCheck(version, 'Versión 2', 'la versión es'),
@@ -186,18 +199,18 @@ const restrictedViewer = async (page: Page): Promise<Verification> => {
   };
 };
 
-/** Ficha del restringido para el auditor: título, insignia y «Publicar nueva versión» deshabilitado. */
+/** Ficha del restringido para el auditor: título, insignia y «Publicar nueva versión» visible y deshabilitado. */
 const auditorDetail = async (page: Page): Promise<Verification> => {
-  const seen = await waitFor(() => countOf(detailBox(page)));
+  const seen = await waitVisible(detailBox(page));
   const title = await textOfLocator(detailTitle(page));
   const badge = await textOfLocator(detailBadge(page));
-  const publish = await enabledOf(publishButton(page));
+  const publish = await buttonStateOf(publishButton(page));
   return {
     checks: [
-      presenceCheck(seen, 'la ficha del documento', 'la ficha'),
+      seenCheck(seen, 'la ficha del documento se ve', 'la ficha'),
       textCheck(title, TITLE_RESTRICTED, 'el título es'),
       textCheck(badge, 'Restringido', 'la insignia es'),
-      check(publish === false, '«Publicar nueva versión» está deshabilitado', `«Publicar nueva versión» está ${publish === undefined ? '(sin leer)' : publish ? 'habilitado' : 'deshabilitado'}`),
+      buttonCheck(publish, 'deshabilitado', 'Publicar nueva versión'),
     ],
   };
 };

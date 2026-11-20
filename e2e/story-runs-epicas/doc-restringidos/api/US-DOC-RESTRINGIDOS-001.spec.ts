@@ -1,7 +1,7 @@
 import { field } from '../../../story-runs/support/api';
 import { defineApiRows, type ApiRowHandler, type ManifestRow, type Outcome } from '../../core/framework';
 import { cell, check, preparationFailed, strict } from '../../support/checks';
-import { CUENTA, TENANT_A, answerCheck, asApiResult, codeOf, codesCheck, docCodesOf, finish, idsOf, itemsOfList, jsonOf, listPresentCheck, rawGet, resetTenants, sessionFor, thenOf } from './common';
+import { CUENTA, TENANT_A, answerCheck, asApiResult, codeOf, codesCheck, docCodesOf, finish, idsOf, itemsOfList, jsonOf, listPresentCheck, rawGet, resetAlumno, sessionFor, thenOf, visibleFor } from './common';
 
 // US-DOC-RESTRINGIDOS-001 — Lista de documentos por la API sin los restringidos para quien no tiene el permiso. Preparación de cada
 // fila: reinicio de alumno01 con su administrador y, después, la cuenta de la fila inicia sesión en alumno01 (admin con el segundo
@@ -41,7 +41,7 @@ const listByRole: ApiRowHandler = async (row: ManifestRow): Promise<Outcome> => 
   const total = strict('total', TOTAL, cell(row, 'total'));
   const hidden = strict('oculto', OCULTO, cell(row, 'oculto'));
   const restricted = docCodesOf(cell(row, 'restringidos'));
-  await resetTenants([TENANT_A]);
+  await resetAlumno();
   const session = await sessionFor(account);
   if (session.token === undefined) return preparationFailed(expected, `${cell(row, 'cuenta')} inicia sesión en alumno01`, session.last);
   const raw = await rawGet('/documents', session.token);
@@ -53,6 +53,8 @@ const listByRole: ApiRowHandler = async (row: ManifestRow): Promise<Outcome> => 
       answerCheck(raw.status, codeOf(body), { status: 200 }),
       listPresentCheck(body),
       check(items !== undefined && items.length === total, `la lista trae ${total} documentos`, `la lista trae ${items === undefined ? '(sin leer)' : items.length} documentos`),
+      // El conjunto exacto de documentos que ve el rol (no solo su clasificación)
+      codesCheck('la lista trae', idsOf(items), visibleFor(account)),
       check(field(body, 'hiddenCount') === hidden, `hiddenCount ${hidden}`, `hiddenCount ${String(field(body, 'hiddenCount'))}`),
       codesCheck('los restringidos que trae son', shownRestricted, restricted),
     ],
@@ -67,7 +69,7 @@ const filteredList: ApiRowHandler = async (row: ManifestRow): Promise<Outcome> =
   const account = strict('cuenta', CUENTA, cell(row, 'cuenta'));
   const query = strict('filtro', FILTRO, cell(row, 'filtro'));
   const codes = docCodesOf(cell(row, 'codigos'));
-  await resetTenants([TENANT_A]);
+  await resetAlumno();
   const session = await sessionFor(account);
   if (session.token === undefined) return preparationFailed(expected, `${cell(row, 'cuenta')} inicia sesión en alumno01`, session.last);
   const raw = await rawGet('/documents', session.token, query);
@@ -85,7 +87,7 @@ const classifiedProgram: ApiRowHandler = async (row: ManifestRow): Promise<Outco
   const expected = thenOf(row);
   const program = strict('programa', PROGRAMA, cell(row, 'programa'));
   const codes = docCodesOf(cell(row, 'codigos'));
-  await resetTenants([TENANT_A]);
+  await resetAlumno();
   const session = await sessionFor('consultor');
   if (session.token === undefined) return preparationFailed(expected, 'consultor@sigpro.test inicia sesión en alumno01', session.last);
   // Precondición de la historia: el programa está marcado como clasificado (se lee por la API, no se da por hecho)

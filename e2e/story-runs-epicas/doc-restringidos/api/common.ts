@@ -1,5 +1,5 @@
-import { API_URL, call, field, type ApiResult } from '../../../story-runs/support/api';
-import { DEMO, TENANT_A, resetTenants, startSession, type Credentials } from '../../../story-runs/support/prepare';
+import { API_URL, adminToken, call, field, type ApiResult } from '../../../story-runs/support/api';
+import { DEMO, TENANT_A, startSession, type Credentials } from '../../../story-runs/support/prepare';
 import type { ManifestRow, Outcome } from '../../core/framework';
 import { check, conclude, type Check } from '../../support/checks';
 
@@ -8,7 +8,26 @@ import { check, conclude, type Check } from '../../support/checks';
 // la respuesta. Todas las peticiones llevan `x-tenant: alumno01`. Las celdas se traducen con mapas estrictos en cada historia: un
 // texto desconocido LANZA. Un fallo de lectura (`undefined`) nunca cuenta como cumplido.
 
-export { TENANT_A, resetTenants };
+export { TENANT_A };
+
+/**
+ * Reinicia alumno01 con el token de su administrador (`POST /api/admin/reset`). La cabecera `x-tenant` va igual que en el resto de
+ * peticiones (la API usa el tenant del token). Lanza si el reinicio no responde 2xx: sin estado inicial no hay fila.
+ */
+export const resetAlumno = async (): Promise<void> => {
+  const token = await adminToken(TENANT_A);
+  const result = await call('POST', '/admin/reset', { tenant: TENANT_A, token });
+  if (result.status < 200 || result.status > 299) throw new Error(`El reinicio de alumno01 respondió ${result.status}: ${JSON.stringify(result.body)}`);
+};
+
+/** Cuentas que ven los restringidos (admin, gestor de programa y auditor) frente al consultor, que no los ve. */
+export const RESTRICTED: readonly string[] = ['DOC-003', 'DOC-006', 'DOC-009', 'DOC-012'];
+/** Los doce documentos del tenant, en orden ascendente por código. */
+export const ALL_DOCUMENTS: readonly string[] = Array.from({ length: 12 }, (_, index) => `DOC-${String(index + 1).padStart(3, '0')}`);
+/** Los documentos que ve el consultor: los doce menos los restringidos. */
+export const PUBLIC_DOCUMENTS: readonly string[] = ALL_DOCUMENTS.filter((code) => !RESTRICTED.includes(code));
+/** Documentos que ve una cuenta: los doce para admin, gestor y auditor; los públicos para el consultor. */
+export const visibleFor = (account: AccountKey): readonly string[] => (account === 'consultor' ? PUBLIC_DOCUMENTS : ALL_DOCUMENTS);
 
 /** Código del segundo factor del seed (el de `admin@sigpro.test`). */
 export const MFA_CODE = '123456';
@@ -116,6 +135,13 @@ export const pdfTexts = (bytes: Buffer): readonly PdfText[] => {
 /** Campos que solo trae un documento (ficha, contenido o listado): si el cuerpo los trae, hay datos del documento. */
 const DOCUMENT_KEYS: readonly string[] = ['id', 'title', 'classification', 'version', 'versions', 'pages', 'programCode', 'programName', 'updatedAt'];
 
+/** ¿Hay alguna clave de documento en el cuerpo, a cualquier nivel (p. ej. `{ document: { title } }`)? */
+const hasDocumentKey = (value: unknown): boolean => {
+  if (Array.isArray(value)) return value.some(hasDocumentKey);
+  if (typeof value !== 'object' || value === null) return false;
+  return Object.entries(value).some(([key, inner]) => DOCUMENT_KEYS.includes(key) || hasDocumentKey(inner));
+};
+
 /** Estado y código de error esperados de una respuesta, y lo que la historia dice de su cuerpo. */
 export interface Expected {
   readonly status: number;
@@ -170,7 +196,7 @@ export const fileCheck = (raw: RawResponse, name: string): Check => {
 /** La respuesta no trae datos del documento: ni campos de ficha ni PDF. */
 export const noDataCheck = (raw: RawResponse): Check => {
   const body = jsonOf(raw.bytes);
-  const leaked = isPdf(raw.bytes) || DOCUMENT_KEYS.some((key) => field(body, key) !== undefined);
+  const leaked = isPdf(raw.bytes) || hasDocumentKey(body);
   return check(!leaked, 'sin datos del documento', leaked ? 'trae datos del documento' : 'sin datos del documento');
 };
 
@@ -234,6 +260,18 @@ export const docCodesOf = (text: string): readonly string[] => {
 };
 
 /** Un «Entonces»/«Y» de la fila: sus pasos tal como están en el manifiesto (lo que la historia espera de la fila). */
+/**
+ * Como `finish`, pero añade una nota fija (cobertura que la fila no prueba) sin perder lo que difiere: si la fila discrepa, la
+ * nota dice en qué y, a continuación, la cobertura.
+ */
+export const finishNoted = (checks: readonly Check[], note: string, evidence?: Readonly<Record<string, unknown>>): Outcome => {
+  const result = finish(checks, evidence === undefined ? {} : { evidence });
+  return { ...result, note: result.note === undefined ? note : `${result.note} · ${note}` };
+};
+
+/** Cobertura que la historia no prueba con fila: el gestor de programa no tiene fila aquí (su acceso se prueba en 001 y 002). */
+export const COBERTURA_GESTOR = 'El gestor de programa no tiene fila en esta historia: su acceso a los restringidos se prueba en US-DOC-RESTRINGIDOS-001 (E1) y 002 (E1).';
+
 export const thenOf = (row: ManifestRow): string => row.resolvedSteps.filter((step) => /^(Entonces|Y) /.test(step)).join('; ');
 
 /**

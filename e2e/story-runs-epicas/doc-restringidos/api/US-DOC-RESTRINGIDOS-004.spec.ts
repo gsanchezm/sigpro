@@ -1,7 +1,7 @@
 import { field } from '../../../story-runs/support/api';
 import { defineApiRows, type ApiRowHandler, type ManifestRow, type Outcome } from '../../core/framework';
 import { cell, check, preparationFailed, strict, type Check } from '../../support/checks';
-import { CUENTA, TENANT_A, answerCheck, codeOf, codesCheck, finish, jsonOf, rawGet, resetTenants, sessionFor, thenOf } from './common';
+import { CUENTA, COBERTURA_GESTOR, TENANT_A, answerCheck, codeOf, codesCheck, finishNoted, jsonOf, rawGet, resetAlumno, sessionFor, thenOf } from './common';
 
 // US-DOC-RESTRINGIDOS-004 — La búsqueda global no devuelve los restringidos a quien no los ve. Preparación de cada fila: reinicio de
 // alumno01 con su administrador y, después, la cuenta de la fila inicia sesión en alumno01 (admin con el segundo factor). El texto
@@ -40,7 +40,7 @@ const documentsInSearch: ApiRowHandler = async (row: ManifestRow): Promise<Outco
   const account = strict('cuenta', CUENTA, cell(row, 'cuenta'));
   const texto = strict('texto', TEXTO, cell(row, 'texto'));
   const grupo = strict('grupo', GRUPO, cell(row, 'grupo'));
-  await resetTenants([TENANT_A]);
+  await resetAlumno();
   const session = await sessionFor(account);
   if (session.token === undefined) return preparationFailed(expected, `${cell(row, 'cuenta')} inicia sesión en alumno01`, session.last);
   const raw = await rawGet('/search', session.token, `q=${encodeURIComponent(texto)}`);
@@ -63,7 +63,15 @@ const documentsInSearch: ApiRowHandler = async (row: ManifestRow): Promise<Outco
     );
     checks.push(codesCheck('los ítems del grupo son', ids, grupo.items));
   }
-  return finish(checks, { evidence: { cuenta: cell(row, 'cuenta'), texto, estado: raw.status } });
+  // Control positivo del caso «ningún grupo» (consultor, DOC-003): la misma búsqueda del consultor sí trae DOC-004, así que el buscador
+  // responde y el grupo vacío no es un buscador roto
+  if (grupo === null) {
+    const control = await rawGet('/search', session.token, 'q=DOC-004');
+    const controlGroup = documentGroupOf(jsonOf(control.bytes));
+    const controlItems = Array.isArray(field(controlGroup, 'items')) ? (field(controlGroup, 'items') as unknown[]).map((item) => String(field(item, 'id'))) : [];
+    checks.push(codesCheck('el control de búsqueda q=DOC-004 trae en el grupo de documentos', controlItems, ['DOC-004']));
+  }
+  return finishNoted(checks, COBERTURA_GESTOR, { cuenta: cell(row, 'cuenta'), texto, estado: raw.status });
 };
 
 defineApiRows({

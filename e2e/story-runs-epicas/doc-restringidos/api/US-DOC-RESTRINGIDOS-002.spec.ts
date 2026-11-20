@@ -1,6 +1,6 @@
 import { defineApiRows, pending, type ApiRowHandler, type ManifestRow, type Outcome } from '../../core/framework';
 import { cell, check, preparationFailed, strict } from '../../support/checks';
-import { CUENTA, TENANT_A, answerCheck, codeOf, expectationChecks, filenameOf, finish, isPdf, jsonOf, noDataCheck, pdfTexts, rawGet, resetTenants, sessionFor, thenOf, type Expected } from './common';
+import { CUENTA, TENANT_A, answerCheck, codeOf, expectationChecks, filenameOf, finish, isPdf, jsonOf, noDataCheck, pdfTexts, rawGet, resetAlumno, sessionFor, thenOf, type Expected } from './common';
 
 // US-DOC-RESTRINGIDOS-002 — Ficha, contenido y descarga de un restringido por la API según el permiso. Preparación de cada fila:
 // reinicio de alumno01 con su administrador y, después, la cuenta de la fila inicia sesión en alumno01 (admin con el segundo factor).
@@ -50,7 +50,7 @@ const byPermission: ApiRowHandler = async (row: ManifestRow): Promise<Outcome> =
   const account = strict('cuenta', CUENTA, cell(row, 'cuenta'));
   const path = strict('petición', PETICION, cell(row, 'peticion'));
   const respuesta = strict('respuesta', RESPUESTA, cell(row, 'respuesta'));
-  await resetTenants([TENANT_A]);
+  await resetAlumno();
   const session = await sessionFor(account);
   if (session.token === undefined) return preparationFailed(expected, `${cell(row, 'cuenta')} inicia sesión en alumno01`, session.last);
   const raw = await rawGet(path, session.token);
@@ -59,8 +59,10 @@ const byPermission: ApiRowHandler = async (row: ManifestRow): Promise<Outcome> =
   // datos del documento la fila no juzga el código (pending); una fuga de datos o cualquier otro estado discrepa.
   if (respuesta.sinDatos === true) {
     const noData = noDataCheck(raw);
-    if (noData.ok && (raw.status === 403 || raw.status === 404)) {
-      const code = codeOf(jsonOf(raw.bytes));
+    const code = codeOf(jsonOf(raw.bytes));
+    // Solo las dos parejas que la decisión deja abiertas: 403 forbidden (hoy) y 404 document_not_found (propuesta)
+    const openPair = (raw.status === 403 && code === 'forbidden') || (raw.status === 404 && code === 'document_not_found');
+    if (noData.ok && openPair) {
       // Lo medido sobre el PDF: cabecera de tipo y cuerpo (sin «%PDF-» = no hay PDF; la descarga pide que no se devuelva)
       const type = raw.contentType === '' ? '(sin cabecera Content-Type)' : raw.contentType;
       const pdf = raw.contentType.startsWith('application/pdf') || isPdf(raw.bytes) ? 'se devuelve un PDF' : 'no se devuelve un PDF';
@@ -82,7 +84,7 @@ const headerMark: ApiRowHandler = async (row: ManifestRow): Promise<Outcome> => 
   const documento = strict('documento', DOCUMENTO, cell(row, 'documento'));
   const nombre = strict('nombre', NOMBRE, cell(row, 'nombre'));
   const marca = strict('marca', MARCA, cell(row, 'marca'));
-  await resetTenants([TENANT_A]);
+  await resetAlumno();
   const session = await sessionFor('admin');
   if (session.token === undefined) return preparationFailed(expected, 'admin@sigpro.test inicia sesión en alumno01 (segundo factor)', session.last);
   const raw = await rawGet(`/documents/${documento}/download`, session.token);
@@ -107,7 +109,7 @@ const headerMark: ApiRowHandler = async (row: ManifestRow): Promise<Outcome> => 
 const unknownDocument: ApiRowHandler = async (row: ManifestRow): Promise<Outcome> => {
   const expected = thenOf(row);
   const account = strict('cuenta', CUENTA, cell(row, 'cuenta'));
-  await resetTenants([TENANT_A]);
+  await resetAlumno();
   const session = await sessionFor(account);
   if (session.token === undefined) return preparationFailed(expected, `${cell(row, 'cuenta')} inicia sesión en alumno01`, session.last);
   // «Cuando pide GET /api/documents/DOC-999»: el código no existe en el tenant (la historia lo fija en el paso, no en una celda)

@@ -1,25 +1,20 @@
 import type { Locator, Page } from '@playwright/test';
-import { DOCUMENTOS_DYNAMIC_TESTIDS, DOCUMENTOS_TESTIDS, PROGRAMAS_DYNAMIC_TESTIDS, PROGRAMAS_TESTIDS } from '../../../../packages/shared/src/testids';
+import { DOCUMENTOS_DYNAMIC_TESTIDS, DOCUMENTOS_TESTIDS, PROGRAMAS_TESTIDS } from '../../../../packages/shared/src/testids';
 import { DEMO, TENANT_A } from '../../../story-runs/support/prepare';
 import { ACTION, CEILING_MS, HOLD_MS, runSteps, safe, waitUntil, type Step } from '../../support/browser';
 import { check, sleep, type Check } from '../../support/checks';
 import { outcome, type BrowserRowHandler, type Outcome } from '../../core/framework';
-import type { AccountKey } from '../api/common';
+import { resetAlumno, type AccountKey } from '../api/common';
 
-// Piezas comunes de las filas web de EP-DOC-RESTRINGIDOS (escritorio 1440 × 900). Los localizadores son de rol y de nombre; los ids
-// de prueba solo donde la pantalla no ofrece otro rastro (filas, insignias, recuentos, bloques de ficha y de visor). Cada lectura
-// es estricta: un fallo de lectura es «no leído», nunca «ausente». Una ausencia cuenta solo tras comprobar que la lista o la ficha se
-// cargaron (recuento o encabezado visibles) y tras observar durante HOLD_MS.
+// Piezas comunes de las filas web de EP-DOC-RESTRINGIDOS (escritorio 1440 × 900). Cada fila reinicia alumno01 ANTES de entrar (en
+// `signIn`). Los localizadores son de rol y de nombre; los ids de prueba solo donde la pantalla no ofrece otro rastro (filas, insignias,
+// recuentos, bloques de ficha y de visor). Cada lectura es estricta: un fallo de lectura es «no leído», nunca «ausente» ni «habilitado».
+// Una ausencia cuenta solo tras comprobar que la lista o la ficha se cargaron, y un elemento solo cuenta como visible si se ve.
+
+export { ALL_DOCUMENTS, PUBLIC_DOCUMENTS, RESTRICTED, visibleFor } from '../api/common';
 
 export const VIEWPORT = { width: 1440, height: 900 } as const;
 export const LOGIN_URL = `/login?tenant=${TENANT_A}`;
-
-/** Restringidos del seed de alumno01 (la historia 001 los da por hechos: DOC-003, DOC-006, DOC-009 y DOC-012). */
-export const RESTRICTED: readonly string[] = ['DOC-003', 'DOC-006', 'DOC-009', 'DOC-012'];
-/** Los doce documentos del tenant, en orden ascendente por código. */
-export const ALL_DOCUMENTS: readonly string[] = Array.from({ length: 12 }, (_, index) => `DOC-${String(index + 1).padStart(3, '0')}`);
-/** Los documentos que ve el consultor: los doce menos los restringidos. */
-export const PUBLIC_DOCUMENTS: readonly string[] = ALL_DOCUMENTS.filter((code) => !RESTRICTED.includes(code));
 
 /** Nota que se añade a cada fila web: la preferencia de cookies se fija por adelantado, como en el piloto. */
 export const COOKIE_NOTE = 'La prueba fija la preferencia de cookies (sigpro.cookies = accepted) antes de abrir la app, como el piloto; el aviso de cookies no se ejerce aquí.';
@@ -52,14 +47,11 @@ export const enterButton = (page: Page): Locator => page.getByRole('button', { n
 export const codeField = (page: Page): Locator => page.getByLabel('Código de verificación', { exact: true });
 export const verifyButton = (page: Page): Locator => page.getByRole('button', { name: 'Verificar', exact: true });
 /**
- * Enlace «Documentos» de la barra lateral. El nombre «Navegación principal» está en el `aside` (rol «complementary»), no en el
- * `nav` que contiene los enlaces, así que se busca dentro del `aside`; de respaldo, el id de prueba del enlace de la barra.
+ * Enlace «Documentos» de la barra lateral. El nombre «Navegación principal» está en el `aside` (rol «complementary»), no en el `nav`
+ * que contiene los enlaces, así que se busca dentro del `aside`. Solo por rol: si no casa, el clic lo diagnostica.
  */
 export const navDocuments = (page: Page): Locator =>
-  page
-    .getByRole('complementary', { name: 'Navegación principal', exact: true })
-    .getByRole('link', { name: 'Documentos', exact: true })
-    .or(page.getByTestId(PROGRAMAS_DYNAMIC_TESTIDS.NAV('documents')));
+  page.getByRole('complementary', { name: 'Navegación principal', exact: true }).getByRole('link', { name: 'Documentos', exact: true });
 /** Buscador «Buscar documentos» de la lista. */
 export const searchBox = (page: Page): Locator => page.getByRole('searchbox', { name: 'Buscar documentos', exact: true });
 /** Recuento encima de la lista (primer párrafo vivo de la página de documentos). */
@@ -74,16 +66,16 @@ export const skeletonRows = (page: Page): Locator => page.getByTestId(PROGRAMAS_
 export const rowOf = (page: Page, code: string): Locator => page.getByTestId(DOCUMENTOS_DYNAMIC_TESTIDS.DOCUMENT_ROW(code));
 /** Insignia de clasificación dentro de una fila de la tabla. */
 export const badgeIn = (row: Locator): Locator => row.getByTestId(DOCUMENTOS_TESTIDS.DOCUMENT_CLASS_BADGE);
-/** Enlace al código de un documento (la lista lo usa para abrir la ficha). */
-export const linkOf = (page: Page, code: string): Locator => page.getByTestId(DOCUMENTOS_DYNAMIC_TESTIDS.DOCUMENT_LINK(code));
+/** Tabla de documentos de escritorio (id de prueba). */
+export const tableOf = (page: Page): Locator => page.getByTestId(DOCUMENTOS_TESTIDS.DOCUMENTS_TABLE);
 
 /** Ficha: contenedor, título, insignia de cabecera, selector de versión, botones y historial. */
 export const detailBox = (page: Page): Locator => page.getByTestId(DOCUMENTOS_TESTIDS.DOCUMENT_DETAIL);
 export const detailTitle = (page: Page): Locator => page.getByTestId(DOCUMENTOS_TESTIDS.DOCUMENT_TITLE);
 export const detailBadge = (page: Page): Locator => detailBox(page).getByTestId(DOCUMENTOS_TESTIDS.DOCUMENT_CLASS_BADGE);
 export const versionSelect = (page: Page): Locator => page.getByTestId(DOCUMENTOS_TESTIDS.DOCUMENT_VERSION_SELECT);
-export const publishButton = (page: Page): Locator => page.getByRole('button', { name: 'Publicar nueva versión', exact: true }).or(page.getByTestId(DOCUMENTOS_TESTIDS.DOCUMENT_PUBLISH));
-export const downloadButton = (page: Page): Locator => page.getByRole('button', { name: 'Descargar PDF', exact: true }).or(page.getByTestId(DOCUMENTOS_TESTIDS.DOCUMENT_DOWNLOAD));
+export const publishButton = (page: Page): Locator => page.getByRole('button', { name: 'Publicar nueva versión', exact: true });
+export const downloadButton = (page: Page): Locator => page.getByRole('button', { name: 'Descargar PDF', exact: true });
 export const versionsList = (page: Page): Locator => page.getByTestId(DOCUMENTOS_TESTIDS.DOCUMENT_VERSIONS);
 /** Aviso «No tienes permiso» de la ficha (rol alerta) y su enlace de vuelta. */
 export const forbiddenBox = (page: Page): Locator => page.getByTestId(DOCUMENTOS_TESTIDS.DOCUMENT_FORBIDDEN);
@@ -96,6 +88,8 @@ export const viewerTitle = (page: Page): Locator => page.getByTestId(DOCUMENTOS_
 export const viewerClass = (page: Page): Locator => page.getByTestId(DOCUMENTOS_TESTIDS.VIEWER_CLASS);
 export const viewerVersion = (page: Page): Locator => page.getByTestId(DOCUMENTOS_TESTIDS.VIEWER_VERSION);
 export const viewerPageOne = (page: Page): Locator => page.getByTestId(DOCUMENTOS_DYNAMIC_TESTIDS.VIEWER_PAGE_N(1));
+/** Cualquier página del visor (`viewer-page-N`): el contenido del documento. */
+export const anyViewerPage = (page: Page): Locator => page.locator('[data-testid^="viewer-page-"]');
 
 // --- Lecturas (nunca lanzan: `undefined` = no leído) -------------------------------------------------------------------------------
 
@@ -108,25 +102,56 @@ export const textOfLocator = async (target: Locator): Promise<string | undefined
 /** Número de elementos que casan (`-1` si no se pudo contar: nunca cuenta como «0»). */
 export const countOf = (target: Locator): Promise<number> => safe(() => target.count(), -1);
 
+/** ¿Se ve el elemento? `true`/`false`, o `undefined` si no se pudo leer (nunca se toma por «no visible»). */
+export const visibleOf = (target: Locator): Promise<boolean | undefined> => safe(() => target.first().isVisible({ timeout: 1_000 }), undefined);
+
 /** Caja visible de un elemento (`undefined` si no se pudo leer). */
 export const boxOf = (target: Locator): Promise<{ readonly x: number; readonly y: number; readonly width: number; readonly height: number } | undefined> =>
   safe(async () => (await target.first().boundingBox({ timeout: 1_000 })) ?? undefined, undefined);
-
-/** Tabla de documentos de escritorio (id de prueba). */
-export const tableOf = (page: Page): Locator => page.getByTestId(DOCUMENTOS_TESTIDS.DOCUMENTS_TABLE);
 
 /** Texto de la opción seleccionada de un desplegable, o `undefined`. */
 export const selectedOptionText = (target: Locator): Promise<string | undefined> =>
   safe(() => target.first().evaluate((element) => (element as HTMLSelectElement).selectedOptions[0]?.textContent?.replace(/\s+/g, ' ').trim() ?? '', undefined, { timeout: 1_000 }), undefined);
 
-/** Estado habilitado de un botón (`undefined` = no leído). */
-export const enabledOf = (target: Locator): Promise<boolean | undefined> => safe(() => target.first().isEnabled({ timeout: 1_000 }), undefined);
+/** ¿El centro del objetivo lo recibe el propio objetivo (o un descendiente)? `undefined` si no se pudo medir. */
+const centerHitsTarget = (target: Locator): Promise<boolean | undefined> =>
+  safe(
+    () =>
+      target.first().evaluate(
+        (node) => {
+          const box = node.getBoundingClientRect();
+          const top = document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2);
+          return top !== null && (top === node || node.contains(top));
+        },
+        undefined,
+        { timeout: 2_000 },
+      ),
+    undefined,
+  );
 
-/** Códigos de los documentos de la lista, en orden (lectura de los enlaces `document-link-…`); `undefined` si no se pudo leer. */
+/** Estado efectivo de un botón visible: deshabilitado (atributo o propiedad), tapado (otro elemento recibe el clic) o habilitado. */
+export type ButtonState = 'habilitado' | 'deshabilitado' | 'no visible' | 'tapado' | 'no leído';
+
+export const buttonStateOf = async (target: Locator): Promise<ButtonState> => {
+  const visible = await visibleOf(target);
+  if (visible === undefined) return 'no leído';
+  if (!visible) return 'no visible';
+  const disabled = await safe(
+    () => target.first().evaluate((node) => (node as HTMLButtonElement).disabled === true || node.getAttribute('aria-disabled') === 'true', undefined, { timeout: 1_000 }),
+    undefined,
+  );
+  if (disabled === undefined) return 'no leído';
+  if (disabled) return 'deshabilitado';
+  const hit = await centerHitsTarget(target);
+  if (hit === undefined) return 'no leído';
+  return hit ? 'habilitado' : 'tapado';
+};
+
+/** Códigos de los documentos de la tabla, en orden: las filas `document-row-DOC-…` (no los botones ⋯ de cada fila). */
 export const shownCodes = (page: Page): Promise<readonly string[] | undefined> =>
   safe(async () => {
-    const ids = await page.locator('[data-testid^="document-link-"]').evaluateAll((elements) => elements.map((element) => element.getAttribute('data-testid') ?? ''));
-    return ids.map((id) => id.replace('document-link-', '')).filter((code) => /^DOC-\d{3}$/.test(code));
+    const ids = await page.locator('[data-testid^="document-row-"]').evaluateAll((elements) => elements.map((element) => element.getAttribute('data-testid') ?? ''));
+    return ids.map((id) => /^document-row-(DOC-\d{3})$/.exec(id)?.[1]).filter((code): code is string => code !== undefined);
   }, undefined);
 
 /** Espera (con techo) a que la lista muestre un recuento con cifra en sus dos sitios (cabecera y pie) y sin filas de carga. */
@@ -151,7 +176,11 @@ export const absenceAfterHold = async (target: Locator): Promise<'ausente' | 'pr
 
 // --- Acciones -----------------------------------------------------------------------------------------------------------------------
 
-/** Preparación de cada fila: fija la preferencia de cookies y el ancho, abre /login?tenant=alumno01 y entra como la cuenta de la fila. */
+/**
+ * Preparación de cada fila: reinicia alumno01 (`POST /api/admin/reset`, 2xx comprobado), fija la preferencia de cookies y el ancho,
+ * abre /login?tenant=alumno01 y entra como la cuenta de la fila (admin con el segundo factor). Si el reinicio falla, la fila es
+ * preparación fallida con ese motivo.
+ */
 export const signIn = (page: Page, account: AccountKey): Promise<string | undefined> => {
   const credentials = DEMO[account];
   const secondFactor: readonly Step[] = [
@@ -160,6 +189,7 @@ export const signIn = (page: Page, account: AccountKey): Promise<string | undefi
     ['pulsar «Verificar»', () => verifyButton(page).click(ACTION)],
   ];
   const steps: readonly Step[] = [
+    ['reiniciar alumno01 (POST /api/admin/reset)', () => resetAlumno()],
     ['fijar la preferencia de cookies', () => page.context().addInitScript(fixCookiePreference)],
     ['fijar el ancho de la ventana', () => page.setViewportSize(VIEWPORT)],
     ['abrir /login?tenant=alumno01', () => page.goto(LOGIN_URL, { timeout: CEILING_MS })],
@@ -229,5 +259,9 @@ export const textCheck = (observed: string | undefined, expected: string, what: 
 export const presenceCheck = (found: number, expected: string, what: string): Check =>
   check(found === 1, expected, found === 1 ? `${what} está (1 elemento)` : found === 0 ? `${what} no está (0 elementos)` : found === -1 ? `${what} (sin leer)` : `${what} aparece ${found} veces`);
 
-/** Visibles para el rol: los doce documentos para admin, gestor y auditor; los públicos para el consultor. */
-export const visibleFor = (account: AccountKey): readonly string[] => (account === 'consultor' ? PUBLIC_DOCUMENTS : ALL_DOCUMENTS);
+/** Comprobación de visibilidad: el elemento se ve (`undefined` = no leído, no cumple). */
+export const seenCheck = (seen: boolean | undefined, expected: string, what: string): Check =>
+  check(seen === true, expected, seen === undefined ? `${what} (sin leer)` : seen ? `${what} se ve` : `${what} no se ve`);
+
+/** Comprobación del estado efectivo de un botón (`habilitado`, `deshabilitado`, …). */
+export const buttonCheck = (state: ButtonState, expected: ButtonState, label: string): Check => check(state === expected, `«${label}» está ${expected}`, `«${label}» está ${state}`);

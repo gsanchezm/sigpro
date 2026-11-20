@@ -1,7 +1,7 @@
 import { call, field, type ApiResult } from '../../../story-runs/support/api';
 import { defineApiRows, type ApiRowHandler, type ManifestRow, type Outcome } from '../../core/framework';
 import { cell, check, preparationFailed, strict, type Check } from '../../support/checks';
-import { CUENTA, TENANT_A, answerCheck, codeOf, expectationChecks, finish, idsOf, itemsOfList, jsonOf, listPresentCheck, rawGet, resetTenants, sessionFor, thenOf, type Expected } from './common';
+import { CUENTA, TENANT_A, answerCheck, codeOf, codesCheck, expectationChecks, finish, idsOf, itemsOfList, jsonOf, listPresentCheck, rawGet, resetAlumno, sessionFor, thenOf, type Expected } from './common';
 
 // US-DOC-RESTRINGIDOS-003 — Publicar una versión de un restringido no cambia su clasificación ni su visibilidad. Preparación de cada
 // fila: reinicio de alumno01 (DOC-003 vuelve a la versión 2) y, después, admin@sigpro.test (con el segundo factor) publica la versión
@@ -35,7 +35,7 @@ const FILTRO: ReadonlyMap<string, Listado> = new Map<string, Listado>([
  * responde 201 con `version` 3, o `undefined` si todo sale bien.
  */
 const publishVersionOfDoc3 = async (): Promise<{ readonly step: string; readonly result: ApiResult } | undefined> => {
-  await resetTenants([TENANT_A]);
+  await resetAlumno();
   const publisher = await sessionFor('admin');
   if (publisher.token === undefined) return { step: 'admin@sigpro.test inicia sesión en alumno01 (segundo factor)', result: publisher.last };
   const published = await call('POST', '/documents/DOC-003/versions', { tenant: TENANT_A, token: publisher.token, body: PUBLICACION });
@@ -88,8 +88,13 @@ const consultorListAfterPublish: ApiRowHandler = async (row: ManifestRow): Promi
     raw.status === 200,
   ];
   const observed = `la lista trae ${items === undefined ? '(sin leer)' : items.length} documentos (${ids.length === 0 ? '(ninguno)' : ids.join(', ')})`;
+  // Control positivo: una búsqueda que sí debe dar resultados (DOC-004, público) devuelve ese documento; así «ninguno» no se da por bueno
+  // con un buscador que siempre responde vacío
+  const control = listing.count === 0 ? await rawGet('/documents', session.token, 'q=DOC-004') : undefined;
+  const controlIds = control === undefined ? undefined : idsOf(itemsOfList(jsonOf(control.bytes)));
+  const controlChecks = controlIds === undefined ? [] : [codesCheck('el control de búsqueda q=DOC-004 trae', controlIds, ['DOC-004'])];
   return finish(
-    [check(conditions.every((ok) => ok), cell(row, 'resultado'), observed), answerCheck(raw.status, codeOf(body), { status: 200 })],
+    [check(conditions.every((ok) => ok), cell(row, 'resultado'), observed), answerCheck(raw.status, codeOf(body), { status: 200 }), ...controlChecks],
     { evidence: { cuenta: 'consultor@sigpro.test', filtro: cell(row, 'filtro'), estado: raw.status } },
   );
 };
