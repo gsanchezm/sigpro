@@ -5,7 +5,7 @@ epica: EP-NAVEGACION
 titulo: "[Web] Ver los avisos sin leer en la campana y leerlos en su panel"
 etiquetas: [web]
 relacionadas: [US-NAVEGACION-015, US-MISION-FEED-006, US-MISION-FEED-008, US-LOGIN-008]
-verificacion: codigo
+verificacion: ejecutada
 ---
 
 ## Historia

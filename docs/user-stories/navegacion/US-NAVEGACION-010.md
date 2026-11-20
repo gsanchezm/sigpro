@@ -5,7 +5,7 @@ epica: EP-NAVEGACION
 titulo: "[Web] Llegar a Programas o a Acceso desde la raíz, las direcciones desconocidas y las privadas"
 etiquetas: [web]
 relacionadas: [US-NAVEGACION-004, US-NAVEGACION-014, US-LOGIN-007]
-verificacion: codigo
+verificacion: ejecutada
 ---
 
 ## Historia

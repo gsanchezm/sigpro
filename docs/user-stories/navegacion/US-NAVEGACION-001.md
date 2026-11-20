@@ -5,7 +5,7 @@ epica: EP-NAVEGACION
 titulo: "[API] Buscar en el tenant y devolver solo los grupos con resultados"
 etiquetas: [api]
 relacionadas: [US-NAVEGACION-002, US-NAVEGACION-003, US-NAVEGACION-007, US-DOC-RESTRINGIDOS-004]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["GET /api/search"]
 ---
 

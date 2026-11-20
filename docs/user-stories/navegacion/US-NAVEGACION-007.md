@@ -5,7 +5,7 @@ epica: EP-NAVEGACION
 titulo: "[Web] Buscar en la cabecera: resultados agrupados, teclado y pantalla completa en responsive"
 etiquetas: [web]
 relacionadas: [US-NAVEGACION-001, US-NAVEGACION-002, US-NAVEGACION-012, US-PROG-LISTA-004]
-verificacion: codigo
+verificacion: ejecutada
 ---
 
 ## Historia

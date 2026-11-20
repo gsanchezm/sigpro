@@ -5,7 +5,7 @@ epica: EP-NAVEGACION
 titulo: "[Móvil] Abrir cada resultado de la búsqueda en su pantalla móvil"
 etiquetas: [movil]
 relacionadas: [US-NAVEGACION-011, US-NAVEGACION-012, US-NAVEGACION-007]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["/programs/:code", "/programs/:code/requirements", "/verification/:code", "/documents/:id"]
 ---
 

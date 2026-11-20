@@ -5,7 +5,7 @@ epica: EP-NAVEGACION
 titulo: "[Web] Abrir el menú de usuario: Perfil, atajos de teclado y Cerrar sesión"
 etiquetas: [web]
 relacionadas: [US-NAVEGACION-005, US-NAVEGACION-006, US-LOGIN-008]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["/profile"]
 ---
 

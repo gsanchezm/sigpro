@@ -5,7 +5,7 @@ epica: EP-NAVEGACION
 titulo: "[API] Exigir al menos dos caracteres en el texto de búsqueda"
 etiquetas: [api]
 relacionadas: [US-NAVEGACION-001, US-NAVEGACION-003]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["GET /api/search"]
 ---
 

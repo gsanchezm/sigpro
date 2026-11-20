@@ -5,7 +5,7 @@ epica: EP-NAVEGACION
 titulo: "[Móvil] Llegar a Programas o a Acceso desde la raíz y las pantallas privadas"
 etiquetas: [movil]
 relacionadas: [US-NAVEGACION-010, US-NAVEGACION-011, US-LOGIN-012]
-verificacion: codigo
+verificacion: ejecutada
 ---
 
 ## Historia

@@ -5,7 +5,7 @@ epica: EP-NAVEGACION
 titulo: "[Móvil] Navegar con las pestañas inferiores y el menú «Más» según el rol"
 etiquetas: [movil]
 relacionadas: [US-NAVEGACION-004, US-NAVEGACION-010, US-NAVEGACION-012, US-NAVEGACION-014, US-NAVEGACION-016, US-LOGIN-013]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["/programs", "/verification", "/nc", "/mission", "/more", "/documents", "/audit", "/admin", "/profile", "/help", "/legal/terms", "/legal/privacy"]
 permisos: [audit.view, users.manage]
 ---

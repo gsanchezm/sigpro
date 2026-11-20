@@ -5,7 +5,7 @@ epica: EP-NAVEGACION
 titulo: "[Móvil] Buscar en la pantalla «Búsqueda global» con resultados agrupados"
 etiquetas: [movil]
 relacionadas: [US-NAVEGACION-001, US-NAVEGACION-007, US-NAVEGACION-011, US-NAVEGACION-013]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["/search"]
 ---
 

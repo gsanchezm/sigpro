@@ -5,7 +5,7 @@ epica: EP-NAVEGACION
 titulo: "[API] Exigir un acceso válido y buscar solo en el tenant del acceso"
 etiquetas: [api]
 relacionadas: [US-NAVEGACION-001, US-NAVEGACION-002, US-LOGIN-001]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["GET /api/search"]
 ---
 

@@ -5,7 +5,7 @@ epica: EP-NAVEGACION
 titulo: "[Web] Abrir y cerrar el menú de navegación en el diseño responsive"
 etiquetas: [web]
 relacionadas: [US-NAVEGACION-004, US-NAVEGACION-005, US-NAVEGACION-009]
-verificacion: codigo
+verificacion: ejecutada
 ---
 
 ## Historia

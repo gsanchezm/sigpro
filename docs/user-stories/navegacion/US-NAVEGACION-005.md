@@ -5,7 +5,7 @@ epica: EP-NAVEGACION
 titulo: "[Web] Diseño de escritorio desde 1024 px: barra lateral plegable y migas de pan"
 etiquetas: [web]
 relacionadas: [US-NAVEGACION-004, US-NAVEGACION-006]
-verificacion: codigo
+verificacion: ejecutada
 ---
 
 ## Historia

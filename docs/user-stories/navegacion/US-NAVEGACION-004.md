@@ -5,7 +5,7 @@ epica: EP-NAVEGACION
 titulo: "[Web] Ver en la barra lateral las secciones de mi rol y cuál está activa"
 etiquetas: [web]
 relacionadas: [US-NAVEGACION-005, US-NAVEGACION-006, US-NAVEGACION-011, US-NAVEGACION-016]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["/mission", "/programs", "/programs/:code/requirements", "/verification", "/nc", "/documents", "/audit", "/admin"]
 permisos: [audit.view, users.manage]
 ---
