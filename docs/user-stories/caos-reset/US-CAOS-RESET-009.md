@@ -5,7 +5,7 @@ epica: EP-CAOS-RESET
 titulo: "[Web] Reiniciar los datos del tenant desde /lab y desde Administración"
 etiquetas: [web]
 relacionadas: [US-CAOS-RESET-001, US-CAOS-RESET-008, US-CAOS-RESET-014]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["/admin"]
 ---
 

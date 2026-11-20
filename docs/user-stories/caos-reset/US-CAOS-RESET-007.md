@@ -5,7 +5,7 @@ epica: EP-CAOS-RESET
 titulo: "[API] El modo caos retrasa y falla solo las peticiones de su tenant"
 etiquetas: [api]
 relacionadas: [US-CAOS-RESET-004, US-CAOS-RESET-006, US-CAOS-RESET-010, US-CAOS-RESET-011]
-verificacion: codigo
+verificacion: ejecutada
 ---
 
 ## Historia

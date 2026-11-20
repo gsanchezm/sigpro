@@ -5,7 +5,7 @@ epica: EP-CAOS-RESET
 titulo: "[Web] Aplicar y apagar el modo caos desde /lab"
 etiquetas: [web]
 relacionadas: [US-CAOS-RESET-006, US-CAOS-RESET-007, US-CAOS-RESET-011, US-CAOS-RESET-012]
-verificacion: codigo
+verificacion: ejecutada
 ---
 
 ## Historia

@@ -5,7 +5,7 @@ epica: EP-CAOS-RESET
 titulo: "[Web] Contraejemplos y preguntas frecuentes de /lab"
 etiquetas: [web]
 relacionadas: [US-CAOS-RESET-008, US-CAOS-RESET-010, US-CAOS-RESET-015]
-verificacion: codigo
+verificacion: ejecutada
 ---
 
 ## Historia

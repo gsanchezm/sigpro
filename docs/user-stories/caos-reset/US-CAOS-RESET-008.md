@@ -5,7 +5,7 @@ epica: EP-CAOS-RESET
 titulo: "[Web] Credenciales de demo y tenant de trabajo en /lab"
 etiquetas: [web]
 relacionadas: [US-CAOS-RESET-009, US-CAOS-RESET-012, US-CAOS-RESET-015, US-LOGIN-007]
-verificacion: codigo
+verificacion: ejecutada
 ---
 
 ## Historia

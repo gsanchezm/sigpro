@@ -5,7 +5,7 @@ epica: EP-CAOS-RESET
 titulo: "[API] Tras el reinicio, las cuentas vuelven al estado del seed"
 etiquetas: [api]
 relacionadas: [US-CAOS-RESET-001, US-CAOS-RESET-003, US-LOGIN-001]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["POST /api/admin/reset"]
 ---
 

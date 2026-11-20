@@ -5,7 +5,7 @@ epica: EP-CAOS-RESET
 titulo: "[API] El reinicio borra las cuentas y los programas creados en la prueba"
 etiquetas: [api]
 relacionadas: [US-CAOS-RESET-002, US-CAOS-RESET-004, US-REGISTRO-001, US-PROG-ALTA-001]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["POST /api/admin/reset"]
 ---
 

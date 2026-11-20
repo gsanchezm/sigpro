@@ -5,7 +5,7 @@ epica: EP-CAOS-RESET
 titulo: "[API] Leer y fijar el modo caos del tenant"
 etiquetas: [api]
 relacionadas: [US-CAOS-RESET-005, US-CAOS-RESET-007, US-CAOS-RESET-010, US-CAOS-RESET-011]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["GET /api/admin/chaos", "PATCH /api/admin/chaos"]
 ---
 

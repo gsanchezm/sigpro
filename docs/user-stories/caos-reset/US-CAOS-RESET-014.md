@@ -5,7 +5,7 @@ epica: EP-CAOS-RESET
 titulo: "[Móvil] Restaurar los datos del tenant desde Administración"
 etiquetas: [movil]
 relacionadas: [US-CAOS-RESET-001, US-CAOS-RESET-009, US-CAOS-RESET-013]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["/admin"]
 ---
 

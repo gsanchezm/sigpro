@@ -5,7 +5,7 @@ epica: EP-CAOS-RESET
 titulo: "[API] Solo el administrador del tenant reinicia o gestiona el modo caos"
 etiquetas: [api]
 relacionadas: [US-CAOS-RESET-001, US-CAOS-RESET-006, US-CAOS-RESET-011]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["POST /api/admin/reset", "GET /api/admin/chaos", "PATCH /api/admin/chaos"]
 permisos: [users.manage]
 ---

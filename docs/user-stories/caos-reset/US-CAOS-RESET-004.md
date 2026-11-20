@@ -5,7 +5,7 @@ epica: EP-CAOS-RESET
 titulo: "[API] El reinicio conserva el caos, las sesiones y los contadores de correos sin cuenta"
 etiquetas: [api]
 relacionadas: [US-CAOS-RESET-001, US-CAOS-RESET-006, US-LOGIN-001]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["POST /api/admin/reset"]
 ---
 

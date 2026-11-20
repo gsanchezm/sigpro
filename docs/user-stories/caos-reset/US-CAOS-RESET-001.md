@@ -5,7 +5,7 @@ epica: EP-CAOS-RESET
 titulo: "[API] Restaurar el tenant con el token de su administrador"
 etiquetas: [api]
 relacionadas: [US-CAOS-RESET-002, US-CAOS-RESET-005, US-CAOS-RESET-009, US-CAOS-RESET-014]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["POST /api/admin/reset"]
 ---
 

@@ -5,7 +5,7 @@ epica: EP-CAOS-RESET
 titulo: "[Web] Modo caos en Administración"
 etiquetas: [web]
 relacionadas: [US-CAOS-RESET-005, US-CAOS-RESET-006, US-CAOS-RESET-010, US-CAOS-RESET-013]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["/admin"]
 ---
 

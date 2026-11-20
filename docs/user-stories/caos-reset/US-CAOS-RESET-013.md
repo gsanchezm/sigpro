@@ -5,7 +5,7 @@ epica: EP-CAOS-RESET
 titulo: "[Móvil] Modo caos en Administración"
 etiquetas: [movil]
 relacionadas: [US-CAOS-RESET-006, US-CAOS-RESET-011, US-CAOS-RESET-014]
-verificacion: codigo
+verificacion: ejecutada
 cubre: ["/admin"]
 ---
 
