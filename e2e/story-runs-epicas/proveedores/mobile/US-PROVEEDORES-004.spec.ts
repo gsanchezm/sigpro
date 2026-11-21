@@ -2,7 +2,7 @@ import type { Page } from '@playwright/test';
 import { DEMO, resetTenants, TENANT_A, type Credentials } from '../../../story-runs/support/prepare';
 import { cell, check, conclude, strict, type Check } from '../../support/checks';
 import { CEILING_MS, pathOf, waitUntil } from '../../support/browser';
-import { defineBrowserRows, type BrowserRowHandler, type Outcome } from '../../core/framework';
+import { defineBrowserRows, notExecutable, type BrowserRowHandler, type Outcome } from '../../core/framework';
 import {
   actionMissing,
   buttonNamesOf,
@@ -82,6 +82,9 @@ const BUSQUEDA_DE: ReadonlyMap<string, string> = new Map<string, string>([
 ]);
 
 /** Código de programa de la historia → código (la fila de contrato solo cita PRG-001 y PRG-002, pero la columna trae más valores). */
+/** Programa en cuya página empieza la fila del código de contrato: la ruta de partida de la historia. */
+const START_PROGRAM = 'PRG-001';
+
 const CODIGOS: ReadonlyMap<string, string> = new Map<string, string>([
   ['PRG-001', 'PRG-001'],
   ['PRG-002', 'PRG-002'],
@@ -420,9 +423,13 @@ const contractLine: BrowserRowHandler = async (row, { page }) => {
 // --- Esquema 11: el código de un contrato lleva a su programa -----------------------------------------------------------------
 
 const contractCodeLink: BrowserRowHandler = async (row, { page }) => {
-  await resetTenants([TENANT_A]);
   const codigo = strict('codigo', CODIGOS, cell(row, 'codigo'));
   const expected = `al tocar el código ${codigo} de un contrato de la ficha llega a /programs/${codigo}`;
+  // La historia parte de /programs/PRG-001. Con ese código el toque lleva a la ruta en la que ya está la página: `router.push` a la misma ruta
+  // no cambia la URL ni genera navegación (0 navegaciones medidas), así que ninguna lectura distingue un toque que funciona de uno que no hace
+  // nada. Una comprobación «llega a /programs/PRG-001» sería verdadera sin tocar el código, de modo que la fila no se juzga.
+  if (codigo === START_PROGRAM) return notExecutable(expected, `sin oráculo: la página ya está en /programs/${START_PROGRAM} y ninguna lectura distingue un toque que funciona de uno que no hace nada`);
+  await resetTenants([TENANT_A]);
   const ready = await readyFor(page, DEMO.gestor, programPath('PRG-001'), expected);
   if (ready) return ready;
   const chosen = await withSuppliersTab(page, expected);
@@ -435,14 +442,7 @@ const contractCodeLink: BrowserRowHandler = async (row, { page }) => {
   const pressed = await clickOn(contractLink(page, codigo), `tocar el código ${codigo}`);
   if (pressed) return actionMissing(expected, pressed);
   const arrived = await waitUntil(async () => pathOf(page) === programPath(codigo), CEILING_MS);
-  // Con PRG-001 la página ya está en esa ruta: la comprobación de la ruta no distingue el toque, y el enlace de la ficha no tiene destino
-  // legible (es un botón de la app móvil). El número de navegaciones va en la evidencia como única señal del toque.
-  const note =
-    codigo === 'PRG-001'
-      ? 'La fila no distingue el toque: la ruta ya es la de destino (PRG-001) y el enlace móvil no expone su destino. El número de navegaciones va en la evidencia.'
-      : undefined;
   return conclude([check(arrived.reached, `llega a ${programPath(codigo)}`, `llega a ${pathOf(page)}`)], {
-    ...(note === undefined ? {} : { note }),
     evidence: { navegacionesDespuesDelToque: navigations.count() },
   });
 };
