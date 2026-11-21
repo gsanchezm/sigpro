@@ -5,7 +5,7 @@ epica: EP-PROVEEDORES
 titulo: "[Móvil] Ver los proveedores contratados y buscar un proveedor en la pestaña «Proveedores»"
 etiquetas: [movil]
 relacionadas: [US-PROVEEDORES-001, US-PROVEEDORES-002, US-PROVEEDORES-003, US-PROG-DETALLE-005]
-verificacion: ejecutada
+verificacion: codigo
 cubre: ["/programs/:code"]
 ---
 
