@@ -258,7 +258,7 @@ describe('regla archivo-id', () => {
   });
 
   it('acepta rutas absolutas, con barras invertidas y slugs con guion', () => {
-    expect(lintWorld(story({ path: 'C:/Users/gilsa/repo/docs/user-stories/login/US-LOGIN-003.md' }))).toEqual([]);
+    expect(lintWorld(story({ path: 'C:/Users/alumno/repo/docs/user-stories/login/US-LOGIN-003.md' }))).toEqual([]);
     expect(lintWorld(story({ path: 'C:\\repo\\docs\\user-stories\\login\\US-LOGIN-003.md' }))).toEqual([]);
     const hyphenated = [
       epic('docs/user-stories/mi-modulo/epic.md', 'EP-MI-MODULO'),
