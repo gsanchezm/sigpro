@@ -637,6 +637,12 @@ Decisiones al construir `packages/stories` (linter, sincronización con GitHub y
 - **Una capacidad que la app no tiene se escribe como historia `no-implementada`, aparte de la vigente.** *25 en estas épicas: la aprobación y el desbloqueo de cuentas, el correo real de verificación y de recuperación, el restablecimiento de contraseña, la subida de un archivo como versión de documento, y varias lagunas del móvil frente a la web (filtros de la lista de programas y de documentos, campana de avisos, entrada de Requisitos, formato enriquecido de NC, cerrar un aviso a mano, `/lab`, entre otras).*
 - **La cobertura se cierra con historias que listan cada endpoint, ruta y permiso: 0 huecos.** *Es una medida de qué historias nombran cada elemento; no sustituye a ejecutarlas.*
 
+### Segunda revisión independiente de los manejadores (2026-11-20)
+
+- **Solo se corrige un veredicto que el revisor demuestre falso y yo confirme leyendo el código de la app y de la historia.** *Una comprobación floja que hoy da el veredicto correcto (no detectaría una regresión) se anota y no se toca: corregirla obligaría a repetir las tres superficies de su épica por cada ajuste. Una ambigüedad de la historia (Regla frente a Ejemplo, o qué elemento se mide) no se resuelve en el manejador: se anota como historia dudosa y la historia no se edita.*
+- **Una fila cuyo toque o acción no se puede distinguir de «no hacer nada» devuelve `notExecutable`, y su historia vuelve a `codigo`.** *Es el criterio de EP-TEMA (US-TEMA-006) y EP-VER-CASOS (US-VER-CASOS-002). Aquí: US-PROVEEDORES-004, Esquema 11, fila 1 (la página de partida ya es la de destino); un `coincide` que no puede fallar es peor que una fila sin juzgar.*
+- **Los umbrales de memoria del lanzador (< 80 % de compromiso) y del vigilante (> 85 %) no se relajan para que una repetición pase.** *El 2026-11-20 el compromiso estuvo entre el 86 % y el 88 % y el lanzador agotó su tope sin lanzar nada; la repetición de EP-PROVEEDORES queda pendiente en vez de ejecutarse sin la protección que decidió el usuario.*
+
 ### Material de instructor
 
 - **`docs/story-discrepancies.md` está en `.gitignore`.** Guarda las desviaciones de comportamientos que existen y difieren de lo que la historia dice que se debió pedir. *El repositorio es público: una confusión del redactor en un archivo versionado filtraría justo lo que el ejercicio quiere que se descubra. Las capacidades ausentes no van ahí: ya son públicas por la etiqueta `no-implementada`.*
