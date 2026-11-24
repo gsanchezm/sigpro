@@ -71,6 +71,11 @@ jobs:
       - name: Build (shared, api, web)
         run: pnpm build
 
+      # Cobertura de las historias: falla si algún endpoint, ruta o permiso se queda sin historia, o si `COBERTURA.md` está
+      # desactualizado. Los permisos salen del `dist` de `@sigpro/shared`, por eso va después del build
+      - name: Cobertura de las historias
+        run: pnpm stories:coverage --check
+
       # `examples/` es un proyecto aparte (npm, su propio lockfile): se instala y se comprueba con TypeScript
       - name: Typecheck del proyecto de ejemplo (examples/)
         run: |
