@@ -305,6 +305,25 @@ describe('parseOutlines', () => {
     ]);
   });
 
+  it('un paso con coma tras la palabra clave («Y, mientras…») sigue siendo un paso, y su marcador se lee', () => {
+    const gherkin = lines(
+      'Esquema del escenario: Avisos apilados',
+      '  Cuando archivo <primero>',
+      '  Y, mientras el aviso <aviso> sigue a la vista, abro las acciones de <segundo>',
+      '  Pero, aun así, no se cierra',
+      '  Yacimiento, sin paso',
+      '  Entonces veo ambos',
+    );
+    const steps = parseOutlines(gherkin)[0]?.steps ?? [];
+    expect(steps).toEqual([
+      'Cuando archivo <primero>',
+      'Y, mientras el aviso <aviso> sigue a la vista, abro las acciones de <segundo>',
+      'Pero, aun así, no se cierra',
+      'Entonces veo ambos',
+    ]);
+    expect(placeholdersOf(steps[1] ?? '')).toEqual(['aviso', 'segundo']);
+  });
+
   it('un Esquema sin nombre da name vacío', () => {
     expect(parseOutlines('Esquema del escenario:\n  Dado <a>')[0]?.name).toBe('');
   });

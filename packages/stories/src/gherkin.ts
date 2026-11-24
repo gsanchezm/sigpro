@@ -122,8 +122,11 @@ const BOUNDARY_LINE = /^(?:Característica|Antecedentes|Regla|Escenario|Ejemplo)
 
 const EXAMPLES_LINE = /^Ejemplos:/;
 
-/** Palabra clave de paso (con su espacio y algo de texto detrás) o `*`. */
-const STEP_LINE = /^(?:Dados?|Dadas?|Cuando|Entonces|Y|E|Pero|\*)\s+\S/;
+/**
+ * Palabra clave de paso (con su espacio y algo de texto detrás) o `*`. La palabra puede llevar una coma pegada
+ * («Y, mientras el aviso sigue a la vista, …»): es un paso igual, y sin esto se descartaba junto con sus marcadores.
+ */
+const STEP_LINE = /^(?:(?:Dados?|Dadas?|Cuando|Entonces|Y|E|Pero),?|\*)\s+\S/;
 
 /** Regla de clasificación: patrón de la línea ya recortada y cómo construir su token. */
 type LineRule = readonly [pattern: RegExp, toToken: (match: RegExpExecArray, line: string) => Token];
