@@ -21,6 +21,28 @@ La URL de la API **se incrusta al compilar**: una build con `localhost` no llega
 
 3. Cuando termine (iOS tarda 20–40 min por los *pods*), descarga los artefactos del run: `sigpro-ios-simulator` y `sigpro-android-emulator`. GitHub los entrega dentro de otro zip: descomprímelo una vez.
 
+### Descargar de Releases
+
+Si se publicó una Release, no hace falta lanzar nada: en la página **Releases** del repositorio, la última versión trae `sigpro-android-emulator.apk` y `sigpro-ios-simulator.zip` como archivos descargables (sin iniciar sesión, sin el segundo zip de los artefactos y sin la caducidad de 30 días). El texto de cada Release dice con qué URL de API se compiló cada archivo.
+
+> **Las Releases se compilan por defecto contra la API local** (`localhost` en iOS, `10.0.2.2` en Android, puerto 3000). Para que apunten a Render hay que publicarlas con `ios_api_url` y `android_api_url` de Render (ver abajo).
+
+### Publicar una Release
+
+Quien tenga permiso de escritura: **Actions → Mobile builds (emuladores) → Run workflow** con `version`, o desde la terminal:
+
+```bash
+gh workflow run mobile-builds.yml -f version=v1.0.0 -f draft=true
+```
+
+| Parámetro | Por defecto | Para qué |
+| --- | --- | --- |
+| `version` | vacío | `vX.Y.Z`. Vacío = solo artefactos del run, como siempre. Si ya existe una Release o un tag con esa versión, el workflow se detiene antes de compilar |
+| `release_notes` | vacío | Texto que se añade a las notas autogeneradas |
+| `draft` | `false` | `true` deja la Release como borrador (ni es pública ni crea el tag hasta que la publicas): úsalo en la primera prueba |
+
+La versión también se escribe en la app (`expo.version`) durante la compilación; no se commitea. Si solo pides `ios` o `android` en `platforms`, la Release lleva solo ese archivo, y si una compilación falla no se publica nada.
+
 ## 2. iOS (Simulador de Xcode, solo macOS)
 
 ```bash

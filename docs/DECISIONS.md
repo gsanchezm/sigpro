@@ -658,3 +658,12 @@ Decisiones al construir `packages/stories` (linter, sincronización con GitHub y
 ### Material de instructor
 
 - **`docs/story-discrepancies.md` está en `.gitignore`.** Guarda las desviaciones de comportamientos que existen y difieren de lo que la historia dice que se debió pedir. *El repositorio es público: una confusión del redactor en un archivo versionado filtraría justo lo que el ejercicio quiere que se descubra. Las capacidades ausentes no van ahí: ya son públicas por la etiqueta `no-implementada`.*
+
+## Releases de los builds móviles (2026-11-25)
+
+- **Se amplía `mobile-builds.yml` en vez de copiar el `mobile-release.yml` de OmniPizza.** *Los pasos de prebuild, xcodebuild y gradle ya estaban verificados en GitHub; un segundo workflow los duplicaría y se desincronizarían. Sin `version` el workflow se comporta como antes (solo artefactos).*
+- **`version` es opcional (`vX.Y.Z`) y un job `prepare` la valida antes de compilar.** *Falla pronto, sin gastar minutos de macOS, si el formato no vale o si ya existe una Release o un tag con esa versión: no se pisa nada. Un error de `gh` o de la API aborta el paso en vez de leerse como «la versión está libre» (lo destapó un fallo del arnés de pruebas: el `gh` real falló y el script siguió).*
+- **`draft` para la primera prueba.** *Una Release en borrador no es pública ni crea el tag. `prepare` solo tiene `contents: read` y no ve borradores, así que no detecta uno previo con la misma versión; relanzar con `draft` debería actualizar el borrador (comportamiento de `softprops/action-gh-release`, sin verificar).*
+- **La versión del tag se escribe en `expo.version` solo en el runner.** *La app y la Release dicen lo mismo sin commitear nada.*
+- **Las URLs de API de la Release son las del workflow (local por defecto).** *Propuesta mía que el usuario no corrigió; para Render se pasan `ios_api_url` y `android_api_url`. El cuerpo de cada Release dice cuál lleva cada archivo.*
+- **No se replica `omnipizza-debug-androidTest.apk`.** *No lo produce el workflow de OmniPizza que se leyó.*
