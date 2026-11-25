@@ -37,11 +37,11 @@ gh workflow run mobile-builds.yml -f version=v1.0.0 -f draft=true
 
 | Parámetro | Por defecto | Para qué |
 | --- | --- | --- |
-| `version` | vacío | `vX.Y.Z`. Vacío = solo artefactos del run, como siempre. Si ya existe una Release o un tag con esa versión, el workflow se detiene antes de compilar |
+| `version` | vacío | `vX.Y.Z`. Vacío = solo artefactos del run, como siempre. Si ya existe una Release publicada o un tag con esa versión, el workflow se detiene antes de compilar; si lo que existe es un borrador, se detiene al publicar (publícalo o bórralo antes de relanzar) |
 | `release_notes` | vacío | Texto que se añade a las notas autogeneradas |
 | `draft` | `false` | `true` deja la Release como borrador (ni es pública ni crea el tag hasta que la publicas): úsalo en la primera prueba |
 
-La versión también se escribe en la app (`expo.version`) durante la compilación; no se commitea. Si solo pides `ios` o `android` en `platforms`, la Release lleva solo ese archivo, y si una compilación falla no se publica nada.
+La versión también se escribe en la app (`expo.version`) durante la compilación; no se commitea. Si solo pides `ios` o `android` en `platforms`, la Release lleva solo ese archivo, y si alguna de las compilaciones pedidas falla o se cancela no se publica nada.
 
 ## 2. iOS (Simulador de Xcode, solo macOS)
 

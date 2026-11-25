@@ -237,18 +237,33 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
-  # Solo con `version`. Las plataformas que `platforms` deja fuera cuentan como omitidas, no como fallo; si cualquier
-  # compilación falla no se publica nada (nunca una Release a medias).
+  # Solo con `version`, y solo si CADA plataforma pedida terminó en success: un fallo, una cancelación o un tiempo agotado
+  # de cualquiera impide publicar (nunca una Release a medias). Las plataformas que `platforms` deja fuera no cuentan.
   release:
     name: Publicar la Release
     needs: [prepare, ios-simulator, android-emulator]
-    if: ${{ !cancelled() && needs.prepare.outputs.version != '' && !contains(needs.*.result, 'failure') && (needs.ios-simulator.result == 'success' || needs.android-emulator.result == 'success') }}
+    if: ${{ !cancelled() && needs.prepare.outputs.version != '' && (inputs.platforms == 'android' || needs.ios-simulator.result == 'success') && (inputs.platforms == 'ios' || needs.android-emulator.result == 'success') }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
       contents: write
 
     steps:
+      # `prepare` solo tiene lectura y no ve los borradores; este job sí (escribe). Sin esta guarda, un borrador viejo con la
+      # misma versión se publicaría con su texto y su commit antiguos. Hay que publicarlo o borrarlo antes de relanzar.
+      - name: Comprobar que no queda otra Release (borradores incluidos) con esa versión
+        env:
+          VERSION: ${{ needs.prepare.outputs.version }}
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          RELEASES="$(gh release list --limit 1000 --json tagName --jq '.[].tagName')"
+          if grep -qxF "$VERSION" <<< "$RELEASES"; then
+            echo "::error::Ya hay una Release o un borrador con esa versión: publícalo o bórralo antes de relanzar"
+            exit 1
+          fi
+
       - uses: actions/download-artifact@v4
         with:
           pattern: sigpro-*
