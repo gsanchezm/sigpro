@@ -29,6 +29,16 @@ on:
       ios_archs:
         description: Arquitecturas del simulador (arm64 = Mac Apple Silicon, x86_64 = Mac Intel)
         default: arm64 x86_64
+      version:
+        description: Versión para publicar una Release (p. ej. v1.0.0). Vacío = solo artefactos del run
+        default: ''
+      release_notes:
+        description: Notas de la Release (opcional; se añaden a las autogeneradas)
+        default: ''
+      draft:
+        description: Crear la Release como borrador (sin tag público); úsalo en la primera prueba
+        type: boolean
+        default: false
 
 env:
   CI: 'true'
@@ -36,8 +46,52 @@ env:
   EXPO_PUBLIC_TENANT: ${{ inputs.tenant }}
 
 jobs:
+  # Con `version` se comprueba antes de gastar minutos de macOS: formato vX.Y.Z y que ni el tag ni la Release existan (no se pisa nada).
+  # Sin `version` no hace nada y la salida queda vacía: el workflow se comporta como siempre (solo artefactos).
+  prepare:
+    name: Comprobar la versión
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    outputs:
+      version: ${{ steps.check.outputs.version }}
+    steps:
+      - id: check
+        name: Validar la versión
+        env:
+          VERSION: ${{ inputs.version }}
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          if [ -z "$VERSION" ]; then
+            echo "Sin versión: solo se dejan artefactos del run, no se publica Release"
+            echo "version=" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if ! [[ "$VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::La versión no tiene el formato vX.Y.Z (p. ej. v1.0.0)"
+            exit 1
+          fi
+          # Se lista y se compara la línea exacta (here-string, no `| grep -q`: con pipefail el SIGPIPE daría un falso negativo).
+          # Un error de gh o de la API rompe el paso por `set -e`: nunca se lee como «la versión está libre».
+          RELEASES="$(gh release list --limit 1000 --json tagName --jq '.[].tagName')"
+          if grep -qxF "$VERSION" <<< "$RELEASES"; then
+            echo "::error::Ya existe una Release con esa versión: elige otra (no se pisa)"
+            exit 1
+          fi
+          TAGS="$(gh api "repos/$GH_REPO/git/matching-refs/tags/$VERSION" --jq '.[].ref')"
+          if grep -qxF "refs/tags/$VERSION" <<< "$TAGS"; then
+            echo "::error::Ya existe un tag con esa versión: elige otra (no se pisa)"
+            exit 1
+          fi
+          echo "Se publicará la Release $VERSION"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
   ios-simulator:
     name: iOS · Simulador (.app en zip)
+    needs: prepare
     if: ${{ inputs.platforms != 'android' }}
     runs-on: macos-latest
     timeout-minutes: 75
@@ -60,6 +114,16 @@ jobs:
       # La app móvil consume `@sigpro/shared` desde su `dist`
       - name: Compilar @sigpro/shared
         run: pnpm --filter @sigpro/shared build
+
+      # Con `version`, la app lleva el mismo número que la Release; el cambio es solo del runner (no se commitea)
+      - name: Versión de la app (solo CI, no se commitea)
+        if: ${{ needs.prepare.outputs.version != '' }}
+        working-directory: apps/mobile
+        env:
+          VERSION: ${{ needs.prepare.outputs.version }}
+        run: |
+          node -e "const fs = require('fs'); const f = 'app.json'; const j = JSON.parse(fs.readFileSync(f, 'utf8')); j.expo.version = process.env.VERSION.slice(1); fs.writeFileSync(f, JSON.stringify(j, null, 2) + '\n')"
+          grep -n '"version"' app.json
 
       # Genera `apps/mobile/ios` (ignorado por git) a partir de app.json y ejecuta `pod install`
       - name: Proyecto nativo (expo prebuild)
@@ -108,6 +172,7 @@ jobs:
 
   android-emulator:
     name: Android · Emulador (.apk)
+    needs: prepare
     if: ${{ inputs.platforms != 'ios' }}
     runs-on: ubuntu-latest
     timeout-minutes: 60
@@ -134,6 +199,15 @@ jobs:
 
       - name: Compilar @sigpro/shared
         run: pnpm --filter @sigpro/shared build
+
+      - name: Versión de la app (solo CI, no se commitea)
+        if: ${{ needs.prepare.outputs.version != '' }}
+        working-directory: apps/mobile
+        env:
+          VERSION: ${{ needs.prepare.outputs.version }}
+        run: |
+          node -e "const fs = require('fs'); const f = 'app.json'; const j = JSON.parse(fs.readFileSync(f, 'utf8')); j.expo.version = process.env.VERSION.slice(1); fs.writeFileSync(f, JSON.stringify(j, null, 2) + '\n')"
+          grep -n '"version"' app.json
 
       - name: Proyecto nativo (expo prebuild)
         working-directory: apps/mobile
@@ -162,3 +236,49 @@ jobs:
           path: dist-android/sigpro-android-emulator.apk
           if-no-files-found: error
           retention-days: 30
+
+  # Solo con `version`. Las plataformas que `platforms` deja fuera cuentan como omitidas, no como fallo; si cualquier
+  # compilación falla no se publica nada (nunca una Release a medias).
+  release:
+    name: Publicar la Release
+    needs: [prepare, ios-simulator, android-emulator]
+    if: ${{ !cancelled() && needs.prepare.outputs.version != '' && !contains(needs.*.result, 'failure') && (needs.ios-simulator.result == 'success' || needs.android-emulator.result == 'success') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: sigpro-*
+          path: artifacts
+          merge-multiple: true
+
+      # Las notas y las URLs viajan por `env`, nunca dentro del script: un `$(…)` o unas comillas en ellas no se ejecutan
+      - name: Texto de la Release
+        env:
+          RELEASE_NOTES: ${{ inputs.release_notes }}
+          IOS_API: ${{ inputs.ios_api_url }}
+          ANDROID_API: ${{ inputs.android_api_url }}
+        run: |
+          set -euo pipefail
+          {
+            if [ -n "$RELEASE_NOTES" ]; then printf '%s\n\n' "$RELEASE_NOTES"; fi
+            printf '%s\n\n' 'Builds para los emuladores, sin firmar y sin cuenta de Expo ni de Apple. La URL de la API se incrusta al compilar.'
+            if [ -f artifacts/sigpro-android-emulator.apk ]; then printf '%s\n' "- \`sigpro-android-emulator.apk\`: emulador de Android (x86_64 y arm64-v8a). API: \`$ANDROID_API\`"; fi
+            if [ -f artifacts/sigpro-ios-simulator.zip ]; then printf '%s\n' "- \`sigpro-ios-simulator.zip\`: Simulador de Xcode (.app en zip). API: \`$IOS_API\`"; fi
+            printf '\n%s\n' "Cómo instalarlos: https://github.com/$GITHUB_REPOSITORY/blob/main/docs/MOBILE-EMULADORES.md"
+          } > release-body.md
+          cat release-body.md
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.prepare.outputs.version }}
+          target_commitish: ${{ github.sha }}
+          name: SIGPRO ${{ needs.prepare.outputs.version }}
+          draft: ${{ inputs.draft }}
+          generate_release_notes: true
+          body_path: release-body.md
+          files: artifacts/*
+          fail_on_unmatched_files: true
